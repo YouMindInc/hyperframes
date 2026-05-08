@@ -14,6 +14,7 @@ import { loadRuntimeSource } from "./runtimeSource.js";
 import { VERSION as version } from "../version.js";
 import {
   createStudioManualEditsRenderBodyScript,
+  createStudioMotionRenderBodyScript,
   createStudioApi,
   createProjectSignature,
   getMimeType,
@@ -25,6 +26,7 @@ import { getElementScreenshotClip } from "@hyperframes/core/studio-api/screensho
 import type { ScreenshotClip } from "@hyperframes/core/studio-api/screenshot-clip";
 
 const STUDIO_MANUAL_EDITS_PATH = ".hyperframes/studio-manual-edits.json";
+const STUDIO_MOTION_PATH = ".hyperframes/studio-motion.json";
 
 // ── Path resolution ─────────────────────────────────────────────────────────
 
@@ -91,6 +93,16 @@ function readStudioManualEditManifestContent(projectDir: string): string {
   }
 }
 
+function readStudioMotionManifestContent(projectDir: string): string {
+  const manifestPath = join(projectDir, STUDIO_MOTION_PATH);
+  if (!existsSync(manifestPath)) return "";
+  try {
+    return readFileSync(manifestPath, "utf-8");
+  } catch {
+    return "";
+  }
+}
+
 async function applyStudioManualEditsToThumbnailPage(
   page: import("puppeteer-core").Page,
   manifestContent: string,
@@ -109,6 +121,28 @@ async function reapplyStudioManualEditsToThumbnailPage(
   await page.evaluate(() => {
     const apply = (window as Window & { __hfStudioManualEditsApply?: () => number })
       .__hfStudioManualEditsApply;
+    if (typeof apply === "function") apply();
+  });
+}
+
+async function applyStudioMotionToThumbnailPage(
+  page: import("puppeteer-core").Page,
+  manifestContent: string,
+  activeCompositionPath: string,
+): Promise<void> {
+  const script = createStudioMotionRenderBodyScript(manifestContent, {
+    activeCompositionPath,
+  });
+  if (!script) return;
+  await page.addScriptTag({ content: script });
+}
+
+async function reapplyStudioMotionToThumbnailPage(
+  page: import("puppeteer-core").Page,
+): Promise<void> {
+  await page.evaluate(() => {
+    const apply = (window as Window & { __hfStudioMotionApply?: () => number })
+      .__hfStudioMotionApply;
     if (typeof apply === "function") apply();
   });
 }
@@ -249,11 +283,16 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
 
           const manifestContent = readStudioManualEditManifestContent(opts.project.dir);
           const manualEditsRenderScript = createStudioManualEditsRenderBodyScript(manifestContent);
+          const motionManifestContent = readStudioMotionManifestContent(opts.project.dir);
+          const motionRenderScript = createStudioMotionRenderBodyScript(motionManifestContent);
+          const renderBodyScripts = [manualEditsRenderScript, motionRenderScript].filter(
+            (script): script is string => typeof script === "string",
+          );
           const job = createRenderJob({
             fps: opts.fps as 24 | 30 | 60,
             quality: opts.quality as "draft" | "standard" | "high",
             format: opts.format,
-            ...(manualEditsRenderScript ? { renderBodyScripts: [manualEditsRenderScript] } : {}),
+            ...(renderBodyScripts.length > 0 ? { renderBodyScripts } : {}),
           });
           const startTime = Date.now();
           const onProgress = (j: { progress: number; currentStage?: string }) => {
@@ -312,9 +351,12 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
         }, opts.seekTime);
         const manifestContent = readStudioManualEditManifestContent(opts.project.dir);
         await applyStudioManualEditsToThumbnailPage(page, manifestContent, opts.compPath);
+        const motionManifestContent = readStudioMotionManifestContent(opts.project.dir);
+        await applyStudioMotionToThumbnailPage(page, motionManifestContent, opts.compPath);
         // Let the seek render settle.
         await new Promise((r) => setTimeout(r, 200));
         await reapplyStudioManualEditsToThumbnailPage(page);
+        await reapplyStudioMotionToThumbnailPage(page);
         let clip: ScreenshotClip | undefined;
         if (opts.selector) {
           clip = await page.evaluate(getElementScreenshotClip, opts.selector, opts.selectorIndex);

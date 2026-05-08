@@ -17,14 +17,22 @@ interface TimelineClipProps {
   theme?: TimelineTheme;
   trackStyle: TimelineTrackStyle;
   isComposition: boolean;
+  isInspectorActive?: boolean;
+  isThumbnailActive?: boolean;
+  thumbnailLabel?: string;
+  childCount?: number;
   onHoverStart: () => void;
   onHoverEnd: () => void;
   onPointerDown?: (e: React.PointerEvent) => void;
   onResizeStart?: (edge: "start" | "end", e: React.PointerEvent) => void;
+  onInspectorClick?: (e: React.MouseEvent) => void;
+  onThumbnailClick?: (e: React.MouseEvent) => void;
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
   children?: ReactNode;
 }
+
+export const TIMELINE_CLIP_CONTROL_Z_INDEX = 20;
 
 export const TimelineClip = memo(function TimelineClip({
   el,
@@ -37,10 +45,16 @@ export const TimelineClip = memo(function TimelineClip({
   theme = defaultTimelineTheme,
   trackStyle,
   isComposition,
+  isInspectorActive = false,
+  isThumbnailActive = false,
+  thumbnailLabel = "thumbnail",
+  childCount = 0,
   onHoverStart,
   onHoverEnd,
   onPointerDown,
   onResizeStart,
+  onInspectorClick,
+  onThumbnailClick,
   onClick,
   onDoubleClick,
   children,
@@ -62,6 +76,10 @@ export const TimelineClip = memo(function TimelineClip({
         : theme.clipShadow;
   const capabilities = getTimelineEditCapabilities(el);
   const displayLabel = el.label || el.id || el.tag;
+  const inspectorLabel =
+    childCount > 0
+      ? `${childCount} nested selectable layer${childCount === 1 ? "" : "s"}`
+      : "Inspect clip layer";
   const showHandles = handleOpacity > 0.01;
   const baseBackgroundImage = isSelected ? theme.clipBackgroundActive : theme.clipBackground;
   const glossBackgroundImage = isSelected
@@ -115,6 +133,120 @@ export const TimelineClip = memo(function TimelineClip({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
+      {childCount > 0 && !isDragging && (
+        <button
+          type="button"
+          className="absolute left-2 top-2 flex h-6 items-center gap-1 rounded-md border border-studio-accent/30 bg-neutral-950/75 px-1.5 text-[10px] font-semibold tabular-nums text-studio-accent shadow-lg shadow-black/25 backdrop-blur transition-colors hover:border-studio-accent/60 hover:bg-studio-accent/15"
+          style={{ zIndex: TIMELINE_CLIP_CONTROL_Z_INDEX }}
+          title={inspectorLabel}
+          aria-label={inspectorLabel}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            onInspectorClick?.(event);
+          }}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="4" y="4" width="6" height="6" rx="1" />
+            <rect x="14" y="4" width="6" height="6" rx="1" />
+            <rect x="4" y="14" width="6" height="6" rx="1" />
+            <path d="M14 17h6" />
+          </svg>
+          {childCount}
+        </button>
+      )}
+      {(onThumbnailClick || onInspectorClick) && !isDragging && (
+        <div
+          className="absolute right-2 top-2 flex items-center gap-1"
+          style={{ zIndex: TIMELINE_CLIP_CONTROL_Z_INDEX }}
+        >
+          {onThumbnailClick && (
+            <button
+              type="button"
+              className={`flex h-6 w-6 items-center justify-center rounded-md border shadow-lg shadow-black/25 backdrop-blur transition-colors ${
+                isThumbnailActive
+                  ? "border-studio-accent/60 bg-studio-accent/18 text-studio-accent"
+                  : "border-white/12 bg-neutral-950/70 text-neutral-400 hover:border-white/24 hover:text-neutral-100"
+              }`}
+              title={
+                isThumbnailActive ? `Hide clip ${thumbnailLabel}` : `Show clip ${thumbnailLabel}`
+              }
+              aria-label={
+                isThumbnailActive ? `Hide clip ${thumbnailLabel}` : `Show clip ${thumbnailLabel}`
+              }
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                onThumbnailClick(event);
+              }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <circle cx="8" cy="10" r="1.5" />
+                <path d="m4 17 5-5 4 4 2-2 5 5" />
+              </svg>
+            </button>
+          )}
+          {onInspectorClick && (
+            <button
+              type="button"
+              className={`flex h-6 w-6 items-center justify-center rounded-md border shadow-lg shadow-black/25 backdrop-blur transition-colors ${
+                isInspectorActive
+                  ? "border-studio-accent/60 bg-studio-accent/18 text-studio-accent"
+                  : "border-white/12 bg-neutral-950/70 text-neutral-400 hover:border-white/24 hover:text-neutral-100"
+              }`}
+              title={inspectorLabel}
+              aria-label={inspectorLabel}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                onInspectorClick(event);
+              }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
       <div
         aria-hidden="true"
         role="presentation"

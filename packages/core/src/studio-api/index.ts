@@ -9,3 +9,8 @@ export {
   createStudioManualEditsRenderBodyScript,
   type StudioManualEditsRenderScriptOptions,
 } from "./helpers/manualEditsRenderScript.js";
+export {
+  STUDIO_MOTION_PATH,
+  createStudioMotionRenderBodyScript,
+  type StudioMotionRenderScriptOptions,
+} from "./helpers/studioMotionRenderScript.js";
