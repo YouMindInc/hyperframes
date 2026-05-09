@@ -54,6 +54,7 @@ interface PropertyPanelProps {
   projectId: string;
   assets: string[];
   element: DomEditSelection | null;
+  multiSelectCount?: number;
   copiedAgentPrompt: boolean;
   onClearSelection: () => void;
   onSetStyle: (prop: string, value: string) => void | Promise<void>;
@@ -2212,6 +2213,7 @@ export const PropertyPanel = memo(function PropertyPanel({
   projectId,
   assets,
   element,
+  multiSelectCount = 0,
   copiedAgentPrompt,
   onClearSelection,
   onSetStyle,
@@ -2258,12 +2260,29 @@ export const PropertyPanel = memo(function PropertyPanel({
   if (!element) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-neutral-900 px-6 text-center">
-        <Eye size={18} className="mb-3 text-neutral-600" />
-        <p className="text-sm font-medium text-neutral-200">Select an element in the preview.</p>
-        <p className="mt-2 max-w-[260px] text-xs leading-5 text-neutral-500">
-          The inspector is tuned for element edits with safer geometry controls, color picking, and
-          cleaner grouped layer controls.
-        </p>
+        {multiSelectCount > 1 ? (
+          <>
+            <Layers size={18} className="mb-3 text-neutral-600" />
+            <p className="text-sm font-medium text-neutral-200">
+              {multiSelectCount} elements selected
+            </p>
+            <p className="mt-2 max-w-[260px] text-xs leading-5 text-neutral-500">
+              Select a single element to edit its properties. Click an element in the preview or use
+              the timeline layer panel.
+            </p>
+          </>
+        ) : (
+          <>
+            <Eye size={18} className="mb-3 text-neutral-600" />
+            <p className="text-sm font-medium text-neutral-200">
+              Select an element in the preview.
+            </p>
+            <p className="mt-2 max-w-[260px] text-xs leading-5 text-neutral-500">
+              The inspector is tuned for element edits with safer geometry controls, color picking,
+              and cleaner grouped layer controls.
+            </p>
+          </>
+        )}
       </div>
     );
   }
