@@ -190,9 +190,48 @@ function countNonZeroRgb48(buf: Uint8Array): number {
 type HdrTransitionMeta = HfTransitionMeta;
 
 /** Pre-computed frame range for an active transition. */
-interface TransitionRange extends HdrTransitionMeta {
+export interface TransitionRange extends HdrTransitionMeta {
   startFrame: number;
   endFrame: number;
+}
+
+/**
+ * Build the set of frame indices that fall inside any active transition window.
+ *
+ * Layered SDR renders defer to the slow per-frame dual-scene compositor for
+ * frames in this set; everything outside the set is eligible for the fast
+ * parallel capture path. The two ranges produced by `[startFrame, endFrame]`
+ * are inclusive on both ends because the layered loop's `i <= endFrame` check
+ * applies the transition blend to the last frame of the window — and the same
+ * frame must be excluded from the parallel non-transition path or it would be
+ * captured twice (once incorrectly without the blend) and overwritten.
+ *
+ * Clamps both ends to `[0, totalFrames)` so out-of-range transitions (e.g.
+ * trailing slop from rounding the end timestamp) don't try to allocate
+ * frames past the end of the composition.
+ *
+ * @param transitionRanges - Pre-computed frame-aligned transition windows
+ *                           (`startFrame`, `endFrame` already rounded from
+ *                           `time` / `duration`).
+ * @param totalFrames       - Total composition frame count; the resulting set
+ *                            never contains an index ≥ totalFrames.
+ * @returns A frozen-by-convention `Set<number>` of frame indices that must
+ *          flow through the sequential layered path.
+ */
+export function partitionTransitionFrames(
+  transitionRanges: ReadonlyArray<Pick<TransitionRange, "startFrame" | "endFrame">>,
+  totalFrames: number,
+): Set<number> {
+  const frames = new Set<number>();
+  if (totalFrames <= 0) return frames;
+  for (const range of transitionRanges) {
+    const start = Math.max(0, range.startFrame);
+    const end = Math.min(totalFrames - 1, range.endFrame);
+    for (let i = start; i <= end; i++) {
+      frames.add(i);
+    }
+  }
+  return frames;
 }
 
 export type RenderStatus =
@@ -765,15 +804,45 @@ export function resolveRenderWorkerCount(
   return workerCount;
 }
 
+/**
+ * Optional cost-shaping inputs for `estimateCaptureCostMultiplier`.
+ *
+ * `transitionFrameRatio` is the fraction (0..1) of frames that will hit the
+ * expensive sequential layered compositor — the rest run on the fast parallel
+ * path post-#677. When provided alongside `hasShaderTransitions`, the cost is
+ * blended (`1 + ratio * 1.5`) so auto-worker sizing reflects the post-hybrid
+ * workload instead of charging the legacy flat `+2`. Pre-hybrid callers and
+ * pre-#677 callers that don't yet know the ratio fall back to the flat charge.
+ */
+export interface CaptureCostShape {
+  /** Fraction of total frames inside an active transition window (0..1). */
+  transitionFrameRatio?: number;
+}
+
 export function estimateCaptureCostMultiplier(
   compiled: Pick<CompiledComposition, "hasShaderTransitions" | "renderModeHints">,
+  shape?: CaptureCostShape,
 ): CaptureCostEstimate {
   let multiplier = 1;
   const reasons: string[] = [];
 
   if (compiled.hasShaderTransitions) {
-    multiplier += 2;
-    reasons.push("shader-transitions");
+    const ratio = shape?.transitionFrameRatio;
+    if (typeof ratio === "number" && Number.isFinite(ratio) && ratio >= 0 && ratio <= 1) {
+      // Hybrid path (issue #677): only `ratio` of frames pay the expensive
+      // sequential layered cost; the rest go through the parallel capture
+      // pool. Blend the historical flat `+2` charge by the ratio plus a
+      // small base bump so the per-worker provisioning still leaves CPU
+      // headroom for the transition processor running alongside the pool.
+      // A composition with no live transitions (e.g. all transitions sit
+      // before/after the composition window) collapses to `1 + 0 = 1` and
+      // gets the same auto-worker count as a plain SDR render.
+      multiplier += ratio * 1.5;
+      reasons.push(`shader-transitions(${(ratio * 100).toFixed(0)}%-frames)`);
+    } else {
+      multiplier += 2;
+      reasons.push("shader-transitions");
+    }
   }
 
   const reasonCodes = new Set(compiled.renderModeHints.reasons.map((reason) => reason.code));
@@ -1735,6 +1804,302 @@ async function compositeHdrFrame(
       coverage: ((finalNonZero / (width * height)) * 100).toFixed(1) + "%",
     });
   }
+}
+
+// ── Layered-frame helpers (issue #677 hybrid path) ──────────────────────────
+//
+// These helpers run a single frame through the layered SDR/HDR compositor and
+// emit one rgb48le buffer. They share the same context (`HdrCompositeContext`)
+// the legacy sequential loop already used, but accept a session parameter so a
+// pool of worker sessions can drive them in parallel for non-transition
+// frames. The transition variant is still serialized — dual-scene composites
+// re-seek the same DOM session twice and write masked, screenshot-derived
+// scenes into per-frame buffers that the shader blend reads back-to-back.
+//
+// Behavioral parity with the legacy inline loop is essential: per-frame
+// timings are recorded into the same `hdrPerf` collector keys so
+// `perf-summary.json` rollups stay comparable across the migration. Workers
+// share a single collector; the increments are integer arithmetic on hot
+// counters and the dispatcher is bounded by Node's main-thread async runtime
+// (workers await on Puppeteer, never on each other), so the appends interleave
+// safely without locking.
+//
+// IMPORTANT: each worker passes its own session in via the first argument
+// rather than reading from `ctx.domSession`. The transition path always uses
+// the main session because the per-scene seek+inject+mask sequence must run
+// against the same `window.__hf` state across both scenes.
+
+interface LayeredTransitionBuffers {
+  bufferA: Buffer;
+  bufferB: Buffer;
+  output: Buffer;
+}
+
+/**
+ * Composite a single non-transition (normal) layered frame on a given DOM
+ * session. Mirrors the legacy inline normal-frame branch — seek, inject,
+ * query stacking, then delegate per-layer compositing to
+ * `compositeHdrFrame`. The caller owns the `canvas` Buffer and is responsible
+ * for zero-fill bookkeeping (the helper does it here so callers don't repeat
+ * the same `.fill(0)` shape).
+ *
+ * @param session - The DOM capture session to drive. Workers in the hybrid
+ *                  parallel pool pass their own session; the legacy
+ *                  sequential path passes the main `domSession`.
+ * @param frameIdx - Frame index in composition timeline. Used for debug dumps
+ *                   only — timing math uses `time` derived from fps.
+ * @param time - Seek time in seconds for this frame.
+ * @param ctx - Long-lived layered-composite context. The helper rebinds
+ *              `ctx.domSession` to `session` for the duration of the call
+ *              so per-layer DOM screenshots in `compositeHdrFrame` go to the
+ *              right session.
+ * @param canvas - Pre-allocated rgb48le canvas (width * height * 6 bytes).
+ *                 Zero-filled by this helper.
+ * @param nativeHdrIds - Set of HDR element ids used by `queryElementStacking`.
+ */
+export async function processLayeredNormalFrame(
+  session: CaptureSession,
+  frameIdx: number,
+  time: number,
+  ctx: HdrCompositeContext,
+  canvas: Buffer,
+  nativeHdrIds: Set<string>,
+): Promise<void> {
+  const hdrPerf = ctx.hdrPerf;
+  if (hdrPerf) hdrPerf.frames += 1;
+  if (hdrPerf) hdrPerf.normalFrames += 1;
+
+  let timingStart = Date.now();
+  await session.page.evaluate((t: number) => {
+    if (window.__hf && typeof window.__hf.seek === "function") window.__hf.seek(t);
+  }, time);
+  addHdrTiming(hdrPerf, "frameSeekMs", timingStart);
+
+  if (ctx.beforeCaptureHook) {
+    timingStart = Date.now();
+    await ctx.beforeCaptureHook(session.page, time);
+    addHdrTiming(hdrPerf, "frameInjectMs", timingStart);
+  }
+
+  timingStart = Date.now();
+  const stackingInfo = await queryElementStacking(session.page, nativeHdrIds);
+  addHdrTiming(hdrPerf, "stackingQueryMs", timingStart);
+
+  timingStart = Date.now();
+  canvas.fill(0);
+  addHdrTiming(hdrPerf, "canvasClearMs", timingStart);
+
+  // Rebind the context to this worker's session for the per-layer DOM
+  // screenshot work inside compositeHdrFrame. The legacy path passed
+  // `domSession` via the closure-captured ctx; for the worker pool we need
+  // each worker's session to drive its own captures.
+  const sessionScopedCtx: HdrCompositeContext = { ...ctx, domSession: session };
+  timingStart = Date.now();
+  await compositeHdrFrame(sessionScopedCtx, canvas, time, stackingInfo, undefined, frameIdx);
+  addHdrTiming(hdrPerf, "normalCompositeMs", timingStart);
+}
+
+/**
+ * Composite a single transition frame on the main DOM session. Runs the
+ * dual-scene capture (scene A and scene B with appropriate `applyDomLayerMask`
+ * targeting) and applies the shader blend into `buffers.output`. Returns the
+ * `output` Buffer; the caller writes it to the encoder.
+ *
+ * Sequential by design: the per-scene seek/inject/mask/screenshot/remove-mask
+ * pattern requires the same `window.__hf` state across the two scenes, which
+ * means a single browser session steps through them in order.
+ *
+ * @param session - Always the main DOM session in the hybrid path.
+ * @param frameIdx - Composition frame index (used for warn-level error logs).
+ * @param time - Seek time in seconds.
+ * @param transition - The transition window that contains this frame.
+ * @param ctx - Layered-composite context (HDR layer maps, transfer, etc.).
+ * @param sceneElements - Scene-id → element-id list, computed once at render
+ *                        start from `.scene` DOM nodes.
+ * @param buffers - Pre-allocated dual-scene buffers and shared output buffer.
+ *                  All three are zero-filled by this helper as needed.
+ * @param assertNotAborted - Render-level abort check, called between scene
+ *                           A and scene B so an abort that lands mid-frame
+ *                           tears down promptly instead of after the
+ *                           second scene's full composite.
+ * @param nativeHdrIds - Set of HDR element ids; passed to mask helpers so HDR
+ *                       elements stay inline-hidden behind the screenshot
+ *                       (their pixels arrive via `blitHdrVideoLayer` etc.).
+ */
+export async function processLayeredTransitionFrame(
+  session: CaptureSession,
+  frameIdx: number,
+  time: number,
+  transition: TransitionRange,
+  ctx: HdrCompositeContext,
+  sceneElements: Record<string, string[]>,
+  buffers: LayeredTransitionBuffers,
+  assertNotAborted: () => void,
+  nativeHdrIds: Set<string>,
+): Promise<void> {
+  const {
+    log,
+    beforeCaptureHook,
+    width,
+    height,
+    fps,
+    compositeTransfer,
+    nativeHdrImageIds,
+    hdrImageBuffers,
+    hdrImageTransferCache,
+    hdrVideoFrameSources,
+    hdrVideoStartTimes,
+    imageTransfers,
+    videoTransfers,
+    hdrPerf,
+  } = ctx;
+  const hdrTargetTransfer = compositeTransfer === "srgb" ? undefined : compositeTransfer;
+
+  if (hdrPerf) hdrPerf.frames += 1;
+  if (hdrPerf) hdrPerf.transitionFrames += 1;
+  const transitionTimingStart = Date.now();
+
+  let timingStart = Date.now();
+  await session.page.evaluate((t: number) => {
+    if (window.__hf && typeof window.__hf.seek === "function") window.__hf.seek(t);
+  }, time);
+  addHdrTiming(hdrPerf, "frameSeekMs", timingStart);
+
+  if (beforeCaptureHook) {
+    timingStart = Date.now();
+    await beforeCaptureHook(session.page, time);
+    addHdrTiming(hdrPerf, "frameInjectMs", timingStart);
+  }
+
+  timingStart = Date.now();
+  const stackingInfo = await queryElementStacking(session.page, nativeHdrIds);
+  addHdrTiming(hdrPerf, "stackingQueryMs", timingStart);
+
+  const progress =
+    transition.endFrame === transition.startFrame
+      ? 1
+      : (frameIdx - transition.startFrame) / (transition.endFrame - transition.startFrame);
+
+  const sceneAIds = new Set(sceneElements[transition.fromScene] ?? []);
+  const sceneBIds = new Set(sceneElements[transition.toScene] ?? []);
+
+  timingStart = Date.now();
+  buffers.bufferA.fill(0);
+  buffers.bufferB.fill(0);
+  addHdrTiming(hdrPerf, "canvasClearMs", timingStart);
+
+  for (const [sceneBuf, sceneIds] of [
+    [buffers.bufferA, sceneAIds],
+    [buffers.bufferB, sceneBIds],
+  ] as const) {
+    assertNotAborted();
+    timingStart = Date.now();
+    await session.page.evaluate((t: number) => {
+      if (window.__hf && typeof window.__hf.seek === "function") window.__hf.seek(t);
+    }, time);
+    addHdrTiming(hdrPerf, "domLayerSeekMs", timingStart);
+    if (beforeCaptureHook) {
+      timingStart = Date.now();
+      await beforeCaptureHook(session.page, time);
+      addHdrTiming(hdrPerf, "domLayerInjectMs", timingStart);
+    }
+
+    for (const el of stackingInfo) {
+      if (!el.isHdr || !sceneIds.has(el.id)) continue;
+      if (nativeHdrImageIds.has(el.id)) {
+        blitHdrImageLayer(
+          sceneBuf,
+          el,
+          hdrImageBuffers,
+          hdrImageTransferCache,
+          width,
+          height,
+          log,
+          imageTransfers.get(el.id),
+          hdrTargetTransfer,
+          hdrPerf,
+        );
+      } else {
+        blitHdrVideoLayer(
+          sceneBuf,
+          el,
+          time,
+          fps,
+          hdrVideoFrameSources,
+          hdrVideoStartTimes,
+          width,
+          height,
+          log,
+          videoTransfers.get(el.id),
+          hdrTargetTransfer,
+          hdrPerf,
+        );
+      }
+    }
+
+    const showIds = Array.from(sceneIds);
+    const hideIds = stackingInfo
+      .map((e) => e.id)
+      .filter((id) => !sceneIds.has(id) || nativeHdrIds.has(id));
+    if (hdrPerf) hdrPerf.domLayerCaptures += 1;
+    timingStart = Date.now();
+    await applyDomLayerMask(session.page, showIds, hideIds);
+    addHdrTiming(hdrPerf, "domMaskApplyMs", timingStart);
+    timingStart = Date.now();
+    const domPng = await captureAlphaPng(session.page, width, height);
+    addHdrTiming(hdrPerf, "domScreenshotMs", timingStart);
+    timingStart = Date.now();
+    await removeDomLayerMask(session.page, hideIds);
+    addHdrTiming(hdrPerf, "domMaskRemoveMs", timingStart);
+
+    try {
+      timingStart = Date.now();
+      const { data: domRgba } = decodePng(domPng);
+      addHdrTiming(hdrPerf, "domPngDecodeMs", timingStart);
+      timingStart = Date.now();
+      blitRgba8OverRgb48le(domRgba, sceneBuf, width, height, compositeTransfer);
+      addHdrTiming(hdrPerf, "domBlitMs", timingStart);
+    } catch (err) {
+      log.warn("DOM layer decode/blit failed; skipping overlay for transition scene", {
+        frameIndex: frameIdx,
+        sceneIds: Array.from(sceneIds),
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const transitionFn: TransitionFn = TRANSITIONS[transition.shader] ?? crossfade;
+  transitionFn(buffers.bufferA, buffers.bufferB, buffers.output, width, height, progress);
+  addHdrTiming(hdrPerf, "transitionCompositeMs", transitionTimingStart);
+}
+
+/**
+ * Decide whether the hybrid parallel layered path is safe to use for a given
+ * render. Returns `false` (i.e. fall back to the legacy sequential loop) for:
+ *
+ * - HDR content (HDR video raw-frame sources are file-descriptor-bound to a
+ *   single worker — sharing would require per-worker `dup(fd)` and
+ *   worker-local scratch buffers, out of scope for the #677 fix).
+ * - Compositions where every frame falls inside a transition window
+ *   (parallel workers would have nothing to do; legacy loop is fine).
+ * - Worker budgets at or below 1 — the legacy loop is already optimal for
+ *   single-worker SDR.
+ *
+ * Surfaced as a top-level helper so the call site can log the gating
+ * decision next to the worker-count choice, and so tests can assert the
+ * exact predicate without spinning up a real render.
+ */
+export function shouldUseHybridLayeredPath(args: {
+  hasHdrContent: boolean;
+  transitionFramesCount: number;
+  totalFrames: number;
+  workerCount: number;
+}): boolean {
+  if (args.hasHdrContent) return false;
+  if (args.workerCount <= 1) return false;
+  if (args.totalFrames <= 0) return false;
+  if (args.transitionFramesCount >= args.totalFrames) return false;
+  return true;
 }
 
 export function createRenderJob(config: RenderConfig): RenderJob {
@@ -2819,7 +3184,11 @@ export async function executeRenderJob(
             mkdirSync(debugDumpDir, { recursive: true });
           }
           const compositeTransfer = resolveCompositeTransfer(hasHdrContent, effectiveHdr);
-          const hdrTargetTransfer = compositeTransfer === "srgb" ? undefined : compositeTransfer;
+          // `hdrTargetTransfer` (compositeTransfer normalized to `undefined`
+          // for sRGB) is now computed inside `processLayeredTransitionFrame`
+          // and `compositeHdrFrame`; the inline copy that the legacy loop
+          // body referenced was removed in the hybrid-dispatch refactor.
+          //
           // Per-job LRU cache for transfer-converted HDR image buffers. Static HDR
           // images that need PQ↔HLG conversion are converted exactly once per
           // (imageId, targetTransfer) and then reused for every subsequent frame
@@ -2864,274 +3233,360 @@ export async function executeRenderJob(
           // to avoid ~37 MB allocation per frame in the hot loop.
           const normalCanvas = Buffer.alloc(bufSize);
 
-          for (let i = 0; i < totalFrames; i++) {
-            assertNotAborted();
-            const time = (i * job.config.fps.den) / job.config.fps.num;
-            if (hdrPerf) hdrPerf.frames += 1;
+          // ── Hybrid layered dispatch (issue #677) ───────────────────────────
+          // Pre-#677 this path was a single sequential for-loop that drove the
+          // dual-scene transition compositor for every transition frame and
+          // the normal layered compositor for every other frame — even when
+          // the composition had no HDR content and could trivially be
+          // parallelized. For an SDR shader-transition composition with 14
+          // 0.3s transitions on a 28s timeline, ~83% of frames were sitting
+          // on a fast non-transition path serialized behind a single browser.
+          //
+          // The fix here computes the transition-frame set up front and,
+          // when the workload qualifies (SDR + multi-worker), spawns a pool
+          // of additional `domSession`s. The pool drains the non-transition
+          // frames in parallel; the main session steps through the
+          // transition frames sequentially. A shared `FrameReorderBuffer`
+          // gates `hdrEncoder.writeFrame` so frames hit the encoder in
+          // ascending index order regardless of which session finished
+          // them first.
+          //
+          // HDR + shader-transitions falls back to the legacy sequential
+          // loop: each worker session would need its own `dup(fd)` into the
+          // pre-extracted HDR raw frame files (the existing
+          // `HdrVideoFrameSource` shape carries a single shared fd and a
+          // single scratch Buffer — a 16-bit pixel format is not safe to
+          // read concurrently from the same fd because `readSync` advances
+          // the file offset). Splitting HDR raw-frame sources per worker is
+          // a follow-up; the #677 fix targets the SDR transition path that
+          // produced the reported 24× regression.
+          const transitionFrames = partitionTransitionFrames(transitionRanges, totalFrames);
+          const transitionFrameCount = transitionFrames.size;
+          const hybridEligible = shouldUseHybridLayeredPath({
+            hasHdrContent,
+            transitionFramesCount: transitionFrameCount,
+            totalFrames,
+            workerCount,
+          });
 
-            // Seek timeline
-            let timingStart = Date.now();
-            await domSession.page.evaluate((t: number) => {
-              if (window.__hf && typeof window.__hf.seek === "function") window.__hf.seek(t);
-            }, time);
-            addHdrTiming(hdrPerf, "frameSeekMs", timingStart);
+          if (transitionRanges.length > 0) {
+            log.info("[Render] Layered hybrid dispatch decision", {
+              hybridEnabled: hybridEligible,
+              hasHdrContent,
+              workerCount,
+              transitionFrameCount,
+              totalFrames,
+              transitionRatio:
+                totalFrames > 0
+                  ? Math.round((transitionFrameCount / totalFrames) * 1000) / 1000
+                  : 0,
+            });
+          }
 
-            // Inject SDR video frames into the DOM
-            if (beforeCaptureHook) {
-              timingStart = Date.now();
-              await beforeCaptureHook(domSession.page, time);
-              addHdrTiming(hdrPerf, "frameInjectMs", timingStart);
-            }
-
-            // Query ALL timed elements for z-order analysis
-            timingStart = Date.now();
-            const stackingInfo = await queryElementStacking(domSession.page, nativeHdrIds);
-            addHdrTiming(hdrPerf, "stackingQueryMs", timingStart);
-
-            // Find active transition for this frame (if any)
-            const activeTransition = transitionRanges.find(
-              (t) => i >= t.startFrame && i <= t.endFrame,
+          // Recompute the worker count using the actual transition ratio now
+          // that we have it — the pre-discovery worker count was sized with
+          // the legacy flat shader-transition charge. With the hybrid path
+          // most frames are cheap, so auto-worker sizing can comfortably
+          // climb back up to the SDR baseline. Explicit `--workers` requests
+          // are still honored verbatim (resolveRenderWorkerCount clamps).
+          let layeredWorkerCount = workerCount;
+          if (hybridEligible && transitionRanges.length > 0) {
+            const ratio = transitionFrameCount / totalFrames;
+            const shapedCost = combineCaptureCostEstimates(
+              estimateCaptureCostMultiplier(compiled, { transitionFrameRatio: ratio }),
+              captureCalibration?.estimate,
             );
-
-            // Per-frame debug snapshot (every 30 frames). The meta object
-            // requires `Array.find` over `stackingInfo` plus a number-format
-            // and conditional struct allocation — non-trivial work to do
-            // every 30 frames in the encode hot loop. Gate the entire block
-            // on the logger's level check so production runs (level=info)
-            // pay nothing.
-            //
-            // Audit note (PR #383 review): this is the only per-frame log
-            // site in the streaming HDR encode loop that constructs
-            // non-trivial metadata. The `[diag]` log.info calls inside
-            // compositeToBuffer (compositeToBuffer plan, hdr layer blit,
-            // dom layer blit, compositeToBuffer end) are already gated by
-            // `shouldLog = debugDumpEnabled && debugFrameIndex >= 0`, where
-            // debugDumpEnabled is driven by KEEP_TEMP=1 — strictly stricter
-            // than an isLevelEnabled check. The HDR blit error-path
-            // log.debugs only fire on caught failures, not on the happy
-            // path. Any new per-frame log site that builds meta should
-            // follow the same `if (log.isLevelEnabled?.("level") ?? true)`
-            // pattern (or stay behind `shouldLog`) so production stays
-            // allocation-free in the hot loop.
-            if (i % 30 === 0 && (log.isLevelEnabled?.("debug") ?? true)) {
-              const hdrEl = stackingInfo.find((e) => e.isHdr);
-              log.debug("[Render] HDR layer composite frame", {
-                frame: i,
-                time: time.toFixed(2),
-                hdrElement: hdrEl
-                  ? { z: hdrEl.zIndex, visible: hdrEl.visible, width: hdrEl.width }
-                  : null,
-                stackingCount: stackingInfo.length,
-                activeTransition: activeTransition?.shader,
+            const shapedWorkers = calculateOptimalWorkers(totalFrames, job.config.workers, {
+              ...cfg,
+              captureCostMultiplier: shapedCost.multiplier,
+            });
+            if (shapedWorkers > layeredWorkerCount) {
+              log.info("[Render] Bumping layered worker count for hybrid SDR path", {
+                from: layeredWorkerCount,
+                to: shapedWorkers,
+                blendedCostMultiplier: shapedCost.multiplier,
+                transitionFrameRatio: ratio,
               });
+              layeredWorkerCount = shapedWorkers;
             }
+          }
 
-            if (activeTransition && transBufferA && transBufferB && transOutput) {
-              if (hdrPerf) hdrPerf.transitionFrames += 1;
-              const transitionTimingStart = Date.now();
-              // ── Transition frame: dual-scene compositing ──────────────────
-              const progress =
-                activeTransition.endFrame === activeTransition.startFrame
-                  ? 1
-                  : (i - activeTransition.startFrame) /
-                    (activeTransition.endFrame - activeTransition.startFrame);
-
-              // Resolve scene element IDs
-              const sceneAIds = new Set(sceneElements[activeTransition.fromScene] ?? []);
-              const sceneBIds = new Set(sceneElements[activeTransition.toScene] ?? []);
-
-              // Zero-fill scene buffers (transition function writes every output pixel)
-              timingStart = Date.now();
-              transBufferA.fill(0);
-              transBufferB.fill(0);
-              addHdrTiming(hdrPerf, "canvasClearMs", timingStart);
-
-              for (const [sceneBuf, sceneIds] of [
-                [transBufferA, sceneAIds],
-                [transBufferB, sceneBIds],
-              ] as const) {
-                // Re-check abort between scene A and scene B. Each scene
-                // capture below performs a DOM seek, optional hook,
-                // per-layer HDR blits, and a full-page screenshot — easily
-                // hundreds of ms. Without this, an abort that arrives
-                // during scene A's capture won't fire until the next outer
-                // frame, after scene B has already been fully composited
-                // and discarded.
-                assertNotAborted();
-                // Fresh state: seek + inject
-                timingStart = Date.now();
-                await domSession.page.evaluate((t: number) => {
-                  if (window.__hf && typeof window.__hf.seek === "function") window.__hf.seek(t);
-                }, time);
-                addHdrTiming(hdrPerf, "domLayerSeekMs", timingStart);
-                if (beforeCaptureHook) {
-                  timingStart = Date.now();
-                  await beforeCaptureHook(domSession.page, time);
-                  addHdrTiming(hdrPerf, "domLayerInjectMs", timingStart);
-                }
-
-                // Blit all HDR videos/images for this scene
-                for (const el of stackingInfo) {
-                  if (!el.isHdr || !sceneIds.has(el.id)) continue;
-                  if (nativeHdrImageIds.has(el.id)) {
-                    blitHdrImageLayer(
-                      sceneBuf as Buffer,
-                      el,
-                      hdrImageBuffers,
-                      hdrImageTransferCache,
-                      width,
-                      height,
-                      log,
-                      imageTransfers.get(el.id),
-                      hdrTargetTransfer,
-                      hdrPerf,
-                    );
-                  } else {
-                    blitHdrVideoLayer(
-                      sceneBuf as Buffer,
-                      el,
-                      time,
-                      fpsToNumber(job.config.fps),
-                      hdrVideoFrameSources,
-                      hdrVideoStartTimes,
-                      width,
-                      height,
-                      log,
-                      videoTransfers.get(el.id),
-                      hdrTargetTransfer,
-                      hdrPerf,
-                    );
-                  }
-                }
-
-                // Single DOM screenshot: mask the page so only this scene's DOM
-                // elements paint. Same masking strategy as the per-layer DOM
-                // branch — see applyDomLayerMask for details. Native HDR videos
-                // and images are always inline-hidden so their fallback poster /
-                // SDR thumbnail doesn't bleed into the DOM overlay (HDR pixels
-                // are blitted separately by blitHdrVideoLayer / blitHdrImageLayer
-                // above).
-                const showIds = Array.from(sceneIds);
-                const hideIds = stackingInfo
-                  .map((e) => e.id)
-                  .filter((id) => !sceneIds.has(id) || nativeHdrIds.has(id));
-                if (hdrPerf) hdrPerf.domLayerCaptures += 1;
-                timingStart = Date.now();
-                await applyDomLayerMask(domSession.page, showIds, hideIds);
-                addHdrTiming(hdrPerf, "domMaskApplyMs", timingStart);
-                timingStart = Date.now();
-                const domPng = await captureAlphaPng(domSession.page, width, height);
-                addHdrTiming(hdrPerf, "domScreenshotMs", timingStart);
-                timingStart = Date.now();
-                await removeDomLayerMask(domSession.page, hideIds);
-                addHdrTiming(hdrPerf, "domMaskRemoveMs", timingStart);
-
-                try {
-                  timingStart = Date.now();
-                  const { data: domRgba } = decodePng(domPng);
-                  addHdrTiming(hdrPerf, "domPngDecodeMs", timingStart);
-                  timingStart = Date.now();
-                  blitRgba8OverRgb48le(
-                    domRgba,
-                    sceneBuf as Buffer,
-                    width,
-                    height,
-                    compositeTransfer,
-                  );
-                  addHdrTiming(hdrPerf, "domBlitMs", timingStart);
-                } catch (err) {
-                  log.warn("DOM layer decode/blit failed; skipping overlay for transition scene", {
-                    frameIndex: i,
-                    sceneIds: Array.from(sceneIds),
-                    error: err instanceof Error ? err.message : String(err),
-                  });
-                }
+          const transitionBuffers: LayeredTransitionBuffers | null = hasTransitions
+            ? {
+                bufferA: transBufferA as Buffer,
+                bufferB: transBufferB as Buffer,
+                output: transOutput as Buffer,
               }
+            : null;
 
-              // Apply shader transition blend directly in the active rgb48le
-              // signal space. Linearizing HDR was attempted but destroys dark
-              // PQ content — values below PQ ~5000 quantize to zero in 16-bit
-              // linear, wiping out the bottom portion of dark video content.
-              // SDR compositions use 16-bit-expanded sRGB, which matches the
-              // shader design space.
-              const transitionFn: TransitionFn = TRANSITIONS[activeTransition.shader] ?? crossfade;
-              transitionFn(transBufferA, transBufferB, transOutput, width, height, progress);
-              addHdrTiming(hdrPerf, "transitionCompositeMs", transitionTimingStart);
+          // Shared by both dispatch paths. `framesWritten` is the encoder
+          // cursor; both transition and normal-frame writers increment it
+          // *only* after `hdrEncoder.writeFrame` succeeds so progress updates
+          // stay tied to actual encoder ingestion.
+          let framesWritten = 0;
+          const reorderBuffer = createFrameReorderBuffer(0, totalFrames);
+          // Snapshot `hdrEncoder` into a non-null local. `hdrEncoder` is the
+          // outer `let` that the finally block uses for defensive close; the
+          // compiler can't narrow it across the writer closure, so capture
+          // the freshly-spawned encoder once at this point. It's a stable
+          // reference for the duration of the writer's lifetime.
+          const encoder = hdrEncoder;
+          if (!encoder) {
+            throw new Error("hdrEncoder is null when starting the layered writer");
+          }
 
-              timingStart = Date.now();
-              hdrEncoder.writeFrame(transOutput);
-              addHdrTiming(hdrPerf, "encoderWriteMs", timingStart);
-            } else {
-              if (hdrPerf) hdrPerf.normalFrames += 1;
-              // ── Normal frame: full layer composite (no transition) ─────────
-              timingStart = Date.now();
-              normalCanvas.fill(0);
-              addHdrTiming(hdrPerf, "canvasClearMs", timingStart);
-              timingStart = Date.now();
-              await compositeHdrFrame(
-                hdrCompositeCtx,
-                normalCanvas,
-                time,
-                stackingInfo,
-                undefined,
-                i,
-              );
-              addHdrTiming(hdrPerf, "normalCompositeMs", timingStart);
-              if (debugDumpEnabled && debugDumpDir && i % 30 === 0) {
-                const previewPath = join(
-                  debugDumpDir,
-                  `frame_${String(i).padStart(4, "0")}_final_rgb48le.bin`,
-                );
-                writeFileSync(previewPath, normalCanvas);
-              }
-              timingStart = Date.now();
-              hdrEncoder.writeFrame(normalCanvas);
-              addHdrTiming(hdrPerf, "encoderWriteMs", timingStart);
-            }
-
-            // Clean up HDR raw frame sources for videos that have ended.
-            // Frees disk space during long renders with many HDR videos.
-            // Skip when KEEP_TEMP=1 so we can inspect intermediate state.
-            if (process.env.KEEP_TEMP !== "1") {
-              for (const [videoId, endTime] of hdrVideoEndTimes) {
-                if (time > endTime && !cleanedUpVideos.has(videoId)) {
-                  // Also check no active transition references this video's scene
-                  const stillNeeded =
-                    activeTransition &&
-                    (sceneElements[activeTransition.fromScene]?.includes(videoId) ||
-                      sceneElements[activeTransition.toScene]?.includes(videoId));
-                  if (!stillNeeded) {
-                    const frameSource = hdrVideoFrameSources.get(videoId);
-                    if (frameSource) {
-                      closeHdrVideoFrameSource(frameSource, log);
-                      try {
-                        rmSync(frameSource.dir, { recursive: true, force: true });
-                      } catch (err) {
-                        log.warn("Failed to clean up HDR raw frame directory", {
-                          videoId,
-                          frameDir: frameSource.dir,
-                          rawPath: frameSource.rawPath,
-                          error: err instanceof Error ? err.message : String(err),
-                        });
-                      }
-                      hdrVideoFrameSources.delete(videoId);
-                    }
-                    cleanedUpVideos.add(videoId);
-                  }
-                }
-              }
-            }
-
-            job.framesRendered = i + 1;
-            if ((i + 1) % 10 === 0 || i + 1 === totalFrames) {
-              const frameProgress = (i + 1) / totalFrames;
+          const writeEncoded = async (frameIdx: number, buf: Buffer): Promise<void> => {
+            await reorderBuffer.waitForFrame(frameIdx);
+            const writeStart = Date.now();
+            encoder.writeFrame(buf);
+            addHdrTiming(hdrPerf, "encoderWriteMs", writeStart);
+            reorderBuffer.advanceTo(frameIdx + 1);
+            framesWritten += 1;
+            job.framesRendered = framesWritten;
+            if (framesWritten % 10 === 0 || framesWritten === totalFrames) {
+              const frameProgress = framesWritten / totalFrames;
               updateJobStatus(
                 job,
                 "rendering",
-                `Layered composite frame ${i + 1}/${job.totalFrames}`,
+                `Layered composite frame ${framesWritten}/${job.totalFrames}`,
                 Math.round(25 + frameProgress * 55),
                 onProgress,
               );
+            }
+            // HDR raw-frame cleanup ran after every frame in the legacy loop.
+            // It's a no-op when `hdrVideoEndTimes` is empty (the SDR hybrid
+            // case), so we keep the same call shape here without forking the
+            // cleanup branch. The `time` is derived back from frameIdx so we
+            // don't have to thread it through the writer plumbing.
+            if (process.env.KEEP_TEMP !== "1" && hdrVideoEndTimes.size > 0) {
+              const frameTime = (frameIdx * job.config.fps.den) / job.config.fps.num;
+              for (const [videoId, endTime] of hdrVideoEndTimes) {
+                if (frameTime > endTime && !cleanedUpVideos.has(videoId)) {
+                  // In the legacy loop this check also gated on whether an
+                  // active transition still referenced the video's scene.
+                  // The hybrid path doesn't know the per-frame
+                  // `activeTransition` at write time, but the SDR hybrid
+                  // case is the only one that exercises this writer in
+                  // parallel and it has no HDR videos, so the simpler
+                  // "after end time" gate is sufficient. The HDR fallback
+                  // path goes through `runSequentialLayered` below and
+                  // does the full check inline.
+                  const frameSource = hdrVideoFrameSources.get(videoId);
+                  if (frameSource) {
+                    closeHdrVideoFrameSource(frameSource, log);
+                    try {
+                      rmSync(frameSource.dir, { recursive: true, force: true });
+                    } catch (err) {
+                      log.warn("Failed to clean up HDR raw frame directory", {
+                        videoId,
+                        frameDir: frameSource.dir,
+                        rawPath: frameSource.rawPath,
+                        error: err instanceof Error ? err.message : String(err),
+                      });
+                    }
+                    hdrVideoFrameSources.delete(videoId);
+                  }
+                  cleanedUpVideos.add(videoId);
+                }
+              }
+            }
+          };
+
+          // ── Hybrid path: parallel pool drains non-transition frames; main
+          // session walks the transition frames sequentially. Both feed into
+          // the same reorder buffer → encoder.
+          if (hybridEligible) {
+            // Build worker partitions: layeredWorkerCount workers split the
+            // contiguous non-transition frame range. Each worker iterates
+            // its slice and skips frames in `transitionFrames`.
+            const workerSessions: CaptureSession[] = [];
+            const workerCanvasesNeeded = Math.max(0, layeredWorkerCount - 1);
+            try {
+              // Worker 0 reuses the main `domSession`; spawn the rest.
+              for (let w = 0; w < workerCanvasesNeeded; w++) {
+                const session = await createCaptureSession(
+                  fileServer.url,
+                  framesDir,
+                  buildCaptureOptions(),
+                  createRenderVideoFrameInjector(),
+                  cfg,
+                );
+                await initializeSession(session);
+                await initTransparentBackground(session.page);
+                workerSessions.push(session);
+              }
+
+              const sessions: CaptureSession[] = [domSession, ...workerSessions];
+              const activeWorkerCount = sessions.length;
+              const totalNonTransitionFrames = totalFrames - transitionFrameCount;
+              const framesPerWorker = Math.max(
+                1,
+                Math.ceil(totalNonTransitionFrames / activeWorkerCount),
+              );
+
+              // Per-worker canvas, allocated once and reused. Worker 0 reuses
+              // `normalCanvas` (already allocated above for the legacy path).
+              const workerCanvases: Buffer[] = [normalCanvas];
+              for (let w = 1; w < activeWorkerCount; w++) {
+                workerCanvases.push(Buffer.alloc(bufSize));
+              }
+
+              // Distribute non-transition frames across workers in a
+              // contiguous, locality-preserving manner. Each worker advances
+              // through its own range and just skips transition frames.
+              const workerRanges: Array<{ start: number; end: number }> = [];
+              let cursor = 0;
+              let assigned = 0;
+              for (let w = 0; w < activeWorkerCount; w++) {
+                const targetForThisWorker = Math.min(
+                  framesPerWorker,
+                  totalNonTransitionFrames - assigned,
+                );
+                const start = cursor;
+                let collected = 0;
+                while (cursor < totalFrames && collected < targetForThisWorker) {
+                  if (!transitionFrames.has(cursor)) collected += 1;
+                  cursor += 1;
+                }
+                workerRanges.push({ start, end: cursor });
+                assigned += collected;
+              }
+
+              const workerTaskOf = async (w: number): Promise<void> => {
+                const session = sessions[w];
+                const canvas = workerCanvases[w];
+                if (!session || !canvas) return;
+                const range = workerRanges[w];
+                if (!range) return;
+                for (let i = range.start; i < range.end; i++) {
+                  if (transitionFrames.has(i)) continue;
+                  assertNotAborted();
+                  const time = (i * job.config.fps.den) / job.config.fps.num;
+                  await processLayeredNormalFrame(
+                    session,
+                    i,
+                    time,
+                    hdrCompositeCtx,
+                    canvas,
+                    nativeHdrIds,
+                  );
+                  if (debugDumpEnabled && debugDumpDir && i % 30 === 0) {
+                    const previewPath = join(
+                      debugDumpDir,
+                      `frame_${String(i).padStart(4, "0")}_final_rgb48le.bin`,
+                    );
+                    writeFileSync(previewPath, canvas);
+                  }
+                  await writeEncoded(i, canvas);
+                }
+              };
+
+              const transitionTaskFn = async (): Promise<void> => {
+                if (!transitionBuffers) return;
+                for (let i = 0; i < totalFrames; i++) {
+                  if (!transitionFrames.has(i)) continue;
+                  assertNotAborted();
+                  const time = (i * job.config.fps.den) / job.config.fps.num;
+                  const activeTransition = transitionRanges.find(
+                    (t) => i >= t.startFrame && i <= t.endFrame,
+                  );
+                  if (!activeTransition) continue;
+                  // Transitions always run on the main session; reserve it
+                  // by waiting until any normal-frame work assigned to
+                  // worker 0 has stepped past `i`. Worker 0's range is the
+                  // first contiguous slice, so once its cursor crosses `i`
+                  // it won't issue another CDP call for the same session at
+                  // overlapping frame indices. We just need a coarse fence:
+                  // wait for the reorder buffer to advance to a point at or
+                  // before `i` (i.e. frame `i` is the next thing the encoder
+                  // expects). This naturally serializes the main session.
+                  await reorderBuffer.waitForFrame(i);
+                  await processLayeredTransitionFrame(
+                    domSession,
+                    i,
+                    time,
+                    activeTransition,
+                    hdrCompositeCtx,
+                    sceneElements,
+                    transitionBuffers,
+                    assertNotAborted,
+                    nativeHdrIds,
+                  );
+                  await writeEncoded(i, transitionBuffers.output);
+                }
+              };
+
+              // Run worker tasks + the transition processor concurrently.
+              // The reorder buffer fences ordering so the encoder never
+              // sees frame N+1 before frame N. Promise.all rethrows the
+              // first rejection, which (combined with `assertNotAborted` in
+              // the per-frame helpers) bubbles cancellation up cleanly.
+              const workerPromises = sessions.map((_, w) => workerTaskOf(w));
+              await Promise.all([transitionTaskFn(), ...workerPromises]);
+              await reorderBuffer.waitForAllDone();
+            } finally {
+              for (const session of workerSessions) {
+                await closeCaptureSession(session).catch((err) => {
+                  log.warn("Hybrid worker session close failed", {
+                    err: err instanceof Error ? err.message : String(err),
+                  });
+                });
+              }
+            }
+          } else {
+            // ── Legacy sequential path ─────────────────────────────────────
+            // Preserves bit-for-bit output for HDR renders, single-worker
+            // renders, and the all-transition edge case (which the hybrid
+            // path early-outs). The helpers `processLayeredNormalFrame` /
+            // `processLayeredTransitionFrame` keep the per-frame work in
+            // sync with the hybrid path so `hdrPerf` rollups are
+            // consistent across both branches.
+            for (let i = 0; i < totalFrames; i++) {
+              assertNotAborted();
+              const time = (i * job.config.fps.den) / job.config.fps.num;
+              const activeTransition = transitionRanges.find(
+                (t) => i >= t.startFrame && i <= t.endFrame,
+              );
+
+              if (i % 30 === 0 && (log.isLevelEnabled?.("debug") ?? true)) {
+                log.debug("[Render] HDR layer composite frame", {
+                  frame: i,
+                  time: time.toFixed(2),
+                  activeTransition: activeTransition?.shader,
+                });
+              }
+
+              if (activeTransition && transitionBuffers) {
+                await processLayeredTransitionFrame(
+                  domSession,
+                  i,
+                  time,
+                  activeTransition,
+                  hdrCompositeCtx,
+                  sceneElements,
+                  transitionBuffers,
+                  assertNotAborted,
+                  nativeHdrIds,
+                );
+                await writeEncoded(i, transitionBuffers.output);
+              } else {
+                await processLayeredNormalFrame(
+                  domSession,
+                  i,
+                  time,
+                  hdrCompositeCtx,
+                  normalCanvas,
+                  nativeHdrIds,
+                );
+                if (debugDumpEnabled && debugDumpDir && i % 30 === 0) {
+                  const previewPath = join(
+                    debugDumpDir,
+                    `frame_${String(i).padStart(4, "0")}_final_rgb48le.bin`,
+                  );
+                  writeFileSync(previewPath, normalCanvas);
+                }
+                await writeEncoded(i, normalCanvas);
+              }
             }
           }
         } finally {
@@ -3619,7 +4074,13 @@ export async function executeRenderJob(
       peakHeapUsedMb: Math.round(peakHeapUsedBytes / (1024 * 1024)),
     };
     job.perfSummary = perfSummary;
-    if (job.config.debug) {
+    // Write `perf-summary.json` whenever the workDir is going to be retained
+    // (debug mode or `KEEP_TEMP=1`). Surfacing the hdrPerf timing rollups
+    // alongside the captured frames was added for issue #677 so future
+    // regressions in the layered shader-transition path are immediately
+    // diagnosable from a single artifact. Production renders (no debug, no
+    // KEEP_TEMP) still skip the write — the workDir is torn down below.
+    if (job.config.debug || process.env.KEEP_TEMP === "1") {
       try {
         writeFileSync(perfOutputPath, JSON.stringify(perfSummary, null, 2), "utf-8");
       } catch (err) {

@@ -18,10 +18,12 @@ import {
   getNextRetryWorkerCount,
   isRecoverableParallelCaptureError,
   materializeExtractedFramesForCompiledDir,
+  partitionTransitionFrames,
   resolveRenderWorkerCount,
   resolveCompositeTransfer,
   selectCaptureCalibrationFrames,
   shouldFallbackToScreenshotAfterCalibrationError,
+  shouldUseHybridLayeredPath,
   shouldUseLayeredComposite,
   shouldUseStreamingEncode,
 } from "./renderOrchestrator.js";
@@ -546,6 +548,173 @@ describe("estimateCaptureCostMultiplier", () => {
 
     expect(cost.multiplier).toBe(4);
     expect(cost.reasons).toEqual(["shader-transitions", "requestAnimationFrame"]);
+  });
+
+  it("blends the shader-transition cost by transition frame ratio (issue #677)", () => {
+    // 17% of frames inside a transition window (the repro case): 1 + 0.17*1.5 ≈ 1.255
+    const cost = estimateCaptureCostMultiplier(
+      {
+        hasShaderTransitions: true,
+        renderModeHints: { recommendScreenshot: false, reasons: [] },
+      },
+      { transitionFrameRatio: 140 / 840 },
+    );
+
+    expect(cost.multiplier).toBeGreaterThan(1);
+    expect(cost.multiplier).toBeLessThan(1.5);
+    expect(cost.reasons[0]).toMatch(/shader-transitions\(17%-frames\)/);
+  });
+
+  it("collapses to the SDR baseline when the transition ratio is 0", () => {
+    const cost = estimateCaptureCostMultiplier(
+      {
+        hasShaderTransitions: true,
+        renderModeHints: { recommendScreenshot: false, reasons: [] },
+      },
+      { transitionFrameRatio: 0 },
+    );
+
+    expect(cost.multiplier).toBe(1);
+  });
+
+  it("ignores an out-of-range transition ratio and falls back to the flat charge", () => {
+    const cost = estimateCaptureCostMultiplier(
+      {
+        hasShaderTransitions: true,
+        renderModeHints: { recommendScreenshot: false, reasons: [] },
+      },
+      { transitionFrameRatio: 1.5 },
+    );
+
+    expect(cost.multiplier).toBe(3);
+    expect(cost.reasons).toEqual(["shader-transitions"]);
+  });
+});
+
+describe("partitionTransitionFrames", () => {
+  it("returns empty when there are no transitions", () => {
+    expect(partitionTransitionFrames([], 100).size).toBe(0);
+  });
+
+  it("returns empty when totalFrames is zero", () => {
+    expect(partitionTransitionFrames([{ startFrame: 0, endFrame: 5 }], 0).size).toBe(0);
+  });
+
+  it("includes both endpoints of each transition window", () => {
+    const set = partitionTransitionFrames([{ startFrame: 5, endFrame: 10 }], 100);
+    expect(set.has(4)).toBe(false);
+    expect(set.has(5)).toBe(true);
+    expect(set.has(10)).toBe(true);
+    expect(set.has(11)).toBe(false);
+    expect(set.size).toBe(6);
+  });
+
+  it("clamps a window that runs past totalFrames-1", () => {
+    const set = partitionTransitionFrames([{ startFrame: 8, endFrame: 20 }], 10);
+    expect(set.size).toBe(2);
+    expect(set.has(8)).toBe(true);
+    expect(set.has(9)).toBe(true);
+    expect(set.has(10)).toBe(false);
+  });
+
+  it("clamps a negative startFrame to 0", () => {
+    const set = partitionTransitionFrames([{ startFrame: -3, endFrame: 2 }], 100);
+    expect(set.has(0)).toBe(true);
+    expect(set.size).toBe(3);
+  });
+
+  it("handles a transition window covering the final frame", () => {
+    const set = partitionTransitionFrames([{ startFrame: 95, endFrame: 99 }], 100);
+    expect(set.has(99)).toBe(true);
+    expect(set.has(100)).toBe(false);
+  });
+
+  it("matches the issue #677 repro: 14 × 0.3s transitions on 28s@30fps → ~140 transition frames", () => {
+    // 14 transitions each 9 frames inclusive (0.3 * 30 = 9 → endFrame - startFrame = 9 → 10 frames inclusive).
+    // Place them at evenly-spaced beats with ≥1s gaps so they don't overlap.
+    const transitions: Array<{ startFrame: number; endFrame: number }> = [];
+    for (let k = 0; k < 14; k++) {
+      const startFrame = 30 + k * 50; // first at 1s, 14th at ~24s, fits inside 28s = 840 frames
+      transitions.push({ startFrame, endFrame: startFrame + 9 });
+    }
+    const totalFrames = 840;
+    const transitionFrames = partitionTransitionFrames(transitions, totalFrames);
+
+    expect(transitionFrames.size).toBe(14 * 10);
+    expect(transitionFrames.size).toBeLessThan(totalFrames);
+    const ratio = transitionFrames.size / totalFrames;
+    expect(ratio).toBeGreaterThan(0.15);
+    expect(ratio).toBeLessThan(0.2);
+  });
+
+  it("deduplicates overlapping transitions", () => {
+    const set = partitionTransitionFrames(
+      [
+        { startFrame: 0, endFrame: 5 },
+        { startFrame: 3, endFrame: 7 },
+      ],
+      100,
+    );
+    expect(set.size).toBe(8);
+    expect(set.has(0)).toBe(true);
+    expect(set.has(7)).toBe(true);
+  });
+});
+
+describe("shouldUseHybridLayeredPath", () => {
+  it("opts into hybrid for SDR multi-worker renders with transitions", () => {
+    expect(
+      shouldUseHybridLayeredPath({
+        hasHdrContent: false,
+        transitionFramesCount: 140,
+        totalFrames: 840,
+        workerCount: 6,
+      }),
+    ).toBe(true);
+  });
+
+  it("falls back to sequential when HDR content is present", () => {
+    expect(
+      shouldUseHybridLayeredPath({
+        hasHdrContent: true,
+        transitionFramesCount: 140,
+        totalFrames: 840,
+        workerCount: 6,
+      }),
+    ).toBe(false);
+  });
+
+  it("falls back to sequential at workerCount=1", () => {
+    expect(
+      shouldUseHybridLayeredPath({
+        hasHdrContent: false,
+        transitionFramesCount: 140,
+        totalFrames: 840,
+        workerCount: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("falls back to sequential when every frame is a transition frame", () => {
+    expect(
+      shouldUseHybridLayeredPath({
+        hasHdrContent: false,
+        transitionFramesCount: 100,
+        totalFrames: 100,
+        workerCount: 6,
+      }),
+    ).toBe(false);
+  });
+
+  it("falls back to sequential when totalFrames is non-positive", () => {
+    expect(
+      shouldUseHybridLayeredPath({
+        hasHdrContent: false,
+        transitionFramesCount: 0,
+        totalFrames: 0,
+        workerCount: 6,
+      }),
+    ).toBe(false);
   });
 });
 
