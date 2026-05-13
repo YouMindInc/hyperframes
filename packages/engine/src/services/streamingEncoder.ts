@@ -24,7 +24,6 @@ import {
 } from "../utils/gpuEncoder.js";
 import { formatFfmpegError } from "../utils/runFfmpeg.js";
 import { getHdrEncoderColorParams } from "../utils/hdr.js";
-import { type EncoderOptions } from "./chunkEncoder.types.js";
 import { DEFAULT_CONFIG, type EngineConfig } from "../config.js";
 import { fpsToFfmpegArg, type Fps } from "@hyperframes/core";
 
@@ -399,6 +398,9 @@ export async function spawnStreamingEncoder(
     stderr += `\nProcess error: ${err.message}`;
     exitPromiseResolve?.();
   });
+
+  ffmpeg.stdin?.on("error", () => {});
+  ffmpeg.stdout?.on("error", () => {});
 
   // Handle abort signal
   const onAbort = () => {

@@ -78,6 +78,81 @@ export interface CaptureSession {
 const BROWSER_CONSOLE_BUFFER_SIZE = 200;
 const CAPTURE_SESSION_CLOSE_TIMEOUT_MS = 5_000;
 
+/**
+ * Fixed warmup-loop iteration count used when `CaptureOptions.lockWarmupTicks`
+ * is `true`. Picked to roughly match the median tick count observed by the
+ * unlocked wall-clock loop during a typical 2s page load at 30fps — so
+ * `beginFrameTimeTicks` lands in a similar range regardless of host speed.
+ */
+export const LOCKED_WARMUP_TICKS = 60;
+
+/**
+ * Internal driver for the BeginFrame warmup loop.
+ *
+ *   - Unlocked: exits as soon as `state.running` flips to `false`. Tick count
+ *     varies with wall-clock page-load time.
+ *   - Locked: ignores `state.running` entirely and exits once it has driven
+ *     exactly `LOCKED_WARMUP_TICKS` iterations. Caller awaits this promise
+ *     after page-readiness so `session.beginFrameTimeTicks` is identical
+ *     across hosts.
+ *   - `tick` errors are swallowed (Chrome's `beginFrame` is best-effort
+ *     during page load — the page hasn't installed CDP listeners yet). When
+ *     `tick` throws, the iteration count does NOT advance.
+ *
+ * `intervalMs` is the BeginFrame interval (≈33ms at 30fps).
+ *
+ * `frameTimeTicks` is derived as `ticks * intervalMs` and exposed via
+ * {@link warmupFrameTimeTicks} — not stored on the state, to keep `ticks`
+ * the single source of truth.
+ */
+export interface WarmupTickState {
+  running: boolean;
+  ticks: number;
+}
+
+export interface WarmupTickOptions {
+  intervalMs: number;
+  lockWarmupTicks: boolean;
+  tick: (frameTimeTicks: number, intervalMs: number) => Promise<void>;
+  /** Injectable so tests can advance "time" without real setTimeout. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Derive the current simulated frame time from a warmup state. Single source
+ * of truth so tests and callers stay in sync.
+ */
+export function warmupFrameTimeTicks(state: WarmupTickState, intervalMs: number): number {
+  return state.ticks * intervalMs;
+}
+
+export async function driveWarmupTicks(
+  options: WarmupTickOptions,
+  state: WarmupTickState,
+): Promise<void> {
+  const sleep = options.sleep ?? realSleep;
+  while (true) {
+    if (options.lockWarmupTicks) {
+      // Locked mode exits on the iteration count, ignoring `state.running` —
+      // the caller flips `running=false` after page-readiness but we keep
+      // ticking until LOCKED_WARMUP_TICKS so the count is host-independent.
+      if (state.ticks >= LOCKED_WARMUP_TICKS) return;
+    } else {
+      // Unlocked mode is wall-clock-bounded.
+      if (!state.running) return;
+    }
+    try {
+      await options.tick(state.ticks * options.intervalMs, options.intervalMs);
+      state.ticks += 1;
+    } catch {
+      // Page not ready yet; keep spinning.
+    }
+    await sleep(options.intervalMs);
+  }
+}
+
 async function waitForCloseWithTimeout(promise: Promise<unknown>): Promise<boolean> {
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -447,38 +522,53 @@ export async function initializeSession(session: CaptureSession): Promise<void> 
 
   // In BeginFrame mode, Chrome's event loop is paused until we issue frames.
   // Start a warmup loop to drive rAF/setTimeout callbacks during page load.
-  let warmupRunning = true;
-  let warmupTicks = 0;
-  let warmupFrameTime = 0;
+  //
+  // The unlocked path runs while `warmupState.running` stays true — wall-
+  // clock-bounded. The locked path (`options.lockWarmupTicks`) additionally
+  // exits at exactly `LOCKED_WARMUP_TICKS` iterations so `beginFrameTimeTicks`
+  // is deterministic across hosts with different page-load latencies.
   const warmupIntervalMs = 33; // ~30fps
+  const warmupState: WarmupTickState = {
+    running: true,
+    ticks: 0,
+  };
+  const lockWarmupTicks = session.options.lockWarmupTicks === true;
   let warmupClient: import("puppeteer-core").CDPSession | null = null;
 
-  const warmupLoop = async () => {
+  const acquireWarmupClient = async (): Promise<void> => {
     try {
       warmupClient = await getCdpSession(page);
       await warmupClient.send("HeadlessExperimental.enable");
     } catch {
       /* page not ready yet */
     }
+  };
 
-    while (warmupRunning) {
-      if (warmupClient) {
-        try {
+  const warmupLoopPromise = (async () => {
+    await acquireWarmupClient();
+    await driveWarmupTicks(
+      {
+        intervalMs: warmupIntervalMs,
+        lockWarmupTicks,
+        tick: async (frameTimeTicks, interval) => {
+          if (!warmupClient) {
+            // No CDP yet — let driveWarmupTicks count the tick anyway so the
+            // locked iteration count is reached deterministically. Throwing
+            // would skip the ticks++ increment, leaking host-load variance
+            // back into the count.
+            return;
+          }
           await warmupClient.send("HeadlessExperimental.beginFrame", {
-            frameTimeTicks: warmupFrameTime,
-            interval: warmupIntervalMs,
+            frameTimeTicks,
+            interval,
             noDisplayUpdates: true,
           });
-          warmupFrameTime += warmupIntervalMs;
-          warmupTicks++;
-        } catch {
-          /* ignore warmup errors */
-        }
-      }
-      await new Promise((r) => setTimeout(r, warmupIntervalMs));
-    }
-  };
-  warmupLoop().catch(() => {});
+        },
+      },
+      warmupState,
+    );
+  })();
+  warmupLoopPromise.catch(() => {});
 
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
@@ -497,7 +587,7 @@ export async function initializeSession(session: CaptureSession): Promise<void> 
     `!!(window.__hf && typeof window.__hf.seek === "function" && window.__hf.duration > 0)`,
   );
   if (!pageReady) {
-    warmupRunning = false;
+    warmupState.running = false;
     throw new Error(
       `[FrameCapture] window.__hf not ready after ${pageReadyTimeout}ms. Page must expose window.__hf = { duration, seek }.`,
     );
@@ -521,11 +611,18 @@ export async function initializeSession(session: CaptureSession): Promise<void> 
   await page.evaluate(`document.fonts?.ready`);
   await waitForOptionalTailwindReady(page, pageReadyTimeout);
 
-  // Stop warmup
-  warmupRunning = false;
+  // Stop warmup. Unlocked mode exits on this flag; locked mode keeps ticking
+  // until LOCKED_WARMUP_TICKS, so we await its promise to ensure the count is
+  // exact before deriving the baseline.
+  warmupState.running = false;
+  if (lockWarmupTicks) {
+    await warmupLoopPromise.catch(() => {});
+  }
 
-  // Set base frame time ticks past warmup range
-  session.beginFrameTimeTicks = (warmupTicks + 10) * session.beginFrameIntervalMs;
+  // Set base frame time ticks past warmup range. Locked mode pins to the
+  // constant so chunk workers on different hosts compute the same baseline.
+  const baseTickCount = lockWarmupTicks ? LOCKED_WARMUP_TICKS : warmupState.ticks;
+  session.beginFrameTimeTicks = (baseTickCount + 10) * session.beginFrameIntervalMs;
 
   // For PNG captures, inject the transparent-background override + stylesheet
   // (see the screenshot-mode branch above for the rationale). BeginFrame mode
@@ -710,6 +807,69 @@ export async function captureFrameToBuffer(
   const { buffer, captureTimeMs } = await captureFrameCore(session, frameIndex, time);
 
   return { buffer, captureTimeMs };
+}
+
+/**
+ * Type of the "inner capture" function consumed by
+ * {@link discardWarmupCapture}. Matches the real `captureFrameCore` signature
+ * with the buffer-bearing result trimmed to what the caller actually uses
+ * (the wrapper never inspects the buffer). Exposed so unit tests can inject
+ * a stub instead of driving Chrome end-to-end.
+ */
+export type DiscardWarmupInnerCapture = (
+  session: CaptureSession,
+  frameIndex: number,
+  time: number,
+) => Promise<{ buffer: Buffer; quantizedTime: number; captureTimeMs: number }>;
+
+/**
+ * Perform one capture, throw away the buffer, and restore any session
+ * side-effects (perf counters, BeginFrame damage tallies) so downstream
+ * captures see state identical to a fresh session.
+ *
+ * Distributed chunk workers need this because Chrome's BeginFrame screenshot
+ * pipeline maintains a per-process `lastFrameCache`: when a captured frame's
+ * `hasDamage` reports `false`, the screenshot path returns the previously
+ * captured buffer. For chunk N (N > 0) the worker has no prior frame in its
+ * cache, so the very first capture's `hasDamage` reporting diverges from
+ * what an in-process render at the same absolute frame index would see (the
+ * in-process renderer always has frame N-1 cached). One discard capture
+ * before the first real capture primes the cache.
+ *
+ * The function intentionally restores perf state so the warmup capture does
+ * NOT bias `getCapturePerfSummary()`'s per-frame averages.
+ *
+ * No file is written; the buffer is discarded.
+ *
+ * @param session — initialized capture session
+ * @param frameIndex — frame index to warm up with (default 0). Chunk
+ *   workers typically pass their chunk's first absolute frame index.
+ * @param time — time in seconds (default 0). Chunk workers typically pass
+ *   the corresponding `frameIndex / fps`.
+ * @param innerCapture — injectable for tests; defaults to the real
+ *   `captureFrameCore`.
+ */
+export async function discardWarmupCapture(
+  session: CaptureSession,
+  frameIndex: number = 0,
+  time: number = 0,
+  innerCapture: DiscardWarmupInnerCapture = captureFrameCore,
+): Promise<void> {
+  // Snapshot the side-effect counters captureFrameCore mutates. We use a
+  // shallow `{...}` for capturePerf because all five fields are primitive
+  // numbers — no nested state to deep-copy.
+  const perfBefore = { ...session.capturePerf };
+  const hasDamageBefore = session.beginFrameHasDamageCount;
+  const noDamageBefore = session.beginFrameNoDamageCount;
+  try {
+    await innerCapture(session, frameIndex, time);
+  } finally {
+    // Always restore — even on error. A failed warmup capture should not
+    // leak inflated perf counters into the real capture summary.
+    session.capturePerf = perfBefore;
+    session.beginFrameHasDamageCount = hasDamageBefore;
+    session.beginFrameNoDamageCount = noDamageBefore;
+  }
 }
 
 export async function closeCaptureSession(session: CaptureSession): Promise<void> {

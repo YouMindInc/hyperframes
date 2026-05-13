@@ -63,6 +63,7 @@
             "pages": [
               "concepts/compositions",
               "concepts/data-attributes",
+              "concepts/variables",
               "concepts/frame-adapters",
               "concepts/determinism"
             ]
@@ -222,7 +223,8 @@
               "contributing",
               "contributing/catalog",
               "contributing/release-channels",
-              "contributing/testing-local-changes"
+              "contributing/testing-local-changes",
+              "contributing/studio-manual-dom-editing"
             ]
           },
           {

@@ -5,3 +5,13 @@ export { isSafePath, walkDir } from "./helpers/safePath.js";
 export { getMimeType, MIME_TYPES } from "./helpers/mime.js";
 export { buildSubCompositionHtml } from "./helpers/subComposition.js";
 export { getElementScreenshotClip, type ScreenshotClip } from "./helpers/screenshotClip.js";
+export {
+  STUDIO_MANUAL_EDITS_PATH,
+  createStudioManualEditsRenderBodyScript,
+  type StudioManualEditsRenderScriptOptions,
+} from "./helpers/manualEditsRenderScript.js";
+export {
+  STUDIO_MOTION_PATH,
+  createStudioMotionRenderBodyScript,
+  type StudioMotionRenderScriptOptions,
+} from "./helpers/studioMotionRenderScript.js";

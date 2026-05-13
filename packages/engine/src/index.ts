@@ -65,11 +65,13 @@ export {
   closeCaptureSession,
   captureFrame,
   captureFrameToBuffer,
+  discardWarmupCapture,
   getCompositionDuration,
   getCapturePerfSummary,
   prepareCaptureSessionForReuse,
   type CaptureSession,
   type BeforeCaptureHook,
+  type DiscardWarmupInnerCapture,
 } from "./services/frameCapture.js";
 
 // ── Screenshot (BeginFrame) ─────────────────────────────────────────────────────
@@ -156,6 +158,13 @@ export {
 export { quantizeTimeToFrame, MEDIA_VISUAL_STYLE_PROPERTIES } from "@hyperframes/core";
 
 export {
+  assertSwiftShader,
+  readWebGlVendorInfo,
+  SwiftShaderAssertionError,
+  BROWSER_GPU_NOT_SOFTWARE,
+} from "./utils/assertSwiftShader.js";
+
+export {
   extractMediaMetadata,
   extractVideoMetadata,
   extractAudioMetadata,
@@ -166,7 +175,12 @@ export {
 } from "./utils/ffprobe.js";
 
 export { downloadToTemp, isHttpUrl } from "./utils/urlDownloader.js";
-export { runFfmpeg, type RunFfmpegOptions, type RunFfmpegResult } from "./utils/runFfmpeg.js";
+export {
+  runFfmpeg,
+  formatFfmpegError,
+  type RunFfmpegOptions,
+  type RunFfmpegResult,
+} from "./utils/runFfmpeg.js";
 
 export {
   decodePng,

@@ -1,5 +1,9 @@
 name: CI
 
+permissions:
+  contents: read
+  pull-requests: read
+
 on:
   pull_request:
     # `edited` is required so the workflow re-fires when a PR's base ref is
@@ -224,11 +228,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           lfs: true
-      - uses: oven-sh/setup-bun@v2
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: Install FFmpeg
@@ -313,6 +317,25 @@ jobs:
             --output /tmp/hf-cli-outside/renders/outside.mp4
 
           test -s /tmp/hf-cli-outside/renders/outside.mp4
+
+  filesize:
+    name: File size check
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Check file sizes (max 500 lines)
+        run: |
+          EXIT=0
+          while IFS= read -r f; do
+            if grep -qxF "$f" .filesize-allowlist 2>/dev/null; then continue; fi
+            lines=$(wc -l < "$f")
+            if [ "$lines" -gt 500 ]; then
+              echo "::error file=$f::$f has $lines lines (max 500)"
+              EXIT=1
+            fi
+          done < <(find packages/studio -path '*/node_modules' -prune -o \( -name '*.ts' -o -name '*.tsx' \) -print | grep -vE '\.(test|spec)\.(ts|tsx)$|\.generated\.')
+          exit $EXIT
 
   semantic-pr-title:
     name: Semantic PR title

@@ -10,12 +10,18 @@ interface PlayerProps {
   projectId?: string;
   directUrl?: string;
   onLoad: () => void;
+  onCompositionLoadingChange?: (loading: boolean) => void;
   portrait?: boolean;
+  style?: React.CSSProperties;
+  suppressLoadingOverlay?: boolean;
 }
 
 interface HyperframesPlayerElement extends HTMLElement {
   iframeElement: HTMLIFrameElement;
 }
+
+const MEDIA_HAVE_FUTURE_DATA = 3;
+const MEDIA_NETWORK_NO_SOURCE = 3;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -30,6 +36,28 @@ function getShaderTransitionLoading(event: Event): boolean | null {
   return state.loading === true && state.ready !== true;
 }
 
+const COMPOSITION_LOADING_OVERLAY_DELAY_MS = 400;
+
+export function shouldShowCompositionLoadingOverlay(compositionLoading: boolean): boolean {
+  return compositionLoading;
+}
+
+function enableInteractiveIframe(player: HyperframesPlayerElement): void {
+  const root = player.shadowRoot;
+  if (!root) return;
+
+  const container = root.querySelector<HTMLElement>(".hfp-container");
+  const iframe = root.querySelector<HTMLIFrameElement>(".hfp-iframe");
+
+  container?.style.setProperty("pointer-events", "auto");
+  iframe?.style.setProperty("pointer-events", "auto");
+}
+
+function isPreviewMediaElement(el: Element): el is HTMLMediaElement {
+  const tagName = el.tagName.toLowerCase();
+  return tagName === "video" || tagName === "audio";
+}
+
 // Assets are considered ready when every `<video>`/`<audio>` has enough data
 // to play through without buffering, and every registered Lottie animation has
 // finished loading.
@@ -38,14 +66,19 @@ function getShaderTransitionLoading(event: Event): boolean | null {
 // races so a brief access failure (e.g. an iframe that just swapped src)
 // doesn't flicker the overlay state — we keep showing whatever was most
 // recently true.
-function hasUnloadedAssets(iframe: HTMLIFrameElement, lastResult: boolean): boolean {
+export function hasUnloadedAssets(iframe: HTMLIFrameElement, lastResult: boolean): boolean {
   try {
     const win = iframe.contentWindow as unknown as (Window & { __hfLottie?: unknown[] }) | null;
     const doc = iframe.contentDocument;
     if (!win || !doc) return lastResult;
 
     for (const el of doc.querySelectorAll("video, audio")) {
-      if (el instanceof HTMLMediaElement && el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+      if (
+        isPreviewMediaElement(el) &&
+        !el.error &&
+        el.networkState !== MEDIA_NETWORK_NO_SOURCE &&
+        el.readyState < MEDIA_HAVE_FUTURE_DATA
+      ) {
         return true;
       }
     }
@@ -72,7 +105,18 @@ function hasUnloadedAssets(iframe: HTMLIFrameElement, lastResult: boolean): bool
  * timeline probing, and DOM inspection.
  */
 export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
-  ({ projectId, directUrl, onLoad, portrait }, ref) => {
+  (
+    {
+      projectId,
+      directUrl,
+      onLoad,
+      onCompositionLoadingChange,
+      portrait,
+      style,
+      suppressLoadingOverlay,
+    },
+    ref,
+  ) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const loadCountRef = useRef(0);
     const assetPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -81,6 +125,21 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
     const [assetOverlayVisible, setAssetOverlayVisible] = useState(false);
     const [assetOverlayFading, setAssetOverlayFading] = useState(false);
     const [shaderTransitionLoading, setShaderTransitionLoading] = useState(false);
+    const [compositionLoading, setCompositionLoading] = useState(true);
+    const [compositionOverlayDeferred, setCompositionOverlayDeferred] = useState(true);
+
+    // eslint-disable-next-line no-restricted-syntax
+    useEffect(() => {
+      if (!compositionLoading) {
+        setCompositionOverlayDeferred(true);
+        return;
+      }
+      const timer = setTimeout(
+        () => setCompositionOverlayDeferred(false),
+        COMPOSITION_LOADING_OVERLAY_DELAY_MS,
+      );
+      return () => clearTimeout(timer);
+    }, [compositionLoading]);
 
     useMountEffect(() => {
       const container = containerRef.current;
@@ -105,6 +164,7 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
         player.style.height = "100%";
         player.style.display = "block";
         container.appendChild(player);
+        enableInteractiveIframe(player);
 
         // Bridge the inner iframe to the forwarded ref for useTimelinePlayer.
         const iframe = player.iframeElement;
@@ -125,10 +185,20 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
         };
         player.addEventListener("shadertransitionstate", handleShaderTransitionState);
 
+        const handleReady = () => {
+          setCompositionLoading(false);
+        };
+        const handleError = () => {
+          setCompositionLoading(false);
+        };
+        player.addEventListener("ready", handleReady);
+        player.addEventListener("error", handleError);
+
         // Forward the iframe's native load event to the studio's onIframeLoad.
         const handleLoad = () => {
           loadCountRef.current++;
           setShaderTransitionLoading(false);
+          setCompositionLoading(true);
           // Reveal animation on reload (hot-reload, composition switch)
           if (loadCountRef.current > 1) {
             container.classList.remove("preview-revealing");
@@ -179,6 +249,8 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
           iframe.removeEventListener("load", handleLoad);
           player.removeEventListener("click", preventToggle, { capture: true });
           player.removeEventListener("shadertransitionstate", handleShaderTransitionState);
+          player.removeEventListener("ready", handleReady);
+          player.removeEventListener("error", handleError);
           if (assetPollRef.current) clearInterval(assetPollRef.current);
           assetPollRef.current = null;
           container.removeChild(player);
@@ -224,11 +296,40 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
       };
     }, [assetsLoading]);
 
-    const showAssetOverlay = assetOverlayVisible && !shaderTransitionLoading;
+    const showCompositionOverlay =
+      !suppressLoadingOverlay &&
+      !compositionOverlayDeferred &&
+      shouldShowCompositionLoadingOverlay(compositionLoading);
+    const showAssetOverlay =
+      assetOverlayVisible && !shaderTransitionLoading && !showCompositionOverlay;
+
+    useEffect(() => {
+      onCompositionLoadingChange?.(showCompositionOverlay || showAssetOverlay);
+    }, [onCompositionLoadingChange, showCompositionOverlay, showAssetOverlay]);
 
     return (
-      <div className="relative w-full h-full max-w-full max-h-full overflow-hidden bg-black flex items-center justify-center">
+      <div
+        className="relative w-full h-full max-w-full max-h-full overflow-hidden bg-black flex items-center justify-center"
+        style={style}
+      >
         <div ref={containerRef} className="w-full h-full" />
+        {showCompositionOverlay && (
+          <div
+            className="absolute inset-0 bg-black flex items-center justify-center z-30 select-none"
+            data-hyperframes-ignore=""
+            data-testid="composition-loading-overlay"
+            draggable={false}
+            onDragStart={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.preventDefault()}
+            onPointerDown={(event) => event.preventDefault()}
+          >
+            <HyperframesLoader
+              title="Loading composition"
+              detail="Preparing the Studio preview."
+              size={56}
+            />
+          </div>
+        )}
         {showAssetOverlay && (
           <div
             className="absolute inset-0 bg-black flex items-center justify-center z-20 select-none"

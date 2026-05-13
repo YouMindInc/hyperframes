@@ -1,5 +1,4 @@
 import type { TimelineTrackStyle } from "./timelineTheme";
-// TimelineClip — Visual clip component for the NLE timeline.
 
 import { memo, type ReactNode } from "react";
 import type { TimelineElement } from "../store/playerStore";
@@ -93,8 +92,8 @@ export const TimelineClip = memo(function TimelineClip({
       }}
       title={
         isComposition
-          ? `${el.compositionSrc} \u2022 Double-click to open`
-          : `${displayLabel} \u2022 ${el.start.toFixed(1)}s \u2013 ${(el.start + el.duration).toFixed(1)}s`
+          ? `${el.compositionSrc} • Double-click to open`
+          : `${displayLabel} • ${el.start.toFixed(1)}s – ${(el.start + el.duration).toFixed(1)}s`
       }
       onPointerEnter={onHoverStart}
       onPointerLeave={onHoverEnd}

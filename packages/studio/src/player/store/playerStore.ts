@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { readStudioUiPreferences, writeStudioUiPreferences } from "../../utils/studioUiPreferences";
 
 export interface TimelineElement {
   id: string;
@@ -23,6 +24,8 @@ export interface TimelineElement {
   volume?: number;
   /** Path from data-composition-src — identifies sub-composition elements */
   compositionSrc?: string;
+  /** Whether this row came from authored clip timing or Studio's full-duration layer fallback. */
+  timingSource?: "authored" | "implicit";
 }
 
 export type ZoomMode = "fit" | "manual";
@@ -56,6 +59,14 @@ interface PlayerState {
   setZoomMode: (mode: ZoomMode) => void;
   setManualZoomPercent: (percent: number) => void;
   reset: () => void;
+
+  /**
+   * Request a seek from outside the player loop (e.g. Layers panel).
+   * useTimelinePlayer subscribes and calls adapter.seek() + liveTime.notify().
+   */
+  requestedSeekTime: number | null;
+  requestSeek: (time: number) => void;
+  clearSeekRequest: () => void;
 }
 
 // Lightweight pub-sub for current time during playback.
@@ -78,13 +89,20 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   timelineReady: false,
   elements: [],
   selectedElementId: null,
-  playbackRate: 1,
+  playbackRate: readStudioUiPreferences().playbackRate ?? 1,
   loopEnabled: false,
   zoomMode: "fit",
   manualZoomPercent: 100,
 
+  requestedSeekTime: null,
+  requestSeek: (time) => set({ requestedSeekTime: time }),
+  clearSeekRequest: () => set({ requestedSeekTime: null }),
+
   setIsPlaying: (playing) => set({ isPlaying: playing }),
-  setPlaybackRate: (rate) => set({ playbackRate: rate }),
+  setPlaybackRate: (rate) => {
+    writeStudioUiPreferences({ playbackRate: rate });
+    set({ playbackRate: rate });
+  },
   setLoopEnabled: (enabled) => set({ loopEnabled: enabled }),
   setZoomMode: (mode) => set({ zoomMode: mode }),
   setManualZoomPercent: (percent) =>

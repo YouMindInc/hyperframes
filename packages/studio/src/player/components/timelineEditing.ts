@@ -228,12 +228,21 @@ export function getTimelineEditCapabilities(input: {
   playbackStart?: number;
   playbackStartAttr?: "media-start" | "playback-start";
   sourceDuration?: number;
+  timingSource?: "authored" | "implicit";
 }): TimelineEditCapabilities {
+  if (input.timingSource === "implicit") {
+    return {
+      canMove: false,
+      canTrimStart: false,
+      canTrimEnd: false,
+    };
+  }
+
   const canPatch = hasPatchableTimelineTarget(input);
   const hasFiniteDuration = Number.isFinite(input.duration) && input.duration > 0;
   const hasDeterministicWindow = isDeterministicTimelineWindow(input);
   return {
-    canMove: canPatch && hasDeterministicWindow,
+    canMove: canPatch && (hasDeterministicWindow || hasFiniteDuration),
     canTrimEnd: canPatch && hasFiniteDuration && hasDeterministicWindow,
     canTrimStart: canPatch && hasFiniteDuration && canOffsetTrimClipStart(input),
   };
@@ -273,7 +282,6 @@ export function buildClipRangeSelection(
     anchorY: anchor.anchorY,
   };
 }
-
 export function buildTimelineAgentPrompt({
   rangeStart,
   rangeEnd,
@@ -347,7 +355,6 @@ export function buildTimelineElementAgentPrompt(element: {
 
   return lines.join("\n");
 }
-
 export function formatTimelineAttributeNumber(value: number): string {
   return Number(roundToCentiseconds(value).toFixed(2)).toString();
 }
