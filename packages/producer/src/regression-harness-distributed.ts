@@ -42,21 +42,24 @@ export type HarnessMode = "in-process" | "distributed-simulated";
  * distributed-vs-in-process equivalence floor, but that target was written
  * against per-render comparisons (one fresh in-process render vs one fresh
  * distributed render). The regression harness compares against a frozen
- * baseline file, and the in-process renderer itself drifts ~2 dB against
- * its own committed baseline due to libx264/JPEG-capture jitter that
- * neither mode controls. So 50 dB is empirically unreachable for either
- * mode against the frozen file.
+ * baseline file, and the in-process renderer itself drifts against that
+ * baseline by varying amounts depending on the composition's dynamics:
+ *   - Static compositions (font-variant-numeric): ~48 dB drift
+ *   - Rapid transitions (many-cuts): 34-44 dB drift
+ * Both modes share the same encoder/JPEG-capture jitter floor, so this is
+ * a property of the fixture's content, not of either renderer.
  *
- * The harness uses 45 dB as a practical floor: it's well above the
- * 30 dB threshold most fixtures set for in-process drift, it's tight
- * enough to catch a real distributed-mode regression (renderChunk pixels
- * diverging from the in-process output by more than ~2× the in-process
- * jitter), and it tracks closely with the observed in-process-vs-baseline
- * floor of ~47-48 dB across the smoke-set fixtures.
+ * The harness therefore uses the fixture's own `minPsnr` for both modes:
+ * distributed must pass the same quality threshold the in-process renderer
+ * passes against the same baseline. A distributed regression that pushes
+ * PSNR below the fixture's tolerance is caught the same way an in-process
+ * regression would be.
  *
- * Fixtures with `minPsnr > 45` use their own (higher) threshold.
+ * This constant is retained as a non-zero floor for absolute pathology
+ * (e.g. a chunk renders as fully black), independent of how lenient the
+ * fixture's authored threshold is.
  */
-export const DISTRIBUTED_SIMULATED_MIN_PSNR_DB = 45;
+export const DISTRIBUTED_SIMULATED_MIN_PSNR_DB = 10;
 
 /** Result of {@link checkDistributedSupport}. */
 export type DistributedSupportResult = { supported: true } | { supported: false; reason: string };

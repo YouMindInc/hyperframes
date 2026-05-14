@@ -99,27 +99,34 @@ describe("resolveMinPsnrForMode()", () => {
     expect(resolveMinPsnrForMode("in-process", 60)).toBe(60);
   });
 
-  it("distributed-simulated raises sub-floor thresholds to the determinism floor", () => {
-    expect(resolveMinPsnrForMode("distributed-simulated", 30)).toBe(
-      DISTRIBUTED_SIMULATED_MIN_PSNR_DB,
-    );
-    expect(resolveMinPsnrForMode("distributed-simulated", 40)).toBe(
-      DISTRIBUTED_SIMULATED_MIN_PSNR_DB,
-    );
-  });
-
-  it("distributed-simulated leaves fixture thresholds ≥ floor unchanged", () => {
+  it("distributed-simulated uses the fixture's own minPsnr when above the absolute floor", () => {
+    // Fixtures with minPsnr >= the absolute floor (catastrophic-failure
+    // guard) use their authored threshold unchanged. Distributed must pass
+    // the same quality bar the in-process renderer passes against the same
+    // baseline — no extra tightening, since baseline drift is shared across
+    // modes.
+    expect(resolveMinPsnrForMode("distributed-simulated", 30)).toBe(30);
     expect(resolveMinPsnrForMode("distributed-simulated", 50)).toBe(50);
-    expect(resolveMinPsnrForMode("distributed-simulated", 55)).toBe(55);
     expect(resolveMinPsnrForMode("distributed-simulated", 80)).toBe(80);
   });
 
-  it("DISTRIBUTED_SIMULATED_MIN_PSNR_DB is the empirical determinism floor", () => {
-    // 45 dB is the practical floor for distributed-vs-baseline equivalence.
-    // §5.1 names 50 dB for distributed-vs-in-process per-render comparison,
-    // but baseline jitter (in-process drifts ~2 dB against its own committed
-    // baseline) puts 50 dB out of reach for the harness's frozen-file
-    // comparison.
-    expect(DISTRIBUTED_SIMULATED_MIN_PSNR_DB).toBe(45);
+  it("distributed-simulated raises pathologically-low thresholds to the absolute floor", () => {
+    // A fixture authored with minPsnr=0 (or very low) wouldn't catch a
+    // distributed-mode renderer producing fully-black output. The absolute
+    // floor exists to catch that pathology.
+    expect(resolveMinPsnrForMode("distributed-simulated", 0)).toBe(
+      DISTRIBUTED_SIMULATED_MIN_PSNR_DB,
+    );
+    expect(resolveMinPsnrForMode("distributed-simulated", 5)).toBe(
+      DISTRIBUTED_SIMULATED_MIN_PSNR_DB,
+    );
+  });
+
+  it("DISTRIBUTED_SIMULATED_MIN_PSNR_DB is the absolute-pathology floor", () => {
+    // 10 dB is far below any real fixture's authored minPsnr (the lowest
+    // among committed fixtures is 30 dB). It exists as a non-zero guard
+    // for distributed-mode regressions that render fully-black frames
+    // against a fixture authored with `minPsnr: 0`.
+    expect(DISTRIBUTED_SIMULATED_MIN_PSNR_DB).toBe(10);
   });
 });

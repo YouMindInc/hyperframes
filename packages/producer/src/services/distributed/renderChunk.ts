@@ -355,29 +355,10 @@ export async function renderChunk(
     job.totalFrames = framesInChunk;
     job.duration = (framesInChunk * plan.dimensions.fpsDen) / plan.dimensions.fpsNum;
 
-    // Force `Page.captureScreenshot` capture for the chunk worker, regardless
-    // of what the plan's locked encoder config recorded for `forceScreenshot`.
-    //
-    // Chrome 148 chrome-headless-shell + `--use-angle=swiftshader` exhibits
-    // a content-dependent compositor wedge on `HeadlessExperimental.beginFrame`
-    // with a screenshot parameter: the engine's probe can approve a build
-    // that subsequently hangs on a real composition's first frame
-    // (`Failed to load resource` + CORS-blocked audio fetches happen to
-    // correlate with the wedge, but stripping them does not reliably
-    // unwedge). The probe-then-fallback path catches some cases but is
-    // intrinsically race-prone — composition complexity tips the
-    // compositor into a state the probe can't simulate.
-    //
-    // `executeRenderJob` already takes the screenshot path for multi-worker
-    // mp4 (the BeginFrame path is single-process only), so this matches the
-    // production renderer's de-facto Linux behavior and inherits its
-    // reliability profile. The per-chunk perf cost is a few percent — well
-    // worth it for byte-identical retries that don't depend on Chrome's GL
-    // backend cooperating.
     const cfg: EngineConfig = {
       ...resolveConfig(),
       browserGpuMode: "software",
-      forceScreenshot: true,
+      forceScreenshot: encoder.forceScreenshot,
     };
 
     // ── Per-chunk work + frames directories ──
@@ -433,9 +414,28 @@ export async function renderChunk(
 
       // Prime BeginFrame's `lastFrameCache` so the chunk's first real capture
       // reports `hasDamage` the same as an in-process render at the same
-      // absolute frame would. Time is the chunk's first-frame absolute time.
-      const startTime = (slice.startFrame * plan.dimensions.fpsDen) / plan.dimensions.fpsNum;
-      await discardWarmupCapture(session, slice.startFrame, startTime);
+      // absolute frame would. The in-process renderer that produces the
+      // baseline has captured frame N-1 by the time it captures frame N, so
+      // frame N-1's bytes are in the cache. The distributed chunk worker
+      // starts cold — without priming, the first real capture for chunk N
+      // would see `hasDamage=true` (no cache hit) while in-process sees
+      // whatever frame N-1 produced.
+      //
+      // The discard MUST target frame N-1, not frame N: BeginFrame deadlocks
+      // when called twice with the same `frameTimeTicks` (the compositor has
+      // no new damage to advance for, and the second call hangs until
+      // protocolTimeout). Earlier wiring called the discard at startFrame
+      // itself, which immediately collided with captureStage's first call
+      // and hung every chunk's render.
+      //
+      // For chunk 0 there is no frame -1 to prime against — and the in-process
+      // renderer's first frame also captures with an empty cache, so the
+      // hasDamage signal matches by construction. Skip the discard entirely.
+      if (slice.startFrame > 0) {
+        const priorFrame = slice.startFrame - 1;
+        const priorTime = (priorFrame * plan.dimensions.fpsDen) / plan.dimensions.fpsNum;
+        await discardWarmupCapture(session, priorFrame, priorTime);
+      }
 
       // ── Capture the chunk's range via runCaptureStage ──
       await runCaptureStage({
