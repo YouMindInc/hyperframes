@@ -328,18 +328,24 @@
       /* Type specimens */
       .type-specimen-row {
         display: flex;
-        gap: 20px;
-        padding: 16px 0;
+        flex-direction: column;
+        gap: 8px;
+        padding: 24px 0;
         border-bottom: 1px solid rgba(128,128,128,0.1);
-        align-items: baseline;
       }
       .type-meta {
-        width: 120px;
-        flex-shrink: 0;
         font-size: 11px;
         color: var(--sc-mt);
         font-family: ui-monospace, monospace;
         line-height: 1.4;
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+      }
+      .type-sample {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .type-meta strong { color: var(--sc-ac); display: block; margin-bottom: 2px; }
       .type-sample { flex: 1; color: var(--sc-fg); }
@@ -1555,7 +1561,10 @@
         document.getElementById("phase-" + name).classList.add("active");
         document.getElementById("tab-" + name).classList.add("active");
         if (name === "mood") document.getElementById("fab").classList.remove("visible");
-        else checkReady();
+        else {
+          checkReady();
+          if (typeof window._redrawBezier === "function") window._redrawBezier();
+        }
       }
 
       function goToTune() {
@@ -1848,15 +1857,15 @@
       // ── Custom Ease Editor (GSAP CustomEase, multi-waypoint) ──
       (function() {
         var customIdx = EASINGS.length;
-        var initPath = "M0,0 C0.126,0.382 0.282,0.674 0.44,0.822 0.632,1.002 0.818,1.001 1,1";
+        var initPath = "M0,0 C0.228,-0.019 0.172,0.504 0.312,0.711 C0.46,0.928 0.614,0.996 1,1";
         EASINGS.push({ name: "Custom", value: initPath, desc: "Click curve to add points, drag to shape" });
         if (typeof CustomEase !== "undefined") { gsap.registerPlugin(CustomEase); CustomEase.create("_pickerCustom", initPath); }
 
         // Anchors: [{x,y,ox,oy,ix,iy}] — ox/oy = outgoing handle, ix/iy = incoming handle (absolute coords, 0-1 normalized, y=0 is bottom)
         var anchors = [
-          { x: 0, y: 0, ox: 0.126, oy: 0.382, ix: 0, iy: 0 },
-          { x: 0.44, y: 0.822, ox: 0.632, oy: 1.002, ix: 0.282, iy: 0.674 },
-          { x: 1, y: 1, ox: 1, oy: 1, ix: 0.818, iy: 1.001 }
+          { x: 0, y: 0, ox: 0.228, oy: -0.019, ix: 0, iy: 0 },
+          { x: 0.312, y: 0.711, ox: 0.46, oy: 0.928, ix: 0.172, iy: 0.504 },
+          { x: 1, y: 1, ox: 1, oy: 1, ix: 0.614, iy: 0.996 }
         ];
         var selectedAnchor = -1;
 
@@ -2111,6 +2120,8 @@
         rebuild();
         setTimeout(function() { draw(); animateBezierDot(); }, 100);
         window.addEventListener("resize", function() { draw(); });
+        // Redraw when Phase 2 becomes visible
+        window._redrawBezier = function() { setTimeout(function() { draw(); }, 50); };
       })();
 
       // ── Background / Three.js Gradient Presets ──
@@ -2415,7 +2426,10 @@
           { token: "data", size: "64px", weight: t.headline.weight, family: t.body.family, sample: "2,481,000", lh: "1.0", ls: "-0.02em" },
         ];
         var typeHtml = typeRows.map(function(r) {
-          return '<div class="type-specimen-row"><div class="type-meta"><strong>' + r.token + '</strong></div><div class="type-sample" style="font-family:\'' + r.family + '\',sans-serif;font-weight:' + r.weight + ';font-size:' + r.size + ';line-height:' + r.lh + ';letter-spacing:' + r.ls + ';color:' + fg + ';">' + r.sample + '</div></div>';
+          return '<div class="type-specimen-row"><div class="type-meta"><strong>' + r.token + '</strong>' +
+            '<div style="margin-top:4px;font-size:10px;color:' + mt + ';font-family:ui-monospace,monospace;">' + r.family + ' ' + r.weight + '</div>' +
+            '<div style="font-size:9px;color:' + mt + ';opacity:0.6;font-family:ui-monospace,monospace;">' + r.size + ' / ' + r.lh + ' / ' + r.ls + '</div>' +
+            '</div><div class="type-sample" style="font-family:\'' + r.family + '\',sans-serif;font-weight:' + r.weight + ';font-size:' + r.size + ';line-height:' + r.lh + ';letter-spacing:' + r.ls + ';color:' + fg + ';">' + r.sample + '</div></div>';
         }).join("");
         document.getElementById("sc-type-specimens").innerHTML = typeHtml;
 
@@ -2443,28 +2457,7 @@
           // Typography: override fonts via JS (CSS can't catch all custom classes)
           window._fontOverride = (picks.type !== null && picks.type > 0) ? { hf: t.headline.family, hw: t.headline.weight, bf: t.body.family, bw: t.body.weight } : null;
 
-          // Corners: override border-radius on interactive/card elements
-          overrideCss +=
-            "[class*='card'], [class*='btn'], [class*='button'], [class*='tag'], [class*='badge'], " +
-            "[class*='chip'], [class*='pill'], [class*='box'], [class*='panel'], [class*='modal'], " +
-            "button, input, .rounded, [class*='round'] { border-radius: " + cr.value + " !important; }\n";
-
-          // Density: override padding/gap on layout containers
-          var padNum = parseInt(pad);
-          var gapNum = parseInt(gap);
-          overrideCss +=
-            "[class*='content'], [class*='grid'], [class*='container'], [class*='wrapper'], " +
-            "[class*='layout'], [class*='section'], .slide-content { " +
-            "gap: " + gap + " !important; }\n" +
-            "[class*='card'], [class*='panel'], [class*='box'], [class*='cell'] { " +
-            "padding: " + pad + " !important; }\n";
-
-          // Depth: override box-shadow
-          if (shadow !== "none") {
-            overrideCss +=
-              "[class*='card'], [class*='panel'], [class*='box'], [class*='elevated'], " +
-              "[class*='shadow'], [class*='float'] { box-shadow: " + shadow + " !important; }\n";
-          }
+          // Corners, density, depth applied via JS below (after iframe injection)
 
           document.querySelectorAll("#sc-scene-grid iframe, #sc-specimen-grid iframe").forEach(function(ifr) {
             if (!ifr.contentDocument) return;
@@ -2506,6 +2499,59 @@
               var fontLink = doc.getElementById("tp-font-link");
               if (fontLink) fontLink.remove();
             }
+          });
+        }
+
+        // ── Density + Corners + Depth via JS on iframe elements ──
+        var _surfaceKey = (picks.density || 0) + "-" + (picks.corners || 0) + "-" + (picks.depth || 0);
+        var isDefaultDensity = picks.density === 1;
+        var isDefaultCorners = picks.corners === 1;
+        var isDefaultDepth = picks.depth === 1;
+        if (window._templatePreviewInline && window._lastSurfaceKey !== _surfaceKey) {
+          window._lastSurfaceKey = _surfaceKey;
+          document.querySelectorAll("#sc-scene-grid iframe, #sc-specimen-grid iframe").forEach(function(ifr) {
+            if (!ifr.contentDocument || !ifr.contentWindow) return;
+            var iDoc = ifr.contentDocument;
+            var iWin = ifr.contentWindow;
+            iDoc.querySelectorAll("*").forEach(function(el) {
+              try {
+                // Store originals on first pass
+                if (!el.dataset.tpOrigGap) {
+                  el.style.removeProperty("gap");
+                  el.style.removeProperty("padding");
+                  el.style.removeProperty("border-radius");
+                  el.style.removeProperty("box-shadow");
+                  var cs = iWin.getComputedStyle(el);
+                  var g = cs.gap, p = cs.padding, r = cs.borderRadius, s = cs.boxShadow;
+                  el.dataset.tpOrigGap = g || "";
+                  el.dataset.tpOrigPad = p || "";
+                  el.dataset.tpOrigRadius = r || "";
+                  el.dataset.tpOrigShadow = s || "";
+                }
+                var origGap = parseFloat(el.dataset.tpOrigGap);
+                var origPad = parseFloat(el.dataset.tpOrigPad);
+                // Density
+                if (!isDefaultDensity) {
+                  if (origGap > 0) el.style.setProperty("gap", Math.round(origGap * (parseInt(gap) / 16)) + "px", "important");
+                  if (origPad > 4) el.style.setProperty("padding", Math.round(origPad * (parseInt(pad) / 20)) + "px", "important");
+                } else {
+                  el.style.removeProperty("gap");
+                  el.style.removeProperty("padding");
+                }
+                // Corners
+                if (!isDefaultCorners && el.dataset.tpOrigRadius !== "0px") {
+                  el.style.setProperty("border-radius", cr.value, "important");
+                } else {
+                  el.style.removeProperty("border-radius");
+                }
+                // Depth
+                if (!isDefaultDepth && el.dataset.tpOrigShadow && el.dataset.tpOrigShadow !== "none") {
+                  el.style.setProperty("box-shadow", shadow, "important");
+                } else {
+                  el.style.removeProperty("box-shadow");
+                }
+              } catch(e) {}
+            });
           });
         }
 
@@ -2796,7 +2842,7 @@
         var overrideStyle = doc.createElement("style");
         overrideStyle.id = "tp-slide-override";
         overrideStyle.textContent =
-          ".deck, .slide-deck, .slides-container, deck-stage { width: 100% !important; height: 100% !important; transform: none !important; position: relative !important; overflow: hidden !important; }" +
+          ".deck, .slide-deck, .slides-container, deck-stage { display: block !important; width: 1920px !important; height: 1080px !important; transform: none !important; position: relative !important; overflow: hidden !important; }" +
           ".slide, section.slide, div.slide, deck-stage > section { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; min-height: 0 !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }" +
           ".slide.active, section.slide.active, div.slide.active, deck-stage > section.active { opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; }";
         doc.head.appendChild(overrideStyle);
@@ -2827,6 +2873,21 @@
 
       function tpScaleAllIframes() {
         document.querySelectorAll("#tp-grid iframe").forEach(tpScaleIframe);
+        // Also scale Phase 2 hero + specimen iframes
+        document.querySelectorAll("#sc-scene-grid iframe").forEach(function(ifr) {
+          var container = ifr.parentElement;
+          if (container) {
+            var w = container.offsetWidth;
+            if (w > 0) ifr.style.transform = "scale(" + (w / 1920) + ")";
+          }
+        });
+        document.querySelectorAll(".specimen-cell iframe").forEach(function(ifr) {
+          var cell = ifr.closest(".specimen-cell");
+          if (cell) {
+            var w = cell.offsetWidth;
+            if (w > 0) ifr.style.transform = "scale(" + (w / 1920) + ")";
+          }
+        });
       }
       window.addEventListener("resize", tpScaleAllIframes);
 
@@ -2860,7 +2921,7 @@
         });
         _heroAnimEls = [];
 
-        var activeSlide = doc.querySelector(".slide.active") || doc.querySelector(".slide:first-child");
+        var activeSlide = doc.querySelector(".slide.active, deck-stage > section.active") || doc.querySelector(".slide:first-child, deck-stage > section:first-child");
         if (!activeSlide) return;
 
         var ifrWin = doc.defaultView;
@@ -2882,7 +2943,6 @@
         });
 
         if (els.length === 0) return;
-        if (els.length > 20) els = els.slice(0, 20);
         _heroAnimEls = els;
 
         var tl = gsap.timeline();
@@ -3002,8 +3062,12 @@
               tpPreloadGsap(ifr);
               updateDefaultPaletteFromIframe(ifr);
               updateDefaultTypeFromIframe(ifr);
-              var scale = wrap.offsetWidth / 1920;
-              ifr.style.transform = "scale(" + scale + ")";
+              function scaleHero() {
+                var w = wrap.offsetWidth;
+                if (w > 0) { ifr.style.transform = "scale(" + (w / 1920) + ")"; }
+                else { setTimeout(scaleHero, 50); }
+              }
+              scaleHero();
               renderPreview();
               // Build specimen grid with ALL slides (including first)
               var doc = ifr.contentDocument;
@@ -3063,7 +3127,7 @@
                       }
                       var ovr = sDoc.createElement("style");
                       ovr.textContent =
-                        ".deck, .slide-deck, .slides-container, deck-stage { width: 100% !important; height: 100% !important; transform: none !important; position: relative !important; overflow: hidden !important; }" +
+                        ".deck, .slide-deck, .slides-container, deck-stage { display: block !important; width: 1920px !important; height: 1080px !important; transform: none !important; position: relative !important; overflow: hidden !important; }" +
                         ".slide, section.slide, div.slide, deck-stage > section { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; min-height: 0 !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }" +
                         ".slide.active, section.slide.active, div.slide.active, deck-stage > section.active { opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; }";
                       sDoc.head.appendChild(ovr);
@@ -3076,8 +3140,11 @@
                           try { if (sWin.getComputedStyle(el).opacity === "0") el.style.opacity = "1"; } catch(e) {}
                         });
                       }
-                      var sScale = cell.offsetWidth / 1920;
-                      specIfr.style.transform = "scale(" + sScale + ")";
+                      (function scaleSpec() {
+                        var w = cell.offsetWidth;
+                        if (w > 0) specIfr.style.transform = "scale(" + (w / 1920) + ")";
+                        else setTimeout(scaleSpec, 50);
+                      })();
                     });
                   })(si);
                 }
@@ -3193,14 +3260,39 @@ void main(){
       const hasShader = bgMode && bgMode > 0;
       const preset = hasShader && window.BG_PRESETS ? window.BG_PRESETS[bgMode] : null;
 
-      // Make template iframes transparent or opaque based on shader selection
+      // Set iframe elements transparent/opaque via JS (not CSS vars, to avoid affecting text color)
       document.querySelectorAll('#sc-scene-grid iframe, #sc-specimen-grid iframe').forEach(ifr => {
-        if (!ifr.contentDocument) return;
-        let style = ifr.contentDocument.getElementById('tp-shader-bg');
-        if (!style) { style = ifr.contentDocument.createElement('style'); style.id = 'tp-shader-bg'; ifr.contentDocument.head.appendChild(style); }
-        style.textContent = hasShader
-          ? 'html, body, .stage, .deck, .slide-deck, .slides-container { background: transparent !important; } .slide.tp-active, .slide.active { background: transparent !important; }'
-          : '';
+        ifr.style.background = hasShader ? 'transparent' : '';
+        if (!ifr.contentDocument || !ifr.contentWindow) return;
+        var iDoc = ifr.contentDocument;
+        var iWin = ifr.contentWindow;
+        // Resolve --tp-secondary to rgb via temp element
+        var tpSec = iWin.getComputedStyle(iDoc.documentElement).getPropertyValue('--tp-secondary').trim();
+        var tmp = iDoc.createElement('div');
+        tmp.style.backgroundColor = tpSec;
+        iDoc.body.appendChild(tmp);
+        var secRgb = iWin.getComputedStyle(tmp).backgroundColor;
+        tmp.remove();
+        if (hasShader && secRgb) {
+          iDoc.documentElement.style.setProperty('background', 'transparent', 'important');
+          iDoc.body.style.setProperty('background', 'transparent', 'important');
+          iDoc.querySelectorAll('*').forEach(el => {
+            try {
+              var bg = iWin.getComputedStyle(el).backgroundColor;
+              if (bg === secRgb) {
+                el.style.setProperty('background-color', 'transparent', 'important');
+                el.dataset.tpShaderBg = '1';
+              }
+            } catch(e) {}
+          });
+        } else {
+          iDoc.documentElement.style.removeProperty('background');
+          iDoc.body.style.removeProperty('background');
+          iDoc.querySelectorAll('[data-tp-shader-bg]').forEach(el => {
+            el.style.removeProperty('background-color');
+            delete el.dataset.tpShaderBg;
+          });
+        }
       });
 
       if (!hasShader || !preset || !preset.type) return;
