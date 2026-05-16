@@ -119,15 +119,19 @@ These showed up in 5+ of 7 sessions. They are the highest-priority fixes.
 | P0       | Snapshot tool blind when using shaders       | ✅ Fixed `f8e733b9` | `__hf.shaderTransitions[].ready` as primary wait signal. Two failure modes resolved. Verified. |
 | P1       | SFX overuse / assigned at build time         | ✅ Fixed `f8e733b9` | SFX now assigned in step 3 with exact files. Step 5 implements only.                           |
 | P1       | Storyboard timing ≠ real TTS duration        | ✅ Fixed `f8e733b9` | Timing reconciliation gate added to step-4-vo.md. CTA hold hard-capped.                        |
-| P1       | Sub-agents use `../capture/` paths           | Open                | Add linter rule or restructure sub-agent prompt                                                |
+| P1       | Sub-agents use `../capture/` paths           | ✅ Fixed `36953172` | First rule in sub-agent RULES block (caps), plus prominent section before template             |
 | P1       | HeyGen TTS API shape mismatch                | Open                | Verify current API response (`data.voices` vs direct list), update step-4-vo.md                |
 | P2       | Transcription CLI hangs silently             | Open                | Progress indicator + cleaner error messages + direct `whisper` fallback                        |
 | P2       | Hashed font filenames unreadable             | Open                | Capture pipeline should preserve font-family → filename mapping                                |
-| P2       | Kokoro mispronounces product names           | Open                | Pronunciation guide in step-4-vo.md                                                            |
-| P2       | WCAG contrast false positive on gradient bg  | Open                | Document `data-layout-ignore` for decorative elements                                          |
-| P3       | "Inter Variable" not in font map             | Open                | Map "Inter Variable" → "Inter" in font compiler                                                |
+| P2       | Kokoro mispronounces product names           | ✅ Fixed `36953172` | Phonetic substitution guide + known failures list in step-4-vo.md                              |
+| P2       | SFX cut off mid-clip                         | ✅ Fixed `36953172` | J-Cut rule: data-duration = full manifest duration; riser trigger = peak_time - duration       |
+| P2       | VO start/end timing vs visuals               | ✅ Fixed `36953172` | VO start is storyboard decision, documented in step-3 Global Direction                         |
+| P2       | WCAG contrast false positive on gradient bg  | ✅ Fixed `36953172` | data-layout-ignore for decorative elements, explanation of gradient sampling behavior          |
+| P2       | Custom fonts not wired (@font-face missing)  | ✅ Fixed `36953172` | @font-face rule added to sub-agent template BRAND VALUES; explicit instruction in step-5       |
+| P2       | Captions stacking (workos)                   | ✅ Fixed `36953172` | Initial opacity:0 rule, one group at a time, verify with snapshot at mid-narration timestamps  |
+| P3       | "Inter Variable" not in font map             | ✅ Fixed `36953172` | step-5 font section: use "Inter" not "Inter Variable"                                          |
 | P3       | Capture ReferenceError (outputDir)           | Open                | Fix CLI bug in AGENTS.md generation                                                            |
-| P3       | Template content null reference              | Open                | Document `getElementById` + null guard pattern                                                 |
+| P3       | Template content null reference              | ✅ Fixed `36953172` | First sub-agent RULES: getElementById + null guards for beat host content                      |
 
 ---
 
