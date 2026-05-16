@@ -73,12 +73,18 @@ After the provider is selected, audition at least 2 voices with the first senten
     -H "x-api-key: $HEYGEN_API_KEY" | python3 -c \
     "import json,sys; v=json.load(sys.stdin)['data']; [print(x['voice_id'], x['name'], x['language']) for x in v[:10]]"
 
-  # Generate audio — returns audio_url + word_timestamps in one call
+  # Generate audio — response: { "data": { "audio_url": ..., "word_timestamps": [...] } }
   curl -s -X POST "https://api.heygen.com/v3/voices/speech" \
     -H "x-api-key: $HEYGEN_API_KEY" \
     -H "Content-Type: application/json" \
     -d '{"text":"Your script here","voice_id":"VOICE_ID","speed":1.0}' \
-    | python3 -c "import json,sys; r=json.load(sys.stdin); print(r['audio_url']); open('transcript_raw.json','w').write(json.dumps(r.get('word_timestamps',[]),indent=2))"
+    | python3 -c "
+  import json,sys
+  r=json.load(sys.stdin)
+  d=r['data']
+  print(d['audio_url'])
+  open('transcript_raw.json','w').write(json.dumps(d.get('word_timestamps',[]),indent=2))
+  "
 
   # Then download the audio
   curl -sL "AUDIO_URL_FROM_ABOVE" --output narration.mp3
@@ -129,7 +135,16 @@ For ElevenLabs and HeyGen TTS, substitutions are usually unnecessary — they ha
 
 ## Transcribe for word-level timestamps
 
-**If you used HeyGen v3 TTS:** word timestamps were already returned in the generate call (`word_timestamps: [{ word, start, end }]`). Save them as `transcript.json` — the format matches what the beat mapping step expects. No separate transcription step needed.
+**If you used HeyGen v3 TTS:** word timestamps were returned in the generate call. Normalize the format before saving — HeyGen v3 uses `word` but the pipeline expects `text`:
+
+```python
+import json
+raw = json.load(open('transcript_raw.json'))
+normalized = [{"text": w["word"], "start": w["start"], "end": w["end"]} for w in raw]
+json.dump(normalized, open('transcript.json', 'w'), indent=2)
+```
+
+No separate transcription step needed.
 
 **If you used ElevenLabs or Kokoro:**
 

@@ -139,17 +139,20 @@ async function captureSnapshots(
         })
         .catch(() => {});
 
-      // Wait for sub-compositions to be mounted by the runtime
-      // (they're fetched and injected asynchronously via data-composition-src)
+      // Wait for ALL sub-compositions to be mounted by the runtime.
+      // The old check resolved when the first sub-timeline registered, causing
+      // "last beat black" bugs: beat-5's sub-comp hadn't loaded yet when the
+      // snapshot seeked into its time range. Now we count data-composition-src
+      // host elements and wait until we have a matching number of sub-timelines.
       await page
         .waitForFunction(
           () => {
             const tls = (window as any).__timelines;
             if (!tls) return false;
-            const keys = Object.keys(tls);
-            // Wait until at least one sub-composition timeline is registered
-            // (not counting "main" or empty registrations)
-            return keys.length >= 2 || keys.some((k) => k !== "main");
+            const hosts = document.querySelectorAll("[data-composition-src]").length;
+            if (hosts === 0) return Object.keys(tls).length >= 1;
+            const subKeys = Object.keys(tls).filter((k) => k !== "main");
+            return subKeys.length >= hosts;
           },
           { timeout: timeoutMs },
         )
@@ -293,8 +296,19 @@ async function captureSnapshots(
             if (tls) {
               for (const key in tls) {
                 if (tls[key]?.seek) {
+                  // Sub-composition timelines run in local time relative to
+                  // their data-start. Seeking them to global time causes beats
+                  // with exit animations to appear black (global t clamps past
+                  // the exit). Compute local time: global_t - data_start.
+                  const host = document.querySelector<HTMLElement>(
+                    `[data-composition-id="${key}"]`,
+                  );
+                  const dataStart = host
+                    ? parseFloat(host.getAttribute("data-start") ?? "0") || 0
+                    : 0;
+                  const localTime = Math.max(0, t - dataStart);
                   tls[key].pause();
-                  tls[key].seek(t);
+                  tls[key].seek(localTime);
                 }
               }
             }
