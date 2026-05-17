@@ -2599,10 +2599,9 @@
           ss += 'function rs(){r.setSize(innerWidth,innerHeight,!1);comp.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}\n';
           ss += 'addEventListener("resize",rs);rs();\n';
           ss += 'const t0=performance.now();\n';
-          ss += 'const pc=document.getElementById("bg-preview-canvas");\n';
-          ss += '(function tick(t){u.uTime.value=(t-t0)*.001;comp.render();\n';
-          ss += 'if(pc&&!pc._drawn){pc.width=pc.clientWidth*2;pc.height=pc.clientHeight*2;var ctx=pc.getContext("2d");if(ctx){ctx.drawImage(c,0,0,pc.width,pc.height);if(u.uTime.value>0.5)pc._drawn=true;}}\n';
-          ss += 'requestAnimationFrame(tick)})(performance.now());\n';
+          ss += 'const pc=document.getElementById("bg-preview-canvas");let pctx=null;\n';
+          ss += 'if(pc){pc.width=pc.clientWidth*2;pc.height=pc.clientHeight*2;pctx=pc.getContext("2d");}\n';
+          ss += '(function tick(t){u.uTime.value=(t-t0)*.001;comp.render();if(pctx)pctx.drawImage(c,0,0,pc.width,pc.height);requestAnimationFrame(tick)})(performance.now());\n';
           ss += '<\/script>';
           h = h.replace(/__SHADER_SCRIPT__/g, ss);
         } else {
