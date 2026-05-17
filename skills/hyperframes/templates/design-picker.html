@@ -1566,6 +1566,7 @@
 
       var currentPhase = "mood";
       function showPhase(name) {
+        if (name === "tune" && !window._currentTemplateSlug) return;
         currentPhase = name;
         document.querySelectorAll(".phase").forEach(function (p) {
           p.classList.remove("active");
@@ -1577,7 +1578,7 @@
         document.getElementById("tab-" + name).classList.add("active");
         if (name === "mood") {
           document.getElementById("fab").classList.remove("visible");
-          // Hide design iframe when going back to templates
+          document.getElementById("tab-tune").classList.add("disabled");
           var dif = document.getElementById("design-iframe");
           if (dif) dif.style.display = "none";
         } else {
