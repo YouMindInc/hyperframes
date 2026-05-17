@@ -2257,6 +2257,12 @@
 
       var seControls = document.getElementById("se-controls");
 
+      var _iframeDebounce = null;
+      function debouncedIframeUpdate() {
+        clearTimeout(_iframeDebounce);
+        _iframeDebounce = setTimeout(function() { if (window._currentTemplateSlug) renderDesignIframe(); }, 300);
+      }
+
       function makeSlider(parent, label, key, min, max, step, preset) {
         var wrap = document.createElement("label");
         wrap.style.cssText = "font-size:10px;color:#666;display:block;margin-bottom:6px;";
@@ -2274,6 +2280,7 @@
           preset[this.dataset.key] = val;
           valSpan.textContent = val;
           if (typeof window._sgUpdateBg === "function") window._sgUpdateBg();
+          debouncedIframeUpdate();
         });
         wrap.textContent = label + " ";
         wrap.appendChild(valSpan);
@@ -2359,6 +2366,7 @@
           seC1.value = p.secondary; seC2.value = p.accent; seC3.value = p.tertiary;
         }
         if (typeof window._sgUpdateBg === "function") window._sgUpdateBg();
+        debouncedIframeUpdate();
       });
       document.getElementById("se-grain").addEventListener("change", function() {
         if (typeof window._sgToggleGrain === "function") window._sgToggleGrain(!this.checked);
@@ -2372,10 +2380,12 @@
             makeSlider(grainBox, "Blend", "grainBlending", 0, 1, 0.05, preset._render);
           }
         }
+        debouncedIframeUpdate();
       });
       [seC1, seC2, seC3].forEach(function(el) {
         el.addEventListener("input", function() {
           if (typeof window._sgUpdateBg === "function") window._sgUpdateBg();
+          debouncedIframeUpdate();
         });
       });
 
