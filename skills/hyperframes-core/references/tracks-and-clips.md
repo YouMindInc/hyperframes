@@ -42,3 +42,35 @@ When adding a new clip to an existing composition:
 `data-start` is in seconds, measured from the start of the _composition_. For sub-compositions, the sub-composition's internal timeline (its own `data-duration` and child clips) runs from `data-start` to `data-start + data-duration` of the host.
 
 `data-media-start` (on `<video>`/`<audio>`) is an offset _into the source media_. Use it to skip the first few seconds of a media file without trimming the file itself.
+
+## Relative Timing
+
+`data-start` accepts a clip ID instead of a number, meaning "start when that clip ends". Add `+ N` / `- N` to offset; negative produces overlap (useful for crossfades).
+
+```html
+<video id="intro" data-start="0" data-duration="10" data-track-index="0" src="..."></video>
+<video id="main" data-start="intro" data-duration="20" data-track-index="0" src="..."></video>
+<video
+  id="scene-a"
+  data-start="intro + 2"
+  data-duration="20"
+  data-track-index="0"
+  src="..."
+></video>
+<video
+  id="scene-b"
+  data-start="intro - 0.5"
+  data-duration="20"
+  data-track-index="1"
+  src="..."
+></video>
+```
+
+Rules:
+
+- References resolve **inside the same composition only** — cannot reach into a parent or sibling sub-composition.
+- The referenced clip must have a **known duration** (explicit `data-duration` or inferred from media). Otherwise the reference cannot resolve.
+- **No circular references** — `A → B → A` is rejected. Cycles are detected and error out.
+- A value that parses as a number is always treated as absolute seconds. Otherwise the resolver expects `<id>`, `<id> + <number>`, or `<id> - <number>` (whitespace optional).
+- References can chain (`A → B → C`). Keep chains under 3-4 levels for readability.
+- Negative offsets create overlap; overlapping clips must be on **different tracks**, same-track overlap is rejected.

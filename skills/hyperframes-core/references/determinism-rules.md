@@ -15,6 +15,7 @@ For GSAP:
 - **Do not** call `tl.play()` for render-critical motion.
 - **Do not** build timelines inside `async`, `Promise`, `setTimeout`, or event handlers — the renderer can sample before they finish.
 - **Do not** create empty tweens only to set duration; use `data-duration` on the clip instead.
+- **Do not** `gsap.set()` clip elements from later scenes — they are not in the DOM at page load. Use `tl.set(selector, vars, time)` inside the timeline at or after the clip's `data-start`.
 
 Use the `hyperframes-gsap` skill for tween syntax, position parameters, eases, and performance rules.
 
@@ -26,11 +27,11 @@ Rendered frames must be reproducible from the requested time. Do **not** use any
 - Unseeded `Math.random()`. Use a seeded PRNG if random-looking placement is needed.
 - Render-time network fetches for required assets. Inline or pre-bundle them.
 - Hover, scroll, pointer, or focus state. The renderer has no input events.
-- Infinite loops such as `repeat: -1`. Compute a finite repeat count from the visible duration.
+- Infinite loops such as `repeat: -1`. Compute a finite repeat count from the visible duration: `repeat: Math.ceil(duration / cycleDuration) - 1`.
 
 Also avoid:
 
-- Animating `display` or `visibility` directly — use opacity/transforms and timed clip visibility.
+- Animating anything outside the visual-property allowlist: `opacity`, `x`, `y`, `scale`, `rotation`, `color`, `backgroundColor`, `borderRadius`, transforms. Never animate `display` or `visibility` — use opacity/transforms and timed clip visibility instead.
 - Animating the same property on the same element from multiple timelines at the same time — GSAP's overwrite behavior is order-dependent and can flip between renders.
 
 ## Layout Contract
@@ -42,7 +43,8 @@ Build the visible end-state in static HTML and CSS first, then animate from/to t
 - Use padding, flex, grid, and `max-width` for layout. Avoid positioning main content with hardcoded `top`/`left` offsets when a layout container can do it.
 - Use `position: absolute` for layers and decorative elements, not as the default content-layout strategy.
 - Prefer transforms and opacity for animation.
-- Keep text inside its intended container. For dynamic text, use `max-width`, wrapping, or `window.__hyperframes.fitTextFontSize(...)`.
+- Keep text inside its intended container. For dynamic text, use `max-width`, wrapping, or `window.__hyperframes.fitTextFontSize(text, { maxWidth, fontFamily, fontWeight })`.
+- **Do not** use `<br>` in body text. Forced breaks ignore the actual rendered font width and produce an extra break when the line already wraps naturally, causing overlap. Let text wrap via `max-width`. Exception: short display titles where each word is deliberately on its own line.
 
 ## Why This Matters
 
