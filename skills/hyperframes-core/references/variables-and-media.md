@@ -25,11 +25,16 @@ document.documentElement.style.setProperty("--accent", accent);
 
 ### Variable Rules
 
-- Supported types: `string`, `number`, `color`, `boolean`, `enum`.
-- Enum declarations also need `options: [{ "value": "...", "label": "..." }]`.
+- Supported types and their extra options (consumed by Studio's editing UI):
+  - `string` — optional `placeholder`, `maxLength`
+  - `number` — optional `min`, `max`, `step`, `unit`
+  - `color` — none
+  - `boolean` — none
+  - `enum` — **required** `options: [{ "value": "...", "label": "..." }, ...]`
 - Always provide useful `default` values so preview works without CLI overrides.
 - Use `data-variable-values='{"title":"Pro"}'` on sub-composition hosts for per-instance overrides.
 - Use `npx hyperframes render --variables '{"title":"Q4 Report"}'` or `--variables-file` for render-time overrides.
+- Add `--strict-variables` in CI: turns undeclared keys, type mismatches, and enum values not in `options` into errors instead of warnings.
 - Read values once during init, not on every animation tick — variables don't change mid-render.
 
 ### Two JSON Shapes (Easy to Confuse)

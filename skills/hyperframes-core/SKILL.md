@@ -11,7 +11,7 @@ Use this skill for the technical contract. For brand direction, visual style, tr
 
 ## Minimal Composition
 
-Standalone compositions put the composition root directly in `<body>`. Do not wrap the root in `<template>`.
+The smallest renderable composition — a standalone (top-level) root with one clip and one tween:
 
 ```html
 <!doctype html>
@@ -68,16 +68,56 @@ Standalone compositions put the composition root directly in `<body>`. Do not wr
 </html>
 ```
 
+## Composition Structure
+
+Two root forms; they are **not** interchangeable.
+
+- **Standalone** (the top-level `index.html`) — root `<div data-composition-id="…">` sits directly in `<body>`. **No `<template>` wrapper.** Wrapping a standalone root in `<template>` hides all content from the browser and breaks rendering.
+- **Sub-composition** (a file loaded via `data-composition-src`) — root `<div data-composition-id="…">` **must** be wrapped in `<template>`. Without the wrapper the runtime cannot extract and mount it.
+
+See `references/sub-compositions.md` for the sub-composition file shape and host wiring.
+
+## Timeline Contract
+
+Every composition registers exactly one GSAP timeline.
+
+- Create with `gsap.timeline({ paused: true })` — the player owns playback.
+- Register at `window.__timelines["<composition-id>"]`; the key **must exactly match** the root's `data-composition-id`.
+- Build the timeline **synchronously** during page load — not inside `async`, `setTimeout`, `Promise`, or event handlers.
+- Render duration comes from `data-duration` on the root, **not** from GSAP timeline length. Do not pad the timeline with empty tweens to set duration.
+- For sub-compositions, do **not** manually nest sub-timelines into the host (`master.add(sub)`); the framework drives them independently.
+
+See `references/determinism-rules.md` for the full Animation Runtime Contract.
+
+## Non-Negotiable Rules
+
+These break the renderer. Routing below points to the full explanations.
+
+1. No `Math.random()` / `Date.now()` / `performance.now()` driving visuals — use a seeded PRNG.
+2. No `repeat: -1`. Use `repeat: Math.ceil(duration / cycleDuration) - 1`.
+3. No `video.play()` / `audio.play()` / `currentTime = …`. The framework owns media playback.
+4. No `gsap.set()` on clip elements from later scenes (they are not in the DOM yet). Use `tl.set(selector, vars, time)` at or after the clip's `data-start`.
+5. No animating `display` / `visibility`. Animate `opacity` / transforms; the clip lifecycle handles show/hide.
+6. No `<br>` in body text. Let text wrap via `max-width`; forced breaks misbehave when text already wraps.
+7. No timeline construction inside `async` / `setTimeout` / `Promise`. The renderer samples after page load, synchronously.
+
 ## Routing
 
-| Want to…                                          | Read                                |
-| ------------------------------------------------- | ----------------------------------- |
-| Look up a `data-*` attribute (root + clip tables) | `references/data-attributes.md`     |
-| Understand track-index, overlap, and z-index      | `references/tracks-and-clips.md`    |
-| Wire a sub-composition into a host                | `references/sub-compositions.md`    |
-| Declare variables or place video/audio            | `references/variables-and-media.md` |
-| Make the composition render deterministically     | `references/determinism-rules.md`   |
-| Author full-frame motion with shared backgrounds  | `references/full-screen-motion.md`  |
+| Want to…                                                                                   | Read                                |
+| ------------------------------------------------------------------------------------------ | ----------------------------------- |
+| Look up a `data-*` attribute (root, clip, sub-comp host, legacy aliases)                   | `references/data-attributes.md`     |
+| Use `class="clip"` correctly (when runtime visibility management requires it)              | `references/data-attributes.md`     |
+| Pick a `data-track-index`; same-track overlap; track-index vs CSS `z-index`                | `references/tracks-and-clips.md`    |
+| Time a clip relative to another (`data-start="intro + 2"`, crossfade overlap, chains)      | `references/tracks-and-clips.md`    |
+| Wire a sub-composition (host attributes, `<template>` wrapper, per-instance variables)     | `references/sub-compositions.md`    |
+| Animate inside a sub-composition (`gsap.fromTo` over `gsap.from`, seek-back behavior)      | `references/sub-compositions.md`    |
+| Declare variables (types, extra options, defaults, `--strict-variables` in CI)             | `references/variables-and-media.md` |
+| Place `<video>` / `<audio>`, set volume, trim with `data-media-start`                      | `references/variables-and-media.md` |
+| Build a seekable timeline (paused, sync construction, `gsap.set` later-scene trap)         | `references/determinism-rules.md`   |
+| Avoid non-deterministic state (clocks, `Math.random`, `repeat: -1`, finite repeat formula) | `references/determinism-rules.md`   |
+| Know what can / cannot be animated (visual-property allowlist; not `display`/`visibility`) | `references/determinism-rules.md`   |
+| Fit text and prevent overflow (`fitTextFontSize` signature, `<br>` rule, layout contract)  | `references/determinism-rules.md`   |
+| Author full-frame motion with shared backgrounds                                           | `references/full-screen-motion.md`  |
 
 For GSAP API details (tween syntax, timelines, easing, performance) use the `hyperframes-gsap` skill.
 
@@ -91,17 +131,14 @@ For GSAP API details (tween syntax, timelines, easing, performance) use the `hyp
 
 ## Validation
 
-Use `hyperframes-cli` for command details. Minimum completion gate:
+Use `hyperframes-cli` for command details. Two phases:
 
-```bash
-npx hyperframes lint
-npx hyperframes validate
-```
+**Fast (run immediately, block on results):**
 
-For layout-sensitive work, also run:
+- [ ] `npx hyperframes lint` passes (0 errors)
+- [ ] `npx hyperframes validate` passes (0 console errors)
 
-```bash
-npx hyperframes inspect
-```
+**Slow (run while inspecting the preview):**
 
-Fix lint errors, runtime validation errors, unregistered timelines, same-track overlaps, missing assets, and unintended text overflow before considering the composition complete.
+- [ ] `npx hyperframes inspect` passes, or every reported overflow is intentionally marked with `data-layout-allow-overflow` / `data-layout-ignore`
+- [ ] No unregistered timelines, same-track overlaps, missing assets, or unintended text overflow remain

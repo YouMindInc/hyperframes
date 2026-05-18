@@ -50,6 +50,10 @@ Contrast with **standalone** compositions, which put the root directly in `<body
 
 **Do not** manually `master.add(child)` a sub-composition timeline into the host timeline. HyperFrames already drives them independently — nesting them in GSAP causes double-seeks.
 
+## Animations Inside Sub-Compositions
+
+Prefer `gsap.fromTo()` over `gsap.from()` for entrance tweens. The host re-seeks the sub-composition every time its clip becomes visible; `gsap.from()` records the starting state at registration and can desync on seek-back, while `gsap.fromTo()` declares both endpoints explicitly and replays cleanly.
+
 ## Per-Instance Variables
 
 If the sub-composition declares variables on its `<html>` element (`data-composition-variables`), the host can override values per instance:

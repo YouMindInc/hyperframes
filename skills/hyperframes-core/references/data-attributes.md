@@ -18,16 +18,17 @@ The root should be `position: relative`, have explicit pixel dimensions, and hid
 
 ## Clip Attributes
 
-Timed child elements are clips. Add `class="clip"` for authored visual clips so tooling and examples can identify them consistently.
+Timed child elements are clips. **`class="clip"` is required on visible timed elements** (`<div>`, `<img>`, etc.) — without it the runtime keeps the element visible for the whole composition, ignoring `data-start` / `data-duration`. Omit on `<video>` (framework manages visibility directly) and `<audio>` (no visual).
 
-| Attribute          | Required                                        | Meaning                                                                    |
-| ------------------ | ----------------------------------------------- | -------------------------------------------------------------------------- |
-| `id`               | Yes                                             | Stable DOM ID for linting, timeline targets, and debugging.                |
-| `data-start`       | Yes                                             | Start time in seconds, or a supported clip-time reference.                 |
-| `data-duration`    | Required for `div`, `img`, and sub-compositions | Duration in seconds. Video/audio can default to media duration when known. |
-| `data-track-index` | Yes                                             | Timeline track. Clips on the same track must not overlap.                  |
-| `data-media-start` | No                                              | Offset into the media source, in seconds.                                  |
-| `data-volume`      | No                                              | Audio volume, `0` to `1`, default `1`.                                     |
+| Attribute          | Required                                        | Meaning                                                                                 |
+| ------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `id`               | Yes                                             | Stable DOM ID for linting, timeline targets, and debugging.                             |
+| `data-start`       | Yes                                             | Start time in seconds, or a supported clip-time reference.                              |
+| `data-duration`    | Required for `div`, `img`, and sub-compositions | Duration in seconds. Video/audio can default to media duration when known.              |
+| `data-track-index` | Yes                                             | Timeline track. Clips on the same track must not overlap.                               |
+| `data-media-start` | No                                              | Offset into the media source, in seconds.                                               |
+| `data-volume`      | No                                              | Audio volume, `0` to `1`, default `1`.                                                  |
+| `data-has-audio`   | No (`<video>` only)                             | `"true"` to declare the video carries an audio track when auto-detection would miss it. |
 
 ## Sub-Composition Host Attributes
 
@@ -45,6 +46,15 @@ See `sub-compositions.md` for the full wiring pattern.
 ## Authoring Hints
 
 - `id="root"` — template convention used by scaffolds and the transition catalog so CSS can target the composition root with `#root` instead of `[data-composition-id="main"]`. Not required by the runtime, but consistent with the rest of the ecosystem.
-- `class="clip"` — semantic marker for tooling. Not required by the runtime.
+- `class="clip"` — required runtime visibility marker on visible timed elements (`<div>`, `<img>`, …). See Clip Attributes above.
 - `data-layout-allow-overflow` — tells `hyperframes inspect` that overflow on this element (or its descendants) is intentional.
 - `data-layout-ignore` — exclude this element from layout audits entirely.
+
+## Legacy / Removed Attributes
+
+These names appear in older projects and examples. Use the current names when authoring or editing:
+
+| Legacy name  | Use instead        |
+| ------------ | ------------------ |
+| `data-layer` | `data-track-index` |
+| `data-end`   | `data-duration`    |
