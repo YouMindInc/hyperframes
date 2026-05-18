@@ -2491,6 +2491,28 @@
         var bg = picks.bg_mode !== null ? BG_PRESETS[picks.bg_mode] : BG_PRESETS[0];
         var name = (PROMPT && PROMPT.title) || "Untitled";
 
+        // Read native palette from template.html and set as Template Default
+        if (PALETTES[0].name !== "Template Default" || !PALETTES[0]._native) {
+          var txhr = new XMLHttpRequest();
+          txhr.open("GET", "templates/" + slug + "/template.html?t=" + Date.now(), false);
+          txhr.send();
+          if (txhr.status === 200) {
+            var tmatch = txhr.responseText.match(/--tp-primary:\s*(#[0-9a-fA-F]{3,8})/);
+            var smatch = txhr.responseText.match(/--tp-secondary:\s*(#[0-9a-fA-F]{3,8})/);
+            var rmatch = txhr.responseText.match(/--tp-tertiary:\s*(#[0-9a-fA-F]{3,8})/);
+            var amatch = txhr.responseText.match(/--tp-accent:\s*(#[0-9a-fA-F]{3,8})/);
+            if (tmatch && smatch) {
+              PALETTES[0].primary = tmatch[1];
+              PALETTES[0].secondary = smatch[1];
+              PALETTES[0].tertiary = rmatch ? rmatch[1] : "#555";
+              PALETTES[0].accent = amatch ? amatch[1] : "#888";
+              PALETTES[0].name = "Template Default";
+              PALETTES[0]._native = slug;
+              buildPalOpts();
+            }
+          }
+        }
+
         // Fetch design template
         var xhr = new XMLHttpRequest();
         xhr.open("GET", "templates/" + slug + "/design.html?t=" + Date.now(), false);
@@ -3777,6 +3799,7 @@
       function handleTemplatePick(pick) {
         if (!pick || !pick.slug) return;
         window._currentTemplateSlug = pick.slug;
+        PALETTES[0]._native = null; // Reset so native palette is re-read for new template
         var tn = document.getElementById("current-tmpl-name");
         if (tn) tn.textContent = pick.name;
         _origVarCache = {};
