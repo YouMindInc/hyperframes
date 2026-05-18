@@ -28,6 +28,7 @@ HyperFrames controls GSAP through its `gsap` runtime adapter. Create a paused ti
 - Do not call `tl.play()` for render-critical motion.
 - Do not build timelines inside async code, timers, or event handlers.
 - Keep loops finite. HyperFrames renders finite video durations.
+- **Render duration comes from `data-duration` on the composition root, not from GSAP timeline length.** Do not pad the timeline with empty tweens like `tl.set({}, {}, 283)` to "extend" it. (Some external docs show this trick; in HyperFrames it conflicts with the seek-driven duration model — set `data-duration` instead.)
 
 ## Core Tween Methods
 
@@ -52,11 +53,31 @@ Always use **camelCase** property names (e.g. `backgroundColor`, `rotationX`).
 
 For transforms, autoAlpha, clearProps, and SVG specifics see `references/transforms-and-perf.md`.
 
+## Animated Property Allowlist
+
+HyperFrames is stricter than vanilla GSAP. Animate only:
+
+- **Compositor-cheap**: `opacity`, `x`, `y`, `scale`, `scaleX`, `scaleY`, `rotation`, `rotationX`, `rotationY`, `skewX`, `skewY`, `transformOrigin`
+- **Visual fills**: `color`, `backgroundColor`, `borderColor`, `borderRadius`
+- **CSS variables**: `"--hue": 180` etc.
+
+**Avoid** (use the transform alias instead):
+
+- `width` / `height` / `top` / `left` / `right` / `bottom` / `margin*` / `padding*` — trigger layout reflows. Use `scaleX/Y` (with `transformOrigin`) or `x` / `y`.
+
+**Forbidden** (breaks the renderer or the clip lifecycle):
+
+- `display`, `visibility` — never tween these directly. Use `autoAlpha` (sets opacity + visibility together at endpoints, doesn't tween the discrete property).
+- Anything driven by `Math.random()`, `Date.now()`, `performance.now()`, or event handlers — animation state must be deterministic from time alone.
+
+> **Note**: `docs/guides/gsap-animation.mdx` lists `width`/`height`/`visibility` in its "Supported Properties" — that list is too permissive for HyperFrames composition rules. This allowlist is the canonical one. See `hyperframes-core/references/determinism-rules.md` for the full deterministic-render contract.
+
 ## References
 
-- `references/timeline-and-labels.md` — timeline creation, position parameter (`+=`, `<`, `>`), labels, nesting, playback control.
+- `references/timeline-and-labels.md` — timeline creation, position parameter (`+=`, `<`, `>`), labels, nesting, sub-comp `fromTo` preference, playback control.
 - `references/easing-and-stagger.md` — easing families, stagger objects, function-based values, `gsap.matchMedia()`, `gsap.defaults()`.
 - `references/transforms-and-perf.md` — transform aliases, autoAlpha, `quickTo`, `will-change`, performance rules.
+- `references/effects.md` — drop-in recipes: typewriter (with cursor / backspace / word rotation) + audio visualizer (uses `scripts/extract-audio-data.py`).
 
 ## Best Practices
 
