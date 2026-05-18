@@ -68,6 +68,19 @@ master.add(child, 0);
 
 In HyperFrames, **do not** nest sub-composition timelines into the host. Sub-compositions loaded via `data-composition-src` are seeked independently by HyperFrames from their own `data-start`. Nesting is only for grouping pieces of the _same_ composition's timeline.
 
+## Inside Sub-Compositions: prefer `fromTo` over `from`
+
+For entrance tweens inside a sub-composition, prefer `gsap.fromTo()` over `gsap.from()`:
+
+```javascript
+// Sub-composition entrance — survives re-seek cleanly
+tl.fromTo(".title", { y: 60, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, 0.2);
+```
+
+Why: HyperFrames re-seeks the sub-composition every time its host clip becomes visible. `gsap.from()` snapshots the starting state at **registration time** (page load); when the playhead jumps back past `data-start`, that snapshot can desync from the actual CSS state and the element renders in the wrong position. `gsap.fromTo()` declares both endpoints explicitly, so the seek-back always produces the same start state.
+
+In top-level (standalone) compositions either form works — there's no re-seek-through-mount cycle.
+
 ## Playback Control (debug / preview only)
 
 ```javascript

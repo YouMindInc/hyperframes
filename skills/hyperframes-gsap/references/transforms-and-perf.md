@@ -71,9 +71,9 @@ Animating `x`, `y`, `scale`, `rotation`, `opacity` stays on the GPU compositor. 
 
 Only on elements that _actually_ animate. Applied everywhere it becomes useless and burns memory.
 
-### gsap.quickTo for frequent updates
+### gsap.quickTo for frequent updates (preview-only)
 
-For high-frequency updates (pointer-driven, audio-reactive scrubs), `quickTo` reuses the same tween instead of creating a new one each frame:
+For high-frequency updates driven by **events** — pointer move, scroll, audio scrub — `quickTo` reuses the same tween instead of creating a new one each frame:
 
 ```javascript
 const xTo = gsap.quickTo("#cursor", "x", { duration: 0.4, ease: "power3" });
@@ -84,6 +84,8 @@ container.addEventListener("mousemove", (e) => {
   yTo(e.pageY);
 });
 ```
+
+> **Render mode has no input events.** The renderer seeks frame-by-frame; `mousemove`, `scroll`, etc. never fire. `quickTo`'s main use case applies in **live preview** in the browser only. For audio-reactive motion in renders, pre-extract audio data and drive the timeline declaratively (see `references/effects.md`).
 
 ### Stagger beats N tweens
 
