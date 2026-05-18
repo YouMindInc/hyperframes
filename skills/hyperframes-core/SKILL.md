@@ -7,7 +7,16 @@ description: Author core HyperFrames HTML compositions. Use for HyperFrames HTML
 
 HyperFrames renders video from HTML. A composition is an HTML file whose DOM declares timing with `data-*` attributes, whose animation runtime is seekable, and whose media playback is owned by the framework.
 
-Use this skill for the technical contract. For brand direction, visual style, transitions, and creative recipes use `hyperframes-creative`. For captions use `hyperframes-captions`. For CLI commands use `hyperframes-cli`. For GSAP API details use `hyperframes-gsap`.
+This skill is the **technical contract** for HTML compositions. Cross-cutting concerns live in sibling skills:
+
+- `hyperframes-creative` — design system, palettes, motion principles, transitions
+- `hyperframes-captions` — subtitles, lyrics, karaoke, transcript timing
+- `hyperframes-media` — TTS / Whisper transcribe / background removal
+- `hyperframes-registry` — install blocks and components (`hyperframes add`)
+- `hyperframes-tailwind` — Tailwind v4 browser runtime (for `init --tailwind` projects)
+- `hyperframes-cli` — dev loop commands (lint / validate / preview / render)
+
+For animation runtime selection (GSAP / Lottie / Three / etc.) see **Choosing an Animation Runtime** below.
 
 ## Minimal Composition
 
