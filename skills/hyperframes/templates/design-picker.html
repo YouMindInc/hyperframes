@@ -2653,13 +2653,14 @@
         h = h.replace(/__FONT_LINK_EXTRA__/g, "");
         h = h.replace(/__DATE__/g, new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }));
 
-        // Inject core token override only — no alias forcing (templates map aliases differently)
-        var overrideCSS = '<style id="picker-override">:root{' +
-          '--primary:' + p.primary + '!important;' +
-          '--secondary:' + p.secondary + '!important;' +
-          '--tertiary:' + (p.tertiary||"#888") + '!important;' +
-          '--accent:' + p.accent + '!important;' +
-          '}</style>';
+        // Inject core token override + force swatch backgrounds to core tokens
+        var overrideCSS = '<style id="picker-override">' +
+          ':root{--primary:' + p.primary + '!important;--secondary:' + p.secondary + '!important;--tertiary:' + (p.tertiary||"#888") + '!important;--accent:' + p.accent + '!important}' +
+          '.palette .swatch:nth-child(1){background:' + p.primary + '!important}' +
+          '.palette .swatch:nth-child(2){background:' + p.secondary + '!important}' +
+          '.palette .swatch:nth-child(3){background:' + (p.tertiary||"#888") + '!important}' +
+          '.palette .swatch:nth-child(4){background:' + p.accent + '!important}' +
+          '</style>';
         h = h.replace('</head>', overrideCSS + '</head>');
 
         // Save scroll position before rewrite
