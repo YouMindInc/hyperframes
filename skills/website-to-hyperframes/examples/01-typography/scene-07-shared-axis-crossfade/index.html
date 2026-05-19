@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-07-shared-axis-crossfade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/CustomEase.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0e14; }
+
+    #scene-07-shared-axis-crossfade {
+      position: relative;
+      overflow: hidden;
+      /* Subtle dark blue-gray gradient — Material Design "depth" feel.
+         Two layered radial gradients give the surface a sense of distance. */
+      background:
+        radial-gradient(ellipse at 50% 40%, #1c2733 0%, #0c1218 55%, #060a0f 100%);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #eef3f7;
+    }
+
+    /* Ambient light spot — continuous-motion source. Drifts during the beat
+       so the frame never sits still even when a phrase is mid-hold. */
+    .light-spot {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      width: 1400px;
+      height: 1400px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(
+        circle,
+        rgba(102, 156, 214, 0.10) 0%,
+        rgba(74, 122, 178, 0.04) 30%,
+        transparent 60%
+      );
+      pointer-events: none;
+      will-change: transform, opacity;
+      filter: blur(8px);
+    }
+
+    /* Faint grid — gives the "Material surface" texture without dominating. */
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(120, 160, 200, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120, 160, 200, 0.025) 1px, transparent 1px);
+      background-size: 80px 80px;
+      mask-image: radial-gradient(ellipse at 50% 50%, black 30%, transparent 80%);
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    /* Stage: perspective host for the z-axis depth crossfade.
+       shared-axis-z.json showcase.stage.container.perspective_px = 900. */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 900px;
+      perspective-origin: 50% 50%;
+    }
+
+    /* Phrase row holds all three phrases stacked. transform-style:preserve-3d
+       lets the scale tween read as a depth move along z, not a flat resize. */
+    .phrase-row {
+      position: relative;
+      width: 100%;
+      height: 240px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-style: preserve-3d;
+    }
+
+    /* CRITICAL: all 3 phrases live in DOM simultaneously, position:absolute
+       centered, opacity:0 initial. We swap via opacity+scale sequencing.
+       This makes the beat seekable — snapshot tool jumps to any timestamp
+       and the DOM is already populated, no callback-driven mutation needed. */
+    /* Phrase host — flexbox in .phrase-row centers it. All 3 phrases stack
+       at the same flex slot using position:absolute. NO CSS transform here:
+       GSAP owns the transform (scale/blur/opacity). Mixing CSS translate(-50%,-50%)
+       with GSAP transforms causes drift (per CLAUDE.md gotcha). */
+    .phrase {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform-origin: 50% 50%;
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      font-size: 130px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.05;
+      white-space: nowrap;
+      color: #eef3f7;
+      opacity: 0;  /* lock pre-entrance state so first snapshot frame is blank */
+      will-change: transform, opacity, filter;
+    }
+
+    /* Eyebrow above the phrase — Material-style section label. */
+    .eyebrow {
+      position: absolute;
+      top: calc(50% - 180px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: 0.36em;
+      text-transform: uppercase;
+      color: #5d7a92;
+      opacity: 0;  /* GSAP fromTo handles entrance */
+      will-change: opacity, transform;
+    }
+
+    /* Progress indicator — three dots tracking which phrase is active. */
+    .progress {
+      position: absolute;
+      top: calc(50% + 180px);
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 14px;
+    }
+    .progress .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(140, 170, 200, 0.18);
+      will-change: transform, background-color;
+    }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-size: 16px;
+      color: #5d7a92;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      z-index: 10;
+      will-change: opacity, transform;
+    }
+    .label .accent { color: #eef3f7; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div id="scene-07-shared-axis-crossfade"
+       data-composition-id="scene-07-shared-axis-crossfade"
+       data-start="0"
+       data-duration="9"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="light-spot" id="light-spot"></div>
+    <div class="grid-overlay" id="grid-overlay"></div>
+
+    <div class="stage">
+      <div class="eyebrow" id="eyebrow">Section 07 · Material · Shared Axis</div>
+
+      <div class="phrase-row">
+        <!-- All three phrases pre-built in DOM. CSS opacity:0 locks initial state.
+             GSAP timeline orchestrates scale+opacity for the depth crossfade.
+             Phrase lengths kept comparable so all three fit at scale 1.32. -->
+        <div class="phrase" data-phrase="0">Step into the view.</div>
+        <div class="phrase" data-phrase="1">Then into the next.</div>
+        <div class="phrase" data-phrase="2">Always one axis.</div>
+      </div>
+
+      <div class="progress" id="progress">
+        <span class="dot" data-dot="0"></span>
+        <span class="dot" data-dot="1"></span>
+        <span class="dot" data-dot="2"></span>
+      </div>
+    </div>
+
+    <div class="label">
+      Scene 07 · <span class="accent">Shared Axis Z</span> · scale-Z depth crossfade between phrases
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 9; // matches data-duration on host div above
+      window.__timelines = window.__timelines || {};
+
+      gsap.registerPlugin(CustomEase);
+
+      // shared-axis-z.json portable_spec.signature_easing for ENTER:
+      // cubic-bezier(0.2, 0, 0, 1) — Material standard "decelerate".
+      // Soft land from depth: phrase emerges from behind, settles forward.
+      var enterEase = CustomEase.create("sharedEnter", "0.2, 0, 0, 1");
+      // shared-axis-z.json portable_spec.exit.easing:
+      // cubic-bezier(0.4, 0, 1, 1) — Material "accelerate".
+      // Outgoing phrase pushes toward camera and accelerates out of frame.
+      var exitEase = CustomEase.create("sharedExit", "0.4, 0, 1, 1");
+
+      // Per shared-axis-z.json: enter from scale 0.9 + blur 2px + opacity 0;
+      // exit to scale 1.06 + blur 1px + opacity 0. We exaggerate the scale
+      // range for 1080p readability — incoming starts from 0.55 (clearly
+      // "behind" the surface, half-size) and outgoing pushes to 1.45
+      // (clearly "through" the camera). This makes the z-axis unmistakable
+      // in snapshot frames where motion is frozen, even at slower sampling.
+      var IN_SCALE_FROM = 0.55;   // incoming starts much smaller (far away)
+      var IN_SCALE_TO = 1.00;     // settles at surface
+      var OUT_SCALE_TO = 1.45;    // outgoing zooms past camera
+      var IN_BLUR = 10;           // entering heavily blurred (atmospheric depth)
+      var OUT_BLUR = 8;           // exiting blurred (motion blur from speed)
+
+      var phrases = gsap.utils.toArray("#scene-07-shared-axis-crossfade .phrase");
+      var dots = gsap.utils.toArray("#scene-07-shared-axis-crossfade .progress .dot");
+
+      var tl = gsap.timeline({ paused: true });
+
+      // === t=0 initial state — lock everything pre-entrance.
+      // All three phrases start invisible at scale 0.72 (behind the surface).
+      tl.set(phrases, {
+        opacity: 0,
+        scale: IN_SCALE_FROM,
+        filter: "blur(" + IN_BLUR + "px)",
+        xPercent: -50,
+        yPercent: -50,
+      }, 0);
+      tl.set("#eyebrow", { opacity: 0, y: -10 }, 0);
+      tl.set(dots, { backgroundColor: "rgba(140,170,200,0.18)", scale: 1 }, 0);
+
+      // === t=0.25s: eyebrow slides in — supporting move layered with phrase 1 entry.
+      // expo.out for premium "soft land" feel — 1st of 5 easings.
+      tl.fromTo("#eyebrow",
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.7, ease: "expo.out" },
+        0.25);
+
+      // === t=0.0s — 9.0s: ambient drift on light spot. "none" easing for
+      // pure linear ambient motion — 2nd easing. Keeps frame alive even
+      // during the mid-phrase holds.
+      tl.fromTo("#light-spot",
+        { x: -120, y: -60, opacity: 0.55 },
+        { x: 120, y: 60, opacity: 1, duration: 9, ease: "none" },
+        0);
+
+      // === t=0.0s — 9.0s: grid parallax — slower than the light spot.
+      // Drifts horizontally to suggest the surface itself is shifting.
+      tl.fromTo("#grid-overlay",
+        { x: 0, opacity: 0.6 },
+        { x: -40, opacity: 1, duration: 9, ease: "none" },
+        0);
+
+      // ============================================================
+      // PHRASE 1 — "Step into the view." enters at t=0.35s
+      // shared-axis-z enter timing: scaled_duration_ms=374 (~0.374s),
+      // signature easing cubic-bezier(0.2,0,0,1).
+      // Swap windows aligned with snapshot sampling (every 1.125s) so
+      // contact-sheet frames at 2.25s and 4.50s land mid-transition.
+      // ============================================================
+
+      // ENTER: scale-Z from 0.55 → 1.0, blur 10 → 0, opacity 0 → 1.
+      // The phrase emerges from "behind" the surface and settles forward.
+      tl.fromTo(phrases[0],
+        {
+          opacity: 0,
+          scale: IN_SCALE_FROM,
+          filter: "blur(" + IN_BLUR + "px)",
+        },
+        {
+          opacity: 1,
+          scale: IN_SCALE_TO,
+          filter: "blur(0px)",
+          duration: 0.65,
+          ease: enterEase,
+        },
+        0.35);
+
+      // Progress dot 0 lights up as phrase 1 lands.
+      // back.out(1.7) — 3rd easing — subtle overshoot for "active" feel.
+      tl.to(dots[0], {
+        backgroundColor: "rgba(180, 215, 250, 1)",
+        scale: 1.3,
+        duration: 0.5,
+        ease: "back.out(1.7)",
+      }, 0.50);
+
+      // === Continuous motion 1.1s — 2.0s: phrase 1 holds with subtle
+      // forward drift on z-axis. sine.inOut for breathing — 4th easing.
+      tl.to(phrases[0], {
+        scale: 1.020,
+        duration: 0.9,
+        ease: "sine.inOut",
+      }, 1.10);
+
+      // ============================================================
+      // PHRASE 1 EXIT + PHRASE 2 ENTER — swap centered at t=2.25s
+      // shared-axis-z swap: overlap_ms=100, micro_delay_ms=20. We use a
+      // ~250ms overlap so mid-swap snapshot frames clearly show one
+      // phrase scaling past the camera (large + faded) while the next
+      // emerges from depth (small + faded). The depth axis is the entire
+      // point of this scene — we MUST catch it on the contact sheet.
+      // ============================================================
+
+      // EXIT phrase 1: scale-Z 1.0 → 1.45 (push toward camera), blur 0 → 8,
+      // opacity 1 → 0. exitEase (cubic-bezier 0.4,0,1,1) — accelerate.
+      tl.to(phrases[0], {
+        opacity: 0,
+        scale: OUT_SCALE_TO,
+        filter: "blur(" + OUT_BLUR + "px)",
+        duration: 0.60,
+        ease: exitEase,
+      }, 2.00);
+
+      // ENTER phrase 2: starts 0.25s into phrase 1's exit so both are
+      // visible mid-transition — phrase 1 large+fading, phrase 2 small+rising.
+      tl.fromTo(phrases[1],
+        {
+          opacity: 0,
+          scale: IN_SCALE_FROM,
+          filter: "blur(" + IN_BLUR + "px)",
+        },
+        {
+          opacity: 1,
+          scale: IN_SCALE_TO,
+          filter: "blur(0px)",
+          duration: 0.70,
+          ease: enterEase,
+        },
+        2.25);
+
+      // Progress dot 0 dims, dot 1 activates.
+      tl.to(dots[0], {
+        backgroundColor: "rgba(140, 170, 200, 0.35)",
+        scale: 1,
+        duration: 0.4,
+        ease: "power2.inOut",
+      }, 2.00);
+      tl.to(dots[1], {
+        backgroundColor: "rgba(180, 215, 250, 1)",
+        scale: 1.3,
+        duration: 0.5,
+        ease: "back.out(1.7)",
+      }, 2.45);
+
+      // === Continuous motion 3.2s — 4.2s: phrase 2 settle drift.
+      tl.to(phrases[1], {
+        scale: 1.022,
+        duration: 1.0,
+        ease: "sine.inOut",
+      }, 3.20);
+
+      // ============================================================
+      // PHRASE 2 EXIT + PHRASE 3 ENTER — swap centered at t=4.50s
+      // ============================================================
+
+      tl.to(phrases[1], {
+        opacity: 0,
+        scale: OUT_SCALE_TO,
+        filter: "blur(" + OUT_BLUR + "px)",
+        duration: 0.60,
+        ease: exitEase,
+      }, 4.25);
+
+      tl.fromTo(phrases[2],
+        {
+          opacity: 0,
+          scale: IN_SCALE_FROM,
+          filter: "blur(" + IN_BLUR + "px)",
+        },
+        {
+          opacity: 1,
+          scale: IN_SCALE_TO,
+          filter: "blur(0px)",
+          duration: 0.70,
+          ease: enterEase,
+        },
+        4.50);
+
+      // Progress dot 1 dims, dot 2 activates with a stronger pop —
+      // power4.out for the final beat's snap — 5th easing.
+      tl.to(dots[1], {
+        backgroundColor: "rgba(140, 170, 200, 0.35)",
+        scale: 1,
+        duration: 0.4,
+        ease: "power2.inOut",
+      }, 4.25);
+      tl.to(dots[2], {
+        backgroundColor: "rgba(180, 215, 250, 1)",
+        scale: 1.4,
+        duration: 0.55,
+        ease: "power4.out",
+      }, 4.70);
+
+      // === Continuous motion 5.5s — 8.5s: phrase 3 holds as the closer.
+      // Gentle z-drift + faint scale pulse so the final phrase doesn't sit
+      // dead-still for the closing 3.5 seconds.
+      tl.to(phrases[2], {
+        scale: 1.030,
+        duration: 1.5,
+        ease: "sine.inOut",
+      }, 5.50);
+      tl.to(phrases[2], {
+        scale: 1.000,
+        duration: 1.5,
+        ease: "sine.inOut",
+      }, 7.00);
+
+      // === Eyebrow exits at t=7.8s — subtle outro cue.
+      tl.to("#eyebrow", {
+        opacity: 0.4,
+        y: -4,
+        duration: 1.0,
+        ease: "expo.out",
+      }, 7.80);
+
+      // === Label breathing — final 2s. Lifts attention to the closing line.
+      tl.fromTo(".label",
+        { opacity: 0.85 },
+        { opacity: 1, duration: 1.0, ease: "sine.inOut", yoyo: true, repeat: 1 },
+        7.00);
+
+      window.__timelines["scene-07-shared-axis-crossfade"] = tl;
+    })();
+  </script>
+</body>
+</html>

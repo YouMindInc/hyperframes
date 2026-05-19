@@ -1,0 +1,102 @@
+/*
+ * Shared design tokens for the examples library.
+ * Every scene that imports this gets the same type scale + neutral palette,
+ * so the catalog feels cohesive even though brands change.
+ *
+ * Import with:
+ *   <link rel="stylesheet" href="../_shared/shared-styles.css">
+ */
+
+:root {
+  /* Neutral catalog palette — chosen so scenes look professional but not branded */
+  --bg-deep: #0a0a0a;
+  --bg-charcoal: #141414;
+  --bg-elevated: #1c1c1c;
+  --bg-card: #232323;
+  --fg-primary: #f5f5f5;
+  --fg-muted: #a3a3a3;
+  --fg-subtle: #707070;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.18);
+
+  /* Accent rotation — pick ONE per scene, not all */
+  --accent-cyan: #06b6d4;
+  --accent-violet: #8b5cf6;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+  --accent-emerald: #10b981;
+  --accent-yellow: #fde047;
+
+  /* Type scale (1.25 ratio, base 16px @ 1920×1080) */
+  --t-1: 14px;
+  --t-2: 18px;
+  --t-3: 24px;
+  --t-4: 32px;
+  --t-5: 48px;
+  --t-6: 72px;
+  --t-7: 108px;
+  --t-8: 160px;
+
+  /* Spacing scale */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 16px;
+  --s-4: 24px;
+  --s-5: 32px;
+  --s-6: 48px;
+  --s-7: 64px;
+  --s-8: 96px;
+
+  /* Radii */
+  --r-1: 4px;
+  --r-2: 8px;
+  --r-3: 12px;
+  --r-4: 16px;
+  --r-5: 24px;
+  --r-pill: 9999px;
+}
+
+/* Common scene resets — every scene root applies these */
+.scene {
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-deep);
+  color: var(--fg-primary);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Universal will-change opt-in for animated children */
+.scene * {
+  box-sizing: border-box;
+}
+
+/* Centered stage helper */
+.stage-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Caption strip for technique label (shown at bottom-left of every scene) */
+.scene-label {
+  position: absolute;
+  left: 48px;
+  bottom: 48px;
+  font-size: var(--t-2);
+  color: var(--fg-subtle);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.scene-label .accent {
+  color: var(--fg-primary);
+  font-weight: 600;
+}

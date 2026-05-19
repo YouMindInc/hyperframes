@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-05-stagger-wave</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/CustomEase.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; }
+
+    #scene-05-stagger-wave {
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 50% 48%, #161616 0%, #0a0a0a 70%);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #f5f5f5;
+    }
+
+    /* Stage — centered phrase host. perspective_px=900 per per-character-rise.json
+       stage.container.perspective_px, in case future variants use z_px or rotateX. */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      perspective: 900px;
+    }
+
+    /* Two phrases stacked at the same screen position (position:absolute).
+       Both DOM-resident at t=0 so the snapshot tool can find every .char span;
+       visibility is governed entirely by the timeline opacity sequence. */
+    .phrase-row {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-style: preserve-3d;
+      min-height: 200px;
+    }
+
+    .phrase {
+      position: absolute;
+      display: inline-block;
+      transform-style: preserve-3d;
+      font-size: 152px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.05;
+      white-space: nowrap;
+    }
+
+    /* Per-character unit — per-character-rise.json stage.unit contract.
+       Initial opacity:0 + translateY locks the pre-entrance state in CSS so
+       the snapshot tool's first-frame capture (before GSAP applies its t=0
+       set tweens) shows the correct blank state. No blur on this effect —
+       per-character-rise is the crisp variant. */
+    .char {
+      display: inline-block;
+      white-space: pre;
+      backface-visibility: hidden;
+      transform-origin: 50% 55%;
+      will-change: transform, opacity;
+      opacity: 0;
+      transform: translateY(32px);
+    }
+
+    /* Eyebrow + accent band — supporting elements that ground the typography */
+    .eyebrow {
+      position: absolute;
+      top: calc(50% - 165px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.34em;
+      text-transform: uppercase;
+      color: #707070;
+      opacity: 0;       /* lock initial state */
+    }
+
+    /* Horizontal accent band beneath the typography — grounds the wave motion.
+       The band is the brief's color #fde047 (yellow) and animates width 0 → 100%
+       so it draws in alongside the first phrase. */
+    .accent-band {
+      position: absolute;
+      top: calc(50% + 130px);
+      left: 50%;
+      width: 720px;
+      height: 6px;
+      transform: translateX(-50%);
+      background: #fde047;
+      border-radius: 3px;
+      transform-origin: 50% 50%;
+      box-shadow: 0 0 24px rgba(253, 224, 71, 0.4);
+      opacity: 0;       /* lock — animated in by timeline */
+    }
+
+    /* Origin marker dots — visual cue that points to where the wave starts.
+       Two small circles bracket the band: center marker (yellow) for phrase 1,
+       edge markers for phrase 2. Both DOM-resident, toggled by opacity. */
+    .origin-marker {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fde047;
+      top: calc(50% + 124px);
+      transform: translateX(-50%);
+      opacity: 0;
+      box-shadow: 0 0 16px rgba(253, 224, 71, 0.55);
+    }
+    .origin-marker.center { left: 50%; }
+    .origin-marker.edge-l { left: calc(50% - 360px); }
+    .origin-marker.edge-r { left: calc(50% + 360px); }
+
+    /* Mode label — small text under the band that tells the viewer which
+       stagger origin is active. Two variants stacked, toggled via opacity. */
+    .mode-label {
+      position: absolute;
+      top: calc(50% + 168px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: #fde047;
+      opacity: 0;
+      font-feature-settings: "tnum";
+    }
+
+    /* Subtle ambient grain — continuous-motion layer (Ken Burns-style drift)
+       so the frame is never static even during phrase holds. */
+    .grain {
+      position: absolute;
+      inset: -50px;
+      background: radial-gradient(circle at 22% 32%, rgba(253, 224, 71, 0.05) 0%, transparent 42%),
+                  radial-gradient(circle at 78% 68%, rgba(255, 255, 255, 0.03) 0%, transparent 38%);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-size: 16px;
+      color: #707070;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      z-index: 10;
+    }
+    .label .accent { color: #f5f5f5; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div id="scene-05-stagger-wave"
+       data-composition-id="scene-05-stagger-wave"
+       data-start="0"
+       data-duration="6"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="grain"></div>
+
+    <div class="stage">
+      <div class="eyebrow" id="eyebrow">Section 05 · Stagger Origin</div>
+
+      <div class="phrase-row">
+        <!-- Both phrases live in DOM simultaneously. Stacked absolute so they
+             occupy the same visual slot; toggled via opacity in the timeline. -->
+        <div class="phrase" data-phrase="0">Wave from center.</div>
+        <div class="phrase" data-phrase="1">Wave from edges.</div>
+      </div>
+
+      <!-- Accent band + origin markers — visual cues for the wave origin. -->
+      <div class="accent-band" id="accent-band"></div>
+      <div class="origin-marker center" id="marker-center"></div>
+      <div class="origin-marker edge-l" id="marker-edge-l"></div>
+      <div class="origin-marker edge-r" id="marker-edge-r"></div>
+
+      <!-- Mode labels — two stacked, toggled by opacity per active phrase. -->
+      <div class="mode-label" id="mode-label-1">from: "center" · center-out</div>
+      <div class="mode-label" id="mode-label-2">from: "edges" · edges-in</div>
+    </div>
+
+    <div class="label">
+      Scene 05 · <span class="accent">Stagger Wave</span> · per-character rise with center-out / edges-in timing
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 6;
+      window.__timelines = window.__timelines || {};
+
+      gsap.registerPlugin(CustomEase);
+
+      // per-character-rise signature easing — Apple tvOS curve from the JSON spec:
+      // cubic-bezier(0.2, 0.8, 0.2, 1). Crisp deceleration, no overshoot.
+      var riseEase = CustomEase.create("rise", "0.2, 0.8, 0.2, 1");
+      // Exit easing per spec exit.easing: cubic-bezier(0.7, 0, 0.84, 0).
+      var exitEase = CustomEase.create("riseExit", "0.7, 0, 0.84, 0");
+
+      // Split each phrase into per-character spans at build time. Both phrases
+      // populate at t=0 so the snapshot tool sees a complete DOM at every
+      // timestamp. Visibility is governed by the timeline opacity sequence —
+      // never by DOM mutation mid-render.
+      function splitPhrase(phraseEl) {
+        var text = phraseEl.textContent;
+        var spans = [];
+        var frag = document.createDocumentFragment();
+        Array.from(text).forEach(function (ch) {
+          var span = document.createElement("span");
+          span.className = "char";
+          // Use a non-breaking space so the inline-block doesn't collapse the
+          // whitespace between words. Matches CHARACTER SPANS rule in beat guide.
+          span.textContent = ch === " " ? " " : ch;
+          frag.appendChild(span);
+          spans.push(span);
+        });
+        phraseEl.replaceChildren(frag);
+        return spans;
+      }
+
+      var phraseEls = document.querySelectorAll("#scene-05-stagger-wave .phrase");
+      var charsByPhrase = [];
+      phraseEls.forEach(function (el) {
+        charsByPhrase.push(splitPhrase(el));
+      });
+
+      // per-character-rise.json runtime: y_travel_multiplier=0.58, but for a
+      // 1920×1080 hero stage we scale up to ~28px so the wave reads at the
+      // viewer's distance. Matches the spec spirit (per-character-rise.json
+      // showcase.runtime applies a damping multiplier of 0.58 for default site
+      // hosts — we're scaling for a much larger viewport).
+      var Y_FROM = 28;
+
+      var tl = gsap.timeline({ paused: true });
+
+      // === t=0 initial state — phrase 1 + 2 hidden + pre-positioned. Mirrors
+      // the CSS lock so the timeline is authoritative once GSAP takes over.
+      tl.set(charsByPhrase[0], { opacity: 0, y: Y_FROM }, 0);
+      tl.set(charsByPhrase[1], { opacity: 0, y: Y_FROM }, 0);
+      tl.set("#eyebrow", { opacity: 0, y: -8 }, 0);
+      tl.set("#accent-band", { opacity: 0, scaleX: 0 }, 0);
+      tl.set("#marker-center", { opacity: 0, scale: 0.6 }, 0);
+      tl.set("#marker-edge-l", { opacity: 0, scale: 0.6 }, 0);
+      tl.set("#marker-edge-r", { opacity: 0, scale: 0.6 }, 0);
+      tl.set("#mode-label-1", { opacity: 0, y: 6 }, 0);
+      tl.set("#mode-label-2", { opacity: 0, y: 6 }, 0);
+
+      // === t=0.20s: eyebrow slides in. Supporting move — leads the typography.
+      tl.fromTo("#eyebrow",
+        { opacity: 0, y: -8 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "expo.out" },
+        0.20);
+
+      // === t=0.30s: accent band draws in beneath the phrase slot.
+      // Different easing for variety — power4.out for the snap, matches the
+      // "decisive" feel of a line drawing in. Variety with the riseEase
+      // on chars below.
+      tl.fromTo("#accent-band",
+        { opacity: 0, scaleX: 0 },
+        { opacity: 1, scaleX: 1, duration: 0.7, ease: "power4.out", transformOrigin: "50% 50%" },
+        0.30);
+
+      // === t=0.45s: center origin marker pops in with overshoot — "this is
+      // where the wave starts" cue. back.out provides the eye-catching whip.
+      tl.fromTo("#marker-center",
+        { opacity: 0, scale: 0.6 },
+        { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(1.7)" },
+        0.45);
+
+      // === t=0.55s: mode label 1 fades in just before the wave fires.
+      tl.fromTo("#mode-label-1",
+        { opacity: 0, y: 6 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "expo.out" },
+        0.55);
+
+      // === t=0.60s: PHRASE 1 ENTERS — `from: "center"` (wave outward).
+      // per-character-rise.json timing: scaled_duration_ms=504, scaled_stagger_ms=17,
+      // signature easing cubic-bezier(0.2, 0.8, 0.2, 1). GSAP stagger origin
+      // `from: "center"` is the wave's defining feature — chars at the center
+      // of the phrase start first, edges last, producing the outward ripple.
+      tl.to(charsByPhrase[0], {
+        opacity: 1,
+        y: 0,
+        duration: 0.504,
+        stagger: { each: 0.05, from: "center" },
+        ease: riseEase,
+      }, 0.60);
+
+      // 17 chars × 0.05s stagger + 0.504s = entrance lands ~1.95s. We leave
+      // a hold window 2.0s–2.6s for the eye to absorb the result.
+
+      // === Continuous motion 1.95s-2.55s: center marker breathing pulse so
+      // the frame doesn't sit static during the phrase hold. Different ease
+      // (sine.inOut) — third easing flavor.
+      tl.to("#marker-center", {
+        scale: 1.18,
+        duration: 0.3,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "50% 50%",
+      }, 1.95);
+
+      // === Continuous motion 0.6s-3.0s: grain drift — ambient camera move.
+      // "none" easing per glossary for pure linear ambient motion.
+      tl.to(".grain", {
+        x: -30,
+        y: -12,
+        duration: 2.4,
+        ease: "none",
+      }, 0.60);
+
+      // === t=2.55s: PHRASE 1 EXITS — per-character upward drift.
+      // Exit timing per spec: scaled_duration_ms=302, scaled_stagger_ms=10.
+      // Stagger from "center" again for exit symmetry — the center chars
+      // leave first, mirroring the entrance pattern.
+      tl.to(charsByPhrase[0], {
+        opacity: 0,
+        y: -Y_FROM,
+        duration: 0.302,
+        stagger: { each: 0.03, from: "center" },
+        ease: exitEase,
+      }, 2.55);
+
+      // === t=2.65s: center marker fades, edge markers pop in. Visual cue
+      // shifts to indicate the next phrase will use `from: "edges"`.
+      tl.to("#marker-center", {
+        opacity: 0,
+        scale: 0.6,
+        duration: 0.35,
+        ease: "power3.in",
+      }, 2.65);
+      tl.to("#mode-label-1", {
+        opacity: 0,
+        y: -6,
+        duration: 0.35,
+        ease: "power3.in",
+      }, 2.65);
+
+      // Edge markers enter with back.out overshoot — same "marker pop" pattern.
+      tl.fromTo(["#marker-edge-l", "#marker-edge-r"],
+        { opacity: 0, scale: 0.6 },
+        { opacity: 1, scale: 1, duration: 0.45, stagger: 0.06, ease: "back.out(1.7)" },
+        2.95);
+
+      // === t=3.05s: mode label 2 fades in just before the second wave fires.
+      tl.fromTo("#mode-label-2",
+        { opacity: 0, y: 6 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "expo.out" },
+        3.05);
+
+      // === t=3.15s: PHRASE 2 ENTERS — `from: "edges"` (wave inward).
+      // Same per-character-rise timing as phrase 1, but stagger origin flips
+      // to "edges" — chars at the left + right edges fire first, the wave
+      // converges on the center. This is the demonstration: same effect,
+      // different origin, visually distinct ripple.
+      tl.to(charsByPhrase[1], {
+        opacity: 1,
+        y: 0,
+        duration: 0.504,
+        stagger: { each: 0.05, from: "edges" },
+        ease: riseEase,
+      }, 3.15);
+
+      // Phrase 2 has 16 chars × 0.05 stagger + 0.504s = entrance lands ~4.45s.
+
+      // === Continuous motion 4.45s-5.45s: edge markers gently breathe and
+      // accent band scales subtly — keeps the frame alive during phrase 2's
+      // hold. elastic.out gives the markers a playful settle on the second pass.
+      tl.to(["#marker-edge-l", "#marker-edge-r"], {
+        scale: 1.15,
+        duration: 0.4,
+        ease: "elastic.out(1, 0.5)",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "50% 50%",
+      }, 4.50);
+
+      tl.to("#accent-band", {
+        scaleX: 1.04,
+        duration: 0.6,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "50% 50%",
+      }, 4.50);
+
+      // === Continuous motion 3.0s-6.0s: grain drift back — ambient continues
+      // the camera move through the second half of the scene.
+      tl.to(".grain", {
+        x: 0,
+        y: 0,
+        duration: 3.0,
+        ease: "none",
+      }, 3.0);
+
+      // === t=5.55s: subtle breathing on the final phrase characters — last
+      // 0.45s of the scene. Stagger from "edges" for visual consistency with
+      // the entrance.
+      tl.to(charsByPhrase[1], {
+        y: -3,
+        duration: 0.45,
+        ease: "sine.inOut",
+        stagger: { each: 0.01, from: "edges" },
+      }, 5.55);
+
+      window.__timelines["scene-05-stagger-wave"] = tl;
+    })();
+  </script>
+</body>
+</html>

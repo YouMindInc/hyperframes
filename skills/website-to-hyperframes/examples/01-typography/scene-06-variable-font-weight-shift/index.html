@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-06-variable-font-weight-shift</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/CustomEase.min.js"></script>
+  <style>
+    /* Register --wght as a numeric CSS custom property so GSAP-driven CSS
+       variable tweens are picked up by the browser's font-variation-settings
+       resolver at seek-time. Without @property, --wght would be treated as
+       a string and font-variation-settings wouldn't re-evaluate mid-tween. */
+    @property --wght {
+      syntax: "<number>";
+      inherits: false;
+      initial-value: 100;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #08080a; }
+
+    #scene-06-variable-font-weight-shift {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 50% 45%, #1c1c22 0%, #0a0a0d 60%, #050507 100%);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #f7f7f5;
+    }
+
+    /* Stage: centered headline host. */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .eyebrow {
+      position: absolute;
+      top: calc(50% - 200px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #6f6f78;
+      opacity: 0;
+      font-variation-settings: "wght" 500;
+    }
+
+    /* Headline host. Per-character spans drive font-variation-settings via
+       a CSS custom property --wght that GSAP updates inside onUpdate. */
+    .headline {
+      font-size: 320px;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      white-space: nowrap;
+      will-change: transform;
+    }
+
+    /* Per-character unit — initial CSS state is intentionally THIN (wght 100)
+       so the very first snapshot frame, captured before GSAP applies its t=0
+       set tweens, shows the correct skeletal pre-entrance state. opacity:0
+       hides it so it doesn't pop visible before the entrance tween starts. */
+    .char {
+      display: inline-block;
+      white-space: pre;
+      --wght: 100;
+      font-variation-settings: "wght" var(--wght);
+      will-change: opacity, transform, font-variation-settings;
+      opacity: 0;
+      transform-origin: 50% 60%;
+      color: #fafaf6;
+    }
+
+    .underbar {
+      position: absolute;
+      top: calc(50% + 180px);
+      left: 50%;
+      width: 360px;
+      height: 2px;
+      transform: translateX(-50%);
+      opacity: 0;
+    }
+    .underbar path {
+      stroke: #fafaf6;
+      stroke-width: 2;
+      fill: none;
+      stroke-dasharray: 360 360;
+      stroke-dashoffset: 360;
+    }
+
+    /* Ambient grain — subtle radial wash that drifts during holds. */
+    .grain {
+      position: absolute;
+      inset: -60px;
+      background:
+        radial-gradient(circle at 22% 28%, rgba(255,255,255,0.045) 0%, transparent 38%),
+        radial-gradient(circle at 78% 72%, rgba(255,255,255,0.035) 0%, transparent 34%);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-size: 16px;
+      color: #6f6f78;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      font-variation-settings: "wght" 500;
+      z-index: 10;
+    }
+    .label .accent { color: #fafaf6; font-weight: 600; font-variation-settings: "wght" 700; }
+  </style>
+</head>
+<body>
+
+  <div id="scene-06-variable-font-weight-shift"
+       data-composition-id="scene-06-variable-font-weight-shift"
+       data-start="0"
+       data-duration="7"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="grain"></div>
+
+    <div class="stage">
+      <div class="eyebrow" id="eyebrow">Section 06 · Variable Weight</div>
+      <div class="headline" id="headline" data-text="WEIGHT."></div>
+      <svg class="underbar" id="underbar" viewBox="0 0 360 2">
+        <path id="underbar-path" d="M 0 1 L 360 1" />
+      </svg>
+    </div>
+
+    <div class="label">
+      Scene 06 · <span class="accent">Variable Font Weight Shift</span> · font-variation-settings wght animation
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 7;
+      window.__timelines = window.__timelines || {};
+
+      gsap.registerPlugin(CustomEase);
+
+      // Signature easings — variety across the 7 second scene.
+      // Ramp ease: dramatic mass-gain curve (slow start, decisive land).
+      var rampEase = CustomEase.create("ramp", "0.22, 1, 0.36, 1");
+      // Wave ease: smooth pass-through left-to-right.
+      var waveEase = CustomEase.create("wave", "0.45, 0, 0.55, 1");
+
+      // Build per-character spans for "WEIGHT." once at t=0 so the comp is
+      // fully seekable. The snapshot tool can jump to any timestamp and find
+      // all chars in the DOM — no callback-driven mutation required.
+      var headlineEl = document.getElementById("headline");
+      var text = headlineEl.getAttribute("data-text") || "WEIGHT.";
+      var chars = [];
+      var frag = document.createDocumentFragment();
+      Array.from(text).forEach(function (ch) {
+        var span = document.createElement("span");
+        span.className = "char";
+        span.textContent = ch === " " ? " " : ch;
+        frag.appendChild(span);
+        chars.push(span);
+      });
+      headlineEl.replaceChildren(frag);
+
+      // We animate the CSS custom property --wght directly on each char.
+      // CSS @property declares --wght as a <number> so the browser interpolates
+      // it natively, and font-variation-settings: "wght" var(--wght) picks up
+      // the live value at seek-time. GSAP's CSSPlugin sets custom properties
+      // via setProperty(), which fires on every seek/render — perfect for
+      // the deterministic snapshot engine.
+
+      var tl = gsap.timeline({ paused: true });
+
+      // === t=0 initial state — all chars thin (wght 100), invisible, eyebrow hidden,
+      //     underbar empty. Locks the snapshot determinism for the first frame.
+      tl.set(chars, { opacity: 0, y: 18, "--wght": 100 }, 0);
+      tl.set("#eyebrow", { opacity: 0, y: -8 }, 0);
+      tl.set("#underbar", { opacity: 0 }, 0);
+      tl.set("#underbar-path", { strokeDashoffset: 360 }, 0);
+
+      // === 0.10s: eyebrow slides in. expo.out — soft land.
+      tl.fromTo("#eyebrow",
+        { opacity: 0, y: -8 },
+        { opacity: 1, y: 0, duration: 0.6, ease: "expo.out" },
+        0.10);
+
+      // === 0.0s-1.0s: phrase enters at THIN weight, almost invisible — chars
+      //     fade up and settle while still skeletal. expo.out per-char.
+      tl.to(chars, {
+        opacity: 1,
+        y: 0,
+        duration: 0.7,
+        stagger: 0.04,
+        ease: "expo.out",
+      }, 0.10);
+
+      // === 1.0s-2.5s: WEIGHT RAMP. Each char's --wght goes 100 → 900 with
+      //     a small stagger so the ramp reads as a left-to-right thickening.
+      //     rampEase = signature Apple-keynote curve.
+      tl.to(chars, {
+        "--wght": 900,
+        duration: 1.3,
+        stagger: 0.06,
+        ease: rampEase,
+      }, 1.00);
+
+      // === 1.4s: underbar reveals as ramp peaks. power4.out — decisive snap.
+      tl.to("#underbar", { opacity: 1, duration: 0.3, ease: "power4.out" }, 1.40);
+      tl.to("#underbar-path", {
+        strokeDashoffset: 0,
+        duration: 0.9,
+        ease: "power4.out",
+      }, 1.50);
+
+      // === 1.0s-2.6s: grain drifts during the ramp. sine.inOut — ambient.
+      tl.to(".grain", {
+        x: -28,
+        y: -8,
+        opacity: 0.75,
+        duration: 1.6,
+        ease: "sine.inOut",
+      }, 1.00);
+
+      // === 2.5s-4.0s: HELD BOLD with per-char weight TEXTURE.
+      //     Some chars dip slightly (down to ~720), others spike (up to ~960),
+      //     creating a quiet hand-typeset feel. sine.inOut yoyo holds the
+      //     scene alive without translating anything. Per-char offsets give
+      //     each letter its own micro-rhythm.
+      var textureOffsets = [-180, 60, -120, 40, -90, 30, -160]; // one per char in "WEIGHT."
+      chars.forEach(function (_, i) {
+        var target = 900 + (textureOffsets[i] || 0);
+        tl.to(chars[i], {
+          "--wght": target,
+          duration: 0.75,
+          ease: "sine.inOut",
+          yoyo: true,
+          repeat: 1,
+        }, 2.50 + i * 0.03);
+      });
+
+      // === 2.6s-4.0s: subtle scale breathing on the headline as a whole —
+      //     1.0 → 1.015 → 1.0. sine.inOut. Continuous motion during the hold.
+      tl.to("#headline", {
+        scale: 1.015,
+        duration: 0.7,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "50% 50%",
+      }, 2.60);
+
+      // === 4.0s-5.5s: WEIGHT WAVE passes LEFT → RIGHT.
+      //     Each char briefly spikes to 950 then settles to 850. Big visible
+      //     ripple. waveEase + per-char stagger creates the propagating wave.
+      chars.forEach(function (_, i) {
+        // Up-spike (peak).
+        tl.to(chars[i], {
+          "--wght": 950,
+          duration: 0.32,
+          ease: waveEase,
+        }, 4.00 + i * 0.13);
+        // Settle to 850.
+        tl.to(chars[i], {
+          "--wght": 850,
+          duration: 0.45,
+          ease: "expo.out",
+        }, 4.32 + i * 0.13);
+      });
+
+      // === 4.0s-5.5s: underbar widens during wave. sine.inOut — soft expand.
+      tl.to("#underbar", {
+        scaleX: 1.12,
+        duration: 0.75,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "50% 50%",
+      }, 4.00);
+
+      // === 5.5s-7.0s: SETTLE & BREATHE.
+      //     All chars converge gently back to wght 800 — final resting bold.
+      //     expo.out — soft land. Plus a quiet per-char y breath and grain return.
+      tl.to(chars, {
+        "--wght": 800,
+        duration: 1.1,
+        stagger: 0.02,
+        ease: "expo.out",
+      }, 5.50);
+
+      // === 5.7s-7.0s: headline soft breathing — 1.0 → 0.995 → 1.0. "none" ease
+      //     for the grain drift gives the ambient layer pure linear feel,
+      //     contrasting with the eased headline tweens.
+      tl.to("#headline", {
+        y: -4,
+        duration: 1.3,
+        ease: "sine.inOut",
+      }, 5.70);
+
+      tl.to(".grain", {
+        x: 0,
+        y: 0,
+        opacity: 1,
+        duration: 1.3,
+        ease: "none",
+      }, 5.70);
+
+      // === 5.7s-7.0s: eyebrow subtle fade-down — frame edges relax.
+      tl.to("#eyebrow", {
+        opacity: 0.55,
+        duration: 1.3,
+        ease: "sine.inOut",
+      }, 5.70);
+
+      window.__timelines["scene-06-variable-font-weight-shift"] = tl;
+    })();
+  </script>
+</body>
+</html>

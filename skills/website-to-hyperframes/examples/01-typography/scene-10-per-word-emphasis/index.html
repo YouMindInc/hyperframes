@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-10-per-word-emphasis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@500;700&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/CustomEase.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #fafaf6; }
+
+    #scene-10-per-word-emphasis {
+      position: relative;
+      overflow: hidden;
+      /* Warm off-white editorial paper — soft warmth in the corners,
+         like a printed page lit from the top. Different palette than 01-09. */
+      background:
+        radial-gradient(ellipse at 50% 40%, #fdfcf6 0%, #f5f2e9 70%, #ede9dc 100%);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #1a1a1a;
+    }
+
+    /* Paper grain — subtle off-white speckle, the kind of ambient noise an
+       editorial layout gets. Drifts during the beat for continuous motion. */
+    .paper-grain {
+      position: absolute;
+      inset: -40px;
+      background:
+        radial-gradient(circle at 15% 22%, rgba(180, 160, 110, 0.06) 0%, transparent 38%),
+        radial-gradient(circle at 82% 70%, rgba(200, 175, 120, 0.05) 0%, transparent 42%),
+        radial-gradient(circle at 50% 92%, rgba(150, 130, 90, 0.04) 0%, transparent 30%);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    /* Stage: centered host for the phrase. */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      perspective: 900px;
+    }
+
+    .eyebrow {
+      position: absolute;
+      top: calc(50% - 200px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #8a7a55;
+      opacity: 0;
+    }
+
+    /* Phrase row — holds the four word spans inline. The emphasis-word
+       wrapper has position:relative so the SVG circle marker (absolutely
+       positioned) anchors to it. */
+    .phrase {
+      position: relative;
+      font-size: 132px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.05;
+      color: #1a1a1a;
+      white-space: nowrap;
+      display: inline-block;
+      transform-style: preserve-3d;
+    }
+
+    /* Per-word unit — pre-split DOM. opacity:0 locks initial state for
+       the snapshot tool (first frame captured before timeline t=0 applies). */
+    .word {
+      display: inline-block;
+      white-space: pre;
+      backface-visibility: hidden;
+      will-change: transform, opacity;
+      opacity: 0;
+      transform: translateY(8px);
+    }
+
+    /* Emphasis word host — relative so the circle SVG anchors here. */
+    .emphasis-host {
+      position: relative;
+      display: inline-block;
+      padding: 0 12px; /* breathing room so the circle has visual margin */
+    }
+
+    /* Hand-drawn circle marker. Pre-positioned over the emphasis word.
+       stroke-dasharray locks the initial empty state in CSS so frame 0
+       (before timeline runs) shows no marker. */
+    .circle-marker {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 130%;
+      height: 145%;
+      transform: translate(-50%, -50%) rotate(-2.2deg);
+      pointer-events: none;
+      overflow: visible;
+      opacity: 0; /* locked off — fades on just before the stroke draws */
+    }
+    .circle-marker path {
+      fill: none;
+      stroke: #ff6b35;
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      /* Initial state set as SVG attributes on the element itself (see HTML)
+         so the snapshot tool's first-frame render shows an empty path even
+         before the GSAP timeline applies its t=0 set tweens. */
+    }
+
+    /* Secondary mark: hand-drawn underline + small arrow. Appears later. */
+    .secondary-mark {
+      position: absolute;
+      left: 50%;
+      top: calc(50% + 105px);
+      width: 340px;
+      height: 60px;
+      transform: translateX(-50%);
+      pointer-events: none;
+      overflow: visible;
+      opacity: 0; /* locked off — fades on just before the stroke draws */
+    }
+    .secondary-mark path {
+      fill: none;
+      stroke: #ff6b35;
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      /* Initial dash state set on element via SVG attributes — see HTML. */
+    }
+
+    /* "Hand-written" Caveat label that appears next to the secondary mark. */
+    .hand-label {
+      position: absolute;
+      left: calc(50% + 200px);
+      top: calc(50% + 130px);
+      font-family: "Caveat", cursive;
+      font-size: 38px;
+      font-weight: 700;
+      color: #ff6b35;
+      transform: rotate(-4deg);
+      opacity: 0;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-size: 16px;
+      color: #8a7a55;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      z-index: 10;
+    }
+    .label .accent { color: #1a1a1a; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div id="scene-10-per-word-emphasis"
+       data-composition-id="scene-10-per-word-emphasis"
+       data-start="0"
+       data-duration="8"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="paper-grain"></div>
+
+    <div class="stage">
+      <div class="eyebrow" id="eyebrow">Section 01 · Typography</div>
+
+      <!-- Phrase pre-split into per-word spans. The emphasis word "intention"
+           lives inside .emphasis-host so the SVG circle anchors over it.
+           All words have opacity:0 in CSS — locked for snapshot frame 0. -->
+      <div class="phrase" id="phrase">
+        <span class="word" data-word="0">Made</span><span class="word" data-word="1"> with </span><span class="emphasis-host"><span class="word" data-word="2" id="emphasis-word">intention</span><!--
+          Hand-drawn circle marker — slightly wonky elliptical path. Uses
+          cubic Beziers with intentional deviations to feel sketched, not
+          mathematically perfect. ViewBox is generous so the stroke can sit
+          outside the word without clipping.
+        --><svg class="circle-marker" id="circle-marker" viewBox="0 0 400 200" preserveAspectRatio="none">
+          <path id="circle-path"
+                stroke-dasharray="2000 2000"
+                stroke-dashoffset="2000"
+                pathLength="2000"
+                d="
+            M 60 102
+            C 55 70, 110 38, 200 36
+            C 295 34, 348 64, 350 100
+            C 352 138, 290 168, 198 168
+            C 110 168, 56 140, 58 104
+            C 58 92, 70 80, 85 72
+          "/>
+        </svg></span><span class="word" data-word="3">.</span>
+      </div>
+
+      <!-- Secondary mark: hand-drawn underline curve + small arrow tail.
+           Anchored at the bottom of the phrase row, drawn after circle fades. -->
+      <svg class="secondary-mark" id="secondary-mark" viewBox="0 0 340 60" preserveAspectRatio="none">
+        <path id="secondary-path"
+              stroke-dasharray="2000 2000"
+              stroke-dashoffset="2000"
+              pathLength="2000"
+              d="
+          M 14 28
+          C 60 18, 130 16, 200 26
+          C 250 33, 290 38, 318 36
+          M 304 26
+          L 320 36
+          L 308 48
+        "/>
+      </svg>
+
+      <div class="hand-label" id="hand-label">on purpose</div>
+    </div>
+
+    <div class="label">
+      Scene 10 · <span class="accent">Per-Word Emphasis</span> · per-word crossfade + hand-drawn marker overlay
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 8;
+      window.__timelines = window.__timelines || {};
+
+      gsap.registerPlugin(CustomEase);
+
+      // per-word-crossfade signature easing — cubic-bezier(0.16, 1, 0.3, 1).
+      // Same curve as the JSON spec's signature_easing.
+      var crossfadeEase = CustomEase.create("crossfade", "0.16, 1, 0.3, 1");
+      // Exit easing — accelerated, from per-word-crossfade.json portable_spec.exit.easing.
+      var crossfadeExit = CustomEase.create("crossfadeExit", "0.7, 0, 0.84, 0");
+
+      // Both circle and secondary paths declare pathLength="2000" as an SVG
+      // attribute, so the browser normalizes their dash math to a 2000-unit
+      // scale regardless of the actual computed path length. Initial state
+      // (dasharray="2000 2000", dashoffset="2000") is locked on the element
+      // itself in HTML — that way the snapshot tool's first-frame capture is
+      // correct even before the GSAP timeline applies its t=0 set tweens.
+      var circlePath = document.getElementById("circle-path");
+      var secondaryPath = document.getElementById("secondary-path");
+      var PATH_LEN = 2000;
+
+      var words = document.querySelectorAll("#phrase .word");
+
+      var tl = gsap.timeline({ paused: true });
+
+      // === t=0: lock every animated element to its pre-entrance state.
+      // Mirrors CSS initial state so seek-to-0 is deterministic.
+      tl.set(words, { opacity: 0, y: 8 }, 0);
+      tl.set("#eyebrow", { opacity: 0, y: -8 }, 0);
+      tl.set(circlePath, { attr: { "stroke-dasharray": PATH_LEN + " " + PATH_LEN, "stroke-dashoffset": PATH_LEN } }, 0);
+      tl.set(secondaryPath, { attr: { "stroke-dasharray": PATH_LEN + " " + PATH_LEN, "stroke-dashoffset": PATH_LEN } }, 0);
+      tl.set("#circle-marker", { opacity: 0, scale: 1, rotation: -2.2, transformOrigin: "50% 50%" }, 0);
+      tl.set("#secondary-mark", { opacity: 0 }, 0);
+      tl.set("#hand-label", { opacity: 0, y: 6, rotation: -4 }, 0);
+
+      // === t=0.30s: eyebrow fades in. Supporting move, layered before main entrance.
+      tl.fromTo("#eyebrow",
+        { opacity: 0, y: -8 },
+        { opacity: 1, y: 0, duration: 0.6, ease: "expo.out" },
+        0.30);
+
+      // === t=0.5s-1.5s: per-word entrance.
+      // per-word-crossfade.json showcase.timing: scaled_duration 504ms,
+      // scaled_stagger 50ms, easing cubic-bezier(0.16, 1, 0.3, 1).
+      // 4 word spans (including the " with " whitespace span which we still
+      // animate so the gap doesn't pop in suddenly — but its content is
+      // mostly space). Total: 0.504 + 3*0.050 = 0.654s ending ~1.15s.
+      tl.fromTo(words,
+        { opacity: 0, y: 8 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.504,
+          stagger: 0.050,
+          ease: crossfadeEase,
+        },
+        0.50);
+
+      // === t=1.4s: paper grain settles into a slow drift.
+      // Continuous-motion layer that runs through the calm hold sections.
+      tl.fromTo(".paper-grain",
+        { x: 0, y: 0, opacity: 1 },
+        { x: -22, y: -8, opacity: 0.92, duration: 4.5, ease: "sine.inOut" },
+        1.40);
+
+      // === t=1.78s: circle-marker SVG fades in just before the stroke starts.
+      // Hides the round-linecap dot artifact that would otherwise show during
+      // the locked-off pre-draw state.
+      tl.to("#circle-marker", { opacity: 1, duration: 0.04, ease: "none" }, 1.78);
+
+      // === t=1.8s-2.5s: hand-drawn circle marker scribes around "intention".
+      // power4.out gives the line a confident, decisive snap — like a pen
+      // stroke from a designer. Duration 0.7s matches the brief spec window.
+      tl.fromTo(circlePath,
+        { attr: { "stroke-dashoffset": PATH_LEN } },
+        { attr: { "stroke-dashoffset": 0 }, duration: 0.7, ease: "power4.out" },
+        1.80);
+
+      // === t=2.5s-4.5s: hold with "handmade" oscillation.
+      // The circle breathes: tiny rotation + scale sine.inOut yoyo — feels
+      // like the ink is still drying, not a perfect static asset.
+      tl.to("#circle-marker", {
+        rotation: -3.6,
+        scale: 1.035,
+        duration: 1.0,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "50% 50%",
+      }, 2.50);
+
+      // === t=2.5s-4.5s: phrase micro y-drift during hold — another
+      // continuous-motion layer so the words don't sit perfectly still.
+      tl.to("#phrase", {
+        y: -4,
+        duration: 1.0,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+      }, 2.50);
+
+      // === t=4.5s-5.1s: circle marker fades out.
+      // Makes room for the secondary mark to take focus.
+      tl.to("#circle-marker", {
+        opacity: 0,
+        duration: 0.6,
+        ease: "expo.out",
+      }, 4.50);
+
+      // === t=4.68s: secondary-mark SVG fades in just before the stroke draws.
+      tl.to("#secondary-mark", { opacity: 1, duration: 0.04, ease: "none" }, 4.68);
+
+      // === t=4.7s-5.6s: secondary mark draws — hand-drawn underline curve
+      // with a small arrow tail pointing at the emphasis word. Same
+      // stroke-dasharray draw-on technique. power4.out for confident pen stroke.
+      tl.fromTo(secondaryPath,
+        { attr: { "stroke-dashoffset": PATH_LEN } },
+        { attr: { "stroke-dashoffset": 0 }, duration: 0.9, ease: "power4.out" },
+        4.70);
+
+      // === t=5.3s: hand-written "on purpose" label appears at end of arrow.
+      // back.out gives it a brief whip overshoot — feels like a writer
+      // adding emphasis after the underline lands.
+      tl.fromTo("#hand-label",
+        { opacity: 0, y: 6, rotation: -4 },
+        { opacity: 1, y: 0, rotation: -4, duration: 0.45, ease: "back.out(1.7)" },
+        5.30);
+
+      // === t=5.8s-7.4s: continued hold with the secondary mark.
+      // Hand-label breathes via subtle rotation oscillation — keeps the
+      // frame alive while content stays on-screen.
+      tl.to("#hand-label", {
+        rotation: -2.5,
+        duration: 0.9,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+      }, 5.80);
+
+      // === t=6.0s-8.0s: phrase exit per per-word-crossfade.json spec.
+      // Exit: scaled_duration 360ms, scaled_stagger 29ms,
+      // easing cubic-bezier(0.7, 0, 0.84, 0). y_px goes to -6.
+      // Spread the exit across the closing 2 seconds for a calm editorial
+      // outro rather than a sudden cut.
+      tl.to(words, {
+        opacity: 0,
+        y: -6,
+        duration: 0.360,
+        stagger: 0.029,
+        ease: crossfadeExit,
+      }, 6.40);
+
+      // === t=6.5s: secondary mark + hand-label fade with the phrase.
+      tl.to("#secondary-mark", {
+        opacity: 0,
+        duration: 0.7,
+        ease: "expo.inOut",
+      }, 6.50);
+      tl.to("#hand-label", {
+        opacity: 0,
+        y: -4,
+        duration: 0.55,
+        ease: "expo.inOut",
+      }, 6.50);
+
+      // === t=6.5s: eyebrow exits with the phrase, same exit ease feel.
+      tl.to("#eyebrow", {
+        opacity: 0,
+        y: -8,
+        duration: 0.5,
+        ease: "expo.inOut",
+      }, 6.50);
+
+      // === t=7.0s-8.0s: paper grain returns slowly — closing ambient breath.
+      // "none" linear easing — drift moves are ambient, no curve needed.
+      tl.to(".paper-grain", {
+        x: 0,
+        y: 0,
+        opacity: 1,
+        duration: 1.0,
+        ease: "none",
+      }, 7.00);
+
+      window.__timelines["scene-10-per-word-emphasis"] = tl;
+    })();
+  </script>
+</body>
+</html>

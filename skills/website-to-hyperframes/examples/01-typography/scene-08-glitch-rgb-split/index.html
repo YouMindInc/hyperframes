@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-08-glitch-rgb-split</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@500&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #050507; }
+
+    #scene-08-glitch-rgb-split {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 50% 50%, #0a0a12 0%, #030305 75%);
+      font-family: "JetBrains Mono", "Menlo", monospace;
+      color: #f5f5ff;
+    }
+
+    /* CRT scanline overlay — continuous slow drift for ambient motion. */
+    .scanlines {
+      position: absolute;
+      inset: -20px 0;
+      background-image: repeating-linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0.0) 0px,
+        rgba(255, 255, 255, 0.0) 2px,
+        rgba(255, 255, 255, 0.04) 2px,
+        rgba(255, 255, 255, 0.04) 4px
+      );
+      pointer-events: none;
+      mix-blend-mode: screen;
+      will-change: transform;
+      z-index: 5;
+    }
+
+    /* Subtle CRT vignette — chromatic edges */
+    .vignette {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,0.7) 100%);
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    /* TV glitch horizontal bar — slim white slice that sweeps vertically across.
+       Pre-positioned off-screen; GSAP tweens y across timeline. */
+    .tv-bar {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 28px;
+      background: linear-gradient(
+        180deg,
+        rgba(255,255,255,0) 0%,
+        rgba(255,255,255,0.85) 30%,
+        rgba(255,255,255,1) 50%,
+        rgba(255,255,255,0.85) 70%,
+        rgba(255,255,255,0) 100%
+      );
+      mix-blend-mode: screen;
+      opacity: 0;
+      top: -40px;
+      pointer-events: none;
+      z-index: 6;
+      box-shadow: 0 0 24px rgba(255,255,255,0.5);
+      will-change: transform, opacity;
+    }
+
+    /* Stage: centered phrase host */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    .eyebrow {
+      position: absolute;
+      top: calc(50% - 180px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: "Inter", sans-serif;
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      color: #4a8db8;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    .eyebrow .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #4ade80;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin-right: 14px;
+      transform: translateY(-2px);
+      box-shadow: 0 0 12px rgba(74, 222, 128, 0.8);
+    }
+
+    .phrase-row {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+    }
+
+    /* Phrases are stacked, position:absolute, all pre-built in DOM at t=0. */
+    .phrase {
+      position: absolute;
+      display: inline-block;
+      font-size: 168px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      line-height: 1;
+      white-space: nowrap;
+      color: #ffffff;
+
+      /* CSS variables drive the RGB channel offsets. Each phrase initially
+         has both channels collapsed onto the white text — no visible split. */
+      --red-x: 0px;
+      --red-y: 0px;
+      --cyan-x: 0px;
+      --cyan-y: 0px;
+
+      /* Two-channel text-shadow: red (#ff0040) offset by red vars,
+         cyan (#00ffea) offset by cyan vars. Tweening the vars produces
+         the channel separation effect. */
+      text-shadow:
+        var(--red-x) var(--red-y) 0 #ff0040,
+        var(--cyan-x) var(--cyan-y) 0 #00ffea;
+
+      /* Initial opacity locked in CSS for deterministic snapshot at t=0. */
+      opacity: 0;
+      will-change: opacity, transform, text-shadow;
+    }
+
+    /* Sub-line under each phrase — code-style data tag */
+    .meta {
+      position: absolute;
+      top: calc(50% + 130px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      color: #4a8db8;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    .meta .bracket { color: #5c6c7a; }
+    .meta .value { color: #4ade80; }
+
+    /* Corner HUD markers — purely decorative cyberpunk frame */
+    .hud {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      border-color: rgba(74, 141, 184, 0.55);
+      opacity: 0;
+      z-index: 3;
+    }
+    .hud.tl { top: 80px; left: 80px; border-top: 2px solid; border-left: 2px solid; }
+    .hud.tr { top: 80px; right: 80px; border-top: 2px solid; border-right: 2px solid; }
+    .hud.bl { bottom: 80px; left: 80px; border-bottom: 2px solid; border-left: 2px solid; }
+    .hud.br { bottom: 80px; right: 80px; border-bottom: 2px solid; border-right: 2px solid; }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-family: "Inter", sans-serif;
+      font-size: 16px;
+      color: #5c6c7a;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      z-index: 10;
+    }
+    .label .accent { color: #f5f5ff; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div id="scene-08-glitch-rgb-split"
+       data-composition-id="scene-08-glitch-rgb-split"
+       data-start="0"
+       data-duration="5"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="scanlines" id="scanlines"></div>
+    <div class="vignette"></div>
+
+    <div class="hud tl" id="hud-tl"></div>
+    <div class="hud tr" id="hud-tr"></div>
+    <div class="hud bl" id="hud-bl"></div>
+    <div class="hud br" id="hud-br"></div>
+
+    <div class="tv-bar" id="tv-bar"></div>
+
+    <div class="stage">
+      <div class="eyebrow" id="eyebrow"><span class="dot"></span>SECURE TERMINAL · v8.4.1</div>
+      <div class="phrase-row">
+        <div class="phrase" id="phrase-0">SYSTEM ONLINE</div>
+        <div class="phrase" id="phrase-1">ACCESS GRANTED</div>
+      </div>
+      <div class="meta" id="meta">
+        <span class="bracket">[</span> status <span class="bracket">=</span> <span class="value">"connected"</span> <span class="bracket">]</span>
+      </div>
+    </div>
+
+    <div class="label">
+      Scene 08 · <span class="accent">Glitch RGB Split</span> · text-shadow channel offset + jitter
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 5;
+      window.__timelines = window.__timelines || {};
+
+      var phrase0 = document.getElementById("phrase-0");
+      var phrase1 = document.getElementById("phrase-1");
+      var tvBar = document.getElementById("tv-bar");
+
+      // ---------------------------------------------------------------------
+      // GLITCH KEYFRAME SEQUENCES
+      //
+      // Each entry: [time_offset_from_phrase_start, redX, redY, cyanX, cyanY, duration]
+      // The "into" direction uses power1.in (snap into chaos);
+      // the "out-back-to-clean" uses power4.out (snap back to zero offset).
+      //
+      // Multiple keyframes in succession create the stuttery feel.
+      // Times feel random but are explicit literals = deterministic.
+      // ---------------------------------------------------------------------
+
+      // Helper that pushes a snap-out + snap-back pair to the timeline,
+      // using CSS variables on the phrase element.
+      function glitchPulse(tl, el, atTime, redX, redY, cyanX, cyanY, snapDur, settleDur) {
+        // Snap INTO the offset state — fast power1.in (mechanical, sudden)
+        tl.to(el, {
+          "--red-x": redX + "px",
+          "--red-y": redY + "px",
+          "--cyan-x": cyanX + "px",
+          "--cyan-y": cyanY + "px",
+          duration: snapDur,
+          ease: "power1.in",
+        }, atTime);
+        // Snap BACK to zero — power4.out for the "settle" feel
+        tl.to(el, {
+          "--red-x": "0px",
+          "--red-y": "0px",
+          "--cyan-x": "0px",
+          "--cyan-y": "0px",
+          duration: settleDur,
+          ease: "power4.out",
+        }, atTime + snapDur);
+      }
+
+      // Hard cut to an offset state — used inside glitch bursts where
+      // the channel shifts in a steps(1) (instant) manner.
+      function hardCut(tl, el, atTime, redX, redY, cyanX, cyanY) {
+        tl.set(el, {
+          "--red-x": redX + "px",
+          "--red-y": redY + "px",
+          "--cyan-x": cyanX + "px",
+          "--cyan-y": cyanY + "px",
+        }, atTime);
+      }
+
+      var tl = gsap.timeline({ paused: true });
+
+      // === t=0 initial state — both phrases hidden, channels collapsed.
+      tl.set([phrase0, phrase1], {
+        opacity: 0,
+        "--red-x": "0px",
+        "--red-y": "0px",
+        "--cyan-x": "0px",
+        "--cyan-y": "0px",
+      }, 0);
+      tl.set("#eyebrow", { opacity: 0, y: -8 }, 0);
+      tl.set("#meta", { opacity: 0, y: 8 }, 0);
+      tl.set(".hud", { opacity: 0 }, 0);
+      tl.set(tvBar, { opacity: 0, y: -40 }, 0);
+
+      // === Continuous motion (entire beat): scanlines drift down + back, sine.inOut.
+      tl.fromTo("#scanlines",
+        { y: 0 },
+        { y: 8, duration: 0.55, repeat: 8, yoyo: true, ease: "sine.inOut" },
+        0);
+
+      // === t=0.10s: HUD corners flicker in via steps(1) — three quick beats then on.
+      tl.to(".hud", { opacity: 0.3, duration: 0.04, ease: "steps(1)" }, 0.10);
+      tl.to(".hud", { opacity: 0,   duration: 0.04, ease: "steps(1)" }, 0.16);
+      tl.to(".hud", { opacity: 0.7, duration: 0.04, ease: "steps(1)" }, 0.22);
+      tl.to(".hud", { opacity: 0,   duration: 0.04, ease: "steps(1)" }, 0.28);
+      tl.to(".hud", { opacity: 1,   duration: 0.18, ease: "power4.out" }, 0.34);
+
+      // === t=0.20s: eyebrow slides in (soft entrance).
+      tl.fromTo("#eyebrow",
+        { opacity: 0, y: -8 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "expo.out" },
+        0.20);
+
+      // ---------------------------------------------------------------------
+      // PHRASE 0: "SYSTEM ONLINE" — 0.30s to 2.30s
+      // ---------------------------------------------------------------------
+
+      // === t=0.30s: phrase 0 hard-cuts in with a heavy glitch state already
+      //              (big RGB offset), then snaps to clean.
+      // Hard pre-set the offsets BEFORE the opacity flips on, so the entrance
+      // moment shows a glitched silhouette.
+      tl.set(phrase0, {
+        "--red-x": "-22px", "--red-y": "0px",
+        "--cyan-x": "26px", "--cyan-y": "-3px",
+      }, 0.28);
+      tl.to(phrase0, { opacity: 1, duration: 0.06, ease: "steps(1)" }, 0.30);
+      // Snap back to clean — power4.out for the "settle" feel
+      tl.to(phrase0, {
+        "--red-x": "0px", "--red-y": "0px",
+        "--cyan-x": "0px", "--cyan-y": "0px",
+        duration: 0.42,
+        ease: "power4.out",
+      }, 0.36);
+
+      // === t=0.85s: brief 2-hit glitch burst (subtle).
+      glitchPulse(tl, phrase0, 0.85,  -8, 0,  10, 0, 0.05, 0.18);
+      glitchPulse(tl, phrase0, 1.05,   6, 0, -7, 0, 0.04, 0.14);
+
+      // === t=1.22s: HARD glitch burst — four rapid hard-cuts in succession.
+      //              Frame snapshot at 1.30s lands inside this burst — peak glitch.
+      hardCut(tl, phrase0, 1.22, -28, 2,  30, -3);
+      hardCut(tl, phrase0, 1.27,  24, -2, -26, 4);
+      hardCut(tl, phrase0, 1.32, -22, 4,  26, -3);  // <- snapshot t=1.3s lands HERE
+      hardCut(tl, phrase0, 1.37,  18, -3, -20, 3);
+      hardCut(tl, phrase0, 1.42, -14, 0,  16, 0);
+      tl.to(phrase0, {
+        "--red-x": "0px", "--red-y": "0px",
+        "--cyan-x": "0px", "--cyan-y": "0px",
+        duration: 0.32,
+        ease: "power4.out",
+      }, 1.48);
+
+      // === t=1.24s: TV bar slice sweeps top-to-bottom across the frame.
+      //              Overlapping with the hard glitch burst — they belong together.
+      tl.to(tvBar, { opacity: 1, duration: 0.04, ease: "steps(1)" }, 1.24);
+      tl.to(tvBar, { y: 1120, duration: 0.34, ease: "power1.in" }, 1.24);
+      tl.to(tvBar, { opacity: 0, duration: 0.06, ease: "steps(1)" }, 1.58);
+
+      // === t=1.90s: meta line fades in beneath the phrase.
+      tl.fromTo("#meta",
+        { opacity: 0, y: 8 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" },
+        1.90);
+
+      // === t=2.30s: phrase 0 holds clean, then begins EXIT glitch — channels
+      //              rip apart wider and wider. The exit ramps INTO the offset
+      //              instead of snapping back, so frame at t=2.5s catches the rip.
+      tl.to(phrase0, {
+        "--red-x": "-26px", "--red-y": "2px",
+        "--cyan-x": "30px",  "--cyan-y": "-3px",
+        duration: 0.20,
+        ease: "power1.in",
+      }, 2.35);
+      // === t=2.50s: hard-cut to a SECOND offset state — snapshot at 2.5s lands here.
+      hardCut(tl, phrase0, 2.50,  22, -3, -26, 4);
+      tl.to(phrase0, { opacity: 0, duration: 0.08, ease: "steps(1)" }, 2.62);
+
+      // ---------------------------------------------------------------------
+      // PHRASE 1: "ACCESS GRANTED" — 2.55s to 5.00s
+      // ---------------------------------------------------------------------
+
+      // === t=2.70s: meta line shifts to swap value (instant hide so phrase1 entrance reads clean).
+      tl.set("#meta", { opacity: 0 }, 2.70);
+
+      // === t=2.72s: phrase 1 hard-cuts in glitched, settles clean.
+      tl.set(phrase1, {
+        "--red-x": "20px", "--red-y": "-2px",
+        "--cyan-x": "-24px", "--cyan-y": "3px",
+      }, 2.70);
+      tl.to(phrase1, { opacity: 1, duration: 0.06, ease: "steps(1)" }, 2.72);
+      tl.to(phrase1, {
+        "--red-x": "0px", "--red-y": "0px",
+        "--cyan-x": "0px", "--cyan-y": "0px",
+        duration: 0.40,
+        ease: "power4.out",
+      }, 2.78);
+
+      // === t=3.15s: meta line re-enters with new content style.
+      tl.fromTo("#meta",
+        { opacity: 0, y: 8 },
+        { opacity: 1, y: 0, duration: 0.35, ease: "expo.out" },
+        3.15);
+
+      // === t=3.50s: subtle 2-hit warm-up burst.
+      glitchPulse(tl, phrase1, 3.50,  6, 0, -8, 0, 0.04, 0.14);
+      glitchPulse(tl, phrase1, 3.65, -10, 0, 12, 0, 0.04, 0.14);
+
+      // === t=3.72s: SECOND hard glitch burst — even heavier than first.
+      //              Five hard-cuts with varied offsets including y-component.
+      //              Frame snapshot at 3.80s lands INSIDE this burst — peak glitch.
+      hardCut(tl, phrase1, 3.72,  28, -3, -32, 4);
+      hardCut(tl, phrase1, 3.76, -26, 5,  30, -4);
+      hardCut(tl, phrase1, 3.80,  24, -3, -28, 3);  // <- snapshot t=3.8s lands HERE
+      hardCut(tl, phrase1, 3.84, -22, 4,  26, -3);
+      hardCut(tl, phrase1, 3.88,  18, -2, -20, 2);
+      hardCut(tl, phrase1, 3.92, -14, 0,  16, 0);
+      tl.to(phrase1, {
+        "--red-x": "0px", "--red-y": "0px",
+        "--cyan-x": "0px", "--cyan-y": "0px",
+        duration: 0.32,
+        ease: "power4.out",
+      }, 3.98);
+
+      // === t=3.76s: SECOND TV bar slice — narrower and faster than the first.
+      tl.set(tvBar, { y: -40 }, 3.74);
+      tl.to(tvBar, { opacity: 1, duration: 0.04, ease: "steps(1)" }, 3.76);
+      tl.to(tvBar, { y: 1120, duration: 0.28, ease: "power1.in" }, 3.76);
+      tl.to(tvBar, { opacity: 0, duration: 0.06, ease: "steps(1)" }, 4.04);
+
+      // === Continuous motion 4.4s-5.0s: meta line subtle breathing + HUD sine pulse.
+      tl.to("#meta", {
+        opacity: 0.6,
+        duration: 0.55,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+      }, 4.40);
+      tl.to(".hud", {
+        opacity: 0.6,
+        duration: 0.55,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+      }, 4.40);
+
+      // === t=4.65s: tiny final residual glitch — phrase quivers once.
+      glitchPulse(tl, phrase1, 4.65,  4, 0, -5, 0, 0.04, 0.20);
+
+      window.__timelines["scene-08-glitch-rgb-split"] = tl;
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-03-kinetic-center-build</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/CustomEase.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; }
+
+    #scene-03-kinetic-center-build {
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 50% 50%, #181818 0%, #0a0a0a 70%);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #f5f5f5;
+    }
+
+    /* Stage host for the kinetic line. perspective_px=900 per showcase.stage.container. */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      perspective: 900px;
+    }
+
+    /* Kinetic line container — relative, centered, with absolute-positioned word spans
+       per showcase.stage.kinetic_container (coordinate_origin: center). */
+    .kinetic-line {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-style: preserve-3d;
+    }
+
+    /* Both phrase wrappers stacked at the same center; only one visible per cycle. */
+    .phrase-host {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%;
+      height: 100%;
+    }
+
+    /* showcase.stage.kinetic_word: absolutely centered, will-change set for compositor. */
+    .kw {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      backface-visibility: hidden;
+      white-space: nowrap;
+      font-size: 140px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      transform-origin: 50% 55%;
+      will-change: transform, opacity, filter;
+      /* Locked initial state for snapshot determinism: invisible, slightly nudged. */
+      opacity: 0;
+      transform: translate(-50%, -50%) translate3d(0px, 6px, 0) scale(0.992);
+      filter: blur(3.5px);
+    }
+
+    /* The second phrase host is hidden by display until its cycle so its words
+       don't briefly flash before opacity gets locked at t=0. */
+    .phrase-host.hidden { display: none; }
+
+    .eyebrow {
+      position: absolute;
+      top: calc(50% - 150px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #707070;
+      opacity: 0;
+    }
+
+    /* Center crosshair guide (subtle) — fades in late to reinforce the "lock center" idea. */
+    .center-rule {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 280px;
+      height: 1px;
+      transform: translate(-50%, 130px);
+      background: linear-gradient(90deg, transparent 0%, rgba(245,245,245,0.18) 50%, transparent 100%);
+      opacity: 0;
+    }
+
+    /* Grain — ambient layer for continuous motion. */
+    .grain {
+      position: absolute;
+      inset: -50px;
+      background:
+        radial-gradient(circle at 22% 28%, rgba(255,255,255,0.04) 0%, transparent 38%),
+        radial-gradient(circle at 78% 72%, rgba(255,255,255,0.03) 0%, transparent 36%);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-size: 16px;
+      color: #707070;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      z-index: 10;
+    }
+    .label .accent { color: #f5f5f5; font-weight: 600; }
+    .label .meta { color: #4a4a4a; font-weight: 500; }
+  </style>
+</head>
+<body>
+
+  <div id="scene-03-kinetic-center-build"
+       data-composition-id="scene-03-kinetic-center-build"
+       data-start="0"
+       data-duration="8"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="grain"></div>
+
+    <div class="stage">
+      <div class="eyebrow" id="eyebrow">Section 03 · Kinetic Type</div>
+
+      <div class="kinetic-line">
+        <!-- Two phrase hosts pre-built into the DOM. Word spans get inserted by the
+             IIFE below; we need them DOM-resident at t=0 so the snapshot tool finds
+             them when it seeks to any timestamp. -->
+        <div class="phrase-host" id="phrase-1" data-words="Built|to|flow."></div>
+        <div class="phrase-host hidden" id="phrase-2" data-words="Motion|with|intent."></div>
+      </div>
+
+      <div class="center-rule" id="center-rule"></div>
+    </div>
+
+    <div class="label">
+      Scene 03 · <span class="accent">Kinetic Center Build</span> · <span class="meta">word-locks-center, phrase builds right-to-left</span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 8;
+      window.__timelines = window.__timelines || {};
+
+      gsap.registerPlugin(CustomEase);
+
+      // Signature easing for kinetic-center-build (from showcase.timing): cubic-bezier(0.2, 0.8, 0.2, 1).
+      var kineticEase = CustomEase.create("kinetic", "0.2, 0.8, 0.2, 1");
+      // Exit easing per spec: cubic-bezier(0.4, 0, 0.2, 1).
+      var kineticExit = CustomEase.create("kineticExit", "0.4, 0, 0.2, 1");
+
+      // Build params (renderer-pixel coordinates — NOT scaled by y_travel_multiplier per
+      // rendering_contract.y_travel_multiplier_note).
+      // NOTE: spec word_gap_px=10 is for the website's smaller font. At 140px headline we
+      // need a visually proportional gap (~56px ≈ 0.4em reads as a natural space between
+      // words for wider longer phrases like "Motion with intent.").
+      var WORD_GAP = 56;
+      var ENTRY_OFFSET = 130;  // bumped proportionally — still well above ~ word width.
+      var FIRST_WORD_Y = 6;
+      var ENTRY_SCALE = 0.992;
+      var ENTRY_BLUR = 3.5;
+      var REFLOW_BLUR = 0.8;
+      var EXIT_Y = -6;
+      var EXIT_BLUR = 2.5;
+
+      // Scaled durations from showcase.timing (source * 0.72 speed_multiplier).
+      var FIRST_DUR = 0.245;  // 245ms — first word in
+      var PUSH_DUR  = 0.310;  // 310ms — each subsequent push
+      var EXIT_DUR  = 0.187;  // 187ms — phrase exit
+
+      // Build the word spans for one phrase host, return [{el, width}] in left-to-right order.
+      function buildPhrase(hostEl) {
+        var words = hostEl.getAttribute("data-words").split("|");
+        var frag = document.createDocumentFragment();
+        var entries = [];
+        words.forEach(function (w) {
+          var span = document.createElement("span");
+          span.className = "kw";
+          span.textContent = w;
+          frag.appendChild(span);
+          entries.push({ el: span, text: w });
+        });
+        hostEl.replaceChildren(frag);
+        // Force the host visible during measurement so offsetWidth resolves
+        // (display:none on phrase-2 would return 0). We toggle a temp class.
+        var wasHidden = hostEl.classList.contains("hidden");
+        if (wasHidden) {
+          hostEl.style.display = "block";
+          hostEl.style.visibility = "hidden";
+        }
+        entries.forEach(function (e) { e.width = e.el.offsetWidth; });
+        if (wasHidden) {
+          hostEl.style.display = "";
+          hostEl.style.visibility = "";
+        }
+        return entries;
+      }
+
+      // Compute the centered x position of each word AFTER all `count` words are present.
+      // total = sum(widths[0..count-1]) + word_gap * (count - 1)
+      // cursor = -total / 2; each word x = cursor + width/2 then cursor += width + gap.
+      function centeredPositions(entries, count) {
+        var widths = entries.slice(0, count).map(function (e) { return e.width; });
+        var total = widths.reduce(function (s, w) { return s + w; }, 0) + WORD_GAP * (count - 1);
+        var cursor = -total / 2;
+        var positions = [];
+        for (var i = 0; i < count; i++) {
+          var x = cursor + widths[i] / 2;
+          positions.push(x);
+          cursor += widths[i] + WORD_GAP;
+        }
+        return positions;
+      }
+
+      var phrase1Host = document.getElementById("phrase-1");
+      var phrase2Host = document.getElementById("phrase-2");
+      var p1 = buildPhrase(phrase1Host);
+      var p2 = buildPhrase(phrase2Host);
+
+      // Remove the .hidden class from phrase-2 now that its words exist and are
+      // locked to opacity 0 via CSS. We control visibility through opacity only
+      // so the snapshot tool finds DOM at every timestamp.
+      phrase2Host.classList.remove("hidden");
+
+      var tl = gsap.timeline({ paused: true });
+
+      // === t=0: explicit lock of all initial states. CSS already locks .kw opacity:0
+      // but this guarantees the per-word transform/filter state is what the spec demands
+      // regardless of which seek timestamp the snapshot tool resolves first.
+      p1.concat(p2).forEach(function (e) {
+        tl.set(e.el, {
+          opacity: 0,
+          x: 0,
+          y: FIRST_WORD_Y,
+          scale: ENTRY_SCALE,
+          filter: "blur(" + ENTRY_BLUR + "px)",
+          xPercent: -50,
+          yPercent: -50,
+        }, 0);
+      });
+      tl.set("#eyebrow", { opacity: 0, y: -8 }, 0);
+      tl.set("#center-rule", { opacity: 0, scaleX: 0.4, transformOrigin: "50% 50%" }, 0);
+
+      // === t=0.20s: eyebrow lifts in with expo.out (soft land). Layered with main entrance.
+      tl.fromTo("#eyebrow",
+        { opacity: 0, y: -8 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "expo.out" },
+        0.20);
+
+      // === t=0.30s: ambient grain breathing — drifts the whole 8s to keep frame alive.
+      tl.fromTo(".grain",
+        { x: 0, y: 0, opacity: 1 },
+        { x: -28, y: -12, opacity: 0.65, duration: 3.4, ease: "sine.inOut" },
+        0.30);
+
+      // ============================================================
+      // CYCLE 1: "Built to flow." — build word-by-word right-to-left.
+      // ============================================================
+
+      // --- Word 1 ("Built") at center: t=0.50s → 0.745s.
+      // First-word recipe: x=0; opacity 0→1; y 6→0; scale 0.992→1; blur 3.5→0. Signature ease.
+      var p1pos1 = centeredPositions(p1, 1); // word 1 alone is centered at x=0
+      tl.to(p1[0].el, {
+        opacity: 1,
+        x: p1pos1[0],
+        y: 0,
+        scale: 1,
+        filter: "blur(0px)",
+        duration: FIRST_DUR,
+        ease: kineticEase,
+      }, 0.50);
+
+      // --- Word 2 ("to") pushes in from right at t=0.95s.
+      // micro_delay_ms=220 between words (per portable_spec.swap.micro_delay_ms scaled).
+      // Existing words shift to new centered positions while incoming word slides in.
+      var p1pos2 = centeredPositions(p1, 2);
+      // Existing word "Built" reflows from x=p1pos1[0] (=0) to x=p1pos2[0].
+      tl.to(p1[0].el, {
+        x: p1pos2[0],
+        filter: "blur(" + REFLOW_BLUR + "px)",
+        duration: PUSH_DUR * 0.52,
+        ease: kineticEase,
+      }, 0.95);
+      tl.to(p1[0].el, {
+        filter: "blur(0px)",
+        duration: PUSH_DUR * 0.48,
+        ease: kineticEase,
+      }, 0.95 + PUSH_DUR * 0.52);
+      // Incoming word "to" starts at targetX + ENTRY_OFFSET and lands at targetX.
+      tl.fromTo(p1[1].el,
+        {
+          opacity: 0,
+          x: p1pos2[1] + ENTRY_OFFSET,
+          y: 0,
+          scale: ENTRY_SCALE,
+          filter: "blur(" + ENTRY_BLUR + "px)",
+        },
+        {
+          opacity: 1,
+          x: p1pos2[1],
+          scale: 1,
+          filter: "blur(0px)",
+          duration: PUSH_DUR,
+          ease: kineticEase,
+        },
+        0.95);
+
+      // --- Word 3 ("flow.") pushes in at t=1.46s.
+      var p1pos3 = centeredPositions(p1, 3);
+      // "Built" reflows to its final position.
+      tl.to(p1[0].el, {
+        x: p1pos3[0],
+        filter: "blur(" + REFLOW_BLUR + "px)",
+        duration: PUSH_DUR * 0.52,
+        ease: kineticEase,
+      }, 1.46);
+      tl.to(p1[0].el, {
+        filter: "blur(0px)",
+        duration: PUSH_DUR * 0.48,
+        ease: kineticEase,
+      }, 1.46 + PUSH_DUR * 0.52);
+      // "to" reflows to its final position.
+      tl.to(p1[1].el, {
+        x: p1pos3[1],
+        filter: "blur(" + REFLOW_BLUR + "px)",
+        duration: PUSH_DUR * 0.52,
+        ease: kineticEase,
+      }, 1.46);
+      tl.to(p1[1].el, {
+        filter: "blur(0px)",
+        duration: PUSH_DUR * 0.48,
+        ease: kineticEase,
+      }, 1.46 + PUSH_DUR * 0.52);
+      // "flow." enters from right.
+      tl.fromTo(p1[2].el,
+        {
+          opacity: 0,
+          x: p1pos3[2] + ENTRY_OFFSET,
+          y: 0,
+          scale: ENTRY_SCALE,
+          filter: "blur(" + ENTRY_BLUR + "px)",
+        },
+        {
+          opacity: 1,
+          x: p1pos3[2],
+          scale: 1,
+          filter: "blur(0px)",
+          duration: PUSH_DUR,
+          ease: kineticEase,
+        },
+        1.46);
+
+      // === t=1.85s: center rule fades up under phrase — visual cue that line locked.
+      // power4.out for the rule snap-in (variety: 3rd easing family).
+      tl.to("#center-rule", {
+        opacity: 1,
+        scaleX: 1,
+        duration: 0.55,
+        ease: "power4.out",
+      }, 1.85);
+
+      // === t=1.85s-3.10s: HOLD. Subtle breathing on the whole phrase keeps it alive.
+      // y drift -2px, sine in/out — nothing static >1.5s rule satisfied.
+      tl.to(p1.map(function (e) { return e.el; }), {
+        y: -2,
+        duration: 0.62,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+      }, 1.85);
+
+      // === t=3.10s: EXIT phrase 1 — all words together. Exit easing.
+      tl.to(p1.map(function (e) { return e.el; }), {
+        opacity: 0,
+        y: EXIT_Y,
+        filter: "blur(" + EXIT_BLUR + "px)",
+        duration: EXIT_DUR,
+        ease: kineticExit,
+      }, 3.10);
+
+      // === t=3.30s: center-rule contracts back as the phrase clears.
+      tl.to("#center-rule", {
+        opacity: 0,
+        scaleX: 0.4,
+        duration: 0.35,
+        ease: kineticExit,
+      }, 3.30);
+
+      // ============================================================
+      // CYCLE 2: "Motion with intent." — same build pattern, different copy.
+      // 158ms gap (per showcase.timing.gap_ms) after exit completes at ~3.29s.
+      // ============================================================
+      var C2_START = 3.55;
+
+      // --- Word 1 ("Motion") at center.
+      var p2pos1 = centeredPositions(p2, 1);
+      tl.to(p2[0].el, {
+        opacity: 1,
+        x: p2pos1[0],
+        y: 0,
+        scale: 1,
+        filter: "blur(0px)",
+        duration: FIRST_DUR,
+        ease: kineticEase,
+      }, C2_START);
+
+      // --- Word 2 ("with") pushes in 200ms after word 1 lands (220 scaled).
+      var p2pos2 = centeredPositions(p2, 2);
+      var T2a = C2_START + 0.45;
+      tl.to(p2[0].el, {
+        x: p2pos2[0],
+        filter: "blur(" + REFLOW_BLUR + "px)",
+        duration: PUSH_DUR * 0.52,
+        ease: kineticEase,
+      }, T2a);
+      tl.to(p2[0].el, {
+        filter: "blur(0px)",
+        duration: PUSH_DUR * 0.48,
+        ease: kineticEase,
+      }, T2a + PUSH_DUR * 0.52);
+      tl.fromTo(p2[1].el,
+        {
+          opacity: 0,
+          x: p2pos2[1] + ENTRY_OFFSET,
+          y: 0,
+          scale: ENTRY_SCALE,
+          filter: "blur(" + ENTRY_BLUR + "px)",
+        },
+        {
+          opacity: 1,
+          x: p2pos2[1],
+          scale: 1,
+          filter: "blur(0px)",
+          duration: PUSH_DUR,
+          ease: kineticEase,
+        },
+        T2a);
+
+      // --- Word 3 ("intent.") pushes in.
+      var p2pos3 = centeredPositions(p2, 3);
+      var T2b = T2a + 0.51;
+      tl.to(p2[0].el, {
+        x: p2pos3[0],
+        filter: "blur(" + REFLOW_BLUR + "px)",
+        duration: PUSH_DUR * 0.52,
+        ease: kineticEase,
+      }, T2b);
+      tl.to(p2[0].el, {
+        filter: "blur(0px)",
+        duration: PUSH_DUR * 0.48,
+        ease: kineticEase,
+      }, T2b + PUSH_DUR * 0.52);
+      tl.to(p2[1].el, {
+        x: p2pos3[1],
+        filter: "blur(" + REFLOW_BLUR + "px)",
+        duration: PUSH_DUR * 0.52,
+        ease: kineticEase,
+      }, T2b);
+      tl.to(p2[1].el, {
+        filter: "blur(0px)",
+        duration: PUSH_DUR * 0.48,
+        ease: kineticEase,
+      }, T2b + PUSH_DUR * 0.52);
+      tl.fromTo(p2[2].el,
+        {
+          opacity: 0,
+          x: p2pos3[2] + ENTRY_OFFSET,
+          y: 0,
+          scale: ENTRY_SCALE,
+          filter: "blur(" + ENTRY_BLUR + "px)",
+        },
+        {
+          opacity: 1,
+          x: p2pos3[2],
+          scale: 1,
+          filter: "blur(0px)",
+          duration: PUSH_DUR,
+          ease: kineticEase,
+        },
+        T2b);
+
+      // === t≈4.85s: center rule fades back in under cycle-2 phrase.
+      var T2done = T2b + PUSH_DUR; // ≈ 4.87s
+      tl.to("#center-rule", {
+        opacity: 1,
+        scaleX: 1,
+        duration: 0.55,
+        ease: "power4.out",
+      }, T2done);
+
+      // === Final hold 4.87s-7.6s: continuous breathing — y drift + scale pulse — and
+      // eyebrow letter-spacing micro-shift (variety: another easing — "none" for linear pulse).
+      tl.to(p2.map(function (e) { return e.el; }), {
+        y: -2,
+        duration: 0.7,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 2,
+      }, T2done + 0.10);
+
+      // Final phrase subtle scale-up breathe (kept under 1.02 to read as breath not zoom).
+      tl.to(p2.map(function (e) { return e.el; }), {
+        scale: 1.012,
+        duration: 1.4,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+      }, T2done + 0.30);
+
+      // Eyebrow letter-spacing slow open — adds drift in a different layer.
+      tl.to("#eyebrow", {
+        letterSpacing: "0.40em",
+        duration: 2.3,
+        ease: "none",
+      }, T2done + 0.20);
+
+      // === t=7.20s: grain settles back to origin — final frame frames the locked phrase.
+      tl.to(".grain", {
+        x: 0,
+        y: 0,
+        opacity: 1,
+        duration: 0.78,
+        ease: "sine.inOut",
+      }, 7.20);
+
+      window.__timelines["scene-03-kinetic-center-build"] = tl;
+    })();
+  </script>
+</body>
+</html>

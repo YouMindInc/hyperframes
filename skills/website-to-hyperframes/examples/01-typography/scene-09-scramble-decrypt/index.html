@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-09-scramble-decrypt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@500&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #02060a; }
+
+    #scene-09-scramble-decrypt {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 50% 55%, #0a1a14 0%, #02060a 70%),
+        linear-gradient(180deg, #03090c 0%, #010305 100%);
+      font-family: "JetBrains Mono", "Menlo", monospace;
+      color: #d4ffd4;
+    }
+
+    /* CRT scanline overlay — keeps frame alive during static holds. */
+    .scanlines {
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(
+        0deg,
+        rgba(0, 255, 120, 0) 0px,
+        rgba(0, 255, 120, 0) 2px,
+        rgba(0, 255, 120, 0.035) 2px,
+        rgba(0, 255, 120, 0.035) 4px
+      );
+      pointer-events: none;
+      mix-blend-mode: screen;
+      will-change: transform;
+    }
+
+    /* Soft green vignette glow at center — pulses during hold. */
+    .glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 1600px;
+      height: 800px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(ellipse at center, rgba(74, 222, 128, 0.14) 0%, transparent 60%);
+      pointer-events: none;
+      filter: blur(40px);
+      will-change: opacity, transform;
+    }
+
+    /* Stage holds the prompt + phrase. */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 36px;
+    }
+
+    .prompt-line {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 24px;
+      font-weight: 500;
+      color: #4ade80;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.7;
+    }
+    .prompt-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 18px rgba(74, 222, 128, 0.7);
+    }
+
+    /* Phrase row — fixed width to prevent layout shift as chars swap. */
+    .phrase {
+      position: relative;
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      justify-content: center;
+      font-size: 132px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1.0;
+      color: #d4ffd4;
+      text-shadow:
+        0 0 18px rgba(74, 222, 128, 0.45),
+        0 0 48px rgba(74, 222, 128, 0.18);
+      white-space: nowrap;
+      will-change: filter;
+    }
+
+    .char {
+      display: inline-block;
+      width: 1ch;
+      text-align: center;
+      white-space: pre;
+      font-variant-numeric: tabular-nums;
+      will-change: color, text-shadow;
+    }
+    /* "scrambled" char visual cue — slight blue tint, dimmer. */
+    .char[data-locked="0"] {
+      color: #5a8a72;
+      text-shadow: 0 0 12px rgba(74, 222, 128, 0.25);
+    }
+    .char[data-locked="1"] {
+      color: #d4ffd4;
+      text-shadow:
+        0 0 18px rgba(74, 222, 128, 0.5),
+        0 0 48px rgba(74, 222, 128, 0.22);
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 26px;
+      height: 110px;
+      vertical-align: baseline;
+      background: #4ade80;
+      margin-left: 12px;
+      transform: translateY(14px);
+      box-shadow: 0 0 28px rgba(74, 222, 128, 0.7);
+      will-change: opacity;
+    }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-size: 16px;
+      color: #5a8a72;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      font-family: "Inter", sans-serif;
+      z-index: 10;
+    }
+    .label .accent { color: #d4ffd4; font-weight: 600; }
+
+    /* Top-right status badge — small touch of UI dressing. */
+    .status {
+      position: absolute;
+      top: 48px;
+      right: 48px;
+      font-family: "Inter", sans-serif;
+      font-size: 14px;
+      color: #5a8a72;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 12px rgba(74, 222, 128, 0.7);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="scene-09-scramble-decrypt"
+       data-composition-id="scene-09-scramble-decrypt"
+       data-start="0"
+       data-duration="6"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="scanlines"></div>
+    <div class="glow" id="glow"></div>
+
+    <div class="stage">
+      <div class="prompt-line" id="prompt">
+        <span class="prompt-dot"></span>
+        <span>SECURE CHANNEL // DECRYPTING</span>
+      </div>
+      <div class="phrase" id="phrase-row">
+        <span id="phrase-chars"></span>
+        <span class="cursor" id="cursor"></span>
+      </div>
+    </div>
+
+    <div class="status">
+      <span class="status-dot"></span>
+      <span>LINK 01</span>
+    </div>
+
+    <div class="label">
+      Scene 09 · <span class="accent">Scramble Decrypt</span> · per-character intermediate substitution
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 6;
+      window.__timelines = window.__timelines || {};
+
+      var FINAL = "AUTHENTICATED"; // 13 chars
+      var CHARSET = "!@#$%^&*<>/?_-+=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+      // Deterministic intermediate generator — no Math.random().
+      // For char position `pos`, returns the `i`-th intermediate glyph.
+      function intermediate(pos, i) {
+        var idx = (pos * 7 + i * 13 + 5) % CHARSET.length;
+        // Avoid picking the actual final char as an intermediate (looks like an early lock).
+        var ch = CHARSET.charAt(idx);
+        if (ch === FINAL.charAt(pos)) {
+          idx = (idx + 17) % CHARSET.length;
+          ch = CHARSET.charAt(idx);
+        }
+        return ch;
+      }
+
+      // === Build the per-character DOM upfront. All char spans exist at t=0.
+      var host = document.getElementById("phrase-chars");
+      var charEls = [];
+      var frag = document.createDocumentFragment();
+      for (var p = 0; p < FINAL.length; p++) {
+        var span = document.createElement("span");
+        span.className = "char";
+        span.setAttribute("data-locked", "0");
+        // Initial visible glyph at t=0: the first intermediate of each position.
+        span.textContent = intermediate(p, 0);
+        frag.appendChild(span);
+        charEls.push(span);
+      }
+      host.replaceChildren(frag);
+
+      var cursor = document.getElementById("cursor");
+      var prompt = document.getElementById("prompt");
+      var glow = document.getElementById("glow");
+      var phraseRow = document.getElementById("phrase-row");
+
+      var tl = gsap.timeline({ paused: true });
+
+      // ====================================================================
+      // CONTINUOUS MOTION (spans entire 6s)
+      // ====================================================================
+
+      // Cursor blink — steps(1) gives the mechanical on/off feel.
+      tl.fromTo(cursor,
+        { opacity: 1 },
+        { opacity: 0.18, duration: 0.42, repeat: 13, yoyo: true, ease: "steps(1)" },
+        0);
+
+      // Scanlines drift down — linear ambient, none ease.
+      tl.fromTo(".scanlines",
+        { y: 0 },
+        { y: 12, duration: 0.9, repeat: 6, yoyo: true, ease: "none" },
+        0);
+
+      // Status dot pulse — sine breath.
+      tl.fromTo(".status-dot",
+        { opacity: 1 },
+        { opacity: 0.4, duration: 0.7, repeat: 8, yoyo: true, ease: "sine.inOut" },
+        0);
+
+      // Prompt label fades in.
+      tl.fromTo(prompt,
+        { opacity: 0, y: -8 },
+        { opacity: 0.7, y: 0, duration: 0.5, ease: "expo.out" },
+        0.10);
+
+      // ====================================================================
+      // PHASE 1 — DECRYPT (0.3s → 2.3s)
+      // Each char cycles through 7 intermediates with steps(1) feel, then locks.
+      // Locks stagger left-to-right.
+      // ====================================================================
+
+      var DECRYPT_START = 0.30;
+      var PER_CHAR_LOCK_STEP = 0.13;  // 13 chars * 0.13 = 1.69s — last lock at 0.30 + 12*0.13 = 1.86s
+      var SCRAMBLE_BEFORE_LOCK = 0.65; // each char scrambles ~650ms before its lock
+      var STEPS_BEFORE_LOCK = 6;       // 6 intermediate swaps before final lock
+
+      for (var pos = 0; pos < FINAL.length; pos++) {
+        var lockTime = DECRYPT_START + pos * PER_CHAR_LOCK_STEP;
+        var scrambleStart = lockTime - SCRAMBLE_BEFORE_LOCK;
+        var stepDur = SCRAMBLE_BEFORE_LOCK / STEPS_BEFORE_LOCK;
+
+        // Schedule the intermediate swaps — tl.set is the correct tool for textContent.
+        for (var s = 0; s < STEPS_BEFORE_LOCK; s++) {
+          var t = scrambleStart + s * stepDur;
+          if (t < 0) t = 0;
+          // Skip the very first intermediate for pos 0 — it's already set in DOM at t=0
+          // and would visually "flash" if re-set. But re-setting is harmless; let it ride.
+          tl.set(charEls[pos], { textContent: intermediate(pos, s + 1) }, t);
+        }
+        // Lock to the final char.
+        tl.set(charEls[pos], { textContent: FINAL.charAt(pos), attr: { "data-locked": "1" } }, lockTime);
+      }
+
+      // Brief whip-glow on each character at its lock moment — back.out feel.
+      // We do this as a single sweep on the phrase row text-shadow via filter pulse.
+      tl.fromTo(phraseRow,
+        { filter: "brightness(1) blur(0px)" },
+        { filter: "brightness(1.25) blur(0px)", duration: 0.4, ease: "back.out(1.7)", yoyo: true, repeat: 1 },
+        1.50);
+
+      // Glow ramps up as more chars lock.
+      tl.fromTo(glow,
+        { opacity: 0.4, scale: 1 },
+        { opacity: 1, scale: 1.04, duration: 1.6, ease: "expo.out", transformOrigin: "50% 50%" },
+        DECRYPT_START);
+
+      // ====================================================================
+      // PHASE 2 — HOLD (2.3s → 4.0s)
+      // Full phrase decrypted. Ambient motion only: glow pulse, slight phrase breath.
+      // ====================================================================
+
+      tl.to(glow, {
+        opacity: 0.75,
+        scale: 1.08,
+        duration: 0.85,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "50% 50%",
+      }, 2.40);
+
+      // Subtle phrase breath — y drift only (no transform conflict with the filter tween above —
+      // filter and transform are independent properties).
+      tl.to(phraseRow, {
+        y: -4,
+        duration: 1.6,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 0,
+      }, 2.40);
+
+      // Prompt label subtle dim/brighten during hold.
+      tl.to(prompt, {
+        opacity: 0.4,
+        duration: 0.8,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+      }, 2.50);
+
+      // ====================================================================
+      // PHASE 3 — RE-ENCRYPT (4.0s → 5.0s)
+      // Chars unlock left-to-right, returning to scramble glyphs.
+      // ====================================================================
+
+      var REENC_START = 4.00;
+      var REENC_PER_CHAR = 1.0 / FINAL.length; // ~0.077s per char
+
+      for (var pos2 = 0; pos2 < FINAL.length; pos2++) {
+        var unlockTime = REENC_START + pos2 * REENC_PER_CHAR;
+        // Three quick scramble swaps after unlock — uses different intermediate offsets
+        // so this phase doesn't look identical to the decrypt sequence.
+        tl.set(charEls[pos2], { textContent: intermediate(pos2, 2), attr: { "data-locked": "0" } }, unlockTime);
+        tl.set(charEls[pos2], { textContent: intermediate(pos2, 4) }, unlockTime + 0.10);
+        tl.set(charEls[pos2], { textContent: intermediate(pos2, 1) }, unlockTime + 0.22);
+      }
+
+      // Glow dims to match the encrypted state.
+      tl.to(glow, {
+        opacity: 0.45,
+        scale: 1.0,
+        duration: 0.9,
+        ease: "power2.inOut",
+        transformOrigin: "50% 50%",
+      }, REENC_START);
+
+      // Prompt label brightens (decrypting again).
+      tl.to(prompt, {
+        opacity: 0.85,
+        duration: 0.5,
+        ease: "expo.out",
+      }, REENC_START + 0.20);
+
+      // ====================================================================
+      // PHASE 4 — RE-DECRYPT (5.0s → 6.0s)
+      // Locks back to the final phrase, faster than phase 1. Ends on full readable phrase.
+      // ====================================================================
+
+      var REDEC_START = 5.00;
+      var REDEC_PER_CHAR = 0.95 / FINAL.length; // ~0.073s per char — finishes by ~5.95s
+      var REDEC_SCRAMBLE_BEFORE = 0.30;
+      var REDEC_STEPS = 4;
+
+      for (var pos3 = 0; pos3 < FINAL.length; pos3++) {
+        var relockTime = REDEC_START + pos3 * REDEC_PER_CHAR;
+        var rs = relockTime - REDEC_SCRAMBLE_BEFORE;
+        if (rs < REENC_START + 0.20) rs = REENC_START + 0.20; // don't collide with phase 3 sets
+        var rstep = REDEC_SCRAMBLE_BEFORE / REDEC_STEPS;
+        for (var rstepi = 0; rstepi < REDEC_STEPS; rstepi++) {
+          tl.set(charEls[pos3], { textContent: intermediate(pos3, rstepi + 3) }, rs + rstepi * rstep);
+        }
+        tl.set(charEls[pos3], { textContent: FINAL.charAt(pos3), attr: { "data-locked": "1" } }, relockTime);
+      }
+
+      // Final glow swell on full re-decryption.
+      tl.to(glow, {
+        opacity: 1,
+        scale: 1.06,
+        duration: 0.8,
+        ease: "expo.out",
+        transformOrigin: "50% 50%",
+      }, 5.20);
+
+      // Final phrase impact pulse — back.out for the whip moment when fully relocked.
+      tl.fromTo(phraseRow,
+        { filter: "brightness(1.0)" },
+        { filter: "brightness(1.35)", duration: 0.35, ease: "back.out(1.7)", yoyo: true, repeat: 1 },
+        5.85);
+
+      window.__timelines["scene-09-scramble-decrypt"] = tl;
+    })();
+  </script>
+</body>
+</html>

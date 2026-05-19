@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-01-soft-blur-in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/CustomEase.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; }
+
+    #scene-01-soft-blur-in {
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 50% 45%, #1a1a1a 0%, #0a0a0a 65%);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #f5f5f5;
+    }
+
+    /* Stage: centered phrase host. perspective_px=900 from soft-blur-in.json. */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      perspective: 900px;
+    }
+
+    .phrase-row {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-style: preserve-3d;
+      min-height: 160px;
+    }
+
+    .phrase {
+      position: absolute;
+      display: inline-block;
+      transform-style: preserve-3d;
+      font-size: 144px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      white-space: nowrap;
+    }
+
+    /* Per-character unit — see showcase.stage.unit in soft-blur-in.json.
+       Initial opacity:0 locks the pre-entrance state in CSS so the snapshot
+       tool's first-frame capture (before the GSAP timeline has time to apply
+       its t=0 set tweens) shows the correct blank state. */
+    .char {
+      display: inline-block;
+      white-space: pre;
+      backface-visibility: hidden;
+      transform-origin: 50% 55%;
+      will-change: transform, opacity, filter;
+      opacity: 0;
+      filter: blur(12px);
+      transform: translateY(24px);
+    }
+
+    /* Same lock for eyebrow and underline initial states */
+    .eyebrow { opacity: 0; }
+    .underline path { stroke-dasharray: 240 240; stroke-dashoffset: 240; }
+
+    .eyebrow {
+      position: absolute;
+      top: calc(50% - 130px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #707070;
+    }
+
+    .underline {
+      position: absolute;
+      top: calc(50% + 110px);
+      left: 50%;
+      width: 240px;
+      height: 2px;
+      transform: translateX(-50%);
+    }
+    .underline path {
+      stroke: #f5f5f5;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .grain {
+      position: absolute;
+      inset: -50px;
+      background: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.04) 0%, transparent 40%),
+                  radial-gradient(circle at 80% 70%, rgba(255,255,255,0.03) 0%, transparent 35%);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-size: 16px;
+      color: #707070;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      z-index: 10;
+    }
+    .label .accent { color: #f5f5f5; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div id="scene-01-soft-blur-in"
+       data-composition-id="scene-01-soft-blur-in"
+       data-start="0"
+       data-duration="8"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="grain"></div>
+
+    <div class="stage">
+      <div class="eyebrow" id="eyebrow">Section 01 · Typography</div>
+      <div class="phrase-row">
+        <div class="phrase" data-phrase="0">Think different.</div>
+        <div class="phrase" data-phrase="1">Built to flow.</div>
+        <div class="phrase" data-phrase="2">Motion with intent.</div>
+      </div>
+      <svg class="underline" viewBox="0 0 240 2">
+        <path id="underline-path" d="M 0 1 L 240 1" />
+      </svg>
+    </div>
+
+    <div class="label">
+      Scene 01 · <span class="accent">Soft Blur In</span> · per-character keynote reveal
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 8;
+      window.__timelines = window.__timelines || {};
+
+      gsap.registerPlugin(CustomEase);
+
+      // soft-blur-in signature easing — Apple keynote curve.
+      var softEase = CustomEase.create("soft", "0.22, 1, 0.36, 1");
+      // Exit easing — accelerated, from soft-blur-in.json portable_spec.exit.easing.
+      var exitEase = CustomEase.create("softExit", "0.64, 0, 0.78, 0");
+
+      // Split each phrase into per-character spans at build time. All three
+      // phrases live in the DOM simultaneously (stacked, position:absolute)
+      // and we toggle visibility through opacity timeline. This makes the
+      // composition seekable — snapshot tool jumps to any timestamp and
+      // the DOM is already populated, no callback-driven mutation required.
+      function splitPhrase(phraseEl) {
+        var text = phraseEl.textContent;
+        var spans = [];
+        var frag = document.createDocumentFragment();
+        Array.from(text).forEach(function (ch) {
+          var span = document.createElement("span");
+          span.className = "char";
+          span.textContent = ch === " " ? " " : ch;
+          frag.appendChild(span);
+          spans.push(span);
+        });
+        phraseEl.replaceChildren(frag);
+        return spans;
+      }
+
+      var phraseEls = document.querySelectorAll("#scene-01-soft-blur-in .phrase");
+      var charsByPhrase = [];
+      phraseEls.forEach(function (el) {
+        charsByPhrase.push(splitPhrase(el));
+      });
+
+      var Y_FROM = 24;     // scaled from spec y_px=16 for 1080p host
+      var BLUR_FROM = 12;  // spec blur_px
+
+      var tl = gsap.timeline({ paused: true });
+
+      // === t=0 initial state — ALL phrases hidden + pre-positioned, eyebrow hidden, underline empty.
+      tl.set(charsByPhrase[0], { opacity: 0, y: Y_FROM, filter: "blur(" + BLUR_FROM + "px)" }, 0);
+      tl.set(charsByPhrase[1], { opacity: 0, y: Y_FROM, filter: "blur(" + BLUR_FROM + "px)" }, 0);
+      tl.set(charsByPhrase[2], { opacity: 0, y: Y_FROM, filter: "blur(" + BLUR_FROM + "px)" }, 0);
+      tl.set("#eyebrow", { opacity: 0, y: -8 }, 0);
+      tl.set("#underline-path", { strokeDasharray: "240 240", strokeDashoffset: 240 }, 0);
+
+      // === t=0.3s: eyebrow slides in. Supporting move, layered with main entrance.
+      tl.fromTo("#eyebrow",
+        { opacity: 0, y: -8 },
+        { opacity: 1, y: 0, duration: 0.6, ease: "expo.out" },
+        0.30);
+
+      // === t=0.5s: phrase 1 enters per-character.
+      // soft-blur-in spec: scaled_duration 648ms, scaled_stagger 18ms, signature easing.
+      tl.to(charsByPhrase[0], {
+        opacity: 1,
+        y: 0,
+        filter: "blur(0px)",
+        duration: 0.648,
+        stagger: 0.018,
+        ease: softEase,
+      }, 0.50);
+
+      // === t=1.4s: underline draws under phrase. Variety in easing — power4.out for the line snap.
+      tl.to("#underline-path", {
+        strokeDashoffset: 0,
+        duration: 0.7,
+        ease: "power4.out",
+      }, 1.40);
+
+      // === Continuous motion 1.4s-3.0s: grain ambient drift. Keeps the frame alive
+      // while the phrase is static — no element sits unchanged for more than ~1.5s.
+      tl.to(".grain", {
+        x: -30,
+        y: -10,
+        opacity: 0.7,
+        duration: 1.6,
+        ease: "sine.inOut",
+      }, 1.40);
+
+      // === t=3.0s: phrase 1 exits.
+      // exit duration scaled to 432ms, stagger 11ms, exit easing curve from spec.
+      tl.to(charsByPhrase[0], {
+        opacity: 0,
+        y: -Y_FROM,
+        filter: "blur(" + BLUR_FROM + "px)",
+        duration: 0.432,
+        stagger: 0.011,
+        ease: exitEase,
+      }, 3.00);
+
+      // === t=3.5s: phrase 2 enters (300ms overlap with phrase 1's exit per spec.swap.overlap_ms=300).
+      tl.to(charsByPhrase[1], {
+        opacity: 1,
+        y: 0,
+        filter: "blur(0px)",
+        duration: 0.648,
+        stagger: 0.018,
+        ease: softEase,
+      }, 3.50);
+
+      // === Continuous motion 4.5s-5.4s: underline scale pulse.
+      tl.to(".underline", {
+        scale: 1.08,
+        duration: 0.45,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "50% 50%",
+      }, 4.50);
+
+      // === t=5.4s: phrase 2 exits.
+      tl.to(charsByPhrase[1], {
+        opacity: 0,
+        y: -Y_FROM,
+        filter: "blur(" + BLUR_FROM + "px)",
+        duration: 0.432,
+        stagger: 0.011,
+        ease: exitEase,
+      }, 5.40);
+
+      // === t=5.9s: phrase 3 enters. Held until end of beat.
+      tl.to(charsByPhrase[2], {
+        opacity: 1,
+        y: 0,
+        filter: "blur(0px)",
+        duration: 0.648,
+        stagger: 0.018,
+        ease: softEase,
+      }, 5.90);
+
+      // === Continuous motion 6.7s-8.0s: subtle breathing on the final phrase + grain return.
+      tl.to(charsByPhrase[2], {
+        y: -4,
+        duration: 1.3,
+        ease: "sine.inOut",
+        stagger: 0.005,
+      }, 6.70);
+      tl.to(".grain", {
+        x: 0,
+        y: 0,
+        opacity: 1,
+        duration: 1.3,
+        ease: "sine.inOut",
+      }, 6.70);
+
+      window.__timelines["scene-01-soft-blur-in"] = tl;
+    })();
+  </script>
+</body>
+</html>

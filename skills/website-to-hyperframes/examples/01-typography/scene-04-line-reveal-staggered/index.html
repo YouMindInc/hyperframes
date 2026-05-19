@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-04-line-reveal-staggered</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/CustomEase.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a1a; }
+
+    #scene-04-line-reveal-staggered {
+      position: relative;
+      overflow: hidden;
+      /* Editorial dark: subtle vignette + paper-grain tint for "magazine spread" feel. */
+      background:
+        radial-gradient(ellipse at 50% 50%, #232323 0%, #1a1a1a 55%, #0f0f0f 100%);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #f2efe8;
+    }
+
+    /* Editorial vignette — slowly drifts during the hold to give the frame breath. */
+    .vignette {
+      position: absolute;
+      inset: -80px;
+      background:
+        radial-gradient(ellipse at 30% 40%, rgba(255, 245, 220, 0.035) 0%, transparent 45%),
+        radial-gradient(ellipse at 70% 60%, rgba(180, 200, 230, 0.025) 0%, transparent 50%);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    /* Stage: centered pull-quote, slightly left-justified for editorial feel. */
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 0 200px;
+      perspective: 900px;
+    }
+
+    /* Eyebrow label above the quote — small caps, premium magazine cue. */
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: 0.36em;
+      text-transform: uppercase;
+      color: #8a8378;
+      margin-bottom: 56px;
+      opacity: 0;          /* lock pre-state for snapshot determinism */
+    }
+    .eyebrow .rule {
+      display: inline-block;
+      width: 56px;
+      height: 1px;
+      background: #8a8378;
+      transform-origin: 0% 50%;
+      transform: scaleX(0);
+    }
+    .eyebrow .text {
+      display: inline-block;
+      transform: translateY(-4px);
+      opacity: 0;
+    }
+
+    /* The pull-quote itself — Fraunces serif for editorial gravitas. */
+    .quote {
+      display: inline-block;
+      font-family: "Fraunces", "Times New Roman", serif;
+      font-weight: 400;
+      font-size: 128px;
+      line-height: 1.08;
+      letter-spacing: -0.025em;
+      color: #f2efe8;
+      transform-style: preserve-3d;
+    }
+
+    /* Per-line mask host — overflow:hidden clips the descended line.
+       This IS the mask. The inner .line-inner animates from y:100% (hidden
+       below the mask floor) to y:0 (fully visible). This is the canonical
+       mask-reveal-up implementation.
+
+       Note: padding-bottom on the mask gives descenders (p, g, y) room to
+       breathe without being clipped at the bottom; padding-top gives the
+       small breathing/drift motion at the top headroom. */
+    .line-mask {
+      display: block;
+      overflow: hidden;
+      padding: 0.08em 0 0.18em;
+    }
+    .line-inner {
+      display: block;
+      will-change: transform, opacity, filter;
+      /* Pre-state locked in CSS so the first snapshot frame (t=0) shows
+         the correct hidden-below state even before GSAP applies its t=0 set.
+         opacity:0 alone is enough — the visible state is hidden either way.
+         GSAP's t=0 tl.set() reaffirms yPercent:110 so the entrance tween
+         knows where to start, and from that point GSAP owns the transform. */
+      opacity: 0;
+    }
+
+    /* Subtle period accent on the final line (editorial flourish). */
+    .quote .accent { color: #c89b5a; font-style: italic; font-weight: 500; }
+
+    /* Drawn underline anchored to the quote's left edge — drawn after lines settle. */
+    .underline {
+      position: absolute;
+      left: 200px;
+      top: calc(50% + 240px);
+      width: 180px;
+      height: 2px;
+      pointer-events: none;
+    }
+    .underline path {
+      stroke: #c89b5a;
+      stroke-width: 2;
+      fill: none;
+      stroke-dasharray: 180 180;
+      stroke-dashoffset: 180;
+    }
+
+    /* Page number — bottom-right, editorial typesetting cue. */
+    .pagenum {
+      position: absolute;
+      right: 48px;
+      bottom: 48px;
+      font-family: "Fraunces", serif;
+      font-style: italic;
+      font-size: 18px;
+      color: #6a6358;
+      letter-spacing: 0.04em;
+      z-index: 10;
+      opacity: 0;
+    }
+
+    .label {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      font-size: 16px;
+      color: #8a8378;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      z-index: 10;
+    }
+    .label .accent { color: #f2efe8; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div id="scene-04-line-reveal-staggered"
+       data-composition-id="scene-04-line-reveal-staggered"
+       data-start="0"
+       data-duration="7"
+       data-width="1920"
+       data-height="1080"
+       style="width:1920px; height:1080px;">
+
+    <div class="vignette"></div>
+
+    <div class="stage">
+      <div class="eyebrow" id="eyebrow">
+        <span class="rule"></span>
+        <span class="text">Essay · Volume Four</span>
+      </div>
+
+      <div class="quote" id="quote">
+        <!-- Each line is a mask (overflow:hidden) containing an inner block
+             that animates from translateY(110%) -> 0. Per mask-reveal-up.json
+             with target="per-line", display:block on each line is required. -->
+        <span class="line-mask"><span class="line-inner" data-line="0">Designed to disappear.</span></span>
+        <span class="line-mask"><span class="line-inner" data-line="1">Until you need it.</span></span>
+        <span class="line-mask"><span class="line-inner" data-line="2">Then it&rsquo;s <span class="accent">everything</span>.</span></span>
+      </div>
+
+      <svg class="underline" viewBox="0 0 180 2" id="underline">
+        <path id="underline-path" d="M 0 1 L 180 1" />
+      </svg>
+    </div>
+
+    <div class="pagenum" id="pagenum">— 042 —</div>
+
+    <div class="label">
+      Scene 04 · <span class="accent">Mask Reveal Up</span> · per-line clip-reveal upward, staggered
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 7;
+      window.__timelines = window.__timelines || {};
+
+      gsap.registerPlugin(CustomEase);
+
+      // mask-reveal-up signature easing — cubic-bezier(0.22, 1, 0.36, 1).
+      // Same family as Apple keynote curves: aggressive deceleration with soft tail.
+      var maskEase = CustomEase.create("maskReveal", "0.22, 1, 0.36, 1");
+
+      // Pre-build references. ALL DOM is set up at parse-time, NOT via tl.call().
+      var lineInners = document.querySelectorAll("#quote .line-inner");
+      var eyebrow = document.getElementById("eyebrow");
+      var eyebrowRule = document.querySelector("#eyebrow .rule");
+      var eyebrowText = document.querySelector("#eyebrow .text");
+      var underlinePath = document.getElementById("underline-path");
+      var underlineGroup = document.getElementById("underline");
+      var pagenum = document.getElementById("pagenum");
+      var vignette = document.querySelector(".vignette");
+      var quote = document.getElementById("quote");
+
+      // Spec values from mask-reveal-up.json showcase.timing:
+      //   scaled_duration_ms=547, scaled_stagger_ms=65, easing=cubic-bezier(0.22,1,0.36,1)
+      // Spec y_travel_multiplier=0.58 — we use yPercent:110 for full mask travel
+      // since the line-mask container IS the mask; the inner travels from below
+      // the mask floor up to its natural position.
+      //
+      // We use slightly larger stagger (180ms) than spec scaled value (65ms) so
+      // the staircase entrance reads clearly across a 3-line headline at this
+      // scale (1080p, 128px serif). Duration stays close to spec.
+      var ENTER_DUR = 0.70;
+      var ENTER_STAGGER = 0.18;
+
+      var tl = gsap.timeline({ paused: true });
+
+      // === t=0 — lock pre-entrance state for all animated elements ===
+      // All lines hidden below their masks, eyebrow + rule + text hidden,
+      // underline empty, pagenum hidden. Vignette at rest.
+      tl.set(lineInners, {
+        yPercent: 110,
+        opacity: 0,
+        filter: "blur(6px)",
+      }, 0);
+      tl.set(eyebrow, { opacity: 0 }, 0);
+      tl.set(eyebrowRule, { scaleX: 0, transformOrigin: "0% 50%" }, 0);
+      tl.set(eyebrowText, { y: -4, opacity: 0 }, 0);
+      tl.set(underlinePath, { strokeDashoffset: 180 }, 0);
+      tl.set(pagenum, { opacity: 0, y: 8 }, 0);
+      tl.set(vignette, { x: 0, y: 0, opacity: 1 }, 0);
+      tl.set(quote, { y: 0 }, 0);
+
+      // === t=0.15s — eyebrow surface ===
+      // Eyebrow appears before the quote — sets editorial context.
+      // Rule draws in horizontally (power4.out snap), text fades up (expo.out soft land).
+      tl.to(eyebrow, { opacity: 1, duration: 0.1, ease: "none" }, 0.15);
+      tl.to(eyebrowRule, {
+        scaleX: 1,
+        duration: 0.55,
+        ease: "power4.out",
+      }, 0.15);
+      tl.to(eyebrowText, {
+        y: 0,
+        opacity: 1,
+        duration: 0.55,
+        ease: "expo.out",
+      }, 0.25);
+
+      // === t=1.00s — quote lines reveal upward, masked, staggered ===
+      // This is the heart of the scene. mask-reveal-up signature easing on
+      // a multi-property tween: yPercent (mask travel) + opacity + filter (blur tail).
+      // Stagger 0.18s gives 3 lines a clear staircase: line 0 starts at 1.00s,
+      // line 1 at 1.18s, line 2 at 1.36s. Last line settled at ~2.06s. This
+      // means at the 1.2s snapshot frame line 0 is mid-reveal while lines 1-2
+      // are still hidden — the staircase is legible in the snapshot grid.
+      tl.to(lineInners, {
+        yPercent: 0,
+        opacity: 1,
+        filter: "blur(0px)",
+        duration: ENTER_DUR,
+        stagger: ENTER_STAGGER,
+        ease: maskEase,
+      }, 1.00);
+
+      // === t=2.15s — underline draws under quote ===
+      // Power4.out snap, third easing variety in the scene.
+      tl.to(underlinePath, {
+        strokeDashoffset: 0,
+        duration: 0.72,
+        ease: "power4.out",
+      }, 2.15);
+
+      // === t=2.30s — pagenum appears bottom-right ===
+      // Soft expo.out, layered with the underline draw.
+      tl.to(pagenum, {
+        opacity: 1,
+        y: 0,
+        duration: 0.6,
+        ease: "expo.out",
+      }, 2.30);
+
+      // === Continuous motion 2.4s → end — vignette drift ===
+      // Pure linear, ambient camera-breath. Two-phase drift so it's never
+      // static during the long hold (4+ seconds of held quote).
+      tl.to(vignette, {
+        x: -22,
+        y: 10,
+        duration: 2.6,
+        ease: "none",
+      }, 2.40);
+      tl.to(vignette, {
+        x: 14,
+        y: -6,
+        duration: 2.0,
+        ease: "sine.inOut",
+      }, 5.00);
+
+      // === t=2.9s → 5.7s: line breathing — subtle per-line drift ===
+      // Each line gently rises by 3px with a sine ease. Spec says "contained,
+      // intentional" so the motion is small but continuous. Stagger from the
+      // last line first so the eye finds fresh movement after the entrance.
+      // We breathe the .line-mask wrapper (NOT .line-inner) so we never touch
+      // the same transform property the entrance tween animated — preventing
+      // conflict with the yPercent that the enter tween left behind.
+      tl.to(".line-mask", {
+        y: -3,
+        duration: 1.4,
+        ease: "sine.inOut",
+        stagger: { each: 0.08, from: "end" },
+        yoyo: true,
+        repeat: 1,
+      }, 2.90);
+
+      // === t=4.0s — underline accent pulse ===
+      // Subtle scale breath on the underline — keeps the bottom-left zone alive.
+      tl.to(underlineGroup, {
+        scaleX: 1.08,
+        opacity: 0.85,
+        duration: 0.8,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 1,
+        transformOrigin: "0% 50%",
+      }, 4.00);
+
+      // === t=5.4s — closing emphasis: eyebrow drifts up, pagenum nudges ===
+      // The eyebrow drifts up slightly to give the closing beat a "settling"
+      // feel. We move the eyebrow (parent of the rule + text) — NOT the quote
+      // — so we never touch a transform on the masks or their inners.
+      // Different easing (expo.inOut) for variety — fifth easing in the scene.
+      tl.to(eyebrow, {
+        y: -4,
+        duration: 1.4,
+        ease: "expo.inOut",
+      }, 5.40);
+      tl.to(pagenum, {
+        y: -3,
+        duration: 1.4,
+        ease: "sine.inOut",
+      }, 5.40);
+
+      // === t=5.6s — eyebrow rule extends slightly (closing flourish) ===
+      // Sixth easing variant (back.out — small overshoot for editorial flourish).
+      tl.to(eyebrowRule, {
+        scaleX: 1.35,
+        duration: 1.0,
+        ease: "back.out(1.3)",
+        transformOrigin: "0% 50%",
+      }, 5.60);
+
+      // === t=6.2s — underline grows toward the right (closing flourish) ===
+      // Final beat: the underline subtly extends, signaling the scene resolves.
+      tl.to(underlineGroup, {
+        scaleX: 1.45,
+        duration: 0.8,
+        ease: "expo.out",
+        transformOrigin: "0% 50%",
+      }, 6.20);
+
+      window.__timelines["scene-04-line-reveal-staggered"] = tl;
+    })();
+  </script>
+</body>
+</html>

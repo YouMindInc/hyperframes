@@ -66,8 +66,11 @@ packages/producer/src/services/fontData.generated.ts
 
 # Test artifacts
 my-video/
-examples/
+/examples/
 packages/studio/data/
+
+# Snapshot artifacts inside the w2h examples library — regenerated on demand
+skills/website-to-hyperframes/examples/**/snapshots/
 .desloppify/
 .worktrees/
 
