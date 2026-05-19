@@ -26,7 +26,7 @@ triggers: [two features, side by side, brand + team, comparison, dual capabiliti
 
 Title drops in from top → two cards enter from opposite sides with opposing 3D tilts → floating pill badges attach near each card.
 
-This blueprint is the HyperFrames port of the Remotion `split-comparison-reveal` choreography. Same three-phase "concept → dual proof" arc; one paused GSAP timeline; constituent patterns map to [split-tilt-cards](../rules/split-tilt-cards.md) and [sine-wave-loop](../rules/sine-wave-loop.md).
+Same three-phase "concept → dual proof" arc; one paused GSAP timeline; constituent patterns map to [split-tilt-cards](../rules/split-tilt-cards.md) and [sine-wave-loop](../rules/sine-wave-loop.md).
 
 ## When to Use
 

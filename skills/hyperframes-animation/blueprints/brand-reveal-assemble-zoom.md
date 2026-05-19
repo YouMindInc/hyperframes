@@ -24,7 +24,7 @@ triggers: [brand reveal, zoom into logo, text leads to, wide to close-up, hero f
 
 Multiple elements share screen → supporting element exits → layout recenters on hero → camera zooms into hero → idle breathing.
 
-This blueprint is the HyperFrames port of the Remotion `assembly-focus-reveal` choreography. Same five-phase narrative arc; single paused GSAP timeline; the coordinate-zoom and breathing patterns map directly to the corresponding HF rules.
+Same five-phase narrative arc; single paused GSAP timeline; the coordinate-zoom and breathing patterns map directly to the corresponding HF rules.
 
 ## When to Use
 
@@ -149,7 +149,7 @@ tl.to(
 
 ## Phase 2: Hero Pop-In
 
-Elastic spring. Scale from 0 → 1 with a perceptible overshoot. The Remotion `spring({ stiffness: 200, damping: 12 })` maps to GSAP `back.out(2)` or `elastic.out(1, 0.45)`.
+Elastic spring. Scale from 0 → 1 with a perceptible overshoot. The the source `spring({ stiffness: 200, damping: 12 })` maps to GSAP `back.out(2)` or `elastic.out(1, 0.45)`.
 
 ```js
 const POP_START = 0.73; // ≈22 frames @ 30fps — after companion's main word lands
@@ -157,11 +157,11 @@ const POP_START = 0.73; // ≈22 frames @ 30fps — after companion's main word 
 tl.fromTo(".hero", { scale: 0 }, { scale: 1, duration: 0.5, ease: "back.out(2)" }, POP_START);
 ```
 
-`back.out(2)` overshoots ~10% past 1.0 then settles — close to the Remotion spring with stiffness 200, damping 12. For a softer landing use `back.out(1.6)`; for more pronounced bounce use `elastic.out(1, 0.4)`.
+`back.out(2)` overshoots ~10% past 1.0 then settles — close to the the source spring with stiffness 200, damping 12. For a softer landing use `back.out(1.6)`; for more pronounced bounce use `elastic.out(1, 0.4)`.
 
 ## Phase 3: Companion Exit & Recenter (Core Glue)
 
-Three concurrent tweens at the same timeline position. The Remotion source used a single spring read three times; the GSAP idiom is three tweens started at the same position parameter.
+Three concurrent tweens at the same timeline position. The source pattern used a single spring read three times; the GSAP idiom is three tweens started at the same position parameter.
 
 ```js
 const SLIDE_START = 1.5; // seconds

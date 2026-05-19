@@ -7,7 +7,7 @@
 
     <!--
       Blueprint: workflow-approve-press
-      HyperFrames port of the Remotion scene-08-interactive-workflow-showcase.tsx.
+      HyperFrames composition.tsx.
       Same four-phase choreography, GSAP-driven, seek-safe.
 
       Audio (assumed accompanying narration):
@@ -35,7 +35,7 @@
 
     <style>
       :root {
-        /* Palette — port of the Remotion COLORS / TYPOGRAPHY constants */
+        /* Palette — port of the the source COLORS / TYPOGRAPHY constants */
         --text-primary: #ffffff;
         --text-secondary: #cbd5e1;
         --text-muted: #94a3b8;
@@ -509,7 +509,7 @@
           y: 0,
           opacity: 1,
           duration: HEADLINE_END - HEADLINE_START,
-          ease: "back.out(1.2)", // ≈ Remotion SPRING_CONFIGS.entrance
+          ease: "back.out(1.2)", // ≈ the source SPRING_CONFIGS.entrance
         },
         HEADLINE_START,
       );
@@ -533,7 +533,7 @@
         STEPS_START,
       );
 
-      // ── Phase 3b: Step state machine (frame-driven in Remotion → snap-toggled here) ──
+      // ── Phase 3b: Step state machine (snap-toggled here) ──
       // Step 1 enters in the "active" state because narration starts on it.
       tl.set(".step-1", { attr: { "data-state": "active" } }, STEPS_START);
 
@@ -576,10 +576,10 @@
       tl.set(".step-3", { attr: { "data-state": "complete" } }, CHECK_POP);
 
       // ── Phase 4d: Checkmark pops into view ─────────────────────────
-      // back.out(1.6) ≈ Remotion spring({ stiffness: 200, damping: 15 }).
+      // back.out(1.6) ≈ the source spring({ stiffness: 200, damping: 15 }).
       tl.to(".btn-check", { scale: 1, duration: 0.5, ease: "back.out(1.6)" }, CHECK_POP);
 
-      // ── Ambient pulsing glow on the button (Math.sin in Remotion) ──
+      // ── Ambient pulsing glow on the button (Math.sin) ──
       // Source: `glowIntensity = 20 + Math.sin(frame * 0.1) * 10` — i.e. blur
       // oscillates 10 ↔ 30 around 20, with angular freq 0.1 rad/frame.
       // At 60fps that's 6 rad/s, so full period ≈ 2π / 6 ≈ 1.05s.

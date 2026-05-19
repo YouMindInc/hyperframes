@@ -23,10 +23,6 @@
                          at 85-100% of morph, mockup-center fades to 0 → avatar visible underneath
         3.53 – 4.40s   Eight task bubbles stagger-enter in a radial pattern around the avatar
         4.40 – 6.00s   Idle: bubble micro-float + avatar orbit dots + avatar breath
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline registered to window.__timelines["main"]
-        - `width` / `height` interpolation in the morph replaced by `scaleX` / `scaleY` + `borderRadius`
           paint-only tween. The "rect → circle" effect is completed by the final 0.51s-onward
           opacity hand-off to the avatar element rendered underneath at z-index 20.
         - Both mockup layer and avatar layer stay in DOM (no `{showX && <Y />}` conditional render);
@@ -601,7 +597,7 @@
         font-size: 20px;
       }
 
-      /* Nine icon positions — taken from the Remotion SCATTERED_ICONS array */
+      /* Nine icon positions — taken from the the source SCATTERED_ICONS array */
       .pi-youtube {
         left: calc(22% + 100px);
         top: calc(20% - 179px);

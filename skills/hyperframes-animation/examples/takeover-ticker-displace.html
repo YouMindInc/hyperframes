@@ -6,7 +6,7 @@
     <title>Scene 5 — HyperFrames Displace Reveal</title>
 
     <!--
-      HyperFrames port of the Remotion scene-5-rolling-text.tsx.
+      HyperFrames composition.tsx.
 
       Choreography (4 phases, 7.5 seconds total):
         0.00 – 0.67s   Typewriter reveals "HyperFrames turns" (3 → 17 chars)
@@ -15,11 +15,6 @@
         4.60 – 5.45s   Logo enters from offscreen-right with rotation + scale impact
                        Text group pushed left + fades (40-50% of hero duration)
         6.60 – 7.50s   Logo breathes (dual-frequency sine onUpdate, multiplicative on 1.3 scale)
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline registered to window.__timelines["main"]
-        - Logo entry: power2.out over 0.85s (matches heavy spring(mass:1.5) feel)
-        - Text group displacement: 3 concurrent tweens at same start time, durations
           tuned to 40-50% of hero duration so the impact reads as causal
         - Breathing uses Form 2 (onUpdate) so it multiplies onto the 1.3 final scale,
           not overwrites it (Form 1 yoyo would undo the impact)

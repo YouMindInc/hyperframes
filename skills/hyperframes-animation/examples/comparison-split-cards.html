@@ -6,7 +6,7 @@
     <title>Scene 09 — Split Comparison Reveal</title>
 
     <!--
-      HyperFrames port of the Remotion scene-09-split-comparison-reveal.tsx.
+      HyperFrames composition.tsx.
 
       Choreography (3 phases, 5 seconds total):
         0.17 – 0.83s   Title slides down from top: "Build Video With HyperFrames"
@@ -16,10 +16,6 @@
         2.00 – 2.50s   Right pill badge "Render Ready" pops in
         0 – 5.00s      Continuous floating: cards y ±6 px / rotation ±1° (phase-opposed)
                        Badges y ±5 px (slow shared sine)
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline registered to window.__timelines["main"]
-        - Two nested wrappers per card: .card-pos (entry x/scale/opacity + float y)
           and .card-tilt (static rotateY + float rotation) so entry and float
           don't fight on the same alias
         - All continuous floating consolidated into one shared scene-ticker onUpdate

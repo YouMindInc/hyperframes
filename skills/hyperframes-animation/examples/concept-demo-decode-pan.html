@@ -6,18 +6,14 @@
     <title>Scene 7 — HyperFrames Decrypt Pan Track</title>
 
     <!--
-      HyperFrames port of the Remotion scene-7-hacker-reveal.tsx.
+      HyperFrames composition.tsx.
 
       Choreography (4 phases, 7 seconds total):
         0.0 – 0.7s   Shot 1 static text fades in + rises ("HyperFrames renders")
         0.7 – 1.6s   Hacker-flip decodes the accent word ("video")
         2.8 – 3.5s   Horizontal pan to Shot 2 with parallax exit + scale-in
         3.7 – 6.1s   Cursor-tracked typing: "HTML, CSS and JS become MP4"
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline, registered to window.__timelines["main"]
-        - Text width measured via document.fonts.ready + a hidden DOM probe
-          (NOT @remotion/layout-utils, NOT a charWidthRatio constant)
+          (NOT @the source/layout-utils, NOT a charWidthRatio constant)
         - Bar width pre-allocated from the full text — never tweened
         - Camera follows cursor by tweening the strip's `x`, with a piecewise
           Math.min(initialOffset, trackingOffset) for the two-phase camera

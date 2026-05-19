@@ -27,9 +27,9 @@ triggers: [multiple phrases typing, sequential statements, typing with highlight
 
 Multiple phrases type sequentially. Each phrase has a main + accent segment. The cursor color tracks the active segment. The timeline is computed from content length — no hardcoded phase windows.
 
-This blueprint is the HyperFrames port of the Remotion `sequential-type-cursor` choreography. Same hard-cut multi-phrase arc, restructured around one paused GSAP timeline and a single `onUpdate` that reads `tl.time()` and writes both text and cursor state. Constituent patterns map to [dynamic-content-sequencing](../rules/dynamic-content-sequencing.md) (for the timeline pre-calculation) and [context-sensitive-cursor](../rules/context-sensitive-cursor.md) (for the cursor color + blink).
+Same hard-cut multi-phrase arc, restructured around one paused GSAP timeline and a single `onUpdate` that reads `tl.time()` and writes both text and cursor state. Constituent patterns map to [dynamic-content-sequencing](../rules/dynamic-content-sequencing.md) (for the timeline pre-calculation) and [context-sensitive-cursor](../rules/context-sensitive-cursor.md) (for the cursor color + blink).
 
-> Remotion drove this scene by re-running every component every frame and finding `currentPhrase` per render. HyperFrames runs a _single_ paused timeline; the same `currentPhrase = TIMELINE.find(...)` lookup moves inside one `onUpdate` callback that fires whenever GSAP advances the timeline. No conditional DOM — the phrase container exists from t=0 with empty text, and the `onUpdate` overwrites `textContent` in-place.
+> the source drove this scene by re-running every component every frame and finding `currentPhrase` per render. HyperFrames runs a _single_ paused timeline; the same `currentPhrase = TIMELINE.find(...)` lookup moves inside one `onUpdate` callback that fires whenever GSAP advances the timeline. No conditional DOM — the phrase container exists from t=0 with empty text, and the `onUpdate` overwrites `textContent` in-place.
 
 ## When to Use
 
@@ -62,7 +62,7 @@ const SCRIPT = [
 ];
 ```
 
-`charSpeed` is **seconds per character** (`2.5 frames / 30 fps = 0.083 s/char` matches the Remotion source). `hold` is the seconds to dwell on the completed phrase before cutting to the next.
+`charSpeed` is **seconds per character** (`2.5 frames / 30 fps = 0.083 s/char` matches the the source source). `hold` is the seconds to dwell on the completed phrase before cutting to the next.
 
 ## Dynamic Timeline Calculation (Setup, Not a Tween)
 

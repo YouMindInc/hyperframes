@@ -30,10 +30,6 @@
         → total 0.67 + 1.08 + 2.00 ≈ 3.75 s, but starts at 6.18 → endTime ≈ 9.93 s
 
         Continuous: cursor blink (square wave via `tl.time() % 1.0`)
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline registered to window.__timelines["main"]
-        - One master onUpdate handles ALL per-frame state: text content, cursor
           color, cursor blink. No per-phrase tweens.
         - No conditional DOM — phrase container exists from t=0 with empty text;
           onUpdate overwrites textContent in-place at each frame.

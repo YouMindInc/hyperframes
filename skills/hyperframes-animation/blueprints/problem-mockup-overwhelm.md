@@ -45,7 +45,7 @@ Product mockups appear → platform icons scatter → center mockup scales down 
     4.47 – 6.00s   Idle: bubble micro-float + avatar orbit dots + avatar breath
 -->
 
-This blueprint is the HyperFrames port of the Remotion `mockup-morph-overwhelm` choreography. The visual arc is identical; the implementation runs on a single paused GSAP timeline driven by HyperFrames' seek loop. Because HyperFrames forbids tweening `width` / `height` (they cause layout reflows), the center mockup's "shape morph" is rendered as **uniform `scale` + `borderRadius` repaint + opacity hand-off to the real avatar underneath** — visually indistinguishable from a width/height interpolation, but allowlist-clean.
+The visual arc is identical; the implementation runs on a single paused GSAP timeline driven by HyperFrames' seek loop. Because HyperFrames forbids tweening `width` / `height` (they cause layout reflows), the center mockup's "shape morph" is rendered as **uniform `scale` + `borderRadius` repaint + opacity hand-off to the real avatar underneath** — visually indistinguishable from a width/height interpolation, but allowlist-clean.
 
 ## When to Use
 
@@ -66,7 +66,7 @@ All phase boundaries are expressed in **seconds**, not frames. HyperFrames opera
 
 ## Layout
 
-In Remotion, the source uses `{showMockups && <MockupCluster />}` / `{showAvatar && <AvatarWithBubbles />}` for conditional rendering. **HyperFrames must keep both layers in the DOM** (seek can move time backward or forward arbitrarily); opacity tweens drive visibility instead.
+In the source, the source uses `{showMockups && <MockupCluster />}` / `{showAvatar && <AvatarWithBubbles />}` for conditional rendering. **HyperFrames must keep both layers in the DOM** (seek can move time backward or forward arbitrarily); opacity tweens drive visibility instead.
 
 ```html
 <div
@@ -153,7 +153,7 @@ gsap.set(".platform-icon", { scale: 0, opacity: 0 });
 
 ## Phase 1: Mockups Appear
 
-Three near-simultaneous spring-in entries with small inter-element delays. The "subtle floating" component is a finite `sine.inOut` yoyo (see [sine-wave-loop](../rules/sine-wave-loop.md)) — **not** a frame-driven `Math.sin(frame * ...)` like in the Remotion source.
+Three near-simultaneous spring-in entries with small inter-element delays. The "subtle floating" component is a finite `sine.inOut` yoyo (see [sine-wave-loop](../rules/sine-wave-loop.md)) — **not** a frame-driven `Math.sin(frame * ...)` like in
 
 ```js
 const MOCKUPS_APPEAR = 0.0; // s
@@ -203,7 +203,7 @@ Per-icon subtle float (`±5px x`, `±4px y`) is a finite `sine.inOut` yoyo on ea
 
 ## Phase 3: Morph (Core Glue)
 
-In the Remotion source, the morph tweens `width` (300 → 160), `height` (540 → 160), and `borderRadius` (28 → 80) in lockstep via `interpolate(morphProgress, ...)`. HyperFrames cannot tween `width` / `height` — they trigger layout reflows and are blocked by the allowlist.
+In the the source source, the morph tweens `width` (300 → 160), `height` (540 → 160), and `borderRadius` (28 → 80) in lockstep via `interpolate(morphProgress, ...)`. HyperFrames cannot tween `width` / `height` — they trigger layout reflows and are blocked by the allowlist.
 
 **HyperFrames substitution**: tween `scale` (uniform, intrinsic dimensions stay fixed) + `borderRadius` (paint-only, allowed). The content fades during the first 40% of the morph, and at 85–100% the entire morph container fades to 0, revealing the real avatar circle rendered underneath. The viewer reads this exactly as "rect morphs to circle" — the hand-off is the trick.
 
@@ -310,7 +310,7 @@ Why this works visually: at the moment the morph container reaches `opacity: 0`,
 
 ## Phase 4: Overwhelm Bubbles
 
-Task bubbles enter in radial positions around the avatar. In the Remotion source, JSX iterates over `POSITIONS` and renders `<TaskBubble />` components. In HyperFrames, the DOM is **generated once at script load** (deterministic, position-pre-baked), then GSAP tweens scale + opacity for staggered entry.
+Task bubbles enter in radial positions around the avatar. In the the source source, JSX iterates over `POSITIONS` and renders `<TaskBubble />` components. In HyperFrames, the DOM is **generated once at script load** (deterministic, position-pre-baked), then GSAP tweens scale + opacity for staggered entry.
 
 ```js
 // Bubble positions — pre-baked, deterministic.
@@ -412,7 +412,7 @@ Phase 3 → Phase 4:
 - **No nondeterministic state**: No `Math.random()`, no `Date.now()`, no `performance.now()`. All bubble positions, icon positions, and stagger orders are pure functions of the script's constants.
 - **`data-duration` on the root governs render length**, not the GSAP timeline's intrinsic length. If you author 6 seconds of motion but want a 4-second render, set `data-duration="4"`.
 
-## Remotion → HyperFrames Mapping (this blueprint)
+## the source → HyperFrames Mapping (this blueprint)
 
 | Source pattern (`scene-02-mockup-morph-overwhelm.tsx`)                      | HyperFrames equivalent                                                    |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |

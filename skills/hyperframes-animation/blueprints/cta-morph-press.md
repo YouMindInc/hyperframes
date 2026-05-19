@@ -27,7 +27,7 @@ triggers:
 
 Hero enters with breathing idle → morphs into CTA via scale-swap → cursor approaches → physics-based click reaction.
 
-This blueprint is the HyperFrames port of the Remotion `morph-press-interact` choreography. Same four-phase "presence → action" arc; one paused GSAP timeline; constituent patterns map to [sine-wave-loop](../rules/sine-wave-loop.md), [scale-swap-transition](../rules/scale-swap-transition.md), and [physics-press-reaction](../rules/physics-press-reaction.md).
+Same four-phase "presence → action" arc; one paused GSAP timeline; constituent patterns map to [sine-wave-loop](../rules/sine-wave-loop.md), [scale-swap-transition](../rules/scale-swap-transition.md), and [physics-press-reaction](../rules/physics-press-reaction.md).
 
 ## When to Use
 
@@ -159,7 +159,7 @@ tl.to(
 );
 ```
 
-Why not scale-breath too? The Remotion source had `idleScale = 1 + sin * 0.01` — ±1 % scale is below the visual threshold for most viewers, and including it complicates the morph exit (the exit tween's `scale: 0.6` has to overwrite the breath). Skip it; rotation alone reads as alive.
+Why not scale-breath too? The source pattern had `idleScale = 1 + sin * 0.01` — ±1 % scale is below the visual threshold for most viewers, and including it complicates the morph exit (the exit tween's `scale: 0.6` has to overwrite the breath). Skip it; rotation alone reads as alive.
 
 ## Phase 2: Scale-Swap Morph (Core Transition)
 

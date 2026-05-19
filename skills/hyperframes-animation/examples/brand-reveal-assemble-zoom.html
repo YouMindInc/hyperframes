@@ -6,7 +6,7 @@
     <title>Scene 3 — Assembly Focus Reveal (hyperframes)</title>
 
     <!--
-      HyperFrames port of the Remotion scene-3-brand-zoom.tsx.
+      HyperFrames composition.tsx.
 
       Choreography (5 phases, 5 seconds total):
         0.00 – 0.67s   "Just use" assembles in a discrete sequence (with hold)
@@ -15,7 +15,7 @@
         2.67 – 3.57s   Camera zooms 5.5× into the logo (scale + counter-translate)
         3.67 – 5.00s   Logo breathes (sine onUpdate, multiplicative on pop scale)
 
-      Key differences from the Remotion source:
+      Key differences :
         - Single paused GSAP timeline registered to window.__timelines["main"]
         - brandTextWidth measured via getBoundingClientRect after document.fonts.ready
         - HERO_FINAL_OFFSET_X derived from real measurement, not estimate
@@ -202,7 +202,7 @@
 
       /* ================================================================
          DISCRETE TEXT SEQUENCE for the companion assembly.
-         Converted from the Remotion frame-based sequence to seconds at 30fps.
+         Converted from the the source frame-based sequence to seconds at 30fps.
          ================================================================ */
       const SEQUENCE = [
         { t: 0.0, text: "J" },

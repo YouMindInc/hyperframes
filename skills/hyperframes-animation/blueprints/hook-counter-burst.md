@@ -26,7 +26,7 @@ triggers: [opening hook, statistic, counting number, dramatic number, attention 
 
 Background → icons enter clustered at center → number counts up while icons expand outward → camera pushes in for closing emphasis.
 
-This blueprint is the HyperFrames port of the Remotion `counting-icon-burst` choreography. Same four-phase opening-hook arc; one paused GSAP timeline; constituent patterns map to [svg-icon-enrichment](../rules/svg-icon-enrichment.md), [center-outward-expansion](../rules/center-outward-expansion.md), [counting-dynamic-scale](../rules/counting-dynamic-scale.md), and [multi-phase-camera](../rules/multi-phase-camera.md).
+Same four-phase opening-hook arc; one paused GSAP timeline; constituent patterns map to [svg-icon-enrichment](../rules/svg-icon-enrichment.md), [center-outward-expansion](../rules/center-outward-expansion.md), [counting-dynamic-scale](../rules/counting-dynamic-scale.md), and [multi-phase-camera](../rules/multi-phase-camera.md).
 
 ## When to Use
 
@@ -130,7 +130,7 @@ tl.to(
   {
     p: 1,
     duration: COUNT_DUR,
-    ease: "power2.out", // approximates Remotion's 1 - (1-x)^2.5
+    ease: "power2.out", // approximates the source's 1 - (1-x)^2.5
     onUpdate: () => {
       counterEl.textContent = Math.round(counterProxy.p * 90);
       counterEl.style.fontSize = W * (0.2 + counterProxy.p * 0.22) + "px";
@@ -174,7 +174,7 @@ tl.to(".camera", { scale: 1.0, duration: 1.83, ease: "power2.out" }, 0.5);
 tl.to(".camera", { scale: 1.08, duration: 1.17, ease: "power2.out" }, 2.33);
 ```
 
-Each phase has lower stiffness than the previous in the Remotion source (50→40 stiffness). In GSAP we use the same `power2.out` ease for both — visually close enough. For a more pronounced cinematic decay, replace the second push with `power3.out`.
+Each phase has lower stiffness than the previous (50→40 stiffness). In GSAP we use the same `power2.out` ease for both — visually close enough. For a more pronounced cinematic decay, replace the second push with `power3.out`.
 
 See [multi-phase-camera](../rules/multi-phase-camera.md) for the optional drift overlay (omitted here — drift is barely visible in a 3.5 s scene).
 

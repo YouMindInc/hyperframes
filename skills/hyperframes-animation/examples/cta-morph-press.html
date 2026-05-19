@@ -6,7 +6,7 @@
     <title>Scene 10 — HyperFrames Morph Press Interact</title>
 
     <!--
-      HyperFrames port of the Remotion scene-10-cta-morph.tsx.
+      HyperFrames composition.tsx.
 
       Choreography (4 phases, 5.5 seconds total):
         0.17 – 0.64s   Hero "HyperFrames" + logo asset fade up (opacity + y rise)
@@ -18,10 +18,6 @@
         2.83 – 3.83s   Cursor approaches via spring path to (W/2 + 120, H/2 + 50)
         3.83 – 3.98s   Click DOWN: both cursor and CTA compress to scale 0.9 (sync)
         4.17 – 4.42s   Click UP: both return to scale 1.0 (sync)
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline registered to window.__timelines["main"]
-        - Conditional renders ({exitOpacity > 0 && ...}) replaced with permanent
           DOM + GSAP opacity tweens; z-index keeps incoming above outgoing
         - Press synchronization uses single GSAP target array ["#cta", "#cursor"]
           to guarantee perfectly identical tween values
