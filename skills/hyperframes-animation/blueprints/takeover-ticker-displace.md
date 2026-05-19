@@ -25,7 +25,7 @@ triggers:
 
 Text builds context (typewriter + ticker) → hero enters from off-screen → hero physically pushes text out → hero settles into breathing.
 
-This blueprint is the HyperFrames port of the Remotion `content-displace-reveal` choreography. Same four-phase arc; one paused GSAP timeline; the displacement maps to [reactive-displacement](../rules/reactive-displacement.md) and the breathing uses the multiplicative form of [sine-wave-loop](../rules/sine-wave-loop.md) (because the hero lands at a non-1 scale).
+Same four-phase arc; one paused GSAP timeline; the displacement maps to [reactive-displacement](../rules/reactive-displacement.md) and the breathing uses the multiplicative form of [sine-wave-loop](../rules/sine-wave-loop.md) (because the hero lands at a non-1 scale).
 
 ## When to Use
 
@@ -153,7 +153,7 @@ Accent words use a distinct `font-weight` (700) and `color` (e.g. accent pink) t
 
 ## Phase 3: Reactive Displacement (Core Glue)
 
-Three concurrent tweens at the same timeline position, with carefully-tuned durations. The Remotion source achieved the causal link via a single `spring()` read three times; in GSAP we achieve it with three tweens that **start at the same position** and **end at fractional multiples of the intruder's duration**.
+Three concurrent tweens at the same timeline position, with carefully-tuned durations. The source pattern achieved the causal link via a single `spring()` read three times; in GSAP we achieve it with three tweens that **start at the same position** and **end at fractional multiples of the intruder's duration**.
 
 ```js
 const DISPLACE_AT = 4.6;
@@ -185,7 +185,7 @@ tl.to(".text-group", { opacity: 0, duration: HERO_DUR * 0.4, ease: "power2.out" 
 
 ### Why `mass: 1.5` matters in the source
 
-Higher mass in the Remotion spring adds inertia — the hero feels heavy and "lands" rather than zips in. In GSAP this is recreated by using a **longer duration** (`0.85s` vs `0.5s`) with a gentle ease (`power2.out`). The numerical config differs but the perceptual result is identical.
+Higher mass in the the source spring adds inertia — the hero feels heavy and "lands" rather than zips in. In GSAP this is recreated by using a **longer duration** (`0.85s` vs `0.5s`) with a gentle ease (`power2.out`). The numerical config differs but the perceptual result is identical.
 
 ### Why the victim completes at 40–50% of the driver
 

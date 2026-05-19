@@ -6,7 +6,7 @@
     <title>Scene 04 — Contextual Product Showcase</title>
 
     <!--
-      HyperFrames port of the Remotion scene-04-contextual-product-showcase.tsx.
+      HyperFrames composition.tsx.
 
       Choreography (4 phases, 9 seconds total):
         0.00 – 0.80s   3D-tilted page card scales 0.95 → 1.0
@@ -17,10 +17,6 @@
                        Carousel section fades in + scales from 0.9
         3.58 – 8.84s   Main video pops forward in 3D (translateZ 80 px) + scales up
                        Radial spotlight dims the surroundings; decays at end
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline registered to window.__timelines["main"]
-        - Keyword glows use CSS custom property --glow + two GSAP tweens per word
           (attack 0→1 then decay 1→REST_LEVEL). All visual effects (color,
           text-shadow, scale) derive from --glow via CSS calc()
         - Pop-target uses the same --glow pattern; translateZ + scale derived

@@ -26,7 +26,7 @@ triggers: [review and approve, step-by-step workflow, user control, approve butt
 
 Headline enters top → center video/animation plays → 3D-tilted step indicators progress left → action button pressed right → state change confirms.
 
-This blueprint is the HyperFrames port of the Remotion `interactive-workflow-showcase` choreography. The visual arc is identical; the implementation uses a single paused GSAP timeline driven by HyperFrames' seek loop instead of Remotion's frame-based render. State transitions that were derived per-frame in Remotion (`currentStep = sceneFrame < 60 ? 1 : …`) become discrete class toggles scheduled at concrete timeline positions, so seeking lands on a deterministic state every time.
+The visual arc is identical; the implementation uses a single paused GSAP timeline driven by HyperFrames' seek loop instead of frame-based rendering. State transitions that were derived per-frame in the source (`currentStep = sceneFrame < 60 ? 1 : …`) become discrete class toggles scheduled at concrete timeline positions, so seeking lands on a deterministic state every time.
 
 ## When to Use
 
@@ -36,7 +36,7 @@ This blueprint is the HyperFrames port of the Remotion `interactive-workflow-sho
 
 ## Phase Pipeline
 
-All boundaries are in **seconds**. Default values match the Remotion source choreography (~5.5s scene at 30fps); adjust per scene length.
+All boundaries are in **seconds**. Default values match the reference choreography (~5.5s scene at 30fps); adjust per scene length.
 
 | Phase | Time window (s)             | What Happens                                                                                             | Skill Reference                                          |
 | ----- | --------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -228,7 +228,7 @@ Center column holds the demo. Left and right columns are 3D-tilted inward (oppos
 </div>
 ```
 
-**3D tilt values**: left flank `rotateY(+12° to +18°)`, right flank `rotateY(-12° to -18°)`. The Remotion source uses ±15°; opposing rotations create inward-facing symmetry.
+**3D tilt values**: left flank `rotateY(+12° to +18°)`, right flank `rotateY(-12° to -18°)`. The source pattern uses ±15°; opposing rotations create inward-facing symmetry.
 
 ## Timeline Construction
 
@@ -275,7 +275,7 @@ tl.to(
   STEPS_START,
 );
 
-// ── Phase 3b: Step state machine (frame-driven in Remotion → tl.set() here) ──
+// ── Phase 3b: Step state machine (tl.set() here) ──
 // Steps start in their HTML-default "pending" state. The timeline only toggles
 // the two state transitions; step state is *snap*, not animated.
 tl.set(".step-1", { attr: { "data-state": "active" } }, STEPS_START);
@@ -311,9 +311,8 @@ tl.set(".btn-label", { textContent: "Approved!" }, CHECK_POP);
 // ── Phase 4d: Checkmark pop (spring → back.out(1.6)) ──────────────
 tl.to(".btn-check", { scale: 1, duration: 0.5, ease: "back.out(1.6)" }, CHECK_POP);
 
-// ── Optional: pulsing glow on the button (Math.sin in Remotion) ───
+// ── Optional: pulsing glow on the button (Math.sin) ───
 // Finite yoyo replaces the continuous Math.sin(frame * 0.1) of the source.
-// Remotion's frame*0.1 has angular freq 0.1 rad/frame → 6 rad/s @60fps
 // (or 3 rad/s @30fps), giving period 2π/6 ≈ 1.05s (or 2.09s @30fps).
 // boxShadow as a string is not GSAP-tweenable — drive a CSS custom property
 // `--btn-glow-blur` that the button's `box-shadow` declaration interpolates.
@@ -397,7 +396,7 @@ Step state is a discrete attribute, never animated. The CSS below maps `[data-st
 
 ## Phase 4 Detail: Button Press Sequence (Core Glue)
 
-The Remotion source splits the press into three frame-windowed branches inside a single render function. In HyperFrames, the same three sub-phases are **three GSAP tweens scheduled at concrete times on the shared timeline** — order and overlap come from positional arguments to `tl.to()`.
+The source pattern splits the press into three frame-windowed branches inside a single render function. In HyperFrames, the same three sub-phases are **three GSAP tweens scheduled at concrete times on the shared timeline** — order and overlap come from positional arguments to `tl.to()`.
 
 1. **Depression** (`PRESS_FRAME → PRESS_FRAME + 0.10`): linear `scale 1 → 0.95`. Linear, not spring — the "instant-feeling" 0.1s dip is intentionally non-bouncy.
 2. **Return** (`PRESS_FRAME + 0.10 → CHECK_POP`): linear `scale 0.95 → 1`. Press and release are split because state continuity matters (end value of press = start value of return, exactly).
@@ -443,24 +442,6 @@ Step state machine timing:
 - **No infinite repeats**: the button glow pulse uses a finite `repeat` computed from remaining scene time, never `repeat: -1`.
 - **Single paused timeline**: one `gsap.timeline({ paused: true })`, registered to `window.__timelines["interactive-workflow"]`. HyperFrames seeks it.
 - **`data-duration` on the root** governs render length, not the GSAP timeline's intrinsic length.
-
-## Remotion → HyperFrames Cheatsheet (scene-specific)
-
-| Remotion concept (in source)                                        | HyperFrames equivalent (in this port)                                                          |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `useCurrentFrame()` + `currentStep = sceneFrame < 60 ? 1 : …`       | Discrete `tl.set({ attr: "data-state": … })` calls at concrete seconds                         |
-| `spring({ frame, fps, config: SPRING_CONFIGS.entrance })`           | `gsap.to(…, { ease: "power3.out", duration: ~0.5 })`                                           |
-| `spring({ … config: SPRING_CONFIGS.entranceBouncy })` (≈ 180/12)    | `ease: "back.out(1.4)"`                                                                        |
-| `spring({ … config: { stiffness: 200, damping: 15 } })` (checkmark) | `ease: "back.out(1.6)"`                                                                        |
-| `interpolate(progress, [0,0.3,1], [0,1,1])` (fade-in with hold)     | `fromTo({ opacity: 0 }, { opacity: 1, duration: …, ease: "power2.out" })`                      |
-| `<OffthreadVideo src={staticFile("…mp4")} />`                       | `<video src="./assets/editor-demo.mp4" muted>`                                                 |
-| `<AbsoluteFill>`                                                    | `<div style="position: absolute; inset: 0;">`                                                  |
-| `transition: "transform 0.1s ease-out"` on press                    | Two sequential `gsap.to` tweens (depression + return)                                          |
-| `Math.sin(frame * 0.1) * 10` glow pulse                             | Finite yoyo tween with repeat count derived from remaining time                                |
-| `isPressing = frame >= pressDelay && frame < pressDelay + 15`       | Two adjacent tweens at `PRESS_FRAME` and `PRESS_FRAME + 0.10`                                  |
-| `showCheck = frame > pressDelay + 15` (boolean branch)              | `tl.set(".btn-label", { textContent: "Approved!" })` at `CHECK_POP` + spring on `.btn-check`   |
-| React `ReviewStep` component with props                             | Three `.step` DOM nodes with `data-step` / `data-state` attributes; CSS does the state styling |
-| Frame-windowed `isActive` / `isComplete` per render                 | Scheduled `tl.set()` toggles on the timeline                                                   |
 
 ## Golden Sample
 

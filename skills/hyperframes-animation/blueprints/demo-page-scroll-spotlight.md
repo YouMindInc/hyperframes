@@ -26,7 +26,7 @@ triggers: [show the feature, product demo, highlight on page, webpage in 3D, scr
 
 3D tilted webpage card enters → scrolls to relevant section → elements highlight synced to voiceover → key element pops forward in 3D with a spotlight.
 
-This blueprint is the HyperFrames port of the Remotion `contextual-product-showcase` choreography. Same four-phase narrative arc; one paused GSAP timeline; the constituent patterns map to [3d-page-scroll](../rules/3d-page-scroll.md) and [asr-keyword-glow](../rules/asr-keyword-glow.md).
+Same four-phase narrative arc; one paused GSAP timeline; the constituent patterns map to [3d-page-scroll](../rules/3d-page-scroll.md) and [asr-keyword-glow](../rules/asr-keyword-glow.md).
 
 ## When to Use
 

@@ -34,7 +34,7 @@ triggers:
 
 Product video centered → video slides left → giant stat appears on the right → both exit left → kinetic text types in the center → gradient pill scales behind a closing phrase.
 
-This blueprint is the HyperFrames port of the Remotion `video-kinetic-text-pivot` choreography. Same four-phase "show → tell with impact" arc; one paused GSAP timeline; constituent patterns map to [3d-text-depth-layers](../rules/3d-text-depth-layers.md) and [sine-wave-loop](../rules/sine-wave-loop.md) (for video idle float). Accent words use static CSS color (no per-frame glow envelope).
+Same four-phase "show → tell with impact" arc; one paused GSAP timeline; constituent patterns map to [3d-text-depth-layers](../rules/3d-text-depth-layers.md) and [sine-wave-loop](../rules/sine-wave-loop.md) (for video idle float). Accent words use static CSS color (no per-frame glow envelope).
 
 ## When to Use
 
@@ -54,7 +54,7 @@ All boundaries are in **seconds** (ASR-driven in the original).
 | 3     | `typingStart – pillTrigger` | Both video and stat exit left; kinetic text types center-screen with accent-colored keywords + blinking cursor | inline typing with static CSS accent classes               |
 | 4     | `pillTrigger – end`         | Gradient pill scales in behind a closing phrase (e.g. "frame by frame.") with glow halo                        | inline pill scale                                          |
 
-The Remotion source ties `slideAt`, `typingStart`, etc. to ASR word timestamps. In HyperFrames, convert those frame numbers to seconds (frames / fps) and bake as `const`.
+The source pattern ties `slideAt`, `typingStart`, etc. to ASR word timestamps. In HyperFrames, convert those frame numbers to seconds (frames / fps) and bake as `const`.
 
 ## Layout
 
@@ -206,7 +206,7 @@ onUpdate: function () {
 
 ## Phase 3: Pivot — Both Exit Left + Typing Begins
 
-The Remotion source ties `typingStart` to the ASR word that opens line 1. At that moment, both video and stat slide off the left edge while the typing text fades and scales in from center.
+The source pattern ties `typingStart` to the ASR word that opens line 1. At that moment, both video and stat slide off the left edge while the typing text fades and scales in from center.
 
 ```js
 const TYPING_START = 3.86; // line 1 opening word speak time
@@ -355,7 +355,7 @@ The pill background is `linear-gradient(90deg, purple, green)`; the glow is a bl
 
 ## Blinking Cursor
 
-The Remotion source used `frame % 30 < 15 ? 1 : 0`. In HyperFrames, derive deterministically from `tl.time()`:
+The source pattern used `frame % 30 < 15 ? 1 : 0`. In HyperFrames, derive deterministically from `tl.time()`:
 
 ```js
 onUpdate: function () {

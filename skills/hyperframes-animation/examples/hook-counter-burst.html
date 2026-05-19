@@ -6,7 +6,7 @@
     <title>Scene 01 — Counting Icon Burst</title>
 
     <!--
-      HyperFrames port of the Remotion scene-01-counting-icon-burst.tsx.
+      HyperFrames composition.tsx.
 
       Choreography (4 phases, 3.5 seconds total):
         0.00 – 0.17s   Background visible with dark overlay; nothing else
@@ -24,11 +24,6 @@
         Cutting line: stroke-dashoffset drifts -200 over 3.5s
         Video record dot: opacity + scale phase-offset sine pulses
         Play triangle: scale pulse ±8%, period ~2.6s
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline registered to window.__timelines["main"]
-        - Internal SVG continuous motion via shared scene-ticker onUpdate
-        - Icon expansion: per-icon x/y tween synced to counter via shared
           ease + duration (no shared driver needed, just identical timing)
         - Counter text + number scale are emitted as seek-safe timeline keyframes
         - Background: local Pexels MP4 plus dark overlay
@@ -658,7 +653,7 @@
         TIMING.cameraPushAt,
       );
 
-      // Subtle deterministic pan from the Remotion camera micro-movement.
+      // Subtle deterministic pan from the the source camera micro-movement.
       tl.to(
         ".camera",
         {

@@ -26,7 +26,7 @@ triggers: [decode effect, decrypt, scene transition, search bar typing, horizont
 
 Shot 1 text decode → horizontal camera pan with parallax → Shot 2 cursor-tracked interaction.
 
-This blueprint is the HyperFrames port of the Remotion `decrypt-pan-track` choreography. The visual arc is identical; the implementation uses a single paused GSAP timeline driven by HyperFrames' seek loop instead of Remotion's frame-based render. The horizontal-pan "shot strip" architecture maps cleanly to a flex container with GSAP `x` transforms.
+The visual arc is identical; the implementation uses a single paused GSAP timeline driven by HyperFrames' seek loop instead of frame-based rendering. The horizontal-pan "shot strip" architecture maps cleanly to a flex container with GSAP `x` transforms.
 
 ## When to Use
 
@@ -112,7 +112,7 @@ Layout: static text and accent text sit side-by-side in a flex row. The `font-we
 
 ## Phase 3: Horizontal Shot Pan (Core Glue)
 
-A single timeline position drives three concurrent tweens: camera pan, Shot 1 parallax exit, and Shot 2 entry. The Remotion source used **one spring** read three times; the GSAP idiom is **three tweens started at the same timeline position**.
+A single timeline position drives three concurrent tweens: camera pan, Shot 1 parallax exit, and Shot 2 entry. The source pattern used **one spring** read three times; the GSAP idiom is **three tweens started at the same timeline position**.
 
 ```js
 const PAN_START = 2.83; // seconds
@@ -190,7 +190,7 @@ const TYPING_START = PAN_START + PAN_DURATION + 0.17; // ≈5 frames after pan e
 
 ### Cursor-Locked Positioning
 
-In the Remotion source, the search bar's `left` property was recalculated every frame from the typing progress. In HyperFrames, **`left` is a forbidden tween target** (layout property). Use one of:
+In the the source source, the search bar's `left` property was recalculated every frame from the typing progress. In HyperFrames, **`left` is a forbidden tween target** (layout property). Use one of:
 
 1. **Pre-position the bar** at the world coordinate where the empty cursor sits at `CURSOR_TARGET`, then move the _camera_ (via the strip's `x`) to follow the cursor — see [camera-cursor-tracking](../rules/camera-cursor-tracking.md).
 2. **Pre-allocate the bar's full width** and move the bar with GSAP `x` (transform alias) — but the camera is already controlled by the strip, so this requires nested transforms and is harder to reason about. Prefer option 1.

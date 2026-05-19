@@ -27,7 +27,7 @@ triggers: [brand reveal, social proof, "#1 tool", million users, trusted by]
 
 Logo + hacker-flip text → text swaps to claim → logo repositions center → avatar cloud builds around logo → brand endorsement logos appear.
 
-This blueprint is the HyperFrames port of the Remotion `anchor-chain-reveal` choreography. The visual arc is identical; the implementation uses a single paused GSAP timeline driven by HyperFrames' seek loop instead of Remotion's frame-based render.
+The visual arc is identical; the implementation uses a single paused GSAP timeline driven by HyperFrames' seek loop instead of frame-based rendering.
 
 ## When to Use
 
@@ -102,7 +102,7 @@ Logo and text in a centered flex row. Logo is the persistent element; text conta
 
 ## Phase 2: Text Swap (Core Glue)
 
-A single tween position drives three concurrent animations: old text slides out, container shifts left, new text fades in. The "single spring" in the Remotion source becomes **multiple GSAP tweens started at the same timeline position**, which is the GSAP idiom for parallel motion.
+A single tween position drives three concurrent animations: old text slides out, container shifts left, new text fades in. The "single spring" becomes **multiple GSAP tweens started at the same timeline position**, which is the GSAP idiom for parallel motion.
 
 ```js
 const SWAP_TRIGGER = 1.1; // seconds
@@ -254,23 +254,6 @@ Phase 4 → Phase 5:
 - **Single paused timeline**: One `gsap.timeline({ paused: true })`, registered to `window.__timelines[data-composition-id]`. HyperFrames seeks it.
 - **No infinite repeats**: Brand logo scroll uses a finite `duration`. If you want continuous-looking scroll, oversize the strip and tween it the visible distance.
 - **`data-duration` on the root** governs total render time. The GSAP timeline's intrinsic length is irrelevant to the renderer.
-
-## Remotion → HyperFrames Cheatsheet
-
-Quick reference for porting the rest of this skill from the Remotion source:
-
-| Remotion concept                                             | HyperFrames equivalent                                                                                                                 |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `useCurrentFrame()`                                          | GSAP `tl.time()` (seconds) — used inside `onUpdate` callbacks only                                                                     |
-| `useVideoConfig().fps`                                       | Constant `FPS = 60` only if you need frame-discrete bucketing (e.g. flicker)                                                           |
-| `useVideoConfig().width / height`                            | Constants matching `data-width` / `data-height` on the composition root                                                                |
-| `spring({ frame, fps, config })`                             | GSAP tween with a matching ease (`back.out`, `power2.out`, `power3.out`) — see mapping in [hacker-flip-3d](../rules/hacker-flip-3d.md) |
-| `interpolate(frame, [a,b], [x,y], { extrapolate: 'clamp' })` | `gsap.to(el, { value: y, duration: (b-a)/fps, ease: '…' })` — duration replaces the explicit range                                     |
-| `<AbsoluteFill>`                                             | `<div style="position: absolute; inset: 0;">`                                                                                          |
-| `<Img src={staticFile("logo.png")}>`                         | `<img src="./assets/logo.png">`                                                                                                        |
-| `random(seed)`                                               | Pre-computed integer hash: `((i * 374761393 + t * 668265263) >>> 0)`                                                                   |
-| React component                                              | HTML element with classes, generated via JS where needed                                                                               |
-| `frame * 0.003` (continuous drift)                           | Finite `yoyo` tween with computed repeats                                                                                              |
 
 ## Golden Sample
 

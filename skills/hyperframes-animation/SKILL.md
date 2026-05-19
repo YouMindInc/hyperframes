@@ -5,7 +5,7 @@ description: Promo-video scene blueprints and atomic animation rules for HyperFr
 
 # HyperFrames Animation
 
-Scene-level choreographies (**blueprints**) and self-contained motion recipes (**rules**) for HyperFrames promo videos. Ported from the Remotion `promo-animation-skills` skill — same visual semantics, restructured around HyperFrames' seek-driven render model:
+Scene-level choreographies (**blueprints**) and self-contained motion recipes (**rules**) for HyperFrames promo videos. HyperFrames-native:
 
 - One paused GSAP timeline per composition, registered to `window.__timelines[data-composition-id]`
 - All timing in **seconds** (not frames); `data-start` / `data-duration` carry phase windows
@@ -18,7 +18,6 @@ For the broader HyperFrames composition contract see `hyperframes-core`. For GSA
 
 - Building a promo video and you want a complete multi-phase scene structure → start with a **blueprint**
 - You need a specific motion technique (decode text, ticker, avatar cloud, etc.) → use a **rule**
-- You're porting Remotion examples into HyperFrames — every rule includes a Remotion-→-HyperFrames mapping section
 
 ## Scene Blueprints
 
@@ -157,8 +156,6 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 </blueprint>
 </blueprints>
 
-> All Remotion blueprints have been migrated.
-
 ## Atomic Rules
 
 Use when you need a specific effect detail, or when no blueprint matches your task.
@@ -213,14 +210,12 @@ Use when you need a specific effect detail, or when no blueprint matches your ta
 
 <rules>
 <reactive-displacement path="rules/reactive-displacement.md">Physical-collision transition where an entering element's GSAP tween drives the exiting element's displacement. Three concurrent tweens at the same timeline position with victim durations 40-50% of the intruder's. Tags: transition, physics, collision, displacement, push</reactive-displacement>
-<press-release-spring path="rules/press-release-spring.md">Tactile button press: linear compression then spring recovery via two adjacent GSAP tweens on the same property. Variations: color transition, shadow depth via CSS vars, release burst (radial glow keyframes), background glow. Replaces Remotion's frame-windowed if/else with timeline-sequential tweens. Tags: spring, press, button, interaction, physics, glow, burst</press-release-spring>
-<physics-press-reaction path="rules/physics-press-reaction.md">Physical click simulation — two sequential GSAP scale tweens (down to 0.9, up to 1.0) replace the Remotion subtractive-spring formula. Pass a single targets array `["#cta", "#cursor"]` to compress both together for tactile contact feel. Tags: spring, click, physics, press, interaction, cursor</physics-press-reaction>
+<press-release-spring path="rules/press-release-spring.md">Tactile button press: linear compression then spring recovery via two adjacent GSAP tweens on the same property. Variations: color transition, shadow depth via CSS vars, release burst (radial glow keyframes), background glow. Tags: spring, press, button, interaction, physics, glow, burst</press-release-spring>
+<physics-press-reaction path="rules/physics-press-reaction.md">Physical click simulation — two sequential GSAP scale tweens (down to 0.9, up to 1.0) approximate a spring with overshoot. Pass a single targets array `["#cta", "#cursor"]` to compress both together for tactile contact feel. Tags: spring, click, physics, press, interaction, cursor</physics-press-reaction>
 <cursor-click-ripple path="rules/cursor-click-ripple.md">Animated cursor moves to a target, depresses cursor + target together on click, emits an expanding ripple with attack-decay opacity envelope. Element lives in DOM from t=0 with `opacity: 0` (no conditional rendering); single GSAP `keyframes` tween gives the `0 → peak → 0` opacity arc in one declaration. Tags: cursor, click, ripple, interaction, mouse, button, keyframes</cursor-click-ripple>
 <scale-swap-transition path="rules/scale-swap-transition.md">Coordinated morph between two DOM elements at the same screen center. Exit cluster shrinks + fades the outgoing (fade ~30% of shrink dur); entrance pops in with `back.out(2)` overshoot. Z-index on incoming hides exit residue. Tags: transition, morph, scale, swap</scale-swap-transition>
 <card-morph-anchor path="rules/card-morph-anchor.md">Container morphs apparent size + corner radius + surface treatment between two shots, then fades to reveal the real target underneath. HyperFrames substitutes uniform `scale` for the forbidden `width`/`height` tween, plus paint-only `borderRadius`/`background`/`boxShadow`. Eye-tracking anchor between shots. Tags: morph, anchor, transition, border-radius, container, shape, handoff</card-morph-anchor>
 </rules>
-
-> All Remotion source rules have been migrated and eval-verified (Wenbo 2026-05-19 — 27 rules / 9 cells each via 3-way v1 Remotion / v2 HF-with-rule / v3 HF-base-only comparison).
 
 ## Examples
 
@@ -279,14 +274,14 @@ Use when you need a specific effect detail, or when no blueprint matches your ta
   path="examples/workflow-approve-press.html"
   blueprint="workflow-approve-press"
   duration="5.5s">
-  "AI edits WITH you" headline slides down → center editor mockup scales in (CSS-mockup fallback when ./assets/editor-demo.mp4 is missing) → 3 review steps stagger-enter on the left flank (3D-tilted +15°) and snap through pending → active → complete states via `tl.set({ attr: data-state })` → Approve button (3D-tilted -15°) bouncy entry with finite-yoyo glow pulse on `--btn-glow-blur` → linear depression then linear return (no overshoot per the "tactile not bouncy" rule) → backgroundColor crossfades to success green + label swaps via `tl.set({ textContent })` + checkmark pops with back.out(1.6). Demonstrates the discrete state machine replacement for Remotion's `currentStep = sceneFrame < 60 ? 1 : …` frame-conditional logic.
+  "AI edits WITH you" headline slides down → center editor mockup scales in (CSS-mockup fallback when ./assets/editor-demo.mp4 is missing) → 3 review steps stagger-enter on the left flank (3D-tilted +15°) and snap through pending → active → complete states via `tl.set({ attr: data-state })` → Approve button (3D-tilted -15°) bouncy entry with finite-yoyo glow pulse on `--btn-glow-blur` → linear depression then linear return (no overshoot per the "tactile not bouncy" rule) → backgroundColor crossfades to success green + label swaps via `tl.set({ textContent })` + checkmark pops with back.out(1.6). Demonstrates a discrete state machine driven by timeline-positioned `tl.set` calls.
 </example>
 <example
   id="problem-mockup-overwhelm"
   path="examples/problem-mockup-overwhelm.html"
   blueprint="problem-mockup-overwhelm"
   duration="6s">
-  Three video-platform mockups (YouTube Studio left, TikTok Creator center, Instagram Reels right) spring-in with back.out(1.4) → nine scattered platform icons stagger-enter with back.out(1.6) → at 3.20s the center mockup morphs via uniform `scale: 1 → 0.6875` (replaces Remotion's forbidden width/height tween) + paint-only `borderRadius: 28 → 110px` + `background` gradient swap + `boxShadow` glow ramp, all driven by power3.out tweens at the same timeline position → at 85% of morph the mockup container fades to 0 revealing a cyan-teal-blue avatar circle rendered underneath at z-index 20 (the "hand-off" trick) → 8 task bubbles ("Edit hours of raw footage", "Reframe for vertical", …) stagger-enter in a radial pattern around the avatar with back.out(1.4) → idle phase: shared scene-ticker onUpdate drives mockup floating (gated to pre-morph), orbit-dot cycling, avatar breath (multiplicative on pop scale), and bubble micro-float. Demonstrates `card-morph-anchor` hand-off, conditional-render-free DOM with opacity gating, and replacement of all `Math.sin(frame * ...)` continuous motion with a single shared onUpdate scene-ticker reading `tl.time()`.
+  Three video-platform mockups (YouTube Studio left, TikTok Creator center, Instagram Reels right) spring-in with back.out(1.4) → nine scattered platform icons stagger-enter with back.out(1.6) → at 3.20s the center mockup morphs via uniform `scale: 1 → 0.6875` (HyperFrames forbids width/height tweens) + paint-only `borderRadius: 28 → 110px` + `background` gradient swap + `boxShadow` glow ramp, all driven by power3.out tweens at the same timeline position → at 85% of morph the mockup container fades to 0 revealing a cyan-teal-blue avatar circle rendered underneath at z-index 20 (the "hand-off" trick) → 8 task bubbles ("Edit hours of raw footage", "Reframe for vertical", …) stagger-enter in a radial pattern around the avatar with back.out(1.4) → idle phase: shared scene-ticker onUpdate drives mockup floating (gated to pre-morph), orbit-dot cycling, avatar breath (multiplicative on pop scale), and bubble micro-float. Demonstrates `card-morph-anchor` hand-off, conditional-render-free DOM with opacity gating, and continuous motion consolidated into a single shared `onUpdate` scene-ticker reading `tl.time()`.
 </example>
 <example
   id="comparison-split-cards"
@@ -317,34 +312,6 @@ Use when you need a specific effect detail, or when no blueprint matches your ta
   "Hyper**Frames**" badge top; mock captioned video card centered (3D-tilted +15° rotateY, slow float ±6px) → at 2.20s video slides to 29% W and "MP4" appears on right as a 5-layer green depth stack (built with `document.createElement`) with `back.out(1.6)` entry + breathing → at 3.86s both video and stat exit left (`x: -W*0.5 / -W*0.7`, scale 0.8), kinetic text typing-stage fades in center → 23-char line 1 "HTML **pages** become **video**" + 15-char line 2 "frame by frame." type char-by-char at 30 ch/s with accent-green segments (static CSS `.accent` color, not ASR glow envelope) → gradient pill (purple → green) scales in behind line 2 (`scaleX 0→1`, `scaleY 0.5→1`) with radial glow halo. Three nested wrappers per moving element (`.pos / .float-or-breath / .tilt`) isolate concerns. Cursor blink derived from `Math.floor(t * 2) % 2` with color swap (green on accent segments).
 </example>
 </examples>
-
-## Remotion → HyperFrames Quick Reference
-
-| Remotion                                                     | HyperFrames                                                             |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `useCurrentFrame()`                                          | `tl.time()` inside an `onUpdate` callback only                          |
-| `useVideoConfig().fps / width / height`                      | Constants matching `data-width` / `data-height` on the composition root |
-| `spring({ frame, fps, config })`                             | GSAP tween with a matching ease: see mapping table below                |
-| `interpolate(frame, [a,b], [x,y], { extrapolate: 'clamp' })` | `gsap.to(el, { value: y, duration: (b-a)/fps, ease: '…' })`             |
-| `<AbsoluteFill>`                                             | `<div style="position: absolute; inset: 0;">`                           |
-| `<Img src={staticFile("foo.png")}>`                          | `<img src="./assets/foo.png">`                                          |
-| Inline JSX component                                         | HTML element (generated by JS where dynamic)                            |
-| `random(seed)`                                               | Pure-int hash: `((i * 374761393 + t * 668265263) >>> 0)`                |
-| `frame * 0.003` continuous drift                             | Finite `yoyo` tween with computed `repeat:`                             |
-
-### Spring → GSAP ease mapping
-
-| Remotion `spring({ stiffness, damping })` | GSAP ease                          |
-| ----------------------------------------- | ---------------------------------- |
-| 180, 12 (bouncy)                          | `back.out(1.4)`                    |
-| 150, 14 (snappy)                          | `back.out(1.6)` or `back.out(1.7)` |
-| 120, 14 (stepped, mild overshoot)         | `back.out(1.4)`                    |
-| 100, 18 (calm settle)                     | `back.out(1.2)` or `power3.out`    |
-| 80, 18 (firm)                             | `power3.out`                       |
-| 80, 20                                    | `power2.out`                       |
-| 45, 22 (gentle, slow)                     | `power2.out`                       |
-
-These are approximations — visually indistinguishable for 0.4–0.8s tween ranges. For physically exact springs, use `gsap.registerPlugin(CustomEase)` and fit a Bezier curve to the spring response.
 
 ## Critical Constraints (apply to every blueprint and rule)
 

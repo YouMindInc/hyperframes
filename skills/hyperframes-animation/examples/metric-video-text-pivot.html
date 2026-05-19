@@ -6,7 +6,7 @@
     <title>Scene 07 — HyperFrames Video Kinetic Text Pivot</title>
 
     <!--
-      HyperFrames port of the Remotion scene-07-video-kinetic-text-pivot.tsx.
+      HyperFrames composition.tsx.
 
       Choreography (4 phases, 6.5 seconds total):
         0.17 – 0.87s   "HyperFrames" badge fades in (top)
@@ -21,10 +21,6 @@
         5.13 – 5.63s   "frame by frame." types char-by-char inside the pill
         0 – 6.50s      Continuous: video float, cursor blink, stat breath
                        (each gated by time window)
-
-      Differences from the Remotion source:
-        - Single paused GSAP timeline registered to window.__timelines["main"]
-        - Three nested wrappers per moving element (.pos / .float-or-breath / .tilt)
           so entry, continuous motion, and static tilt never overwrite each other
         - Conditional rendering ({frame > X && ...}) replaced by permanent DOM +
           opacity 0 + gates inside the scene-ticker onUpdate
@@ -453,7 +449,7 @@
         H = 1080;
       const TOTAL_DUR = 6.5;
 
-      /* ASR-anchored timing (Remotion source frame counts converted to seconds at 30fps). */
+      /* ASR-anchored timing (the source source frame counts converted to seconds at 30fps). */
       const TIMING = {
         // Phase 1: video + badge enter
         badgeAt: 0.17,

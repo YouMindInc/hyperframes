@@ -26,9 +26,9 @@ triggers: [works for any genre, multiple categories, click to generate, versatil
 
 Category icons enter with a 3D flip → orbit a central CTA → cursor moves to CTA and clicks → icons collapse inward toward the click point → product demo springs out from the collapse point → demo floats on a breathing idle.
 
-This blueprint is the HyperFrames port of the Remotion `orbit-collapse-action` choreography. Same five-phase arc; one paused GSAP timeline; constituent patterns map to [orbit-3d-entry](../rules/orbit-3d-entry.md), [cursor-click-ripple](../rules/cursor-click-ripple.md), [center-outward-expansion](../rules/center-outward-expansion.md) (reversed), and [sine-wave-loop](../rules/sine-wave-loop.md) Form 1.
+Same five-phase arc; one paused GSAP timeline; constituent patterns map to [orbit-3d-entry](../rules/orbit-3d-entry.md), [cursor-click-ripple](../rules/cursor-click-ripple.md), [center-outward-expansion](../rules/center-outward-expansion.md) (reversed), and [sine-wave-loop](../rules/sine-wave-loop.md) Form 1.
 
-> The original Remotion blueprint expressed the orbit as `effectiveFrame * orbitSpeed` and the collapse as a `spring(stiffness:150, damping:15)`. HyperFrames forbids per-frame conditionals on `frame`, so both motions are folded into a single master `onUpdate` that reads `tl.time()` and an eased collapse proxy. The visual result is identical.
+> The original the source blueprint expressed the orbit as `effectiveFrame * orbitSpeed` and the collapse as a `spring(stiffness:150, damping:15)`. HyperFrames forbids per-frame conditionals on `frame`, so both motions are folded into a single master `onUpdate` that reads `tl.time()` and an eased collapse proxy. The visual result is identical.
 
 ## When to Use
 
@@ -207,7 +207,7 @@ ICONS.forEach(({ sel, entryDelay }) => {
 
 ### Why `back.out(1.4)` and not a stiffer ease
 
-The Remotion source uses `stiffness: 100–120, damping: 14` for icon entry — a mild overshoot. Per the SKILL.md mapping, that lands at `back.out(1.4)`. Keep it gentle here — the icons should _arrive_, not _snap into place_. The collapse spring in Phase 3 is the snappier one.
+The source pattern uses `stiffness: 100–120, damping: 14` for icon entry — a mild overshoot. Per the SKILL.md mapping, that lands at `back.out(1.4)`. Keep it gentle here — the icons should _arrive_, not _snap into place_. The collapse spring in Phase 3 is the snappier one.
 
 ### Internal SVG enrichment
 
@@ -288,7 +288,7 @@ tl.to(
       const radiusFactor = 1 - collapseEased; // 1 → 0 over Phase 3
       const collapseScale = 1 - collapseEased * 0.5; // 1 → 0.5
 
-      // Two-segment opacity envelope: 1 at 0, 0.5 at 0.8, 0 at 1 — matches the Remotion source.
+      // Two-segment opacity envelope: 1 at 0, 0.5 at 0.8, 0 at 1 — matches
       const o = collapseEased;
       const collapseOpacity =
         o < 0.8
