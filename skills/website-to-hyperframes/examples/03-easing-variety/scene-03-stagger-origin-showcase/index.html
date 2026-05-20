@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-03-stagger-origin-showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #08090c; }
+
+    [data-composition-id="scene-03-stagger-origin-showcase"] {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: radial-gradient(ellipse 1600px 1000px at 50% 50%, #14171f 0%, #06070a 70%);
+      font-family: "Inter", -apple-system, sans-serif;
+      color: #f0f0f0;
+    }
+
+    .race-title {
+      position: absolute;
+      top: 80px; left: 0; right: 0;
+      text-align: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+    }
+    .race-title b {
+      display: block;
+      font-family: "Inter", sans-serif;
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      text-transform: none;
+      color: #f4f4f7;
+      margin-top: 14px;
+    }
+
+    /* 4 panels (4 stagger origins) in a 2×2 grid */
+    .panels {
+      position: absolute;
+      top: 220px;
+      left: 80px; right: 80px;
+      bottom: 100px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 32px;
+    }
+
+    .panel {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .panel-label {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #5b8dff;
+      margin-bottom: 6px;
+    }
+    .panel-spec {
+      font-family: "Inter", sans-serif;
+      font-size: 14px;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 24px;
+      font-style: italic;
+    }
+
+    /* 15-dot row in each panel */
+    .dot-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+    }
+    .dot {
+      flex: 1;
+      max-width: 38px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #5b8dff 0%, #3a5bdc 100%);
+      box-shadow: 0 0 14px rgba(91, 141, 255, 0.4);
+      transform: scale(0);
+      transform-origin: center;
+    }
+    /* Per-panel color variants */
+    .panel-2 .dot {
+      background: linear-gradient(180deg, #f59e0b 0%, #d97757 100%);
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
+    }
+    .panel-3 .dot {
+      background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+      box-shadow: 0 0 14px rgba(52, 211, 153, 0.4);
+    }
+    .panel-4 .dot {
+      background: linear-gradient(180deg, #f472b6 0%, #be185d 100%);
+      box-shadow: 0 0 14px rgba(244, 114, 182, 0.4);
+    }
+
+    .scene-label {
+      position: absolute;
+      left: 24px; bottom: 24px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.06em;
+    }
+    .scene-label b { color: rgba(255,255,255,0.65); }
+  </style>
+</head>
+<body>
+  <div
+    id="scene-03-stagger-origin-showcase"
+    data-composition-id="scene-03-stagger-origin-showcase"
+    data-start="0"
+    data-duration="6"
+    data-width="1920"
+    data-height="1080"
+  >
+    <div class="race-title">
+      GSAP STAGGER · 4 ORIGIN MODES SIDE-BY-SIDE
+      <b>Where the wave starts changes everything.</b>
+    </div>
+
+    <div class="panels">
+      <div class="panel panel-1">
+        <div class="panel-label">START</div>
+        <div class="panel-spec">stagger: { from: "start" } — left → right</div>
+        <div class="dot-row" id="row-1"></div>
+      </div>
+      <div class="panel panel-2">
+        <div class="panel-label">CENTER</div>
+        <div class="panel-spec">stagger: { from: "center" } — middle → edges</div>
+        <div class="dot-row" id="row-2"></div>
+      </div>
+      <div class="panel panel-3">
+        <div class="panel-label">EDGES</div>
+        <div class="panel-spec">stagger: { from: "edges" } — edges → middle</div>
+        <div class="dot-row" id="row-3"></div>
+      </div>
+      <div class="panel panel-4">
+        <div class="panel-label">END</div>
+        <div class="panel-spec">stagger: { from: "end" } — right → left</div>
+        <div class="dot-row" id="row-4"></div>
+      </div>
+    </div>
+
+    <div class="scene-label">Section 03 · <b>Stagger Origin Showcase</b> · same 15 dots, 4 different stagger origins, side-by-side</div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 6;
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      // === Build 15 dots in each of the 4 panels ===
+      for (var p = 1; p <= 4; p++) {
+        var row = document.getElementById("row-" + p);
+        for (var i = 0; i < 15; i++) {
+          var d = document.createElement("div");
+          d.className = "dot";
+          row.appendChild(d);
+        }
+      }
+
+      // Title fade in
+      tl.fromTo(".race-title",
+        { opacity: 0, y: -6 },
+        { opacity: 1, y: 0, duration: 0.6, ease: "expo.out" }, 0);
+
+      // Panel containers fade in with stagger
+      tl.fromTo(".panel",
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: "power2.out" }, 0.3);
+
+      // === Stagger waves: each panel runs its own stagger origin, all start at t=1.5s ===
+      var WAVE_START = 1.5;
+      var WAVE_DUR = 1.4;
+
+      tl.to(".panel-1 .dot",
+        { scale: 1, duration: 0.4, ease: "back.out(1.7)",
+          stagger: { from: "start", amount: WAVE_DUR } },
+        WAVE_START);
+
+      tl.to(".panel-2 .dot",
+        { scale: 1, duration: 0.4, ease: "back.out(1.7)",
+          stagger: { from: "center", amount: WAVE_DUR } },
+        WAVE_START);
+
+      tl.to(".panel-3 .dot",
+        { scale: 1, duration: 0.4, ease: "back.out(1.7)",
+          stagger: { from: "edges", amount: WAVE_DUR } },
+        WAVE_START);
+
+      tl.to(".panel-4 .dot",
+        { scale: 1, duration: 0.4, ease: "back.out(1.7)",
+          stagger: { from: "end", amount: WAVE_DUR } },
+        WAVE_START);
+
+      // === Hold (3.3s onward): continuous gentle breath on all dots, panel-by-panel ===
+      tl.to(".panel-1 .dot", { y: -3, duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: 1, stagger: { from: "start", amount: 0.4 } }, 3.4);
+      tl.to(".panel-2 .dot", { y: -3, duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: 1, stagger: { from: "center", amount: 0.4 } }, 3.4);
+      tl.to(".panel-3 .dot", { y: -3, duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: 1, stagger: { from: "edges", amount: 0.4 } }, 3.4);
+      tl.to(".panel-4 .dot", { y: -3, duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: 1, stagger: { from: "end", amount: 0.4 } }, 3.4);
+
+      // 5.0s onward: another wave runs (yoyo back to 0 + bounce in again — proves the technique is repeatable)
+      tl.to(".panel-1 .dot", { scale: 0.6, duration: 0.4, ease: "power2.in", stagger: { from: "start", amount: 0.5 } }, 5.0);
+      tl.to(".panel-1 .dot", { scale: 1, duration: 0.4, ease: "back.out(2)", stagger: { from: "start", amount: 0.5 } }, 5.4);
+
+      tl.to(".panel-2 .dot", { scale: 0.6, duration: 0.4, ease: "power2.in", stagger: { from: "center", amount: 0.5 } }, 5.0);
+      tl.to(".panel-2 .dot", { scale: 1, duration: 0.4, ease: "back.out(2)", stagger: { from: "center", amount: 0.5 } }, 5.4);
+
+      tl.to(".panel-3 .dot", { scale: 0.6, duration: 0.4, ease: "power2.in", stagger: { from: "edges", amount: 0.5 } }, 5.0);
+      tl.to(".panel-3 .dot", { scale: 1, duration: 0.4, ease: "back.out(2)", stagger: { from: "edges", amount: 0.5 } }, 5.4);
+
+      tl.to(".panel-4 .dot", { scale: 0.6, duration: 0.4, ease: "power2.in", stagger: { from: "end", amount: 0.5 } }, 5.0);
+      tl.to(".panel-4 .dot", { scale: 1, duration: 0.4, ease: "back.out(2)", stagger: { from: "end", amount: 0.5 } }, 5.4);
+
+      window.__timelines["scene-03-stagger-origin-showcase"] = tl;
+    })();
+  </script>
+</body>
+</html>

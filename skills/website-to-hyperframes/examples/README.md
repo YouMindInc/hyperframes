@@ -61,6 +61,7 @@ Need a specific technique? Use this table to find the canonical scene.
 |---|---|
 | 4-shader transitions side-by-side (chromatic-split, sdf-iris, domain-warp, whip-pan) | [`05-transitions-shader/scene-01-shader-transitions-showcase/`](05-transitions-shader/scene-01-shader-transitions-showcase/) |
 | **Single ripple-shader A→B transition** (concentric rings + RGB chromatic aberration + central flash) | [`05-transitions-shader/scene-02-ripple-shader-transition/`](05-transitions-shader/scene-02-ripple-shader-transition/) |
+| **Glitch shader A→B transition** (12 RGB-displaced horizontal slice bands + cyber jitter) | [`05-transitions-shader/scene-03-glitch-shader-transition/`](05-transitions-shader/scene-03-glitch-shader-transition/) |
 | 6 CSS transitions side-by-side (push, scale, blur-dissolve, 3D flip, light leak, dissolve) | [`06-transitions-css/scene-01-css-transitions-grid/`](06-transitions-css/scene-01-css-transitions-grid/) |
 | **Single full-frame CSS 3D flip transition** (blue card → 180° flip → orange card with counters) | [`06-transitions-css/scene-02-3d-flip-transition/`](06-transitions-css/scene-02-3d-flip-transition/) |
 | **Light-leak wipe transition** (3 stacked diagonal gradient strips sweep DARK→LIGHT scene with mix-blend-mode screen bloom) | [`06-transitions-css/scene-03-light-leak-wipe/`](06-transitions-css/scene-03-light-leak-wipe/) |
@@ -85,6 +86,7 @@ Need a specific technique? Use this table to find the canonical scene.
 | Magnetic WebGL caption (GLSL distortion + chromatic aberration follows cursor) | [`02-markers-and-emphasis/scene-07-magnetic-caption-webgl/`](02-markers-and-emphasis/scene-07-magnetic-caption-webgl/) |
 | 6x3 grid of pure-CSS animations | [`03-easing-variety/scene-01-css-animation-grid/`](03-easing-variety/scene-01-css-animation-grid/) |
 | **7-easing race** (power4.out / back.out / expo.out / power1.out / elastic.out / expo.inOut / none, side-by-side) | [`03-easing-variety/scene-02-easing-race/`](03-easing-variety/scene-02-easing-race/) |
+| **Stagger origin showcase** (start / center / edges / end — same dots, 4 different stagger origins side-by-side) | [`03-easing-variety/scene-03-stagger-origin-showcase/`](03-easing-variety/scene-03-stagger-origin-showcase/) |
 | Animated kanban board with drag | [`04-composed-ui/scene-01-kanban-board/`](04-composed-ui/scene-01-kanban-board/) |
 | Chat with typing dots + reactions (narration-sync gold standard) | [`04-composed-ui/scene-02-chat-with-typing/`](04-composed-ui/scene-02-chat-with-typing/) |
 | Terminal with multi-line command + output | [`04-composed-ui/scene-03-terminal-typeon/`](04-composed-ui/scene-03-terminal-typeon/) |
@@ -111,6 +113,7 @@ Need a specific technique? Use this table to find the canonical scene.
 | Vertical scroll-pan pipeline diagram | [`09-counters-and-data/scene-02-pipeline-diagram/`](09-counters-and-data/scene-02-pipeline-diagram/) |
 | Canonical 0 → 1,000,000 counter (33 deterministic `tl.set` steps) | [`09-counters-and-data/scene-03-counter-million-showcase/`](09-counters-and-data/scene-03-counter-million-showcase/) |
 | **6-bar staggered chart rise with deterministic value labels** (quarterly growth, peak bar in amber) | [`09-counters-and-data/scene-04-bar-chart-rise/`](09-counters-and-data/scene-04-bar-chart-rise/) |
+| **4-card sparkline dashboard** (SVG path-draw + filled area + delta arrows + live value counters) | [`09-counters-and-data/scene-05-sparkline-draw/`](09-counters-and-data/scene-05-sparkline-draw/) |
 | Radial bloom dot grid (stagger from center) | [`10-particles-and-ambient/scene-01-radial-bloom-grid/`](10-particles-and-ambient/scene-01-radial-bloom-grid/) |
 | Aurora end-card + particles + tri-color text gradient | [`10-particles-and-ambient/scene-02-aurora-end-card/`](10-particles-and-ambient/scene-02-aurora-end-card/) |
 | Scan-line CRT grid + telemetry HUD | [`10-particles-and-ambient/scene-03-scan-line-grid/`](10-particles-and-ambient/scene-03-scan-line-grid/) |
@@ -141,10 +144,10 @@ Need a specific technique? Use this table to find the canonical scene.
 
 ## Stitched Grand Tour reel
 
-All 71 scenes concatenated back-to-back as a single 8:11 MP4. Useful for visual-gestalt review or for sharing the library at a glance:
+All 74 scenes concatenated back-to-back as a single 8:30 MP4. Useful for visual-gestalt review or for sharing the library at a glance:
 
-- **Grand Tour reel:** https://www.heygenverse.com/s/2637bc07-ef26-43f2-8ef3-83c21d7aad88/raw
-- **Browsable gallery (per-section grid, all 71 scenes as embedded videos):** https://www.heygenverse.com/a/1636f2fe-3ddc-4543-9a56-0d0b99538807
+- **Grand Tour reel:** https://www.heygenverse.com/s/aefd8761-7ae5-4399-bed4-3c33ea7dc3bf/raw
+- **Browsable gallery (per-section grid, all 74 scenes as embedded videos):** https://www.heygenverse.com/a/1636f2fe-3ddc-4543-9a56-0d0b99538807
 
 Rebuild the reel after adding scenes: `ffmpeg -f concat -safe 0 -i /tmp/concat-list.txt -c copy out.mp4` where the concat list orders all scene MP4s in section sequence.
 

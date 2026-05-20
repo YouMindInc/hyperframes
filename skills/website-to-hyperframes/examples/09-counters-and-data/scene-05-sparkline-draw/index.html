@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-05-sparkline-draw</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0b10; }
+
+    [data-composition-id="scene-05-sparkline-draw"] {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: radial-gradient(ellipse 1400px 900px at 50% 40%, #14171f 0%, #06070b 70%);
+      font-family: "Inter", -apple-system, sans-serif;
+      color: #f0f0f0;
+    }
+
+    /* Header */
+    .eyebrow {
+      position: absolute;
+      top: 64px; left: 0; right: 0;
+      text-align: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+    }
+    .headline {
+      position: absolute;
+      top: 100px; left: 0; right: 0;
+      text-align: center;
+      font-family: "Inter", sans-serif;
+      font-weight: 800;
+      font-size: 44px;
+      letter-spacing: -0.02em;
+      color: #f4f4f7;
+    }
+
+    /* 4-card grid */
+    .stat-grid {
+      position: absolute;
+      left: 80px; right: 80px;
+      top: 220px; bottom: 140px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 28px;
+    }
+
+    .stat-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 28px 28px 24px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    .stat-label {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 10px;
+    }
+
+    .stat-value {
+      font-family: "Inter", sans-serif;
+      font-size: 64px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1;
+      color: #f4f4f7;
+    }
+    .stat-value .unit {
+      font-size: 28px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.5);
+      margin-left: 4px;
+    }
+
+    .stat-delta {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      margin-top: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stat-delta.up { color: #34d399; }
+    .stat-delta.down { color: #f87171; }
+    .stat-delta::before {
+      content: "";
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 7px solid currentColor;
+    }
+    .stat-delta.down::before {
+      border-bottom: none;
+      border-top: 7px solid currentColor;
+    }
+
+    /* Sparkline SVG container */
+    .spark {
+      margin-top: 18px;
+      flex: 1;
+      min-height: 80px;
+      position: relative;
+    }
+    .spark svg {
+      width: 100%;
+      height: 100%;
+    }
+    .spark .spark-path {
+      fill: none;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .spark .spark-fill {
+      opacity: 0.18;
+    }
+
+    /* Per-card colors */
+    .card-1 .spark-path, .card-1 .stat-value { color: #5b8dff; }
+    .card-1 .spark-path { stroke: #5b8dff; }
+    .card-1 .spark-fill { fill: #5b8dff; }
+
+    .card-2 .spark-path, .card-2 .stat-value { color: #34d399; }
+    .card-2 .spark-path { stroke: #34d399; }
+    .card-2 .spark-fill { fill: #34d399; }
+
+    .card-3 .spark-path, .card-3 .stat-value { color: #f59e0b; }
+    .card-3 .spark-path { stroke: #f59e0b; }
+    .card-3 .spark-fill { fill: #f59e0b; }
+
+    .card-4 .spark-path, .card-4 .stat-value { color: #a78bfa; }
+    .card-4 .spark-path { stroke: #a78bfa; }
+    .card-4 .spark-fill { fill: #a78bfa; }
+
+    /* Spark dot (latest data point) */
+    .spark-dot {
+      fill: currentColor;
+      opacity: 0;
+    }
+    .card-1 .spark-dot { fill: #5b8dff; }
+    .card-2 .spark-dot { fill: #34d399; }
+    .card-3 .spark-dot { fill: #f59e0b; }
+    .card-4 .spark-dot { fill: #a78bfa; }
+
+    .scene-label {
+      position: absolute;
+      left: 24px; bottom: 18px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.06em;
+    }
+    .scene-label b { color: rgba(255,255,255,0.65); }
+  </style>
+</head>
+<body>
+  <div
+    id="scene-05-sparkline-draw"
+    data-composition-id="scene-05-sparkline-draw"
+    data-start="0"
+    data-duration="7"
+    data-width="1920"
+    data-height="1080"
+  >
+    <div class="eyebrow">LIVE METRICS · 30-DAY ROLLING</div>
+    <div class="headline">Four sparklines · drawn from path stroke-dashoffset.</div>
+
+    <div class="stat-grid">
+
+      <!-- Card 1: Active users -->
+      <div class="stat-card card-1" id="card-1">
+        <div class="stat-label">Active users</div>
+        <div class="stat-value"><span id="v-1">0</span><span class="unit">k</span></div>
+        <div class="stat-delta up" id="d-1">+24.3% vs last 30d</div>
+        <div class="spark">
+          <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+            <path class="spark-fill" id="fill-1"
+              d="M 0 64 L 13 58 L 27 60 L 40 52 L 53 56 L 67 48 L 80 45 L 93 50 L 107 40 L 120 38 L 133 32 L 147 28 L 160 22 L 173 14 L 200 10 L 200 80 L 0 80 Z"
+              pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" />
+            <path class="spark-path" id="path-1"
+              d="M 0 64 L 13 58 L 27 60 L 40 52 L 53 56 L 67 48 L 80 45 L 93 50 L 107 40 L 120 38 L 133 32 L 147 28 L 160 22 L 173 14 L 200 10"
+              pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" />
+            <circle class="spark-dot" id="dot-1" cx="200" cy="10" r="4" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Card 2: Revenue -->
+      <div class="stat-card card-2" id="card-2">
+        <div class="stat-label">Revenue · MRR</div>
+        <div class="stat-value">$<span id="v-2">0</span><span class="unit">K</span></div>
+        <div class="stat-delta up" id="d-2">+18.7% MoM</div>
+        <div class="spark">
+          <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+            <path class="spark-fill" id="fill-2"
+              d="M 0 60 L 18 55 L 36 50 L 54 48 L 72 42 L 90 38 L 108 35 L 126 28 L 144 22 L 162 18 L 180 14 L 200 8 L 200 80 L 0 80 Z"
+              pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" />
+            <path class="spark-path" id="path-2"
+              d="M 0 60 L 18 55 L 36 50 L 54 48 L 72 42 L 90 38 L 108 35 L 126 28 L 144 22 L 162 18 L 180 14 L 200 8"
+              pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" />
+            <circle class="spark-dot" id="dot-2" cx="200" cy="8" r="4" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Card 3: API calls (volatile shape — peaks + dips) -->
+      <div class="stat-card card-3" id="card-3">
+        <div class="stat-label">API calls / day</div>
+        <div class="stat-value"><span id="v-3">0</span><span class="unit">M</span></div>
+        <div class="stat-delta up" id="d-3">+9.4% (rolling avg)</div>
+        <div class="spark">
+          <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+            <path class="spark-fill" id="fill-3"
+              d="M 0 50 L 14 38 L 28 55 L 42 30 L 57 50 L 71 25 L 85 45 L 100 20 L 114 42 L 128 18 L 143 36 L 157 12 L 171 30 L 186 15 L 200 22 L 200 80 L 0 80 Z"
+              pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" />
+            <path class="spark-path" id="path-3"
+              d="M 0 50 L 14 38 L 28 55 L 42 30 L 57 50 L 71 25 L 85 45 L 100 20 L 114 42 L 128 18 L 143 36 L 157 12 L 171 30 L 186 15 L 200 22"
+              pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" />
+            <circle class="spark-dot" id="dot-3" cx="200" cy="22" r="4" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Card 4: Avg latency (declining = good — shows down delta) -->
+      <div class="stat-card card-4" id="card-4">
+        <div class="stat-label">Avg latency · p95</div>
+        <div class="stat-value"><span id="v-4">0</span><span class="unit">ms</span></div>
+        <div class="stat-delta down" id="d-4">−32% (faster)</div>
+        <div class="spark">
+          <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+            <path class="spark-fill" id="fill-4"
+              d="M 0 15 L 18 22 L 36 18 L 54 30 L 72 28 L 90 38 L 108 42 L 126 52 L 144 50 L 162 58 L 180 62 L 200 68 L 200 80 L 0 80 Z"
+              pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" />
+            <path class="spark-path" id="path-4"
+              d="M 0 15 L 18 22 L 36 18 L 54 30 L 72 28 L 90 38 L 108 42 L 126 52 L 144 50 L 162 58 L 180 62 L 200 68"
+              pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" />
+            <circle class="spark-dot" id="dot-4" cx="200" cy="68" r="4" />
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene-label">Section 09 · <b>Sparkline Draw</b> · 4-card dashboard with SVG sparklines via stroke-dashoffset</div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 7;
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      // Header fade in
+      tl.fromTo([".eyebrow", ".headline"],
+        { opacity: 0, y: -6 },
+        { opacity: 1, y: 0, duration: 0.5, stagger: 0.12, ease: "expo.out" }, 0);
+
+      // Cards drop in with stagger
+      tl.fromTo(".stat-card",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.6, stagger: 0.1, ease: "expo.out" }, 0.5);
+
+      // === Spark draws: each card's path + fill stroke-draws progressively ===
+      // Path draws first (faster), fill follows behind (gives volume)
+      var cards = [1, 2, 3, 4];
+      cards.forEach(function (n, i) {
+        var startTime = 1.4 + i * 0.18;
+
+        // Fill (drawn behind, slower, semi-transparent)
+        tl.to("#fill-" + n,
+          { strokeDashoffset: 0, duration: 1.0, ease: "power2.inOut" },
+          startTime);
+
+        // Path stroke (drawn on top, faster, opaque line)
+        tl.to("#path-" + n,
+          { strokeDashoffset: 0, duration: 0.9, ease: "power2.inOut" },
+          startTime + 0.05);
+
+        // End-of-line dot fades in
+        tl.fromTo("#dot-" + n,
+          { opacity: 0, scale: 0, transformOrigin: "center" },
+          { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2.5)" },
+          startTime + 0.9);
+      });
+
+      // === Counter values tick up as the sparkline draws ===
+      var targets = [
+        { id: 1, target: 142, suffix: "" },
+        { id: 2, target: 87,  suffix: "" },
+        { id: 3, target: 2.4, suffix: "decimal" },
+        { id: 4, target: 84,  suffix: "" },
+      ];
+      targets.forEach(function (t, i) {
+        var startTime = 1.4 + i * 0.18;
+        var steps = 10;
+        for (var s = 0; s <= steps; s++) {
+          var time = startTime + (s / steps) * 0.9;
+          var val;
+          if (t.suffix === "decimal") {
+            val = (s / steps) * t.target;
+            val = val.toFixed(1);
+          } else {
+            val = Math.round((s / steps) * t.target);
+          }
+          tl.set("#v-" + t.id, { textContent: val.toString() }, time);
+        }
+      });
+
+      // Delta lines fade in last (after sparkline complete)
+      tl.fromTo([".stat-delta"],
+        { opacity: 0, x: -6 },
+        { opacity: 1, x: 0, duration: 0.4, stagger: 0.12, ease: "power3.out" },
+        3.0);
+
+      // === End-of-line dot pulse (continuous motion during hold) ===
+      cards.forEach(function (n) {
+        tl.to("#dot-" + n,
+          { r: 6, duration: 0.4, ease: "sine.inOut", yoyo: true, repeat: 3 },
+          4.0 + n * 0.05);
+      });
+
+      // === Card breath during hold (subtle scale) ===
+      tl.to(".stat-card", { y: -3, duration: 1.2, ease: "sine.inOut", yoyo: true, repeat: 1, stagger: 0.05 }, 5.0);
+
+      window.__timelines["scene-05-sparkline-draw"] = tl;
+    })();
+  </script>
+</body>
+</html>

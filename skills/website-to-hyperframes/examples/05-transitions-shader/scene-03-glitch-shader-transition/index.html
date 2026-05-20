@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scene-03-glitch-shader-transition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; }
+
+    [data-composition-id="scene-03-glitch-shader-transition"] {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #000;
+      font-family: "Inter", -apple-system, sans-serif;
+      color: #f0f0f0;
+    }
+
+    .beat {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Beat A: deep purple cyber */
+    .beat-a {
+      background:
+        linear-gradient(135deg, #0a0420 0%, #2d0a4a 50%, #4a0e6e 100%),
+        radial-gradient(circle at 30% 40%, rgba(167, 139, 250, 0.3), transparent 60%);
+    }
+    .beat-a .label {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 20px;
+    }
+    .beat-a .hero {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 220px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #f0e6ff;
+      line-height: 0.9;
+      text-shadow: 0 0 60px rgba(167, 139, 250, 0.6);
+    }
+    .beat-a .sub {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 18px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.55);
+      margin-top: 24px;
+    }
+
+    /* Beat B: vivid green cyber */
+    .beat-b {
+      background:
+        linear-gradient(135deg, #04200a 0%, #0a4a1a 50%, #167a30 100%),
+        radial-gradient(circle at 70% 60%, rgba(52, 211, 153, 0.25), transparent 60%);
+      opacity: 0;
+    }
+    .beat-b .label {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 20px;
+    }
+    .beat-b .hero {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 220px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #e6ffe6;
+      line-height: 0.9;
+      text-shadow: 0 0 60px rgba(52, 211, 153, 0.6);
+    }
+    .beat-b .sub {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 18px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.55);
+      margin-top: 24px;
+    }
+
+    /* Glitch canvas (Canvas 2D draws displaced/sliced bands during transition) */
+    .glitch-canvas {
+      position: absolute;
+      inset: 0;
+      width: 1920px;
+      height: 1080px;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    /* Transition meta + scene label */
+    .transition-meta {
+      position: absolute;
+      bottom: 28px; right: 32px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+      z-index: 50;
+    }
+
+    .scene-label {
+      position: absolute;
+      left: 24px; bottom: 18px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.06em;
+      z-index: 50;
+    }
+    .scene-label b { color: rgba(255,255,255,0.75); }
+  </style>
+</head>
+<body>
+  <div
+    id="scene-03-glitch-shader-transition"
+    data-composition-id="scene-03-glitch-shader-transition"
+    data-start="0"
+    data-duration="6"
+    data-width="1920"
+    data-height="1080"
+  >
+    <!-- Beat A -->
+    <div class="beat beat-a" id="beat-a">
+      <div class="label">SCENE A · PURPLE</div>
+      <div class="hero">SIGNAL</div>
+      <div class="sub">802.11n · LOCKED</div>
+    </div>
+
+    <!-- Beat B -->
+    <div class="beat beat-b" id="beat-b">
+      <div class="label">SCENE B · GREEN</div>
+      <div class="hero">DECODED</div>
+      <div class="sub">5.4GHZ · OPEN CHANNEL</div>
+    </div>
+
+    <!-- Glitch overlay canvas -->
+    <canvas class="glitch-canvas" id="glitch-canvas" width="1920" height="1080"></canvas>
+
+    <div class="transition-meta">GLITCH SHADER · 1.8S WINDOW · 12 RANDOMIZED SLICE BANDS · RGB SPLIT</div>
+    <div class="scene-label">Section 05 · <b>Glitch Shader Transition</b> · Canvas 2D RGB-split slice glitch between A → B</div>
+  </div>
+
+  <script>
+    (function () {
+      var BEAT = 6;
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      var canvas = document.getElementById("glitch-canvas");
+      var ctx = canvas.getContext("2d");
+      var W = 1920, H = 1080;
+
+      // === Deterministic glitch slice schedule (pre-computed for full seekability) ===
+      // 12 horizontal slices with fixed y positions, heights, x-displacements, color channel offsets
+      var slices = [];
+      // Seeded "random" — fixed arrays so the glitch looks complex but is fully deterministic
+      var ySeeds   = [0.05, 0.13, 0.21, 0.29, 0.37, 0.46, 0.54, 0.63, 0.71, 0.80, 0.88, 0.95];
+      var hSeeds   = [0.04, 0.06, 0.03, 0.07, 0.05, 0.08, 0.04, 0.06, 0.05, 0.07, 0.03, 0.05];
+      var dxSeeds  = [-40, 60, -80, 30, -50, 90, -30, 70, -90, 50, -60, 40];
+      var rgbSeeds = ["r", "g", "b", "rb", "gb", "r", "rg", "b", "r", "g", "rgb", "b"];
+      for (var i = 0; i < 12; i++) {
+        slices.push({
+          y: ySeeds[i] * H,
+          height: hSeeds[i] * H,
+          dx: dxSeeds[i],
+          ch: rgbSeeds[i],
+        });
+      }
+
+      // Render the glitch at progress u ∈ [0, 1]
+      function renderGlitch(u) {
+        ctx.clearRect(0, 0, W, H);
+        if (u <= 0 || u >= 1) return;
+
+        // Intensity bell curve
+        var intensity = Math.sin(u * Math.PI);
+
+        // Draw colored noise bands (scanline aesthetic)
+        for (var y = 0; y < H; y += 4) {
+          if (((y / 4) | 0) % 3 === 0) {
+            ctx.fillStyle = "rgba(255,255,255," + (intensity * 0.04) + ")";
+            ctx.fillRect(0, y, W, 2);
+          }
+        }
+
+        // Draw 12 RGB-displaced slices
+        slices.forEach(function (slice, i) {
+          // Each slice has its own intensity envelope based on the global u
+          // Shift the phase slightly per slice so they don't all peak at once
+          var slicePhase = (u + i * 0.04) % 1;
+          if (slicePhase < 0.15 || slicePhase > 0.85) return;
+
+          var sliceIntensity = Math.sin((slicePhase - 0.15) / 0.7 * Math.PI);
+          var dx = slice.dx * sliceIntensity * intensity;
+
+          // Draw 3 channels offset
+          var alphaBase = sliceIntensity * intensity * 0.6;
+          var fills = {
+            r: "rgba(255, 50, 100, " + alphaBase + ")",
+            g: "rgba(50, 255, 150, " + alphaBase + ")",
+            b: "rgba(100, 50, 255, " + alphaBase + ")",
+          };
+
+          var channels = slice.ch.split("");
+          channels.forEach(function (ch, k) {
+            ctx.fillStyle = fills[ch];
+            ctx.fillRect(dx + k * 6, slice.y, W, slice.height);
+          });
+        });
+
+        // Central flash on the deepest glitch
+        if (intensity > 0.7) {
+          var flash = (intensity - 0.7) / 0.3;
+          ctx.fillStyle = "rgba(255, 255, 255, " + (flash * 0.4) + ")";
+          ctx.fillRect(0, 0, W, H);
+        }
+      }
+
+      // === Timeline ===
+      // 0.0s: beat-a fades in
+      tl.fromTo("#beat-a", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+
+      // 0.3s: hero text + labels
+      tl.fromTo("#beat-a .hero",
+        { opacity: 0, x: -20 },
+        { opacity: 1, x: 0, duration: 0.5, ease: "expo.out" }, 0.3);
+      tl.fromTo(["#beat-a .label", "#beat-a .sub"],
+        { opacity: 0 },
+        { opacity: 1, duration: 0.4, stagger: 0.1, ease: "power2.out" }, 0.5);
+
+      // === GLITCH TRANSITION WINDOW: 1.7-3.5s ===
+      tl.to("#glitch-canvas", { opacity: 1, duration: 0.2, ease: "power2.out" }, 1.7);
+
+      var glitchStart = 1.7;
+      var glitchEnd = 3.5;
+      function tickGlitch() {
+        var t = tl.time();
+        if (t < glitchStart - 0.1 || t > glitchEnd + 0.3) {
+          ctx.clearRect(0, 0, W, H);
+          return;
+        }
+        var u = (t - glitchStart) / (glitchEnd - glitchStart);
+        u = Math.max(0, Math.min(1, u));
+        renderGlitch(u);
+      }
+      gsap.ticker.add(tickGlitch);
+
+      // Beat A jitters during glitch (subtle x displacement)
+      tl.to("#beat-a .hero", { x: -15, duration: 0.08, ease: "none" }, 2.0);
+      tl.to("#beat-a .hero", { x: 12, duration: 0.06, ease: "none" }, 2.08);
+      tl.to("#beat-a .hero", { x: -8, duration: 0.07, ease: "none" }, 2.14);
+      tl.to("#beat-a .hero", { x: 0, duration: 0.1, ease: "none" }, 2.21);
+
+      // 2.5s: beat-a fades out
+      tl.to("#beat-a", { opacity: 0, duration: 0.3, ease: "power2.in" }, 2.5);
+      // 2.6s: beat-b fades in
+      tl.to("#beat-b", { opacity: 1, duration: 0.3, ease: "power2.out" }, 2.6);
+
+      // Beat B also jitters as it enters
+      tl.fromTo("#beat-b .hero",
+        { x: 20, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.3, ease: "back.out(1.6)" }, 2.7);
+      tl.to("#beat-b .hero", { x: -8, duration: 0.08, ease: "none" }, 3.0);
+      tl.to("#beat-b .hero", { x: 6, duration: 0.07, ease: "none" }, 3.08);
+      tl.to("#beat-b .hero", { x: 0, duration: 0.1, ease: "none" }, 3.15);
+
+      // 3.5s: glitch fades out
+      tl.to("#glitch-canvas", { opacity: 0, duration: 0.3, ease: "power2.in" }, 3.5);
+
+      // Beat-b labels settle in after the glitch ends
+      tl.fromTo(["#beat-b .label", "#beat-b .sub"],
+        { opacity: 0, y: 8 },
+        { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: "power2.out" }, 3.7);
+
+      // 4.2s onward: hold + subtle text glitch on beat-b (continuous motion)
+      tl.to("#beat-b .hero", { x: 2, duration: 0.06, ease: "none" }, 4.7);
+      tl.to("#beat-b .hero", { x: -2, duration: 0.06, ease: "none" }, 4.76);
+      tl.to("#beat-b .hero", { x: 0, duration: 0.06, ease: "none" }, 4.82);
+
+      tl.to("#beat-b .hero", { x: -3, duration: 0.05, ease: "none" }, 5.5);
+      tl.to("#beat-b .hero", { x: 0, duration: 0.05, ease: "none" }, 5.55);
+
+      window.__timelines["scene-03-glitch-shader-transition"] = tl;
+    })();
+  </script>
+</body>
+</html>
