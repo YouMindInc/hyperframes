@@ -268,6 +268,6 @@ const offsetY = (viewportCenter.y - (tRect.top + tRect.height / 2)) / phase.scal
 
 ## Pairs with HF skills
 
-- `/hyperframes-gsap` — multi-phase tween + drift onUpdate
+- `/hyperframes-adapters` — multi-phase tween + drift onUpdate
 - `/hyperframes-core` — composition wiring, scene wrapper
 - `/hyperframes-cli` — `hyperframes lint`

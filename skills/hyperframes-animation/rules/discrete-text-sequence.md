@@ -268,6 +268,6 @@ else textEl.style.color = "{mutedColor}"; // mid-edit dim
 
 ## Pairs with HF skills
 
-- `/hyperframes-gsap` — onUpdate-driven discrete state lookup
+- `/hyperframes-adapters` — onUpdate-driven discrete state lookup
 - `/hyperframes-core` — composition wiring
 - `/hyperframes-cli` — `hyperframes lint`

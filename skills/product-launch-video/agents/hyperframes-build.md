@@ -13,16 +13,17 @@ Build a complete HyperFrames composition from `./section_plan.md` (your implemen
 - `hyperframes-core` — HTML composition contract, data-attributes, timeline contract
 - `hyperframes-cli` — init / lint / validate / inspect / render commands
 - `hyperframes-animation` — atomic animation rules (default toolbox); the SKILL.md indexes 27 rules. Scene-level blueprints live in `blueprints-index.md` **and are loaded on demand only** when a scene maps cleanly onto a multi-phase template (see "Reference blueprints + rules" below)
-- `hyperframes-gsap` — GSAP API, easing, transform aliases, allowlist
+- `hyperframes-adapters` — animation runtime references (GSAP default; Lottie / Three / Anime.js / CSS / WAAPI / TypeGPU on demand). GSAP API, easing, transform aliases, allowlist live at `hyperframes-adapters/references/gsap.md`.
 
 **Secondary** (load when relevant):
 
-- `hyperframes-creative` (palettes, motion principles, scene transitions)
+- `hyperframes-creative` (palettes, motion principles, narration, audio-reactive)
 - `hyperframes-registry` (blocks / components via `hyperframes add`)
+- `hyperframes-media` (TTS, transcribe, captions, background removal)
 
 **On demand only** (per-scene runtime needs):
 
-- `hyperframes-css-animations`, `hyperframes-waapi`, `hyperframes-three`, `hyperframes-lottie`, `hyperframes-typegpu`, `hyperframes-animejs`, `hyperframes-captions`, `hyperframes-tailwind`, `hyperframes-media`
+- `hyperframes-tailwind` — Tailwind v4 browser runtime if the project was scaffolded with `init --tailwind`
 
 ## Pipeline contract (this run's specifics)
 
