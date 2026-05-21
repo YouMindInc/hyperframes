@@ -612,6 +612,18 @@ function inlineSubCompositions(
     }
   }
 
+  if (result.externalLinks.length && head) {
+    for (const link of result.externalLinks) {
+      const escapedHref = link.href.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      if (document.querySelector(`link[href="${escapedHref}"]`)) continue;
+      const el = document.createElement("link");
+      el.setAttribute("rel", link.rel);
+      el.setAttribute("href", link.href);
+      if (link.crossorigin != null) el.setAttribute("crossorigin", link.crossorigin);
+      head.appendChild(el);
+    }
+  }
+
   // Append collected styles to <head>
   if (result.styles.length && head) {
     const styleEl = document.createElement("style");
@@ -668,7 +680,32 @@ function ensureFullDocument(html: string): string {
   // Wrap fragment with a proper document including margin/padding reset.
   // Without this, Chrome applies default body { margin: 8px } which creates
   // visible white lines at the edges of rendered video.
-  return `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <style>*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:#000}</style>\n</head>\n<body style="margin:0;overflow:hidden">\n${html}\n</body>\n</html>`;
+  return `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <style>*{margin:0;padding:0;box-sizing:border-box;text-rendering:geometricPrecision}body{overflow:hidden;background:#000}</style>\n</head>\n<body style="margin:0;overflow:hidden">\n${html}\n</body>\n</html>`;
+}
+
+/**
+ * Force subpixel glyph positioning so chrome-headless-shell (BeginFrame) and
+ * full Chrome (screenshot fallback) lay text out identically. `text-rendering:
+ * auto` resolves to `optimizeSpeed` (integer advances) in headless-shell but
+ * `geometricPrecision` in full Chrome — that ~1% advance-width gap shifts
+ * line-wrap points and any animation that reads `offsetWidth`. The `*`
+ * selector has zero specificity, so authored class/id rules still override.
+ */
+function injectTextRenderingRule(html: string): string {
+  const { document } = parseHTML(html);
+  const head = document.querySelector("head");
+  if (!head) return html;
+
+  if (document.querySelector("style[data-hyperframes-text-rendering]")) {
+    return html;
+  }
+
+  const styleEl = document.createElement("style");
+  styleEl.setAttribute("data-hyperframes-text-rendering", "true");
+  styleEl.textContent = "html,body,*{text-rendering:geometricPrecision}";
+  head.insertBefore(styleEl, head.firstChild);
+
+  return document.toString();
 }
 
 /**
@@ -882,7 +919,9 @@ export async function compileForRender(
   const hasShaderTransitions = detectShaderTransitionUsage(sanitizedHtml);
 
   const coalescedHtml = await injectDeterministicFontFaces(
-    coalesceHeadStylesAndBodyScripts(promoteCssImportsToLinkTags(sanitizedHtml)),
+    injectTextRenderingRule(
+      coalesceHeadStylesAndBodyScripts(promoteCssImportsToLinkTags(sanitizedHtml)),
+    ),
     { failClosedFontFetch: options.failClosedFontFetch === true },
   );
 
@@ -904,6 +943,7 @@ export async function compileForRender(
   // positions survive frame-by-frame rendering without a JSON sidecar.
   const HF_POSITION_ATTRS = [
     'data-hf-studio-path-offset="true"',
+    'data-hf-studio-box-size="true"',
     'data-hf-studio-rotation="true"',
     'data-hf-studio-motion="',
   ];
