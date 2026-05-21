@@ -119,7 +119,9 @@ export const BlocksTab = memo(function BlocksTab({ onAddBlock, onPreviewBlock }:
                   videoUrl={block.preview?.video}
                   onPreview={onPreviewBlock}
                   onAdd={
-                    block.type === "hyperframes:component"
+                    block.category === "vfx" ||
+                    block.category === "social" ||
+                    block.category === "scenes"
                       ? () => onAddBlock?.(block.name)
                       : undefined
                   }
