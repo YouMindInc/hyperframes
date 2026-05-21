@@ -61,7 +61,7 @@ const matched = effectLike.filter((n) => known.has(n));
 const unknown = effectLike.filter((n) => !known.has(n));
 
 // Skip known non-effect terms that are also hyphenated (HyperFrames data-* attrs,
-// CSS values, choreography pattern names defined inside visual-design).
+// CSS values, filename tokens).
 const SKIP_PREFIXES = ["data-"];
 const SKIP_EXACT = new Set([
   // GSAP / CSS / HyperFrames vocabulary
@@ -73,20 +73,6 @@ const SKIP_EXACT = new Set([
   "elastic-out",
   "sine-inout",
   "ease-in-out",
-  // Choreography patterns from visual-design (not rules)
-  "anchor-chain-reveal",
-  "sequential-type-cursor",
-  "contextual-product-showcase",
-  "mockup-morph-overwhelm",
-  "interactive-workflow-showcase",
-  "counting-icon-burst",
-  "decrypt-pan-track",
-  "assembly-focus-reveal",
-  "content-displace-reveal",
-  "split-comparison-reveal",
-  "orbit-collapse-action",
-  "morph-press-interact",
-  "video-kinetic-text-pivot",
   // Filenames / paths
   "narrator-scripts",
   "section-plan",
@@ -108,16 +94,14 @@ if (matched.length === 0) {
 
 for (const s of suspicious) {
   errors.push(
-    `Unknown effect-like token "${s}" — not a rule under hyperframes-animation/rules/ and not in the known choreography-pattern list. Pick an existing rule name or use a documented choreography pattern.`,
+    `Unknown effect-like token "${s}" — not a rule under hyperframes-animation/rules/. Pick an existing rule name.`,
   );
 }
 
 if (errors.length) {
   console.error(`✗ ${planPath}: ${errors.length} issue(s)`);
   for (const e of errors) console.error(`  - ${e}`);
-  console.error(
-    `\n  Known rules: \`ls ${rulesDir}\`\n  Known patterns: see visual-design/SKILL.md "Choreography patterns" section`,
-  );
+  console.error(`\n  Known rules: \`ls ${rulesDir}\``);
   process.exit(1);
 }
 

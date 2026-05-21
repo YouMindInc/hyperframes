@@ -79,7 +79,9 @@ function categorize(tags) {
   return "Transition & Motion";
 }
 
-const files = readdirSync(RULES_DIR).filter((f) => f.endsWith(".md")).sort();
+const files = readdirSync(RULES_DIR)
+  .filter((f) => f.endsWith(".md"))
+  .sort();
 const rules = [];
 const skipped = [];
 for (const f of files) {
