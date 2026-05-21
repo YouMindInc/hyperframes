@@ -510,6 +510,27 @@ function coalesceHeadStylesAndBodyScripts(document: Document): void {
 }
 
 /**
+ * Force subpixel glyph positioning so headless rendering paths
+ * (chrome-headless-shell with BeginFrame) lay text out identically to full
+ * Chrome. `text-rendering: auto` resolves to `optimizeSpeed` (integer glyph
+ * advances) in headless-shell but `geometricPrecision` in full Chrome, which
+ * shifts line-wrap points and any animation that reads measured text width.
+ * Mirrors the producer's `injectTextRenderingRule` so bundled previews and
+ * compiled renders stay byte-aligned. `*` has zero specificity, so authored
+ * class/id rules still override.
+ */
+function injectTextRenderingRule(document: Document): void {
+  const head = document.head;
+  if (!head) return;
+  if (document.querySelector("style[data-hyperframes-text-rendering]")) return;
+
+  const styleEl = document.createElement("style");
+  styleEl.setAttribute("data-hyperframes-text-rendering", "true");
+  styleEl.textContent = "html,body,*{text-rendering:geometricPrecision}";
+  head.insertBefore(styleEl, head.firstChild);
+}
+
+/**
  * Concatenate JS chunks safely. Goals:
  *   - Each chunk's last statement is terminated, so joining can't introduce ASI
  *     surprises (e.g. `a()` followed by `(b)()` — the second chunk would parse
@@ -685,6 +706,7 @@ export async function bundleToSingleHtml(
   const compStyleChunks: string[] = [...subCompResult.styles];
   const compScriptChunks: string[] = [...subCompResult.scripts];
   const compExternalScriptSrcs: string[] = [...subCompResult.externalScriptSrcs];
+  const compExternalLinks = [...subCompResult.externalLinks];
   const compVariablesByComp: Record<string, Record<string, unknown>> = {
     ...subCompResult.variablesByComp,
   };
@@ -811,6 +833,17 @@ export async function bundleToSingleHtml(
     }
   }
 
+  for (const link of compExternalLinks) {
+    const escapedHref = link.href.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    if (!document.querySelector(`link[href="${escapedHref}"]`)) {
+      const linkEl = document.createElement("link");
+      linkEl.setAttribute("rel", link.rel);
+      linkEl.setAttribute("href", link.href);
+      if (link.crossorigin != null) linkEl.setAttribute("crossorigin", link.crossorigin);
+      document.head.appendChild(linkEl);
+    }
+  }
+
   if (compStyleChunks.length) {
     const style = document.createElement("style");
     style.textContent = compStyleChunks.join("\n\n");
@@ -830,6 +863,7 @@ export async function bundleToSingleHtml(
   enforceCompositionPixelSizing(document);
   autoHealMissingCompositionIds(document);
   coalesceHeadStylesAndBodyScripts(document);
+  injectTextRenderingRule(document);
 
   // Inline textual assets
   for (const el of [...document.querySelectorAll("[src], [href], [poster], [xlink\\:href]")]) {
