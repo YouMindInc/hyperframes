@@ -4,51 +4,53 @@ The visual layer of a promotional video. Given the story (from Phase 2 — `narr
 
 This guide is about **creative intent**, not code. Describe what you want to see in natural language; a downstream build agent (using `/hyperframes-core` + `/hyperframes-animation`) translates it into the HTML composition + GSAP timeline.
 
+The bar for the plan is the golden-sample archive — playground-launch, timeline-editor-launch-v5, hyperframes-codex-plugin-announcement, fadeglow-v4, inspector-logo-intro, hermes-hyperframes, and the 13 canonical scenes in `hyperframes-animation/examples/`. Those plans **name the emotional beat alongside the mechanic**, use **specific pixel/duration/easing values** (not vague "make it bounce"), define the aesthetic **by exclusion** as much as by inclusion, and treat the **background as an active agent**, not a backdrop.
+
 ## Design principles — load on demand
 
 **Primary source: `hyperframes-creative` (Skill tool).** It owns the cross-workflow design canon — banned fonts, register-based font thinking, easing-as-emotion, build/breathe/resolve scene structure, load-bearing GSAP rules, the 9 named palettes, beat-direction framing. The subagent prompt loads it; reach for its routing table first when you need typography / color / composition / motion / palette / beat direction.
 
-**Secondary overlays: local `rules/*.md` below.** They hold this pipeline's exact numbers, scene-quality minimums, and the pattern names cited by `section_plan.md`. They are HyperFrames/GSAP-native — when creative talks principle, local talks pixels and milliseconds.
+**Secondary overlays: local `rules/*.md` below.** They hold this pipeline's exact numbers and the calibrated values from the golden-sample archive (Inter Tight + IBM Plex Mono, off-black `#0B0D0E`, the cut-the-curve transition spec, 60-30-10 in practice). They are HyperFrames/GSAP-native — when creative talks principle, local talks pixels and milliseconds, and _grounds each claim in a real archive scene_.
 
 <rules>
-<typography path="rules/typography.md">5-tier type scale (hero 100-120px → caption 20-28px), CJK fallback chain, letter-spacing guide, tabular-nums for counters. Overlay on `hyperframes-creative/references/typography.md`. Tags: font, typography, scale, hierarchy</typography>
-<color-system path="rules/color-system.md">Brand-palette extraction from `extraction/shared/tokens.json`, 60-30-10 visual-weight split, OKLCH neutral tinting (chroma ≈ 0.01), dark-scene weight/saturation adjustments. Overlay on `hyperframes-creative/references/house-style.md` + `palettes/*.md`. Tags: color, palette, brand, tokens</color-system>
-<composition path="rules/composition.md">1920×1080 canvas zones (96px safe margin, bottom 15% caption zone), primary asset ≥ 40% area, depth via opacity+scale (0.15/0.6/1.0 → scale 1.1/1.0/0.95). Overlay on `hyperframes-creative/references/composition-patterns.md` + `video-composition.md`. Tags: layout, composition, whitespace, hierarchy</composition>
-<motion-language path="rules/motion-language.md">Spring presets (entry / gentle / snappy / heavy), GSAP easing curves, 100/300/500 ms duration table at 30 fps, exit = 75% of entry, total stagger ≤ 500 ms, minimum hold times. Overlay on `hyperframes-creative/references/motion-principles.md`. Tags: easing, spring, timing, rhythm</motion-language>
-<choreography-patterns path="rules/choreography-patterns.md">Multi-phase scene-design patterns (anchor-chain-reveal, assembly-focus-reveal, orbit-collapse-action, etc.). Pipeline-owned — these names appear in `section_plan.md` and have no creative equivalent. Tags: choreography, scene-design, patterns, multi-phase</choreography-patterns>
+<typography path="rules/typography.md">6-tier type scale calibrated against archive sizes (hero 200-340px → eyebrow 14-30px → counter up to 806px), real font pairings (Inter Tight + IBM Plex Mono, Bricolage Grotesque, Playfair italic accents, DM Serif Display, JetBrains Mono), tight tracking (-0.04 to -0.055em) for confident display, CJK fallback chain, `tabular-nums` for counters, per-beat typographic variance as a valid move. Overlay on `hyperframes-creative/references/typography.md`. Tags: font, typography, scale, hierarchy</typography>
+<color-system path="rules/color-system.md">Brand-palette extraction from `extraction/shared/tokens.json`, 60-30-10 in practice (cyan/lime/amber tied to meaning, never overlapping), tinted neutral ladder (`#0B0D0E → #141A1B → #1C2424`), dual-radial swell background recipe, calibrated off-black/off-white catalog from the archive, dark-scene compensations (weight -1, saturation -10-20%, two-layer accent glow). Overlay on `hyperframes-creative/references/house-style.md` + `palettes/*.md`. Tags: color, palette, brand, tokens</color-system>
+<composition path="rules/composition.md">1920×1080 canvas zones (96-150px safe margin, 36-58px top chrome when present, max text-block width 1360px), 6 composition templates with archive references (centered / thirds / split / layered / asymmetric / triptych / strip), depth via opacity+scale (0.15/0.6/1.0 → scale 1.05/1.0/0.92 — note the inversion), three-layer card shadow stack, perspective 800-1400px for 3D. Overlay on `hyperframes-creative/references/composition-patterns.md` + `video-composition.md`. Tags: layout, composition, whitespace, hierarchy</composition>
+<motion-language path="rules/motion-language.md">Spring intents (entry / gentle / snappy / heavy / slam) with archive-counted GSAP eases (`back.out(1.4-1.7)` 11/13 files), 100/300/500 ms duration table at 30 fps, exit = 75% of entry, total stagger ≤ 500 ms, multiplicative breathing formula, cut-the-curve transition spec (exit 0.33s power2.in + blur 8px / entry 0.42s expo.out / background leads by 0.1s), stillness-before-climax beat. Overlay on `hyperframes-creative/references/motion-principles.md`. Tags: easing, spring, timing, rhythm</motion-language>
 </rules>
 
 ### Key principles summary
 
-- **Typography** — Use the brand's own fonts. 5-tier size scale (hero 100-120px down to caption 20-28px). Hierarchy through size + weight + color + spacing, not size alone.
-- **Color** — Extract palette from `tokens.json`. 60-30-10 rule (neutral bg / secondary elements / brand accent). Tint neutrals toward brand hue. Never pure black or white.
-- **Composition** — Squint test: primary element identifiable at a glance. Primary visual covers 40%+ of canvas. Every scene has 3+ depth layers (background, midground, foreground). Mix composition styles across scenes.
-- **Motion** — Consistent spring presets and easing curves across the video. Entry animations 300–500ms. Exits 75% of entry duration. Total stagger capped at 500ms. Every element keeps moving after entry.
+- **Typography** — Use the brand's own fonts. 6-tier scale calibrated to the archive (hero 200-340px, eyebrow 14-30px, counter up to 806px). Tight tracking (-0.04 to -0.055em) on display headlines. Hierarchy through size + weight + color + spacing + case + style mix, not size alone. Per-beat typographic variance is OK when the emotional arc justifies it (playground-launch runs 5 different pairings in 8 beats).
+- **Color** — Extract palette from `tokens.json`. 60-30-10 with each accent tied to a _meaning_ (HyperFrames-cyan, render-lime, Codex-amber — never overlapping). Off-black `#0B0D0E` / `#0a0a0f` / `#07100c`, off-white `#f2f6ef` / `#fff8e9` / `#f5f5f7`. Never pure black or white. Dual-radial background swell, not flat color.
+- **Composition** — Squint test: primary element identifiable at a glance. Primary visual covers 40%+ of canvas. Every scene has 3+ depth layers (background, midground, foreground). Mix 3+ composition templates across the video. Safe margins 96-150px. Use real extracted assets aggressively — no AI-invented decorative blobs.
+- **Motion** — Consistent spring intents and easing curves across the video (`back.out(1.4-1.7)` for entry, `power3.out` for refined, `power2.in` for exit). Entry animations 450-800ms. Exits 75% of entry duration. Total stagger capped at 500ms. Every element keeps moving after entry (multiplicative breathing, sine drift ≥ ±6px, not 3-pixel float). Cut-the-curve as the default scene transition.
 
 ## Scene quality baseline
 
-Every scene must meet these minimums:
+Every scene must meet these minimums.
 
 ### Three-layer motion model
 
 1. **Macro Motion** — camera drift: slow zoom + translation across the whole frame
-2. **Element Motion** — content enters, then keeps drifting / rotating / scaling (never sits still)
-3. **Micro Motion** — ambient details: flowing gradients, breathing glow, looping particles
+2. **Element Motion** — content enters, then keeps drifting / rotating / scaling (never sits still — multiplicative breathing on final scale, not yoyo)
+3. **Micro Motion** — ambient details: flowing gradients, breathing glow (38 ± 26px box-shadow oscillation), looping particles, halftone density warp
 
 ### Environment layers
 
 Every scene has a visual foundation beyond its core content:
 
-1. **Camera drift** — continuous subtle zoom + pan on the whole frame
-2. **Ambient particles** — brand-colored floating particles as atmospheric background
-3. **Emphasis moment** — at least one impact beat (ripple on landing, glow burst on keyword, impact lines on data reveal)
+1. **Camera drift** — continuous subtle zoom + pan on the whole frame (background `scale: 1.05`, camera `scale: 0.92` is the archive's standard inversion)
+2. **Background swell** — dual-radial overlay in brand-adjacent hues at 0.17-0.20 opacity (the HyperFrames signature), or architectural grid `rgba(<neutral>, 0.08)` at 80px spacing for workspace scenes
+3. **Ambient particles or scanline / halftone field** — brand-colored floating particles, scanline overlay at 3-5% opacity, or halftone dot field whose density warps per beat
+4. **Emphasis moment** — at least one impact beat (ripple on landing, glow burst on keyword, impact lines on data reveal, screen-shatter on title punch)
 
 ### Multi-phase choreography
 
 Static = dead. Each scene should have multiple animation phases:
 
 ```
-entry → rearrange/morph → camera push → emphasis/interaction → exit
+entry → ambient drift → major transition (morph / pivot / collapse) → stillness-before-climax (0.3-0.75s) → result / emphasis → idle breathing → exit
 ```
 
 A scene where elements spring in and then sit still is a slideshow, not a video.
@@ -56,12 +58,15 @@ A scene where elements spring in and then sit still is a slideshow, not a video.
 ### Forbidden patterns
 
 - Continuous motion covers less than 50% of the scene duration
-- Tiny 3px floating as the only "motion"
-- Word-by-word text pop-up as the primary visual (text is supporting, visual choreography is the lead)
-- All elements entering simultaneously (must stagger)
+- Tiny 3px floating as the only "motion" (the archive's minimum amplitude is ±6px)
+- Word-by-word text pop-up as the _primary_ visual when there is no choreographed visual lead
+- All elements entering simultaneously (must stagger; per-item 50-150ms, total cap 500ms)
 - Only environment layers with no main content (just particles + subtitles)
-- Same composition layout for every scene (use at least 3 different compositions)
+- Same composition layout for every scene (use at least 3 different composition templates per video)
 - Primary visual element covering less than 40% of canvas
+- Generic AI-slop palette: full-saturation neon on pure `#000`, purple-blue AI gradient backgrounds, floating bokeh orbs as decoration
+- Flat solid background with no swell / grid / scanline / particle layer
+- A scene that goes from action straight to payoff with no stillness-before-climax comma
 
 ## Animation effects catalog
 
@@ -96,7 +101,7 @@ One section per scene, in scene order. Each scene block has a **strict header co
 
 Rules:
 
-- **`**Effects:**` line** — 3-5 backtick-wrapped rule ids, comma-separated, inside square brackets. Every id must appear in the embedded catalog. The order matters: it's the timeline-layering order Phase 4 workers will use.
+- **`**Effects:**` line** — 4-7 backtick-wrapped rule ids, comma-separated, inside square brackets. Every id must appear in the embedded catalog. The order matters: it's the timeline-layering order Phase 4 workers will use.
 - **`**Duration:**` line** — float seconds, parsed from this scene's `estimatedDuration` in `narrator_scripts.json` (strip the trailing `"s"` → number).
 - Both lines on their own line, exactly as shown. No surrounding text, no merging onto one line.
 - A scene block missing either anchor is a fatal Phase 3 error — Phase 4a will STOP and report.
@@ -105,22 +110,34 @@ Rules:
 
 After the two anchor lines, write a free-prose body that describes:
 
-1. **Spatial relationships in natural language** — "product screenshot dominates the left two-thirds of the frame with a slight 3D tilt; feature bullets enter from the right with staggered timing"
-2. **Effect → asset mapping** — for each id in `**Effects:**`, name the brand asset (file path under `extraction/`) or text label that drives it
-3. **Choreography pattern inspiration** (optional) — e.g. "follow `assembly-focus-reveal`"; see `rules/choreography-patterns.md`
-4. **Brand styling overlay** — palette (primary/accent hex from `tokens.json`) + typography (font family)
-5. **Transition to next scene** (optional)
+1. **Tone and pacing footnote first** — one sentence that names the _feeling_ and the _rhythm_ of this beat ("frustrated, slightly-off comma", "luminous launch-film slow build", "neobrutalist crunch on the 1, then breath"). The archive's strongest plans always name the emotional intent before the mechanic — generic "the scene fades in" is the failure mode.
+2. **Spatial relationships in natural language** — "product screenshot dominates the left two-thirds of the frame with a slight 3D tilt; feature bullets enter from the right with staggered timing." Be specific about composition template (centered / split / layered / triptych / asymmetric / strip), primary asset's canvas-area occupancy (target ≥40%), and safe margins.
+3. **Effect → asset mapping** — for each id in `**Effects:**`, name the brand asset (file path under `extraction/`) or text label that drives it, and the _moment_ it fires within the scene's phase timeline.
+4. **Brand styling overlay** — palette (primary/accent hex from `tokens.json`, called out by role: 60% canvas, 30% surface, 10% accent), typography (font family + the 2-3 sizes/weights used in this scene). Use the calibrated off-black / off-white from rules/color-system.md, not pure `#000` / `#fff`.
+5. **Multi-phase choreography** — the sequence of phases (entry → ambient → major transition → stillness → emphasis → exit) with rough durations or proportions. Note any _stillness-before-climax_ beat explicitly. Name the GSAP ease intent (`entry` / `gentle` / `snappy` / `heavy` / `slam`) per phase.
+6. **Continuous / ambient motion** — what keeps the scene alive after entry settles? Multiplicative breathing on the hero (±2-5% scale), sine drift on cards (±6-8px in opposition), orbit on supporting icons, halftone density warp, glow pulse on CTA?
+7. **One constraint or negation** — what this scene must NOT do, in the codex-plugin voice ("no halo behind the bell — Jake killed those", "snap back to clean black-on-white after the chromatic moment, don't linger", "no neon glow, this is a workspace"). This is the move that separates a real plan from generic AI output.
+8. **Transition to next scene** — name the transition vocabulary (cut-the-curve LEFT, scale+fade, slide-up, morph, hard cut). If cut-the-curve, name the direction and confirm the 0.33s exit / 0.42s entry / 8-10px blur spec applies.
 
-Do NOT prescribe pixel values, GSAP timeline code, or composition HTML — that's the build agent's job.
+Do NOT prescribe pixel values, GSAP timeline code, or composition HTML — that's the build agent's job. But DO give the build agent enough constraints that the result is recognizably _this scene_ and not a generic interpretation: specific easings, specific durations as proportions ("hold for ~1.0s after entry"), specific colors as roles ("brand cyan on the focal word"), specific phase ordering.
 
-The full prose body is copied **verbatim** by Phase 4a into each scene's `creative_brief` field in `group_spec.json`. The scene-builder worker treats it as the single source of design truth.
+The full prose body is copied **verbatim** by Phase 4a into each scene's `creative_brief` field in `group_spec.json`. The scene-builder worker treats it as the single source of design truth — write as if you are briefing a senior animator who has never seen this brand.
+
+#### Voice reference — what a good scene brief reads like
+
+The archive's strongest plans share a voice. Aim for this register:
+
+> "Beat 2b — the spiral (frustrated, slightly-off comma). Centered chat-app composition: message stack scrolls up at accelerating pace, cursor sits anchored at the bottom-right, never moves. ~5-7 follow-up prompts flash through at 0.4-0.6s each, each punctuated by a button click + a late SFX tick — pace tightens, audio layers the tick faster and faster, tension builds. Hold on a final frustrated beat: the cursor sits still, the chat is full, the SFX is still _slightly_ off. Palette: warm-paper `#f5f5f7` canvas, ink `#1d1d1f` text, single orange `#FF9500` cursor accent — no halo, no glow. Type: Inter 900 in chat bubbles, 39px body. Multi-phase: setup hold 0.5s → accelerating montage 4.8s → final still beat 0.9s → cut-the-curve LEFT into Act 3 (0.33s exit + 8px blur)."
+
+Notice: emotional tone _named first_, then composition, then palette by role, then type by use, then phase sequence with durations as proportions, then transition spec. No GSAP code; every word is doing work.
 
 ### Variety
 
-Across all scenes, ensure at least 3 different compositional arrangements — don't center everything, don't lock to one layout family.
+Across all scenes, ensure at least 3 different compositional arrangements — don't center everything, don't lock to one layout family. The strongest archive plans (playground-launch) run 5+ visual universes across 8 beats, held together by a single shared transition vocabulary (cut-the-curve) and a shared palette grammar. Variety in _visual world_, consistency in _seam treatment_ — that is the principle.
 
 ## See also
 
 - `phases/story-design/guide.md` — narrative architecture (upstream; produces `narrator_scripts.json`).
 - `/hyperframes-animation` — atomic rules + multi-phase blueprints a build agent uses to realize this plan.
 - `/hyperframes-core` — composition contract a build agent applies.
+- `/hyperframes-creative` — primary design canon (palettes, register-based fonts, easing-as-emotion, build/breathe/resolve).
