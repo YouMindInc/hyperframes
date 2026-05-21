@@ -6,6 +6,8 @@ category: visual-design
 
 # Composition for 1920x1080 Video
 
+**Pair with `hyperframes-creative/references/composition-patterns.md` and `references/video-composition.md`** for ready-made HyperFrames composition patterns (picture-in-picture, text-behind-subject, slideshow) and the broader "video frames are not pages" framing. This file is the **numeric overlay** — exact safe margins, canvas zones, density targets, depth values for the 1920×1080 / 30 fps render contract.
+
 Video composition is closer to film and poster design than web layout. There is no scroll, no responsive reflow. Every frame is a fixed canvas where every pixel matters.
 
 ## The squint test
@@ -171,17 +173,17 @@ Layer at least 2-3 depth levels per scene to avoid the flat-poster look.
 
 ### Depth via opacity and transform
 
-Different opacity values assign elements to different depth planes instantly:
+Different opacity values assign elements to different depth planes instantly. Set them via GSAP at the appropriate timeline position so they participate in the seekable timeline:
 
-```tsx
-// Background plane
-opacity: 0.15, transform: "scale(1.1)"       // receding
+```js
+// Background plane — receding
+tl.set(".bg-layer", { opacity: 0.15, scale: 1.1 }, 0);
 
-// Midground plane
-opacity: 0.6, transform: "scale(1.0)"        // supporting
+// Midground plane — supporting
+tl.set(".mid-layer", { opacity: 0.6, scale: 1.0 }, 0);
 
-// Foreground plane
-opacity: 1.0, transform: "scale(0.95)"       // primary focus
+// Foreground plane — primary focus
+tl.set(".fg-layer", { opacity: 1.0, scale: 0.95 }, 0);
 ```
 
 Use `scale` (values slightly above or below 1.0) to reinforce the depth assignment. Elements at 1.05 scale feel like they are leaning toward the viewer; elements at 0.92 feel set back. Combined with opacity, this creates convincing foreground/background separation without 3D transforms.

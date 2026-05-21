@@ -8,34 +8,37 @@ category: visual-design
 
 A good promo video feels like one continuous piece, not a slideshow of unrelated animations. This requires a consistent motion language: the same easing curves, the same timing rhythm, and the same spring feel across all scenes.
 
-## Spring presets
+**Pair with `hyperframes-creative/references/motion-principles.md`** for the qualitative guardrails (easing-as-emotion, build/breathe/resolve, load-bearing GSAP rules — no double transforms, prefer `fromTo` over `from`). This file is the **numeric overlay** — spring values, frame counts at 30 fps, stagger caps — that the build agent translates into GSAP code.
 
-Define these once in design constants and reuse everywhere:
+## Spring intents
 
-| Preset     | Config                                       | Use for                                       |
-| ---------- | -------------------------------------------- | --------------------------------------------- |
-| **entry**  | `{ mass: 1, damping: 18, stiffness: 120 }`   | Primary elements entering the frame           |
-| **gentle** | `{ mass: 1, damping: 24, stiffness: 80 }`    | Background elements, subtle movements         |
-| **snappy** | `{ mass: 0.8, damping: 14, stiffness: 200 }` | UI elements, small icons, button-like objects |
-| **heavy**  | `{ mass: 1.5, damping: 20, stiffness: 100 }` | Large images, mockups, hero visuals           |
+HyperFrames motion runs on GSAP, not a spring solver. Spring **intents** below describe the feel each named role should have; the build agent realizes them with the GSAP ease in the next table. Reuse the same intent for similar elements across scenes.
 
-**Consistency rule**: Similar elements should use the same preset. All icons in a scene use `snappy`. All hero images use `heavy`. Do not give each element a bespoke spring config.
+| Intent     | Feel                              | GSAP ease + duration             | Use for                                       |
+| ---------- | --------------------------------- | -------------------------------- | --------------------------------------------- |
+| **entry**  | Confident overshoot, settles fast | `back.out(1.4)` over 0.40-0.50 s | Primary elements entering the frame           |
+| **gentle** | Soft glide, no overshoot          | `power2.out` over 0.55-0.70 s    | Background elements, subtle movements         |
+| **snappy** | Tight overshoot, near-instant     | `back.out(1.7)` over 0.20-0.30 s | UI elements, small icons, button-like objects |
+| **heavy**  | Weighted deceleration             | `power3.out` over 0.65-0.85 s    | Large images, mockups, hero visuals           |
 
-## Easing for non-spring interpolation
+**Consistency rule**: Similar elements share the same intent. All icons in a scene use `snappy`. All hero images use `heavy`. Do not invent a bespoke ease + duration per element.
 
-When using `interpolate()` with `Easing`:
+## GSAP easing palette
 
-| Curve              | Use for                               | Easing function                | CSS cubic-bezier                |
-| ------------------ | ------------------------------------- | ------------------------------ | ------------------------------- |
-| **ease-out-expo**  | Elements entering (snappy, confident) | `Easing.out(Easing.exp)`       | `cubic-bezier(0.16, 1, 0.3, 1)` |
-| **ease-out-quart** | Smooth refined entrances              | `Easing.out(Easing.poly(4))`   | `cubic-bezier(0.25, 1, 0.5, 1)` |
-| **ease-in**        | Elements leaving                      | `Easing.in(Easing.exp)`        | —                               |
-| **ease-in-out**    | State changes, morphs                 | `Easing.inOut(Easing.poly(3))` | —                               |
-| **linear**         | Continuous drift, rotation, particles | No easing needed               | —                               |
+GSAP eases drive every tween — pick from this curated set (the broader GSAP catalog exists, but these read cleanly on video and stay distinct from each other):
 
-**When to choose which**: ease-out-expo (`cubic-bezier(0.16, 1, 0.3, 1)`) is snappy and confident — use for primary hero entrances and CTA moments. ease-out-quart (`cubic-bezier(0.25, 1, 0.5, 1)`) is smoother and more refined — use for secondary elements and ambient motion.
+| Curve             | Use for                               | GSAP ease       | Equivalent cubic-bezier         |
+| ----------------- | ------------------------------------- | --------------- | ------------------------------- |
+| **expo out**      | Elements entering (snappy, confident) | `expo.out`      | `cubic-bezier(0.16, 1, 0.3, 1)` |
+| **power3 out**    | Smooth refined entrances              | `power3.out`    | `cubic-bezier(0.25, 1, 0.5, 1)` |
+| **power2 in**     | Elements leaving (exit accelerates)   | `power2.in`     | —                               |
+| **power2 inOut**  | State changes, morphs                 | `power2.inOut`  | —                               |
+| **back.out(1.4)** | Overshoot entries (`entry` intent)    | `back.out(1.4)` | —                               |
+| **none / linear** | Continuous drift, rotation, particles | `none`          | —                               |
 
-**Forbidden**: `Easing.bounce` and `Easing.elastic`. They feel dated and draw attention to the animation itself rather than the content. Real objects decelerate smoothly — they do not bounce.
+**When to choose which**: `expo.out` is snappy and confident — primary hero entrances, CTA moments. `power3.out` is smoother and more refined — secondary elements, ambient motion. `back.out(1.4)` is the entry-overshoot default.
+
+**Forbidden**: `bounce.out` and `elastic.out`. They feel dated and draw attention to the animation itself rather than the content. Real objects decelerate smoothly — they do not bounce. (`back.out` with a low overshoot 1.2-1.7 is the sanctioned overshoot; reserve higher values for explicit playfulness moments only.)
 
 ## Duration norms
 

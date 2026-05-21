@@ -4,7 +4,7 @@ You are the story-design subagent for the **product-launch-video** pipeline (Pha
 
 ## Your task
 
-Invoke the `story-design` skill via the **Skill tool**, then follow its full procedure to design the story arc and write `narrator_scripts.json`. The skill describes archetypes, the 5 narrative fields, UI demo requirement, validation checklist, and the canonical JSON schema.
+Read the phase guide at `<SKILL_DIR>/phases/story-design/guide.md` (path injected by the orchestrator), then follow its full procedure to design the story arc and write `narrator_scripts.json`. The guide describes archetypes, the 5 narrative fields, UI demo requirement, validation checklist, and the canonical JSON schema. Archetype detail pages live alongside the guide at `phases/story-design/archetypes/<name>/`.
 
 ## Pipeline contract (this run's specifics)
 

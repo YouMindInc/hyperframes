@@ -1,12 +1,14 @@
 ---
 name: video-typography
-description: "Font hierarchy, scale, and selection for Remotion videos — site fonts first, curated fallbacks second [font, typography, text, hierarchy, scale]"
+description: "Font hierarchy, scale, and selection for HyperFrames videos — site fonts first, curated fallbacks second [font, typography, text, hierarchy, scale]"
 category: visual-design
 ---
 
 # Typography for Video
 
 Video typography differs from web typography. There is no scrolling, no responsive reflow, and the viewer cannot control the pace. Every text element must be legible at a glance within its visible window (typically 1-5 seconds).
+
+**Pair with `hyperframes-creative/references/typography.md`** for banned fonts (Inter, Roboto, Syne…), register-based font selection, and the Google Fonts discovery script. This file is the **numeric overlay** — scale, CJK fallback, letter-spacing values — on top of those principles.
 
 ## Font Selection Strategy
 
@@ -22,8 +24,8 @@ The extracted `tokens.json` and `assets/fonts/` contain the brand's typefaces. T
 
 1. Check `tokens.json` → `fonts` for the font family names
 2. Check `extraction/assets/fonts/` for actual font files (.woff2, .ttf, .otf)
-3. Load them via `staticFile()` in Remotion and register with `@font-face`
-4. If the site uses a Google Font, load it directly from Google Fonts instead of the extracted file
+3. The HyperFrames compiler auto-embeds supported fonts via inline-data `@font-face` — just write the `font-family` in CSS and put the file under `hyperframes/public/fonts/<file>`. No `<link>` tag, no `@import`. If you need to declare a face explicitly (variable axes, weight range), write the `@font-face` rule yourself pointing at `public/fonts/<file>`.
+4. If the site uses a Google Font, write the `font-family` in CSS — the compiler picks it up. Do NOT add `<link rel="stylesheet" href="fonts.googleapis.com/...">`; renders run in headless Chrome with no network.
 
 ### Priority 2: Curated fallbacks (only when needed)
 
@@ -88,8 +90,11 @@ Example: A hero title that is larger, lighter weight (300), uppercase, AND has w
 
 When animating numeric values (counters, percentages, statistics):
 
-```tsx
-fontVariantNumeric: "tabular-nums";
+```css
+.counter,
+.stat-value {
+  font-variant-numeric: tabular-nums;
+}
 ```
 
 This prevents width jumping as digits change. Without it, neighboring elements will jitter.
@@ -98,15 +103,21 @@ This prevents width jumping as digits change. Without it, neighboring elements w
 
 Enable kerning explicitly — some renderers skip it by default:
 
-```tsx
-fontKerning: "normal";
+```css
+.counter,
+.stat-value {
+  font-kerning: normal;
+}
 ```
 
 Always set both together on animated number elements:
 
-```tsx
-fontVariantNumeric: "tabular-nums",
-fontKerning: "normal",
+```css
+.counter,
+.stat-value {
+  font-variant-numeric: tabular-nums;
+  font-kerning: normal;
+}
 ```
 
 ## Letter-spacing guide
@@ -135,8 +146,11 @@ Headless Chromium has no CJK or emoji fonts unless explicitly installed. The Doc
 
 1. **Every `font-family` must include a CJK fallback** — even if you don't expect Chinese text, the narrator script or user edits may introduce it:
 
-   ```ts
-   fontFamily: "'BrandFont', 'Noto Sans CJK SC', 'PingFang SC', sans-serif";
+   ```css
+   .display,
+   .body {
+     font-family: "BrandFont", "Noto Sans CJK SC", "PingFang SC", sans-serif;
+   }
    ```
 
 2. **For Chinese-primary content**, use a CJK font as the display font — don't rely on fallback rendering:

@@ -172,12 +172,16 @@ say "Installing skills from the local repo into .claude/skills/ ..."
 npx --yes skills add "$HF_REPO" --skill '*' --agent claude-code --yes \
   || fail "skills add failed."
 
-# --------- step 7: verify the 5 launch-video-related skills landed ---------
+# --------- step 7: verify skill graph landed ---------
 say "Verifying skill installation..."
 
-REQUIRED=(web-extraction story-design visual-design product-launch-video hyperframes-animation)
+# Top-level skills the orchestrator + subagents load via Skill tool.
+# web-extraction / story-design / visual-design are NO LONGER standalone skills —
+# they live under product-launch-video/phases/<name>/ now and ride along with
+# the product-launch-video skill install.
+REQUIRED_SKILLS=(product-launch-video hyperframes-core hyperframes-animation hyperframes-cli hyperframes-media)
 MISSING=()
-for s in "${REQUIRED[@]}"; do
+for s in "${REQUIRED_SKILLS[@]}"; do
   if [[ -d ".claude/skills/$s" ]]; then
     ok ".claude/skills/$s/"
   else
@@ -185,16 +189,30 @@ for s in "${REQUIRED[@]}"; do
   fi
 done
 
+# Phase guides nested inside product-launch-video. These don't load via Skill
+# tool; the orchestrator passes their absolute paths to subagents via Dispatch
+# context, so they must physically land on disk under .claude/skills/.
+PHASE_GUIDES=(web-extraction story-design visual-design audio)
+for p in "${PHASE_GUIDES[@]}"; do
+  guide=".claude/skills/product-launch-video/phases/$p/guide.md"
+  if [[ -f "$guide" ]]; then
+    ok "$guide"
+  else
+    MISSING+=("$guide")
+  fi
+done
+
 if [[ ${#MISSING[@]} -gt 0 ]]; then
-  warn "Missing skill(s): ${MISSING[*]}"
+  warn "Missing: ${MISSING[*]}"
   warn "Subagent dispatches that rely on them will fail. Check skills/ in the repo and re-run."
 fi
 
-# Verify the orchestrator's agents/ wrappers came across
+# Verify the orchestrator's agents/ wrappers came across (7 expected: web-extraction,
+# story-design, visual-design, audio, hyperframes-prep, hyperframes-scene, hyperframes-finalize)
 AGENTS_DIR=".claude/skills/product-launch-video/agents"
 if [[ -d "$AGENTS_DIR" ]]; then
   AGENT_COUNT=$(find "$AGENTS_DIR" -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' ')
-  ok "$AGENTS_DIR/ has $AGENT_COUNT subagent prompt file(s)"
+  ok "$AGENTS_DIR/ has $AGENT_COUNT subagent prompt file(s) (expect 7)"
 else
   warn "$AGENTS_DIR/ missing — the orchestrator's dispatch wrappers didn't come across."
 fi
