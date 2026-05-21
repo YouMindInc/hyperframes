@@ -6,6 +6,8 @@ category: visual-design
 
 # Color System for Video
 
+**Pair with `hyperframes-creative/references/house-style.md` and `hyperframes-creative/palettes/*.md`** for the named palette catalog and the "lazy defaults to question" list (no gradient text, no `#000` / `#fff`, etc.). This file is the **numeric overlay** — 60-30-10 allocation, OKLCH neutral tinting, contrast targets — applied on top of whichever palette is in play.
+
 ## Extract the brand palette from tokens.json
 
 `tokens.json` contains the design tokens extracted from the target website. The `colors` section is your primary source.
@@ -45,17 +47,23 @@ Pure gray has no personality. Always tint neutral colors toward the brand hue:
 - If the brand is warm (red/orange/yellow): add a subtle warm cast to grays
 - If the brand is cool (blue/purple/green): add a subtle cool cast
 
-The tint should be barely perceptible but creates subconscious cohesion. In code:
+The tint should be barely perceptible but creates subconscious cohesion. In CSS:
 
-```tsx
-// Instead of pure gray backgrounds
-background: "#1a1a1a"; // dead, no personality
+```css
+/* Instead of pure gray backgrounds */
+.scene {
+  background: #1a1a1a;
+} /* dead, no personality */
 
-// Tint toward brand blue
-background: "#1a1c22"; // cool-tinted, cohesive
+/* Tint toward brand blue */
+.scene {
+  background: #1a1c22;
+} /* cool-tinted, cohesive */
 
-// Tint toward brand orange
-background: "#221a18"; // warm-tinted, inviting
+/* Tint toward brand orange */
+.scene {
+  background: #221a18;
+} /* warm-tinted, inviting */
 ```
 
 **OKLCH approach**: Add a chroma of ~0.01 to all neutral stops in OKLCH space. This is the minimum perceptible hue that still reads as "gray" but feels alive. Warm brand → positive hue angle (~30-60°), cool brand → ~230-270°.
@@ -86,7 +94,7 @@ Every scene in the video must feel like it belongs to the same visual system.
 
 **Rules**:
 
-- Define the background palette at the project level (in `Root.tsx` design constants), not per scene
+- Define the background palette once at the project level — CSS custom properties on `:root` (or a shared `<style>` in `index.html`), referenced from every scene's `<style>` — not per scene as ad-hoc hex values
 - Scenes can vary in lightness (dark scene → light scene for contrast) but must share the same hue family
 - Accent color usage must be consistent: if primary blue is the CTA color in scene 1, it cannot become a background in scene 5
 - Data visualization colors should be derived from the brand palette, not arbitrary

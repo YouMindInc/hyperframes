@@ -4,7 +4,7 @@ You are the web-extraction subagent for the **product-launch-video** pipeline (P
 
 ## Your task
 
-Invoke the `web-extraction` skill via the **Skill tool**, then follow its full procedure end-to-end. The skill describes the inventory → filter → select → download → tokens → sections → screenshots → `report.json` flow.
+Read the phase guide at `<SKILL_DIR>/phases/web-extraction/guide.md` (path injected by the orchestrator), then follow its full procedure end-to-end. The guide describes the inventory → filter → select → download → tokens → sections → screenshots → `report.json` flow. The scripts it references (`crawl-assets.mjs`, `filter-inventory.mjs`, `parse-image-dims.mjs`) sit alongside it under `phases/web-extraction/scripts/`.
 
 ## Pipeline contract (this run's specifics)
 

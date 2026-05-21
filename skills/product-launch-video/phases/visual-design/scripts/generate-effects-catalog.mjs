@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generate skills/visual-design/effects-catalog.md from
+// Generate skills/product-launch-video/phases/visual-design/effects-catalog.md from
 // skills/hyperframes-animation/rules/*.md frontmatter.
 //
 // This is the single-source-of-truth chain:
@@ -14,7 +14,9 @@ import { resolve, join, basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const RULES_DIR = resolve(here, "../../hyperframes-animation/rules");
+// here = skills/product-launch-video/phases/visual-design/scripts/
+// rules = skills/hyperframes-animation/rules/  → go up 4, across to hyperframes-animation
+const RULES_DIR = resolve(here, "../../../../hyperframes-animation/rules");
 const OUT_PATH = resolve(here, "../effects-catalog.md");
 
 // Tag-priority routing. Each rule lands in the FIRST matching category, so order matters.
@@ -103,7 +105,7 @@ for (const list of groups.values()) list.sort((a, b) => a.name.localeCompare(b.n
 let out = `# Animation Effects Catalog
 
 > ⚠ AUTO-GENERATED from \`skills/hyperframes-animation/rules/*.md\`. Do NOT edit by hand.
-> Regenerate: \`node skills/visual-design/scripts/generate-effects-catalog.mjs\`
+> Regenerate: \`node skills/product-launch-video/phases/visual-design/scripts/generate-effects-catalog.mjs\`
 
 Reference these effects **by name** (backtick-wrapped) in \`section_plan.md\`. The build agent (Phase 4) translates each name into its \`hyperframes-animation/rules/<name>.md\` recipe.
 

@@ -1,7 +1,7 @@
 # Animation Effects Catalog
 
 > ⚠ AUTO-GENERATED from `skills/hyperframes-animation/rules/*.md`. Do NOT edit by hand.
-> Regenerate: `node skills/visual-design/scripts/generate-effects-catalog.mjs`
+> Regenerate: `node skills/product-launch-video/phases/visual-design/scripts/generate-effects-catalog.mjs`
 
 Reference these effects **by name** (backtick-wrapped) in `section_plan.md`. The build agent (Phase 4) translates each name into its `hyperframes-animation/rules/<name>.md` recipe.
 
@@ -65,3 +65,8 @@ Total effects: 27
 | `reactive-displacement`      | Physical collision where an entering element's spring drives the exiting element's displacement — single source of truth makes the motion causally linked. |
 | `scale-swap-transition`      | Coordinated shrink-out + spring pop-in morph-like transition between two elements — no SVG path interpolation needed.                                      |
 | `sine-wave-loop`             | Continuous breathing / idle ambient motion using trigonometry — keeps elements alive after entry settles. Pairs with virtually every entry rule.           |
+
+## Skipped (frontmatter problems)
+
+- css-marker-patterns.md: missing frontmatter (name + description)
+- gsap-effects.md: missing frontmatter (name + description)

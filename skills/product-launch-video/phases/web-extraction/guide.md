@@ -1,10 +1,3 @@
----
-name: web-extraction
-description: Extract structured design data (visual assets, brand tokens, page structure) from a live website using Puppeteer headless Chrome. Use when you need to crawl a site for video creative work, design analysis, or any task that needs the site's images, SVGs, fonts, color palette, and section layout in a structured form.
-metadata:
-  tags: extraction, puppeteer, assets, design-tokens, website-analysis
----
-
 # Web Extraction
 
 Extract assets, design tokens, and page structure from a target URL using `puppeteer-core` headless Chrome. Output is a structured `extraction/` tree consumable by downstream creative tooling (e.g. the `/product-launch-video` orchestrator).

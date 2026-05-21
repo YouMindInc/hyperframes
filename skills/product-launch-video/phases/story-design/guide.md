@@ -1,10 +1,3 @@
----
-name: story-design
-description: Design a video's story — pick a storytelling archetype, structure the scene sequence, define each scene's narrative intent, and write narrator scripts. Use when planning a promotional / explainer / launch video from extraction data (assets, tokens, sections). Covers story structure only; visual treatment is a separate concern (see `/visual-design`).
-metadata:
-  tags: planning, narrative, story, video-direction, storyboard, archetype
----
-
 # Story Design
 
 The story layer of a promotional video. Pick a storytelling archetype, design the scene sequence, define each scene's narrative intent, and write narrator scripts. Output: `narrator_scripts.json`.
@@ -103,5 +96,5 @@ Use `sceneNumber` (not `scene_id`), `sceneName` (not `scene_name`), `script` (no
 
 ## See also
 
-- `/visual-design` — visual treatment for each scene (consumes `narrator_scripts.json`).
-- `/product-launch-video` — orchestrator that calls this skill as one phase of a website-to-launch-video pipeline.
+- `phases/visual-design/guide.md` — visual treatment for each scene (downstream; consumes `narrator_scripts.json`).
+- `/product-launch-video` (this skill's `SKILL.md`) — orchestrator that calls this guide as Phase 2 of the website-to-launch-video pipeline.
