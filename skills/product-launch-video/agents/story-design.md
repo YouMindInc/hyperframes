@@ -18,6 +18,18 @@ Invoke the `story-design` skill via the **Skill tool**, then follow its full pro
   - `extraction/pages/<page>/tokens.json` (per-page accents)
   - `extraction/screenshots/` (reference visuals)
 
+## Self-validate before reporting done
+
+The Dispatch context block of your prompt contains a "Schema validator:" line with an absolute path. After writing `narrator_scripts.json`, **run that validator and fix every error it reports**:
+
+```bash
+node <validator-path> ./narrator_scripts.json
+```
+
+The validator catches the documented drift modes (`scene_id` vs `sceneNumber`, `narration` vs `script`, flattened `narrativeIntent` fields, missing UI-demo scene type, etc.). Iterate until it exits 0.
+
+Do not report done until the validator passes.
+
 ## When done — report
 
 - Narrative archetype chosen

@@ -76,6 +76,7 @@ After it returns: read `extraction/report.json` to confirm shape; relay key fact
 2. Compose prompt = <its contents>
                   + "\n\n## Dispatch context\n"
                   + "Phase 1 summary: <one-paragraph: pages crawled, brand colors, fonts noted>\n"
+                  + "Schema validator: <SKILL_DIR>/scripts/validate-narrator-scripts.mjs\n"
 3. Agent(
      subagent_type: "general-purpose",
      description: "Phase 2: story design",
@@ -83,7 +84,18 @@ After it returns: read `extraction/report.json` to confirm shape; relay key fact
    )
 ```
 
-After it returns: read `narrator_scripts.json` to verify schema (`sceneNumber` / `narrativeIntent` / `estimatedDuration`). Surface archetype + scene list to the user.
+`<SKILL_DIR>` is the directory containing this SKILL.md — pass it as an absolute path so the subagent (which has a fresh cwd-relative view) can invoke `node <abs-path>` directly.
+
+After it returns — **machine-validate before continuing**:
+
+```bash
+node <SKILL_DIR>/scripts/validate-narrator-scripts.mjs ./narrator_scripts.json
+```
+
+- Exit 0 → surface archetype + scene list to the user, proceed to Phase 3.
+- Exit 1 → re-dispatch Phase 2 with the validator's stderr appended to the Dispatch context as "Schema errors to fix: <stderr>". Do NOT advance to Phase 3 on a failed schema — Phase 3 reads these field names and will silently produce wrong output.
+
+The subagent is also instructed (in `agents/story-design.md`) to self-validate before reporting done, so this is a double check, not the primary gate.
 
 ## Phase 3 — dispatch visual-design
 
@@ -92,6 +104,7 @@ After it returns: read `narrator_scripts.json` to verify schema (`sceneNumber` /
 2. Compose prompt = <its contents>
                   + "\n\n## Dispatch context\n"
                   + "Phase 2 summary: <archetype + scene count + emotional arc>\n"
+                  + "Schema validator: <SKILL_DIR>/scripts/validate-section-plan.mjs\n"
 3. Agent(
      subagent_type: "general-purpose",
      description: "Phase 3: visual design",
@@ -99,7 +112,16 @@ After it returns: read `narrator_scripts.json` to verify schema (`sceneNumber` /
    )
 ```
 
-After it returns: read `section_plan.md` to verify scenes are populated with effect names and choreography references.
+After it returns — **machine-validate before continuing**:
+
+```bash
+node <SKILL_DIR>/scripts/validate-section-plan.mjs ./section_plan.md
+```
+
+This script asserts every effect name in `section_plan.md` exists in `skills/hyperframes-animation/rules/` (the single source of truth) or is a known choreography pattern. Stops the "phase 3 invents an effect name, phase 4 can't find it" failure mode.
+
+- Exit 0 → proceed to Phase 4.
+- Exit 1 → re-dispatch Phase 3 with the validator's stderr appended as "Effect-name errors to fix: <stderr>". Do NOT advance to Phase 4 — the build agent will hunt for non-existent rules and waste a phase.
 
 ## Phase 4 — dispatch hyperframes-build
 

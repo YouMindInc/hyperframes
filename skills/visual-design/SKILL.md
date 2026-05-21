@@ -71,63 +71,19 @@ A scene where elements spring in and then sit still is a slideshow, not a video.
 
 ## Animation effects catalog
 
-These are the motion techniques the build agent can implement. Reference them **by name** in your visual plan. Combine multiple effects per scene for rich choreography.
+The catalog is **auto-generated** from `skills/hyperframes-animation/rules/*.md` — those rule files are the single source of truth. Effect names here always match rule filenames; one cannot drift from the other.
 
-### Camera & Viewport
+→ **Read [`effects-catalog.md`](./effects-catalog.md)** for the current effect list (description per effect, grouped by category).
 
-| Effect                     | Description                                                                                                                                               | Best for                                                                              |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **camera-cursor-tracking** | Camera locks onto a moving element and follows it across the frame, keeping it centered while background shifts                                           | UI demos where attention must follow a cursor or highlight across a product interface |
-| **coordinate-target-zoom** | Camera zooms into a specific non-centered point on the canvas, with counter-translation to keep the target visible                                        | Focusing on a specific UI element, data point, or product detail                      |
-| **multi-phase-camera**     | Camera moves through 2-3 sequential phases (pull back to show context → focus on subject → push in for detail) with continuous micro-drift between phases | Complex scenes that need to reveal context first, then drill into specifics           |
+Reference effects **by name** in `section_plan.md` (backtick-wrapped, e.g. `` `hacker-flip-3d` ``). Combine multiple per scene for rich choreography. Phase 3 self-validates against this catalog — any unknown name is a fatal error from `validate-section-plan.mjs`.
 
-### Interaction & Click Simulation
+If you need an effect that doesn't exist in the catalog:
 
-| Effect                     | Description                                                                                                                 | Best for                                                          |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| **press-release-spring**   | Element compresses down like a physical button press, then springs back with elastic recovery                               | CTA buttons, interactive UI elements, tactile product demos       |
-| **physics-press-reaction** | Realistic click where surrounding elements physically react to the press (displacement, wobble)                             | Product interaction demos where the UI feels alive and responsive |
-| **cursor-click-ripple**    | Animated cursor glides to a target, clicks with visible depression, and expanding ripple rings radiate from the click point | Step-by-step product walkthroughs, demonstrating user workflows   |
-
-### Text & Typography
-
-| Effect                       | Description                                                                                                                        | Best for                                                              |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **hacker-flip-3d**           | Characters rotate in 3D one by one, cycling through random glyphs before settling on the correct letter (decryption/decode effect) | Tech brand reveals, cybersecurity products, "unlocking" moments       |
-| **discrete-text-sequence**   | Text changes at specific frame thresholds (not smooth typing — abrupt swaps) creating a non-linear, glitchy typing feel            | Data processing visuals, AI output simulation, rapid-fire messaging   |
-| **context-sensitive-cursor** | Typing cursor changes its appearance (color, shape, blinking speed) based on the text segment being typed                          | Coding demos, multi-context workflows, text that shifts meaning       |
-| **vertical-spring-ticker**   | Text slots scroll vertically with spring physics (like a slot machine) to reveal new values                                        | Changing statistics, rotating feature names, before/after value swaps |
-| **asr-keyword-glow**         | Specific keywords glow and scale up at the exact moment they are spoken in the narration (synced to word timestamps)               | Emphasizing key terms during narration, linking audio to visual beats |
-| **3d-text-depth-layers**     | Text rendered with multiple offset layers behind it creating a 3D extrusion/shadow depth effect                                    | Hero headlines, brand name reveals, dramatic typography moments       |
-| **counting-dynamic-scale**   | Number counter animates upward while font size grows proportionally — bigger numbers feel physically larger                        | Revenue stats, user counts, performance metrics, growth stories       |
-
-### SVG & Icons
-
-| Effect                  | Description                                                                                                                     | Best for                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **svg-path-draw**       | SVG outlines draw themselves stroke by stroke, revealing the shape progressively                                                | Logo reveals, diagram construction, technical illustrations           |
-| **svg-icon-enrichment** | Individual parts of SVG icons animate independently (clock hands rotate, signal dots pulse, checkmarks draw) — icons feel alive | Feature lists where each icon has personality, dashboard-style scenes |
-
-### Layout & 3D
-
-| Effect                       | Description                                                                                                | Best for                                                              |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **split-tilt-cards**         | Two cards tilt in opposite directions on the Y-axis, creating a symmetric 3D split-screen                  | Before/after comparisons, feature vs. competitor, plan tiers          |
-| **3d-page-scroll**           | A webpage screenshot is displayed on a tilted 3D card that scrolls vertically to reveal different sections | Product demos, showing a full landing page or dashboard in context    |
-| **orbit-3d-entry**           | Elements flip in from 3D space and then orbit on an elliptical path around a center point                  | Feature ecosystems, integration showcases, connected capabilities     |
-| **center-outward-expansion** | All elements start stacked at the center of the screen, then spring outward to their final positions       | Feature reveals, capability explosions, "everything included" moments |
-| **avatar-cloud-network**     | User avatars arranged on an elliptical ring with animated SVG lines connecting them to a center hub        | Social proof, community size, network effects, collaboration features |
-| **ai-tracking-box**          | A bounding box with corner markers follows an oscillating path, simulating AI object detection             | AI/ML product demos, computer vision features, smart detection        |
-
-### Transition & Motion
-
-| Effect                         | Description                                                                                                      | Best for                                                                      |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **scale-swap-transition**      | Current element shrinks away while the next element pops in at the same position — a coordinated morph-like swap | Shot transitions within a scene, swapping between related visuals             |
-| **reactive-displacement**      | New elements physically push existing elements out of the way as they enter (collision physics)                  | High-energy reveals, competitive displacement, "replacing the old way"        |
-| **card-morph-anchor**          | A persistent container smoothly morphs its dimensions and border-radius as content inside changes between shots  | Scenes with a persistent card that evolves (feature card → detail view → CTA) |
-| **sine-wave-loop**             | Continuous breathing/floating animation using trigonometric functions for natural-feeling idle motion            | Background elements, decorative shapes, ambient visual texture                |
-| **dynamic-content-sequencing** | Timeline automatically calculated from text length and reading speed — content phases itself                     | Text-heavy scenes, multi-step explanations, auto-paced reveals                |
+1. Try combining existing effects first.
+2. If that's not enough, **don't invent a name** — flag the gap in your phase report as "needed effect missing: <description>". A maintainer adds a rule file + regenerates the catalog:
+   ```bash
+   node skills/visual-design/scripts/generate-effects-catalog.mjs
+   ```
 
 ---
 
