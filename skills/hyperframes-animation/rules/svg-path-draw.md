@@ -269,6 +269,6 @@ Requires `fill-opacity: 0` initially and a real `fill` color in CSS.
 
 ## Pairs with HF skills
 
-- `/hyperframes-gsap` — timeline + stroke property tween
+- `/hyperframes-adapters` — timeline + stroke property tween
 - `/hyperframes-core` — composition wiring
 - `/hyperframes-cli` — `hyperframes lint`

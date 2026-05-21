@@ -23,15 +23,15 @@ Video narrative is independent from webpage structure. A webpage is an informati
 Before designing scenes, pick **one** storytelling archetype. Read its overview for guidance and study its golden samples; don't mix sections from different archetypes — each is a coherent emotional journey.
 
 <archetypes>
-<pain-agitate-solve path="narrative-archetypes/pain-agitate-solve/overview.md">
+<pain-agitate-solve path="archetypes/pain-agitate-solve/overview.md">
 **Pain → Agitate → Solve (PAS)** — Build painful recognition, then reveal the remedy. Best for: products solving a known frustration, B2B tools, audiences who already feel the pain.
 </pain-agitate-solve>
 
-<future-pacing path="narrative-archetypes/future-pacing/overview.md">
+<future-pacing path="archetypes/future-pacing/overview.md">
 **Future Pacing — Vision → Proof** — Paint a beautiful future, then prove it's achievable. Best for: AI/tech products with novel capabilities, new category products.
 </future-pacing>
 
-<demo-loop path="narrative-archetypes/demo-loop/overview.md">
+<demo-loop path="archetypes/demo-loop/overview.md">
 **Demo Loop — Question → Instant Answer** — Minimal narrative around repeated product demos. Best for: UI-centric products, data tools, "seeing is believing".
 </demo-loop>
 </archetypes>
@@ -57,7 +57,7 @@ At least one scene must function as a UI demo by recreating the product's real i
 ## Workflow
 
 1. Review extraction data: skim screenshots, read `report.json` for an index, then deep-read `sections.json` + `tokens.json` for pages you care about.
-2. Choose a narrative archetype that fits the product and audience (read the relevant `narrative-archetypes/<name>/overview.md`).
+2. Choose a archetype that fits the product and audience (read the relevant `archetypes/<name>/overview.md`).
 3. Design the scene sequence — purely narrative, not webpage order.
 4. Define the Narrative Intent for each scene (all 5 fields above).
 5. Write narrator scripts for each scene (plain text, no markdown).

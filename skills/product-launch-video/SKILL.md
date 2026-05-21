@@ -16,13 +16,13 @@ The pipeline cleanly separates **skills** (reusable domain knowledge) from **sub
 
 ## Pipeline
 
-| Phase | Subagent prompt file          | Underlying skill(s) the subagent loads via Skill tool                                               | Writes                      |
-| ----- | ----------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------- |
-| 1     | `agents/web-extraction.md`    | `web-extraction`                                                                                    | `extraction/`               |
-| 2     | `agents/story-design.md`      | `story-design`                                                                                      | `narrator_scripts.json`     |
-| 3     | `agents/visual-design.md`     | `visual-design`                                                                                     | `section_plan.md`           |
-| 4     | `agents/hyperframes-build.md` | `hyperframes-core` + `hyperframes-cli` + `hyperframes-animation` + `hyperframes-gsap` (+ optionals) | `hyperframes/`              |
-| 5     | (you, not a subagent)         | —                                                                                                   | `hyperframes/out/video.mp4` |
+| Phase | Subagent prompt file          | Underlying skill(s) the subagent loads via Skill tool                                                   | Writes                      |
+| ----- | ----------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------- |
+| 1     | `agents/web-extraction.md`    | `web-extraction`                                                                                        | `extraction/`               |
+| 2     | `agents/story-design.md`      | `story-design`                                                                                          | `narrator_scripts.json`     |
+| 3     | `agents/visual-design.md`     | `visual-design`                                                                                         | `section_plan.md`           |
+| 4     | `agents/hyperframes-build.md` | `hyperframes-core` + `hyperframes-cli` + `hyperframes-animation` + `hyperframes-adapters` (+ optionals) | `hyperframes/`              |
+| 5     | (you, not a subagent)         | —                                                                                                       | `hyperframes/out/video.mp4` |
 
 ## Project layout
 
@@ -237,4 +237,4 @@ If a phase fails or you abort mid-run, mark `[interrupted]` instead of `[done]`.
 
 - `/hyperframes-animation` — scene blueprints + atomic animation rules (Phase 4's main reference)
 - `/web-extraction`, `/story-design`, `/visual-design` — the reusable domain skills invoked by Phases 1–3
-- `/hyperframes-core`, `/hyperframes-cli`, `/hyperframes-gsap` — composition contract + dev loop + GSAP API
+- `/hyperframes-core`, `/hyperframes-cli`, `/hyperframes-adapters` — composition contract + dev loop + animation runtime references

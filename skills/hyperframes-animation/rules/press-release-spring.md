@@ -291,6 +291,6 @@ tl.to(
 
 ## Pairs with HF skills
 
-- `/hyperframes-gsap` — `back.out` ease + multi-tween coordination
+- `/hyperframes-adapters` — `back.out` ease + multi-tween coordination
 - `/hyperframes-core` — composition wiring
 - `/hyperframes-cli` — `hyperframes lint`

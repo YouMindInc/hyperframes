@@ -302,6 +302,6 @@ document
 
 ## Pairs with HF skills
 
-- `/hyperframes-gsap` — single driver, reverse-search dispatch
+- `/hyperframes-adapters` — single driver, reverse-search dispatch
 - `/hyperframes-core` — composition wiring
 - `/hyperframes-cli` — `hyperframes lint`
