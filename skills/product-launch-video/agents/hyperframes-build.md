@@ -59,12 +59,12 @@ Check whether `hyperframes/` already exists:
 - Exactly **one** paused GSAP timeline per composition, registered to `window.__timelines["scene-N"]`.
 - Build timelines synchronously during page load. Never inside async / setTimeout / Promise / event handlers.
 - Animate **only via transforms (`x`, `y`, `scale`, `rotation`) and `opacity`**. This applies to both `tl.to()` tweens AND stepped `tl.set()` calls — anything that touches layout-affecting properties (`width` / `height` / `top` / `left` / `font-size` / `padding` / `margin` / `line-height`) will trigger per-step layout reflow and produce visible jitter, even when the visual delta is small. Need apparent "size growth" → animate `scale`. Need apparent "position change" → animate `x` / `y`. Cursor or icon needs to land on a target element → see `hyperframes-animation/rules/anchor-at-target.md`.
-- Reference blueprints + rules from `hyperframes-animation` **by name** (don't reinvent the wheel).
+- Reference blueprints + rules from `hyperframes-animation` **by name** (don't reinvent the wheel). The section_plan uses the visual-design catalog naming. When a referenced effect name does NOT exist as a rule file (e.g. `hyperframes-animation/rules/<name>.md` is missing), search `hyperframes-animation/SKILL.md` for a blueprint whose `aka="<name>"` matches — that's the implementation. Do NOT improvise from the catalog description alone when a blueprint exists; the blueprint encodes phase timing, easing, and structural rules the description omits.
 - Copy each asset from `extraction/` to `hyperframes/public/` **before** referencing. Verify file exists. Never invent filenames.
 
 ## Hard rules
 
-Three of these are cross-file mount rules that `lint` / `validate` / `inspect` cannot catch. Full ❌/✅ examples in `hyperframes-core` → `references/sub-compositions.md` ("Common pitfalls").
+Four of these are cross-file / cross-scope rules that `lint` / `validate` / `inspect` cannot catch (mount contract + cross-scene scope). Full ❌/✅ examples in `hyperframes-core` → `references/sub-compositions.md` ("Common pitfalls").
 
 - **Sub-comp `<style>` + `<script>` go INSIDE `<template>`, not in `<head>`.** `<head>` is discarded at mount time.
 - **Host `data-composition-id` ≡ inner template `data-composition-id` ≡ `window.__timelines` key.** No `-mount`/`-slot` suffixes.
@@ -74,6 +74,7 @@ Three of these are cross-file mount rules that `lint` / `validate` / `inspect` c
 - No infinite repeats (`repeat: -1`). Compute finite repeats from `data-duration`.
 - `data-duration` on the root governs render length, not GSAP timeline length.
 - **When a `fromTo` from-state is visible** (non-zero opacity, non-default transform), use `tl.set(...) + tl.to(...)` at the same time-offset instead. `fromTo` defaults to `immediateRender: true`, which bakes the from-state at timeline-init — visible from t=0 until the tween fires, not at the tween's scheduled time.
+- **Cross-scene element-morph requires a HOISTED bridge element in `index.html`, not per-scene tweens.** When section_plan describes an element persisting or morphing across a scene boundary (e.g. "router node morphs into the next scene's central divider", "chart card morphs into a circular counter shape"), per-scene timelines cannot reach across the boundary — scene N's tl runs only on scene N's DOM. Implement via a hoisted bridge `<div>` at `#root` level (sibling of the scene hosts), animated by the master timeline in `index.html`, with both scenes' corresponding elements hidden/handed-off in master tl. See `rules/anchor-at-target.md` for the position-handoff pattern and `rules/card-morph-anchor.md` for the morph-properties pattern.
 
 ## Gates
 

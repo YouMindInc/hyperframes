@@ -23,10 +23,13 @@ For the broader HyperFrames composition contract see `hyperframes-core`. For GSA
 
 Each blueprint describes a complete multi-phase choreography with phase pipeline, glue code, and a working sample composition.
 
+**`aka` lookup**: when a section_plan (from `/visual-design`) references an effect by its catalog name and that name does NOT match an atomic rule filename, search this list for a blueprint whose `aka` matches. The catalog-facing name and the implementation filename intentionally differ — `aka` is the bridge.
+
 <blueprints>
 <blueprint
   id="proof-logo-chain"
   path="blueprints/proof-logo-chain.md"
+  aka="anchor-chain-reveal"
   role="social-proof"
   duration="6-10s"
   phases="5"
@@ -37,6 +40,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="concept-demo-decode-pan"
   path="blueprints/concept-demo-decode-pan.md"
+  aka="decrypt-pan-track"
   role="concept-demo"
   duration="6-10s"
   phases="4"
@@ -47,6 +51,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="brand-reveal-assemble-zoom"
   path="blueprints/brand-reveal-assemble-zoom.md"
+  aka="assembly-focus-reveal"
   role="brand-reveal"
   duration="4-6s"
   phases="5"
@@ -57,6 +62,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="takeover-ticker-displace"
   path="blueprints/takeover-ticker-displace.md"
+  aka="content-displace-reveal"
   role="takeover"
   duration="5-8s"
   phases="4"
@@ -67,6 +73,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="demo-page-scroll-spotlight"
   path="blueprints/demo-page-scroll-spotlight.md"
+  aka="contextual-product-showcase"
   role="demo"
   duration="5-9s"
   phases="4"
@@ -77,6 +84,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="hook-counter-burst"
   path="blueprints/hook-counter-burst.md"
+  aka="counting-icon-burst"
   role="opening-hook"
   duration="3-5s"
   phases="4"
@@ -87,6 +95,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="workflow-approve-press"
   path="blueprints/workflow-approve-press.md"
+  aka="interactive-workflow-showcase"
   role="workflow"
   duration="4-6s"
   phases="4"
@@ -97,6 +106,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="problem-mockup-overwhelm"
   path="blueprints/problem-mockup-overwhelm.md"
+  aka="mockup-morph-overwhelm"
   role="problem"
   duration="4-6s"
   phases="4"
@@ -107,6 +117,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="cta-orbit-collapse"
   path="blueprints/cta-orbit-collapse.md"
+  aka="orbit-collapse-action"
   role="cta"
   duration="5-8s"
   phases="5"
@@ -117,6 +128,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="cta-morph-press"
   path="blueprints/cta-morph-press.md"
+  aka="morph-press-interact"
   role="cta"
   duration="4-6s"
   phases="4"
@@ -127,6 +139,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="comparison-split-cards"
   path="blueprints/comparison-split-cards.md"
+  aka="split-comparison-reveal"
   role="comparison"
   duration="4-6s"
   phases="3"
@@ -137,6 +150,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="metric-video-text-pivot"
   path="blueprints/metric-video-text-pivot.md"
+  aka="video-kinetic-text-pivot"
   role="metric"
   duration="5-8s"
   phases="4"
@@ -147,6 +161,7 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
 <blueprint
   id="messaging-multi-phrase"
   path="blueprints/messaging-multi-phrase.md"
+  aka="sequential-type-cursor"
   role="messaging"
   duration="7-8s"
   phases="3"
