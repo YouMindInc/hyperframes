@@ -8,6 +8,15 @@ Invoke the `visual-design` skill via the **Skill tool**, then follow its full pr
 
 The skill describes design principles (typography / color / composition / motion), scene quality baseline, the animation effects catalog (reference by name), choreography patterns, and how to write the plan.
 
+**If `Skill: visual-design` returns "Unknown skill"**, fall back to reading skill files directly from disk. Detect skills root:
+
+```bash
+SKILLS_ROOT=$(find "$HOME" -type d -name "visual-design" -path "*/skills/*" 2>/dev/null | head -1 | xargs -I {} dirname {})
+echo "SKILLS_ROOT=$SKILLS_ROOT"
+```
+
+Then `Read $SKILLS_ROOT/visual-design/SKILL.md` + any `$SKILLS_ROOT/visual-design/rules/<name>.md` you need.
+
 ## Pipeline contract (this run's specifics)
 
 - Your cwd is the project root. **NEVER** run `cd` as a standalone command. Use subshells.

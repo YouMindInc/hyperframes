@@ -52,7 +52,7 @@ Use a GSAP timeline because the phase ordering (move → settle → click → ri
 
 ## CSS
 
-Position cursor at the entry point. Button sits at its final position. Ripples are at the click-target center with `scale: 0` and `opacity: 0` so they hold invisible until the timeline trigger:
+Cursor, button, and ripples **all anchor to the click target's center via static CSS** (see [anchor-at-target.md](anchor-at-target.md)). The cursor's entry point is expressed as a transform offset, not a different CSS position. This eliminates manual delta math when computing the cursor's path.
 
 ```css
 .scene {
@@ -70,9 +70,16 @@ Position cursor at the entry point. Button sits at its final position. Ripples a
 }
 
 .cursor {
+  /* Anchored to the click target — same left/top as the button.
+     Negative margins offset by half the cursor's own size so the visual
+     hotspot lands dead-center on the target. */
   position: absolute;
-  left: 10%;
-  top: 80%; /* entry corner */
+  left: 50%;
+  top: 50%;
+  margin: -12px 0 0 -12px; /* half of cursor's 24×24 size */
+  width: 24px;
+  height: 24px;
+  opacity: 0;
   pointer-events: none;
   z-index: 999;
 }
@@ -101,16 +108,24 @@ Build a paused timeline. Register it on `window.__timelines` with the same key a
   window.__timelines = window.__timelines || {};
   const tl = gsap.timeline({ paused: true });
 
-  // MOVE_DUR, MOVE_EASE, CLICK_AT, PRESS_DUR, CURSOR_PRESS_SCALE, TARGET_PRESS_SCALE,
-  // RIPPLE_AT, RIPPLE_DUR, RIPPLE_SCALE, RIPPLE_STAGGER, RIPPLE_EASE
-  // — all named; values per How to Choose Values.
+  // ENTRY_DX, ENTRY_DY, MOVE_DUR, MOVE_EASE, CLICK_AT, PRESS_DUR,
+  // CURSOR_PRESS_SCALE, TARGET_PRESS_SCALE, RIPPLE_AT, RIPPLE_DUR,
+  // RIPPLE_SCALE, RIPPLE_STAGGER, RIPPLE_EASE — all named; values per
+  // How to Choose Values below.
 
-  // Phase 1 — Move cursor to target center (eased, not linear)
+  // Phase 1 — Cursor enters and approaches the target via anchor-at-target.
+  // CSS anchors `.cursor` to the target center (`left:50%; top:50%` with
+  // negative margins offset by half cursor size); the GSAP transform x/y are
+  // offsets FROM that anchor. Terminal state is always (0, 0) regardless of
+  // where the target lands on screen — no manual `target − start` delta math.
+  // Pattern reference: rules/anchor-at-target.md
+  tl.set(".cursor", { x: ENTRY_DX, y: ENTRY_DY, opacity: 0 }, 0);
   tl.to(
     ".cursor",
     {
-      x: TARGET_X,
-      y: TARGET_Y,
+      x: 0,
+      y: 0,
+      opacity: 1,
       duration: MOVE_DUR,
       ease: MOVE_EASE,
     },
@@ -141,8 +156,15 @@ Build a paused timeline. Register it on `window.__timelines` with the same key a
     CLICK_AT,
   );
 
-  // Phase 3 — Ripple burst, N rings staggered from the click point
-  tl.set([".ripple-1", ".ripple-2", ".ripple-3"], { opacity: 1 }, RIPPLE_AT);
+  // Phase 3 — Ripple burst, N rings staggered from the click point.
+  //
+  // IMPORTANT: ripples have a VISIBLE from-state (scale:1, opacity:1) before
+  // expanding to (RIPPLE_SCALE, 0). Any visible from-state — non-zero opacity,
+  // non-default transform — must NOT use `fromTo` (default `immediateRender:
+  // true` bakes the from-state at timeline init, leaking it into frames before
+  // the tween fires). Safest pattern: explicit `set + to` at the same
+  // time-offset, so the from-state is applied at exactly the click moment.
+  tl.set([".ripple-1", ".ripple-2", ".ripple-3"], { scale: 1, opacity: 1 }, RIPPLE_AT);
   tl.to(
     [".ripple-1", ".ripple-2", ".ripple-3"],
     {
@@ -151,7 +173,6 @@ Build a paused timeline. Register it on `window.__timelines` with the same key a
       duration: RIPPLE_DUR,
       ease: RIPPLE_EASE,
       stagger: RIPPLE_STAGGER,
-      immediateRender: false,
     },
     RIPPLE_AT,
   );
@@ -161,6 +182,12 @@ Build a paused timeline. Register it on `window.__timelines` with the same key a
 ```
 
 ## How to Choose Values
+
+- **ENTRY_DX / ENTRY_DY** — cursor's transform offset from the anchored target center at t=0
+  - Range: typically ±300 to ±1100 px (off-screen) on each axis; sign indicates approach direction
+  - Effects: corner entries (both axes nonzero) feel deliberate; pure horizontal/vertical reads as scripted
+  - Constraints: large enough that the cursor starts visibly off-screen; the cursor's terminal state is `(0, 0)` because CSS anchors it to the target center (see [anchor-at-target.md](anchor-at-target.md))
+  - Reference: examples/cta-orbit-collapse.html uses (-480, 240) — bottom-left entry
 
 - **MOVE_DUR** — cursor travel time from entry to target, in seconds
   - Range: 0.4–1.0 s
@@ -243,7 +270,8 @@ Build a paused timeline. Register it on `window.__timelines` with the same key a
 
 - **Timeline must be paused**: `gsap.timeline({ paused: true })`. Never call `tl.play()` — HyperFrames seeks the timeline frame-by-frame deterministically
 - **Registry key = `data-composition-id`**: `window.__timelines["<id>"]` must match the `data-composition-id` on the scene root exactly
-- **`immediateRender: false` on the ripple expand**: holds the initial state (`scale: 0`, `opacity: 0`) until the click moment, otherwise the tween pre-renders and the rings appear at the wrong size at t=0
+- **Cursor and ripples anchor to the target via CSS** (`left: 50%; top: 50%`), and tween only `x`/`y` transform offsets — no manual delta math. See [anchor-at-target.md](anchor-at-target.md).
+- **`set + to` instead of `fromTo` for any visible from-state** — ripples appear at `scale: 1` + `opacity: 1` then expand to `scale: RIPPLE_SCALE` + `opacity: 0`. `fromTo`'s default `immediateRender: true` would bake the from-state at timeline init and leak visible artifacts into earlier frames. Splitting into `set` + `to` at the same time-offset pins both to the trigger moment. (`immediateRender: false` on `fromTo` achieves the same effect but the `set + to` form is more explicit about intent.)
 - **Finite duration**: verify `tl.duration()` matches the scene's `data-duration`
 - **`pointer-events: none` on cursor + ripples**: they're purely visual; never block underlying interactivity (matters for hover-able exports)
 - **No CSS transitions / animations**: all motion lives in the GSAP timeline so seek stays deterministic

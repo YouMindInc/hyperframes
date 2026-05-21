@@ -75,7 +75,7 @@ Contrast with **standalone** compositions, which put the root directly in `<body
 
 ## Common pitfalls that pass static checks but break at render
 
-`lint`, `validate`, and `inspect` evaluate each file in isolation. These two failures live in the **cross-file mount contract** and cannot be caught until the runtime actually tries to mount the sub-composition. Watch for them at author time and verify with the pre-render checklist below.
+`lint`, `validate`, and `inspect` evaluate each file in isolation. These failures live in the **cross-file mount contract** and cannot be caught until the runtime actually tries to mount the sub-composition. The third — host wrapper visual properties — also passes `snapshot` cleanly and only manifests in the final mp4 render. Watch for all three at author time.
 
 ### Pitfall 1 — `<style>` in `<head>` instead of inside `<template>`
 
@@ -132,6 +132,48 @@ Contrast with **standalone** compositions, which put the root directly in `<body
 **Why this happens:** it feels natural to give the host slot a different name like `chart-mount` ("the mount point") vs `data-chart` ("the actual chart"). HyperFrames does not work that way — **the host's `data-composition-id` is the lookup key the framework uses to find the registered timeline**. Lint passes because each file's ids are individually valid; the cross-file mismatch only blows up at render.
 
 **Symptom:** the render logs `Sub-composition timelines not registered after 45000ms: <host-id>` for every mismatched slot, waits 45s per scene, then captures static initial-state frames (so the video is full-length but no animation plays).
+
+### Pitfall 3 — Visual properties on the host wrapper element
+
+```html
+<!-- ❌ WRONG — host wrapper background renders in snapshot but disappears in mp4 -->
+<template>
+  <style>
+    .s1-root {
+      position: absolute;
+      inset: 0;
+      background: #fafaf5; /* painted in snapshot, NOT in render */
+      border: 1px solid #ddd; /* painted in snapshot, NOT in render */
+    }
+  </style>
+  <div class="s1-root" data-composition-id="scene-1" ...>
+    <div class="s1-content">...</div>
+  </div>
+</template>
+
+<!-- ✅ RIGHT — visuals live on a child div, host wrapper is transparent -->
+<template>
+  <style>
+    .s1-root {
+      position: absolute;
+      inset: 0;
+    }
+  </style>
+  <div class="s1-root" data-composition-id="scene-1" ...>
+    <div
+      class="s1-bg"
+      style="position:absolute;inset:0;background:#fafaf5;pointer-events:none"
+    ></div>
+    <div class="s1-content">...</div>
+  </div>
+</template>
+```
+
+**Why this happens:** the render engine's frame-capture path treats the `data-composition-id` host wrapper as an inert mount point and does not paint its visual properties (background, border, box-shadow, outline). The `snapshot` tool uses a different code path that does paint them, so the bug hides until the final mp4 render.
+
+**Symptom:** a paper-tone scene renders as full black in the final mp4 (because the body bg shows through where the wrapper bg should have been). Snapshot at the same timestamp shows the correct paper background. The mismatch is the diagnostic signature — when snapshot and render disagree on the background, suspect this pitfall.
+
+**Rule of thumb:** treat the `data-composition-id` element as a positioning anchor only — give it `position` and `inset` and nothing else. Put all visuals (background, border, content) on children.
 
 ### Verification checklist before render
 

@@ -6,6 +6,15 @@ You are the story-design subagent for the **product-launch-video** pipeline (Pha
 
 Invoke the `story-design` skill via the **Skill tool**, then follow its full procedure to design the story arc and write `narrator_scripts.json`. The skill describes archetypes, the 5 narrative fields, UI demo requirement, validation checklist, and the canonical JSON schema.
 
+**If `Skill: story-design` returns "Unknown skill"**, the skill files are not registered in your sub-agent registry — fall back to reading them directly from disk. Detect skills root once:
+
+```bash
+SKILLS_ROOT=$(find "$HOME" -type d -name "story-design" -path "*/skills/*" 2>/dev/null | head -1 | xargs -I {} dirname {})
+echo "SKILLS_ROOT=$SKILLS_ROOT"
+```
+
+Then `Read $SKILLS_ROOT/story-design/SKILL.md` + any `$SKILLS_ROOT/story-design/narrative-archetypes/<name>/overview.md` you need.
+
 ## Pipeline contract (this run's specifics)
 
 - Your cwd is the project root. **NEVER** run `cd` as a standalone command. Use subshells.

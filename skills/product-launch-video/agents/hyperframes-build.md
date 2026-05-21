@@ -24,6 +24,15 @@ Build a complete HyperFrames composition from `./section_plan.md` (your implemen
 
 - `hyperframes-css-animations`, `hyperframes-waapi`, `hyperframes-three`, `hyperframes-lottie`, `hyperframes-typegpu`, `hyperframes-animejs`, `hyperframes-captions`, `hyperframes-tailwind`, `hyperframes-media`
 
+**If `Skill: <name>` returns "Unknown skill"** for any of the above, fall back to reading skill files directly from disk. Detect skills root:
+
+```bash
+SKILLS_ROOT=$(find "$HOME" -type d -name "hyperframes-core" -path "*/skills/*" 2>/dev/null | head -1 | xargs -I {} dirname {})
+echo "SKILLS_ROOT=$SKILLS_ROOT"
+```
+
+Then `Read $SKILLS_ROOT/<skill-name>/SKILL.md` instead. Sister skills live at the same level: `$SKILLS_ROOT/hyperframes-core/`, `$SKILLS_ROOT/hyperframes-cli/`, `$SKILLS_ROOT/hyperframes-animation/SKILL.md` + `blueprints/<name>.md` + `rules/<name>.md`, etc.
+
 ## Pipeline contract (this run's specifics)
 
 - Your cwd is the project root. **NEVER** run `cd` as a standalone command — use subshells: `(cd hyperframes && npx hyperframes lint)`.
@@ -49,20 +58,22 @@ Check whether `hyperframes/` already exists:
 - Every timed element: `class="clip"` + `data-start` / `data-duration` / `data-track-index`.
 - Exactly **one** paused GSAP timeline per composition, registered to `window.__timelines["scene-N"]`.
 - Build timelines synchronously during page load. Never inside async / setTimeout / Promise / event handlers.
-- GSAP transform aliases only (`x`, `y`, `scale`, `rotation`). Never tween `width` / `height` / `top` / `left`.
+- Animate **only via transforms (`x`, `y`, `scale`, `rotation`) and `opacity`**. This applies to both `tl.to()` tweens AND stepped `tl.set()` calls — anything that touches layout-affecting properties (`width` / `height` / `top` / `left` / `font-size` / `padding` / `margin` / `line-height`) will trigger per-step layout reflow and produce visible jitter, even when the visual delta is small. Need apparent "size growth" → animate `scale`. Need apparent "position change" → animate `x` / `y`. Cursor or icon needs to land on a target element → see `hyperframes-animation/rules/anchor-at-target.md`.
 - Reference blueprints + rules from `hyperframes-animation` **by name** (don't reinvent the wheel).
 - Copy each asset from `extraction/` to `hyperframes/public/` **before** referencing. Verify file exists. Never invent filenames.
 
 ## Hard rules
 
-Two of these are cross-file mount rules that `lint` / `validate` / `inspect` cannot catch. Full ❌/✅ examples in `hyperframes-core` → `references/sub-compositions.md` ("Common pitfalls").
+Three of these are cross-file mount rules that `lint` / `validate` / `inspect` cannot catch. Full ❌/✅ examples in `hyperframes-core` → `references/sub-compositions.md` ("Common pitfalls").
 
 - **Sub-comp `<style>` + `<script>` go INSIDE `<template>`, not in `<head>`.** `<head>` is discarded at mount time.
 - **Host `data-composition-id` ≡ inner template `data-composition-id` ≡ `window.__timelines` key.** No `-mount`/`-slot` suffixes.
+- **Sub-comp host wrapper visuals are not painted by the render engine.** Background / border / shadow on the `data-composition-id` root div will appear in `snapshot` but disappear in the final mp4. Put scene backgrounds on a `bg-layer` child div as the first child of the wrapper. See `references/sub-compositions.md` Pitfall 3.
 - No `Math.random()` / `Date.now()` / `performance.now()` / network fetches at render time.
 - No CSS transitions — only the paused GSAP timeline drives motion.
 - No infinite repeats (`repeat: -1`). Compute finite repeats from `data-duration`.
 - `data-duration` on the root governs render length, not GSAP timeline length.
+- **When a `fromTo` from-state is visible** (non-zero opacity, non-default transform), use `tl.set(...) + tl.to(...)` at the same time-offset instead. `fromTo` defaults to `immediateRender: true`, which bakes the from-state at timeline-init — visible from t=0 until the tween fires, not at the tween's scheduled time.
 
 ## Gates
 

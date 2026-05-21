@@ -173,40 +173,60 @@ See [scale-swap-transition](../rules/scale-swap-transition.md) for the full patt
 
 ## Phase 3: Cursor Motion Path
 
-The cursor enters from beyond the viewport's bottom-right and follows a spring path toward a target slightly offset from center (where a human would naturally aim — not dead-center on the button, but a hair right and below).
+The cursor enters from beyond the viewport's bottom-right and follows a spring path toward a target slightly offset from the CTA's center (where a human would naturally aim — a hair right and below).
+
+The cursor's **CSS anchor is the click target itself**, with negative margins offsetting by half its own size so the hotspot lands dead-center on the CTA. The entry path is expressed as a transform offset from that anchor (positive `x`/`y` = bottom-right entry). Terminal state is `{ x: HUMAN_AIM_X, y: HUMAN_AIM_Y }` — a small offset off center, **not a coordinate computed by subtracting the cursor's start point from the CTA's center**. Pattern: see [anchor-at-target.md](../rules/anchor-at-target.md).
+
+```html
+<!-- Cursor anchored to the screen center (same as CTA) — negative margins offset by half cursor size. -->
+<div
+  id="cursor"
+  style="position:absolute; left:50%; top:50%; margin:-12px 0 0 -12px; width:24px; height:24px;"
+>
+  <svg>...</svg>
+</div>
+```
 
 ```js
-// W and H are the composition's data-width / data-height (real numbers in the example).
-const CURSOR_START_X = W + CURSOR_OFFSCREEN_X_PX;
-const CURSOR_START_Y = H + CURSOR_OFFSCREEN_Y_PX;
-const CURSOR_TARGET_X = W / 2 + CURSOR_TARGET_OFFSET_X_PX; // slightly right of center
-const CURSOR_TARGET_Y = H / 2 + CURSOR_TARGET_OFFSET_Y_PX; // slightly below center
+const CURSOR_ENTER_AT = 2.83;
+// Anchor-at-target: cursor's CSS pins it to the CTA center (left:50%; top:50%
+// with negative margins). Entry/aim deltas below are the TRANSFORM offsets from
+// that anchor — terminal state is always (0, 0) regardless of where the CTA
+// lands on screen. See rules/anchor-at-target.md for the pattern.
 
-// Cursor initial position (off-screen) + scale 1 (no entrance scale).
-gsap.set("#cursor", {
-  x: CURSOR_START_X,
-  y: CURSOR_START_Y,
-  scale: 1,
-});
+// Entry offset from the anchored position (the CTA center). Positive values
+// because we want bottom-right entry. These are distances, not deltas — there
+// is no risk of getting the sign wrong by subtracting coordinates.
+const ENTRY_DX = 1060; // off-screen right
+const ENTRY_DY = 740; // off-screen bottom
+const AIM_DX = 12; // human aim — a hair right of center
+const AIM_DY = 5; // a hair below center
+
+// Pre-position cursor off-screen with opacity 0. Use tl.set so the from-state
+// is applied at the start of the timeline (no immediateRender gotcha for the
+// entry tween).
+tl.set("#cursor", { x: ENTRY_DX, y: ENTRY_DY, opacity: 0 }, 0);
 
 // HARD-CUT opacity. Cursors appear instantly — they don't fade in.
-// A near-zero-duration tween creates a step change that scrubs correctly.
-tl.fromTo(
-  "#cursor",
-  { opacity: 0 },
-  { opacity: 1, duration: HARD_CUT_DUR, ease: "none" },
-  CURSOR_ENTER_AT,
-);
+// `tl.set` (not `tl.fromTo` with HARD_CUT_DUR) — fromTo defaults to
+// `immediateRender: true` which bakes the from-state at timeline init, leaking
+// `opacity: 0` from t=0 onward instead of just before CURSOR_ENTER_AT. `set`
+// applies the step exactly at the scheduled time.
+tl.set("#cursor", { opacity: 1 }, CURSOR_ENTER_AT);
 
 // Spring-driven approach path.
 tl.to(
   "#cursor",
-  { x: CURSOR_TARGET_X, y: CURSOR_TARGET_Y, duration: CURSOR_PATH_DUR, ease: "power2.out" },
+  // Terminal state is the human-aim offset from the CTA center (anchor-at-target).
+  // CURSOR_PATH_DUR documented in How to Choose Values.
+  { x: AIM_DX, y: AIM_DY, duration: CURSOR_PATH_DUR, ease: "power2.out" },
   CURSOR_ENTER_AT,
 );
 ```
 
-**Why hard-cut opacity, not a fade?** Real cursors don't fade in — they instantly appear at their last known position. A fade-in cursor looks like a ghost. Use a `fromTo` with a near-zero `HARD_CUT_DUR` to create a step change rather than a smooth transition.
+**Why anchor-at-target instead of absolute coordinates?** The naive "CSS at entry point, tween to target coords" approach forces the agent to compute `target − start` deltas by hand and frequently flips a sign. Anchoring the cursor to the click target via CSS makes the terminal state `(0, 0)` (or a small human-aim offset), and the entry offset is described in directional terms ("+1060 because off-screen right"), not arithmetic. See `rules/anchor-at-target.md`.
+
+**Why hard-cut opacity, not a fade?** Real cursors don't fade in — they instantly appear at their last known position. A fade-in cursor looks like a ghost. Use `tl.set` for the opacity step rather than `fromTo` — `fromTo`'s default `immediateRender: true` would bake the from-state at timeline init, leaking the invisible cursor's pre-entry pose into earlier frames.
 
 **Why offset target, not dead-center?** Click targets are typically off-center by a small handful of pixels when a user clicks — the cursor lands where the eye + hand coordinate to, which has a slight bias toward the visible center of mass of the button. Dead-center lands too perfectly and reads as scripted.
 
