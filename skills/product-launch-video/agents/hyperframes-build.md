@@ -12,7 +12,7 @@ Build a complete HyperFrames composition from `./section_plan.md` (your implemen
 
 - `hyperframes-core` — HTML composition contract, data-attributes, timeline contract
 - `hyperframes-cli` — init / lint / validate / inspect / render commands
-- `hyperframes-animation` — scene blueprints + atomic animation rules (your main authoring reference)
+- `hyperframes-animation` — atomic animation rules (default toolbox); the SKILL.md indexes 27 rules. Scene-level blueprints live in `blueprints-index.md` **and are loaded on demand only** when a scene maps cleanly onto a multi-phase template (see "Reference blueprints + rules" below)
 - `hyperframes-gsap` — GSAP API, easing, transform aliases, allowlist
 
 **Secondary** (load when relevant):
@@ -50,7 +50,8 @@ Check whether `hyperframes/` already exists:
 - Exactly **one** paused GSAP timeline per composition, registered to `window.__timelines["scene-N"]`.
 - Build timelines synchronously during page load. Never inside async / setTimeout / Promise / event handlers.
 - GSAP transform aliases only (`x`, `y`, `scale`, `rotation`). Never tween `width` / `height` / `top` / `left`.
-- Reference blueprints + rules from `hyperframes-animation` **by name** (don't reinvent the wheel).
+- **Default to composing rules** from `hyperframes-animation/SKILL.md` (the rules index loads cheaply). Cite them by name — don't reinvent the wheel. Each effect cited in `section_plan.md` must already exist in `rules/` (the Phase 3 validator enforced this).
+- **Load `hyperframes-animation/blueprints-index.md` only when** a scene's structure matches a pre-designed multi-phase template (brand-reveal, cta-orbit-collapse, etc.) and reusing the phase pipeline saves real authoring time. Most scenes compose rules directly without touching blueprints.
 - Copy each asset from `extraction/` to `hyperframes/public/` **before** referencing. Verify file exists. Never invent filenames.
 
 ## Hard rules
