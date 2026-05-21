@@ -8,6 +8,7 @@
 # Usage:
 #   bash scripts/test-product-launch-video.sh                       # default URL
 #   bash scripts/test-product-launch-video.sh https://example.com/  # custom URL
+#   bash scripts/test-product-launch-video.sh --no-launch <URL>     # setup only, no auto-launch
 #   bash scripts/test-product-launch-video.sh -h                    # help
 #
 # What it does:
@@ -50,11 +51,16 @@ DEFAULT_URL="https://hyperframes.heygen.com/"
 
 # --------- arg parse ---------
 URL=""
+LAUNCH=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
-      sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
+      ;;
+    --no-launch)
+      LAUNCH=0
+      shift
       ;;
     -*)
       echo "Unknown flag: $1" >&2
@@ -217,7 +223,7 @@ else
   warn "$AGENTS_DIR/ missing — the orchestrator's dispatch wrappers didn't come across."
 fi
 
-# --------- step 8: print next steps ---------
+# --------- step 8: launch Claude (or print next steps) ---------
 echo ""
 printf "\033[1;32m========================================================\033[0m\n"
 printf "\033[1;32m Setup complete.\033[0m\n"
@@ -226,6 +232,23 @@ echo ""
 echo "Project:  $TEST_DIR"
 echo "Target:   $URL"
 echo ""
+
+PROMPT="make a product launch video for $URL"
+
+# Happy path: auto-launch Claude Code in this directory with the prompt baked in.
+# Skip if --no-launch was passed, claude isn't on PATH, or the user declines.
+if [[ "$LAUNCH" == "1" ]] && command -v claude >/dev/null 2>&1; then
+  read -r -p "Launch Claude Code now with prompt pre-loaded? [Y/n] " ans
+  case "${ans:-y}" in
+    [Yy]*)
+      printf "\033[1;36m→ exec claude --dangerously-skip-permissions \"%s\"\033[0m\n" "$PROMPT"
+      exec claude --dangerously-skip-permissions "$PROMPT"
+      ;;
+  esac
+  echo ""
+fi
+
+# Manual path (--no-launch, claude not on PATH, or user declined the prompt above).
 echo "To start the test, run these two commands:"
 echo ""
 printf "  \033[1;37mcd %s\033[0m\n" "$TEST_DIR"
@@ -233,7 +256,7 @@ printf "  \033[1;37mclaude --dangerously-skip-permissions\033[0m\n"
 echo ""
 echo "Then paste this prompt into Claude:"
 echo ""
-printf "  \033[1;33mmake a product launch video for %s\033[0m\n" "$URL"
+printf "  \033[1;33m%s\033[0m\n" "$PROMPT"
 echo ""
 echo "What to watch for:"
 echo "  • Claude should invoke the /product-launch-video skill (not /website-to-hyperframes)"
