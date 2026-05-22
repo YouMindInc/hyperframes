@@ -8,7 +8,7 @@ category: visual-design
 
 A good promo video feels like one continuous piece, not a slideshow of unrelated animations. This requires a consistent motion language: the same easing curves, the same timing rhythm, and the same spring feel across all scenes.
 
-**Pair with `./design-system/design.html` §5 (Motion)** — that's where the actual brand `EASE` / `DUR` JS constants live (mapped from the site's CSS cubic-beziers to GSAP eases). This file is the **video-craft numeric overlay** — spring intents, frame counts at 30 fps, stagger caps, the "cut-the-curve" transition spec — calibrated against the golden-sample archive. The ease names come from design.html; the duration tables and rhythm rules come from here.
+**`EASE` / `DUR` JS constants come from `./design-system/design.html` §5. This file owns video-craft numerics** — spring intents, frame counts at 30 fps, stagger caps, the "cut-the-curve" transition spec.
 
 ## Spring intents
 

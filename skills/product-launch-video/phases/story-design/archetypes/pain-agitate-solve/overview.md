@@ -11,7 +11,7 @@ Anxiety/Frustration ──▶ Peak Tension ──▶ Relief ──▶ Confidence
      (hook)            (agitation)     (reveal)    (demo)          (CTA)
 ```
 
-The reverse-engineered samples in `/phase_2/` repeatedly verbalize this as: "Overwhelm and frustration transition into relief, control, and triumphant success" (Zeliq) or "Frustration with manual processes shifting to relief and excitement" (JustCall) or "Intense frustration and anxiety → relief and clarity → empowerment and control" (HRS). The common pattern is a **V-curve**: dip into a named negative beat → product arrives as the pivot → sustained ascent through control / confidence / empowerment.
+Canonical PAS samples verbalize this as: "Overwhelm and frustration transition into relief, control, and triumphant success" (Zeliq), "Frustration with manual processes shifting to relief and excitement" (JustCall), "Intense frustration and anxiety → relief and clarity → empowerment and control" (HRS). The common pattern is a **V-curve**: dip into a named negative beat → product arrives as the pivot → sustained ascent through control / confidence / empowerment.
 
 ## Typical Section Sequence
 
@@ -89,16 +89,3 @@ Key technique: Tribal-vocabulary saturation, founder-voice product intro, passiv
 Opens with a sentence-completion recruitment ("...like / yours."), stacks dual-register pain (mental load via Overwhelm Cloud + financial cost via Invoice Shock), reveals Madison as a *person* ("your new AI-powered digital marketing specialist"), anchors price immediately after cost-pain ("$99/month"), then runs the longest sustained Feature-Benefit Cascade in the archive (9 scenes) with consistent verb-anthropomorphization ("Madison goes to work", "she's driving more customers"). Reserves the "Triumph" emotional beat for the analytics scene.
 Key technique: Continuous-sentence recruitment, dual-register pain stack, specialist personification chain (noun → verb → pronoun), price-anchor after cost-pain, analytics-as-triumph.
 </madison>
-
-## Additional reverse-engineered references
-
-The `/phase_2/` archive contains 6+ more PAS samples worth scanning for pattern reinforcement:
-
-- **HRS Crew & Passenger** (`1.gemini_3_1_pro.visual_description.md`) — gold-standard PAS implementation; the canonical complete-schema example. Visceral-metaphor hook ("goodbye to dinosaurs").
-- **ResponseScribe** — short PAS (7 scenes); review-overwhelm pain validated via desk-clutter visual; product as automation relief.
-- **Fosfor** — PAS for enterprise data; social-proof hook (everyone talking about AI) → agitation via newspaper-tear transition → product as unified system.
-- **JustCall IQ** — character-direct-address hook ("Sales teams, listen up!"); extended pain (50% of runtime); humor in the showcase ("everything but minds. Maybe in the next update?").
-- **Zeliq** — outreach-tool PAS with Rule-of-Three structural move ("Data, outreach, performance" as triangular pillars).
-- **PayCloud** — statistic-hook PAS ("50% of companies still rely on paper checks") + Win-Win persuasion (vendor _also_ benefits) + 15-scene UI demo sequence.
-- **JustCall (generic)** — long PAS (15 scenes); Problem-Agitate-Solution then 10 consecutive feature_showcase scenes.
-- **ZapBG** — short product-demo PAS (background remover); "Grandma" specificity beat for accessibility signaling.

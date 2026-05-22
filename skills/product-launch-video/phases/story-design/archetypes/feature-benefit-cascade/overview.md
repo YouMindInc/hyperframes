@@ -4,7 +4,7 @@
 
 Open with brand or visual spectacle → cascade rapid sequential feature reveals, each paired with its emotional/business benefit → escalate desire and momentum → close with CTA. There is no agitation phase. The video does not validate a pain; it builds _desire through accumulation_. Each feature scene resolves into a benefit beat, then immediately morphs into the next feature — the rhythm itself is the persuasion.
 
-The reverse-engineered samples in `/phase_2/` use this archetype across 4 NFT/crypto launches (Elemental Soul, Ultra Power, NFT Marketplace, Artinals) plus 2 SaaS explainers (Vibe.co, Skye) plus several hybrids (Madison's PAS body, AgentGPT's proof phase). It is the dominant _inner rhythm_ of the launch-video category — once the product is on stage, Cascade is how you keep escalating.
+Cascade is the dominant _inner rhythm_ of the launch-video category — once the product is on stage, Cascade is how you keep escalating. Canonical samples: 4 NFT/crypto launches (Elemental Soul, Ultra Power, NFT Marketplace, Artinals), 2 SaaS explainers (Vibe.co, Skye), plus hybrids (Madison's PAS body, AgentGPT's proof phase).
 
 ## Emotional Arc Pattern
 
@@ -106,13 +106,3 @@ Key technique: Brand-first hook, Rule of Three structural beat, Familiarity heur
 Opens with single-word visual spectacle ("Fire"), cascades four elemental cards (Fire / Water / Earth / Air) with color-bleed transitions matching each element's palette, unifies them as ecosystem, then reveals the climax premium tier ("the exclusive Collective Soul") before drop-date FOMO close.
 Key technique: Stratified tier escalation, single-word scripts, drop-date temporal urgency, marketplace as exclusive destination.
 </elemental-soul>
-
-## Additional reverse-engineered references
-
-The `/phase_2/` archive contains more Cascade samples worth scanning:
-
-- **Ultra Power** (`NFT_Launch_Promo_ULTRA_S_POWER...`) — 11-scene NFT collection promo; product visible scene 1 (asset grid); explicit pricing anchor in scene 4; ecosystem perks 5-8; drop date 9.
-- **NFT Marketplace** (`NFT_Marketplace_Launch_Explainer_Video_Ultra.io...`) — **39-scene** Cascade epic; longest sample in archive; 15-scene granular purchase-to-sell workflow inside a Cascade frame. Demonstrates how Cascade scales to deep walkthroughs.
-- **Artinals** — 10-scene RWA tokenization Cascade; question hook ("Got something to create?"); product named scene 4; "grandmom can use it" accessibility beat in scene 9.
-- **Skye (affable.ai)** — Trend-positioning Cascade ("future of influencer marketing"); product named scene 2; Authority via Google Cloud partnership; empty scripts during feature pivots.
-- **JustCall (generic)** — Long PAS + Cascade hybrid (15 scenes); after PAS setup (scenes 1-3), cascades 10 consecutive feature scenes.

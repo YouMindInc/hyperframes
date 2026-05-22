@@ -4,7 +4,7 @@
 
 Minimal narrative setup → rapid product reveal → repeated demonstration cycles that escalate in scope. The product's UI and output quality _are_ the persuasion. Narrative takes a backseat to "seeing is believing."
 
-The reverse-engineered GWI plan in `/phase_2/` labels this archetype as `"Problem-Solution-Benefit Cascade"` — which is the dominant variant: a problem statement (not full agitation), an immediate product reveal, then a cascade of demonstration cycles building from specificity → breadth → strategy.
+GWI is canonically labeled `"Problem-Solution-Benefit Cascade"` — the dominant Demo Loop variant: a problem statement (not full agitation), an immediate product reveal, then a cascade of demonstration cycles building from specificity → breadth → strategy.
 
 ## Emotional Arc Pattern
 
@@ -71,8 +71,3 @@ Demo Loop's "Problem-Solution-Benefit Cascade" variant is essentially Demo Loop 
 Opens with "Need answers... now?" — reveals product at 5s. Three escalating demo cycles: specificity (NBA fans) → breadth (APAC fashion) → strategy (targeting parents). Explicitly addresses AI trust.
 Key technique: Query-Result loop, Micro-to-Macro expansion, Verb-Brand association ("Spark your next idea").
 </gwi>
-
-## Additional reverse-engineered references
-
-- **GWI** (`Product_Launch_Video_for_GWI_s_AI_Assistant_Tool_*.visual_description.md`) — the same video as the existing sample, in structured-plan format. Labels itself `"Problem-Solution-Benefit Cascade"` — confirms Demo Loop is best understood as a Cascade with a problem hook.
-- For pure Cascade variants (no problem hook, brand from scene 1), see `archetypes/feature-benefit-cascade/overview.md`.

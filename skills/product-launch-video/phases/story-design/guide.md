@@ -11,7 +11,7 @@ Video narrative is independent from webpage structure. A webpage is an informati
 - Reorder, combine, omit, or reframe webpage content as needed.
 - Extraction data is the source of information and assets, not the story template.
 
-The bar for the plan is the 22 reverse-engineered golden samples in `/Users/caleb/Documents/projects/golden_sample_reverse/Iteration/dataset-creation/data/phase_2/` (AgentGPT, GWI, Madison, Alpha, Kyvos, DeskLog, JustCall, JustCall IQ, Zeliq, PayCloud, NFT Marketplace, Elemental Soul, Ultra Power, Artinals, Vibe.co, Skye, HRS, ResponseScribe, Fosfor, ZapBG, +2 launch/misc). Those plans **name the emotional beat alongside the structural type**, **name the specific persuasion technique** (not "show benefits"), and **prescribe a transition for every seam** — what carries the eye from scene N to N+1 is part of the story, not a downstream visual concern.
+The bar for the plan: **name the emotional beat alongside the structural type**, **name the specific persuasion technique** (not "show benefits"), and **prescribe a transition for every seam** — what carries the eye from scene N to N+1 is part of the story, not a downstream visual concern.
 
 ## Narrative archetypes
 
@@ -19,7 +19,7 @@ Before designing scenes, pick **one** storytelling archetype (or a hybrid named 
 
 <archetypes>
 <pain-agitate-solve path="archetypes/pain-agitate-solve/overview.md">
-**Pain → Agitate → Solve (PAS)** — Build painful recognition, then reveal the remedy. Best for: products solving a known frustration, B2B tools, audiences who already feel the pain. Late product reveal (33-50% through) maximizes relief contrast. Samples: alpha (culture/identity-driven crypto PAS), madison (character-driven PAS + Feature-Benefit Cascade compound). Plus 7+ more PAS samples in `/phase_2/` for reference: ResponseScribe, Fosfor, JustCall IQ, Zeliq, JustCall, PayCloud, HRS, ZapBG, affable.ai original.
+**Pain → Agitate → Solve (PAS)** — Build painful recognition, then reveal the remedy. Best for: products solving a known frustration, B2B tools, audiences who already feel the pain. Late product reveal (33-50% through) maximizes relief contrast. Samples: alpha (culture/identity-driven crypto PAS), madison (character-driven PAS + Feature-Benefit Cascade compound).
 </pain-agitate-solve>
 
 <future-pacing path="archetypes/future-pacing/overview.md">
@@ -35,7 +35,7 @@ Before designing scenes, pick **one** storytelling archetype (or a hybrid named 
 </before-after-bridge>
 
 <feature-benefit-cascade path="archetypes/feature-benefit-cascade/overview.md">
-**Feature-Benefit Cascade** — Rapid sequential feature reveals building momentum toward CTA. No agitation phase. Best for: feature-rich SaaS, NFT collections / marketplaces, products where desire-escalation (not pain-relief) drives the buy. Product named early (0-22%) or shown visually from scene 1. Samples: ultra-marketplace, vibe-co, plus elemental-soul, ultra-power, artinals, skye, and JustCall(generic) in `/phase_2/`. Often appears as the *internal rhythm* inside other archetypes — Madison runs PAS+Cascade, AgentGPT runs BAB+Cascade.
+**Feature-Benefit Cascade** — Rapid sequential feature reveals building momentum toward CTA. No agitation phase. Best for: feature-rich SaaS, NFT collections / marketplaces, products where desire-escalation (not pain-relief) drives the buy. Product named early (0-22%) or shown visually from scene 1. Samples: vibe-co, elemental-soul. Often appears as the *internal rhythm* inside other archetypes — Madison runs PAS+Cascade, AgentGPT runs BAB+Cascade.
 </feature-benefit-cascade>
 </archetypes>
 
@@ -156,18 +156,6 @@ When the visual carries the message, set `script: ""` and let the scene be silen
 
 If you set empty script, the `narrativeIntent` must be especially strong — `narrativeRole` and `persuasion` carry what the script doesn't.
 
-## Product reveal timing
-
-The reverse-engineered samples cluster into three patterns. Match reveal timing to archetype:
-
-| Window                 | Pattern                                            | Archetypes                                                                       |
-| ---------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Very early (0-10%)** | Product is the headline; brand named in scene 1-2  | Future Pacing, Feature-Benefit Cascade (some), Category-announcement hooks       |
-| **Early-mid (15-35%)** | Brief pain or hook → product reveal → walkthrough  | Before-After-Bridge, Demo Loop, Cascade with brief preamble                      |
-| **Late (40-71%)**      | Extended pain/agitation → product as relief climax | PAS (Madison, ResponseScribe, Kyvos, JustCall IQ, PayCloud, affable.ai original) |
-
-Strategic logic: longer pain/agitation builds psychological investment in the problem before the hero product arrives, increasing relief contrast. But late reveal only works if the pain is _real and felt_ — for a new-category product (audience doesn't know they have the pain), late reveal feels like withholding.
-
 ## UI demo as a sequence, not a single scene
 
 The phase 2 archive overwhelmingly treats the UI demo as a **sequence of 3-15 consecutive scenes**, each focusing on one feature area, glued together with `ui_morphing` transitions:
@@ -192,16 +180,7 @@ How a planner identifies a UI demo sequence:
 
 ## Inputs from Phase 1 — web-research
 
-Phase 1 (web-research) writes its capture pack into `./research/`. You read four things from there:
-
-| File                           | What it gives you                                                                                                                                                                                                                              |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `research/context_pack.md`     | **Read first.** Compact LLM-friendly digest: source metadata, section candidates with CTAs, asset inventory with `alt` + `nearbyText`, visible-text excerpt. One scan = enough context for hero / social-proof / feature identification.       |
-| `research/extraction.json`     | Drill-down when you need full asset URLs, section rectangles, computed colors, font families, etc. ~175 KB.                                                                                                                                    |
-| `research/screenshot_full.png` | Full-page rendered screenshot. Use it when visual judgment matters (does this asset _look_ like a hero?).                                                                                                                                      |
-| `research/assets/`             | Downloaded image/SVG/video/font files. The `assetCandidates[].path` values you write per scene MUST be `public/<basename>` where `<basename>` is a file in `research/assets/` (Phase 4a's `prep.mjs` copies these into `hyperframes/public/`). |
-
-There is no separate `tokens.json`, `sections.json`, or `report.json` — that was the old Phase 1 format. `extraction.json` consolidates all of that. There is also no `analysis.json` — generating that file is **out of scope for this pipeline's Phase 1**; you produce the higher-fidelity `narrator_scripts.json` instead, which captures everything `analysis.json` would have (product understanding via archetype choice, section→scene mapping, asset recommendations via `assetCandidates`).
+Phase 1 writes `./research/`. You read: `context_pack.md` (read first — compact digest), `extraction.json` (drill-down for asset URLs / section rects / colors), `screenshot_full.png` (visual judgment), `research/assets/` (your asset pool — every `assetCandidates[].path` must be `public/<basename>` where `<basename>` is a file here; Phase 4a's `prep.mjs` copies these into `hyperframes/public/`).
 
 ## Workflow
 
@@ -306,4 +285,3 @@ Field rules:
 - `phases/visual-design/guide.md` — visual treatment for each scene (downstream; consumes `narrator_scripts.json` only — `transition`, `narrativeIntent`, and `assetCandidates` — never reads `research/`).
 - `phases/web-research/guide.md` — upstream Phase 1. Owns the capture script and writes `research/`.
 - `/product-launch-video` (this skill's `SKILL.md`) — orchestrator that calls this guide as Phase 2 of the website-to-launch-video pipeline.
-- Reverse-engineered reference plans: `/Users/caleb/Documents/projects/golden_sample_reverse/Iteration/dataset-creation/data/phase_2/*.visual_description.md` — 22 real videos analyzed into the narrative half of this schema (pre-`assetCandidates` era). Use the HRS file (`1.gemini_3_1_pro.visual_description.md`) as the canonical complete-narrative example.
