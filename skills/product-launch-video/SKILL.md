@@ -17,19 +17,19 @@ The pipeline separates **workflow-internal phases** (this workflow's owned proce
 
 ## Pipeline
 
-| Phase | Subagent prompt file              | Subagent reads / loads                                                            | Writes                                                                          |
-| ----- | --------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| 1     | `agents/web-extraction.md`        | `phases/web-extraction/guide.md` (+ scripts)                                      | `extraction/`                                                                   |
-| 2     | `agents/story-design.md`          | `phases/story-design/guide.md` (+ archetypes)                                     | `narrator_scripts.json`                                                         |
-| 2.5   | `agents/audio.md`                 | `phases/audio/guide.md` (+ `lyria-recipe.py`) + `/hyperframes-media` (Skill tool) | `audio_meta.json` + `hyperframes/assets/voice/*` + `hyperframes/assets/bgm.wav` |
-| 3     | `agents/visual-design.md`         | `phases/visual-design/guide.md` (+ rules + effects-catalog.md)                    | `section_plan.md`                                                               |
-| 4a    | `scripts/prep.mjs` (no subagent)  | section_plan.md + narrator_scripts.json + audio_meta.json (optional)              | `group_spec.json` + `hyperframes/public/`                                       |
-| 4b    | `agents/hyperframes-scene.md` × N | `/hyperframes-core` + `/hyperframes-animation` (Skill tool)                       | `hyperframes/compositions/scene_*.html`                                         |
-| 4c    | `agents/hyperframes-finalize.md`  | `/hyperframes-core` + `/hyperframes-cli` (Skill tool)                             | `hyperframes/index.html` + gates + `hyperframes/renders/video.mp4`              |
+| Phase | Subagent prompt file              | Subagent reads / loads                                               | Writes                                                                                         |
+| ----- | --------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1     | `agents/web-extraction.md`        | `phases/web-extraction/guide.md` (+ scripts)                         | `extraction/`                                                                                  |
+| 2     | `agents/story-design.md`          | `phases/story-design/guide.md` (+ archetypes)                        | `narrator_scripts.json`                                                                        |
+| 2.5   | `scripts/audio.mjs` (no subagent) | `narrator_scripts.json` + `extraction/shared/tokens.json` (optional) | `audio_meta.json` + `hyperframes/assets/voice/*` + `hyperframes/assets/bgm.wav` (BGM detached) |
+| 3     | `agents/visual-design.md`         | `phases/visual-design/guide.md` (+ rules + effects-catalog.md)       | `section_plan.md`                                                                              |
+| 4a    | `scripts/prep.mjs` (no subagent)  | section_plan.md + narrator_scripts.json + audio_meta.json (optional) | `group_spec.json` + `hyperframes/public/`                                                      |
+| 4b    | `agents/hyperframes-scene.md` × N | `/hyperframes-core` + `/hyperframes-animation` (Skill tool)          | `hyperframes/compositions/scene_*.html`                                                        |
+| 4c    | `agents/hyperframes-finalize.md`  | `/hyperframes-core` + `/hyperframes-cli` (Skill tool)                | `hyperframes/index.html` + gates + `hyperframes/renders/video.mp4`                             |
 
-**Phase 2.5 ‖ Phase 3 run in parallel** — orchestrator **spawns both subagents to work simultaneously in parallel**: ONE assistant message containing TWO `Agent` tool_use blocks, **both with `run_in_background: true`**. They share `narrator_scripts.json` (read-only for both) and write disjoint files. Phase 4a merges `audio_meta.json` into `group_spec.json` so workers + finalize see the real `voiceDuration`.
+**Phase 2.5 ‖ Phase 3 run in parallel** — orchestrator **launches both simultaneously**: ONE assistant message containing TWO tool_use blocks (a `Bash` for `audio.mjs` + an `Agent` for visual-design), **both with `run_in_background: true`**. They share `narrator_scripts.json` (read-only for both) and write disjoint files. Phase 4a merges `audio_meta.json` into `group_spec.json` so workers + finalize see the real `voiceDuration`. **Lyria BGM is spawned detached by `audio.mjs` and may finish minutes after the script exits** — `audio_meta.bgm_pending: true` signals this; Phase 4c re-checks `bgm.wav` on disk before emitting the `<audio>` element.
 
-> ❌ **Critical anti-pattern**: do NOT issue Phase 2.5 first, wait for it to finish, then issue Phase 3. That serializes a flow that's designed parallel and adds 4-8 min of wall-clock waste. Both `Agent` calls MUST be in the same assistant message. The same rule applies to Phase 4b's N scene workers.
+> ❌ **Critical anti-pattern**: do NOT issue Phase 2.5 first, wait for it to finish, then issue Phase 3. That serializes a flow that's designed parallel and adds 30-90s of wall-clock waste. The Bash (audio.mjs) and the Agent (visual-design) MUST be in the same assistant message, both with `run_in_background: true`. The same rule applies to Phase 4b's N scene workers.
 
 Phases 1-3 read **local files** (`phases/<name>/guide.md`); Phase 4 loads **shared domain skills** via the Skill tool.
 
@@ -88,7 +88,7 @@ Read `./context.log` if it exists:
   - Some `compositions/scene_*.html` present, not all → resume Phase 4b for the missing scene_ids only (one Agent call per missing scene)
   - All scene files present, no `hyperframes/renders/video.mp4` (or mp4 corrupted) → resume from Phase 4c
 
-If audio is intentionally skipped (user said "no audio" or env lacks all TTS providers): orchestrator omits Phase 2.5 dispatch and proceeds directly from Phase 2 → Phase 3 → 4a. Phase 4a tolerates a missing `audio_meta.json` and falls back to `estimatedDuration` everywhere.
+If audio is intentionally skipped (user said "no audio" or env lacks all TTS providers): orchestrator omits the `audio.mjs` Bash call and proceeds directly from Phase 2 → Phase 3 → 4a. Phase 4a tolerates a missing `audio_meta.json` and falls back to `estimatedDuration` everywhere.
 
 ## Phase 1 — dispatch web-extraction
 
@@ -107,7 +107,19 @@ If audio is intentionally skipped (user said "no audio" or env lacks all TTS pro
 
 `SKILL_DIR` is the absolute path of the directory containing this SKILL.md. The subagent reads `<SKILL_DIR>/phases/web-extraction/guide.md` to get its procedure.
 
-After it returns: read `extraction/report.json` to confirm shape; relay key facts to the user (pages crawled, asset counts). Proceed to Phase 2.
+**Immediately after dispatching Phase 1, kick off model pre-warm in background** so Kokoro + Whisper models are loaded into the OS page cache by the time Phase 2.5 needs them. This is fire-and-forget — failures are silent and harmless. Use a single Bash with `run_in_background: true`:
+
+```bash
+( WARM_DIR=$(mktemp -d) && \
+  echo "warm" > "$WARM_DIR/warm.txt" && \
+  npx hyperframes tts "$WARM_DIR/warm.txt" --output "$WARM_DIR/warm.wav" > /dev/null 2>&1 && \
+  npx hyperframes transcribe "$WARM_DIR/warm.wav" --model small.en --output "$WARM_DIR/warm.json" > /dev/null 2>&1; \
+  rm -rf "$WARM_DIR" ) || true
+```
+
+(Skip the pre-warm if the user has explicitly asked for "no audio" — there's nothing to warm.)
+
+After Phase 1 returns: read `extraction/report.json` to confirm shape; relay key facts to the user (pages crawled, asset counts). Proceed to Phase 2.
 
 ## Phase 2 — dispatch story-design
 
@@ -138,53 +150,57 @@ node <SKILL_DIR>/scripts/validate-narrator-scripts.mjs ./narrator_scripts.json
 
 The subagent is also instructed (in `agents/story-design.md`) to self-validate before reporting done, so this is a double check, not the primary gate.
 
-## Phase 2.5 ‖ Phase 3 — spawn audio + visual-design subagents to work simultaneously in parallel
+## Phase 2.5 ‖ Phase 3 — run `audio.mjs` (Bash) + dispatch visual-design (Agent) in parallel
 
-After Phase 2 returns clean, **spawn two subagents to work simultaneously in parallel**: one for audio production (Phase 2.5), one for visual design (Phase 3). These investigations are fully independent — they share `narrator_scripts.json` (read-only) and write disjoint files (`audio_meta.json` + `hyperframes/assets/*` vs `section_plan.md`).
+After Phase 2 returns clean, **launch two things in parallel**: a Bash invocation of `audio.mjs` for Phase 2.5 and an Agent dispatch for Phase 3 visual-design. They share `narrator_scripts.json` (read-only) and write disjoint files (`audio_meta.json` + `hyperframes/assets/*` vs `section_plan.md`).
+
+**Phase 2.5 is no longer a subagent** — it's a deterministic script that:
+
+- detects TTS provider (`$ELEVENLABS_API_KEY` + python `elevenlabs` import → ElevenLabs, else Kokoro)
+- pipelines per-scene TTS → transcribe (each scene's whisper run starts the moment its own TTS finishes; doesn't wait for siblings)
+- spawns Lyria BGM **detached** in the background and **returns immediately** when voice work is done — BGM may finish minutes later. `audio_meta.json` sets `bgm_pending: true` so prep.mjs trusts the path and Phase 4c does the final on-disk check before render.
 
 **Mechanics (non-negotiable)**:
 
-1. **ONE assistant message** containing **TWO `Agent` tool_use blocks** — never two separate messages.
-2. **Both `Agent` calls pass `run_in_background: true`** — without this flag, Claude defaults to foreground (blocking) mode and the second call waits for the first to complete, serializing the flow.
-3. Issue both dispatches in the same turn the moment Phase 2's schema validator exits 0. Do NOT pause for user confirmation between Phase 2 and this parallel pair.
-4. After issuing both, you will be auto-notified as each subagent completes. Do not poll, sleep, or check on progress proactively.
+1. **ONE assistant message** with **TWO tool_use blocks**: one Bash + one Agent.
+2. **Both calls pass `run_in_background: true`** — without this flag, Claude defaults to foreground (blocking) mode and the second call waits for the first to complete, serializing the flow.
+3. Issue both the moment Phase 2's schema validator exits 0. Do NOT pause for user confirmation between Phase 2 and this parallel pair.
+4. After issuing both, you will be auto-notified as each completes. Do not poll, sleep, or check on progress proactively.
 
 > ❌ **Anti-pattern (the documented Claude Code default behavior)** — see [GitHub issue #29181](https://github.com/anthropics/claude-code/issues/29181):
 >
 > ```
-> assistant: <text> + Agent(Phase 2.5, run_in_background=false)    ← message 1
-> [waits 4-5 min for Phase 2.5 to finish]
-> assistant: <text> + Agent(Phase 3,   run_in_background=false)    ← message 2
+> assistant: <text> + Bash(audio.mjs, run_in_background=false)     ← message 1
+> [waits 30-60s for Phase 2.5 to finish]
+> assistant: <text> + Agent(Phase 3,  run_in_background=false)     ← message 2
 > ```
 >
-> This serializes the two phases and adds 4-8 min wall-clock waste. The orchestrator MUST consciously override the conservative-serial default; that is exactly what `run_in_background: true` + same-message dispatch are for.
+> This serializes a flow that's designed parallel and adds 30-90s wall-clock waste. The orchestrator MUST consciously override the conservative-serial default; that is exactly what `run_in_background: true` + same-message dispatch are for.
 
-Decide BGM availability before composing the audio dispatch:
+If the user has explicitly asked for "no audio" (or no TTS provider is available at all in this environment), **skip the Phase 2.5 Bash call entirely** — dispatch Phase 3 only. Downstream phases tolerate a missing `audio_meta.json` (Phase 4a's `prep.mjs` falls back to `estimatedDuration` everywhere).
+
+### Phase 2.5 (audio) — Bash command
 
 ```bash
-[ -n "$GOOGLE_API_KEY" ] && echo "BGM enabled" || echo "BGM disabled"
+node <SKILL_DIR>/scripts/audio.mjs \
+  --narrator-scripts ./narrator_scripts.json \
+  --tokens ./extraction/shared/tokens.json \
+  --hyperframes ./hyperframes \
+  --out ./audio_meta.json \
+  --lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py
 ```
 
-If the user has explicitly asked for "no audio" (or no TTS provider is available at all in this environment), **omit the Phase 2.5 dispatch entirely** — proceed with Phase 3 only. Downstream phases tolerate a missing `audio_meta.json`.
+Optional flags:
 
-### Compose the Phase 2.5 (audio) dispatch
+- `--voice <id>` — override default voice (Kokoro default `am_michael`; ElevenLabs default `21m00Tcm4TlvDq8ikWAM`).
+- `--provider kokoro|elevenlabs` — force a provider (else auto-detect from env).
+- `--lang <iso>` — non-English (e.g. `--lang zh`); requires explicit `--voice` for Kokoro.
+- `--no-bgm` — skip BGM entirely.
+- `--bgm-prompt "<prompt>"` — override the auto-inferred brand-mood BGM prompt.
 
-```
-1. Read product-launch-video/agents/audio.md
-2. Compose prompt = <wrapper contents>
-                  + "\n\n## Dispatch context\n"
-                  + "SKILL_DIR: <abs-path-to-this-skill>\n"
-                  + "Phase 2 summary: <scene count + Σ estimatedDuration as a float>\n"
-                  + "TTS provider hint: <elevenlabs|kokoro|auto based on env>\n"
-                  + "BGM: <enabled|disabled>\n"
-3. Agent block:
-     subagent_type: "general-purpose",
-     description: "Phase 2.5: audio (TTS + transcribe + BGM)",
-     prompt: <composed>,
-     run_in_background: true,    ← MANDATORY for parallelism
-```
+The script exits 0 once voice + transcribe + ffprobe are done. BGM keeps rendering in the background; the orchestrator does NOT need to wait for it. Exit 1 means zero scenes got voice — read stderr and decide whether to retry (e.g. install missing TTS deps) or proceed without audio.
 
-### Compose the Phase 3 (visual-design) dispatch
+### Phase 3 (visual-design) — Agent dispatch
 
 ```
 1. Read product-launch-video/agents/visual-design.md
@@ -208,14 +224,14 @@ If the user has explicitly asked for "no audio" (or no TTS provider is available
 The assistant turn that fires after Phase 2 validator passes MUST look like this:
 
 ```
-<one sentence text: "Spawning audio + visual-design subagents in parallel.">
-<tool_use block 1: Agent(... Phase 2.5 ..., run_in_background: true)>
-<tool_use block 2: Agent(... Phase 3 ...,   run_in_background: true)>
+<one sentence text: "Running audio.mjs + dispatching visual-design subagent in parallel.">
+<tool_use block 1: Bash(node <SKILL_DIR>/scripts/audio.mjs ..., run_in_background: true)>
+<tool_use block 2: Agent(... Phase 3 ..., run_in_background: true)>
 ```
 
 Two tool_use blocks, same message, both backgrounded. Then **stop emitting tool calls in that turn** — the next turn is when their results come back.
 
-Self-check before you hit "send": is your draft assistant message about to emit only ONE Agent block, with the intent of "I'll dispatch Phase 3 after Phase 2.5 finishes"? **STOP and reconstruct as two blocks in this same message.** That intent is the exact bug this section exists to prevent.
+Self-check before you hit "send": is your draft assistant message about to emit only ONE block, with the intent of "I'll launch the other after this one finishes"? **STOP and reconstruct as two blocks in this same message.** That intent is the exact bug this section exists to prevent.
 
 ### After both return
 
@@ -228,11 +244,11 @@ Self-check before you hit "send": is your draft assistant message about to emit 
    - Exit 0 → continue
    - Exit 1 → re-dispatch Phase 3 (only) with stderr appended; Phase 2.5's output is unaffected and stays on disk.
 
-2. Sanity-parse the audio side file:
+2. Sanity-parse the audio side file (if it was produced):
    ```bash
    [ -f audio_meta.json ] && python3 -m json.tool < audio_meta.json > /dev/null
    ```
-3. Surface to user: scene list (from section_plan), TTS provider + voice (from audio_meta), BGM yes/no, any scenes missing voice.
+3. Surface to user: scene list (from section_plan), TTS provider + voice (from audio_meta), BGM status (`bgm_pending: true` means Lyria is still rendering in the background — that's expected, not an error), any scenes missing voice.
 
 Then proceed to Phase 4a.
 
@@ -381,7 +397,7 @@ When `context.log` shows a full pipeline already ran, **don't redispatch everyth
 - **Multi-scene rebuild** → re-run Phase 4b fan-out (multiple `Agent` calls in one message), then 4c
 - **Visual plan change** (new effect choice, restructured scene) → Phase 3 → 4a (refresh `group_spec.json`) → 4b fan-out → 4c
 - **Narration text change** (different script for one or more scenes) → Phase 2 (rewrite narrator_scripts.json) → **(3 ‖ 2.5)** parallel → 4a → 4b → 4c
-- **Voice / BGM change only** (same script, swap voice id or BGM mood) → Phase 2.5 ONLY → 4a (re-merge audio_meta.json into group_spec.json) → 4c. Phase 3 / 4b unchanged.
+- **Voice / BGM change only** (same script, swap voice id or BGM mood) → re-run `audio.mjs` (Phase 2.5) with `--voice <id>` and/or `--bgm-prompt "..."` → 4a (re-merge audio_meta.json into group_spec.json) → 4c. Phase 3 / 4b unchanged.
 - **Drop audio entirely** → delete `audio_meta.json` + `hyperframes/assets/voice/` + `hyperframes/assets/bgm.wav` → dispatch 4a → 4c (no `<audio>` elements emitted; everything falls back to `estimatedDuration`)
 - **Narrative change** (reorder scenes, new archetype) → Phase 2 → (3 ‖ 2.5) → 4a → 4b → 4c
 - **More assets needed** → Phase 1 with a scoped URL/scope hint in the Dispatch context, then cascade through (3 ‖ 2.5) → 4a → 4b → 4c

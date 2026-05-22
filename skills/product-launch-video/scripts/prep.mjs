@@ -313,14 +313,22 @@ const total_duration_s = scenes.reduce(
   (sum, s) => sum + s.estimatedDuration_s,
   0,
 );
+// BGM may still be rendering (audio.mjs spawns Lyria detached and exits before
+// it finishes). Trust audio_meta.bgm_path; Phase 4c does the final on-disk
+// check before emitting the <audio> element.
 let bgm_path = "";
 if (audioMeta?.bgm_path) {
-  if (existsSync(join(hyperframesDir, audioMeta.bgm_path))) {
-    bgm_path = audioMeta.bgm_path;
-  } else {
-    anomalies.push(
-      `bgm_path "${audioMeta.bgm_path}" listed in audio_meta but not on disk — dropping`,
-    );
+  bgm_path = audioMeta.bgm_path;
+  if (!existsSync(join(hyperframesDir, audioMeta.bgm_path))) {
+    if (audioMeta.bgm_pending) {
+      anomalies.push(
+        `bgm "${audioMeta.bgm_path}" still rendering (bgm_pending=true) — Phase 4c will re-check before emitting <audio>`,
+      );
+    } else {
+      anomalies.push(
+        `bgm "${audioMeta.bgm_path}" listed in audio_meta but missing — Phase 4c will skip if still absent`,
+      );
+    }
   }
 }
 
