@@ -34,7 +34,6 @@
     "skills/**/scripts/**",
     "registry/**",
     "examples/**",
-    "playground/**",
     ".github/workflows/fixtures/**",
   ],
   "ignoreExports": [
