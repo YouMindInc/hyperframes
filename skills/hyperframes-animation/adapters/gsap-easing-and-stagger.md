@@ -38,26 +38,30 @@ Setting defaults at timeline scope is preferred — it documents the motion lang
 ## Stagger
 
 ```javascript
-gsap.from(".item", { y: 24, opacity: 0, duration: 0.5, stagger: 0.08 });
+gsap.fromTo(".item", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, stagger: 0.08 });
 ```
 
 Object form:
 
 ```javascript
-gsap.from(".item", {
-  y: 24,
-  opacity: 0,
-  stagger: {
-    each: 0.08, // delay between each
-    from: "center", // "start" | "end" | "center" | "edges" | "random" | index
-    amount: 0.6, // total stagger time (overrides each if both set)
-    grid: "auto", // for 2D stagger
-    axis: "x" | "y",
+gsap.fromTo(
+  ".item",
+  { y: 24, opacity: 0 },
+  {
+    y: 0,
+    opacity: 1,
+    stagger: {
+      each: 0.08, // delay between each
+      from: "center", // "start" | "end" | "center" | "edges" | "random" | index
+      amount: 0.6, // total stagger time (overrides each if both set)
+      grid: "auto", // for 2D stagger
+      axis: "x" | "y",
+    },
   },
-});
+);
 ```
 
-Prefer `stagger` over N separate tweens with manual delays — it stays correct when the target count or order changes.
+Prefer `stagger` over N separate tweens with manual delays — it stays correct when the target count or order changes. Use `fromTo()` rather than `from()` so the start state is explicit (see `gsap-timeline-and-labels.md` → sub-composition entrances).
 
 ## Function-Based Values
 
