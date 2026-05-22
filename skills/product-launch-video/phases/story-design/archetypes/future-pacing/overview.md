@@ -26,7 +26,7 @@ The reverse-engineered AgentGPT plan verbalizes this as: "From curious and seeki
 | 7     | benefit_highlight | Self-improving / feedback loop       | 12-18%   |
 | 8     | cta               | Direct command to act                | 15-20%   |
 
-**Reveal timing** — Future Pacing is the **very-early-reveal** archetype. AgentGPT names the product at scene 2 of 12 (17%, within the first 4-8 seconds of runtime). The reverse-engineered file in `/phase_2/` labels AgentGPT as "Before-After-Bridge (BAB) / Feature-Benefit Cascade" — Future Pacing and BAB are sibling patterns; the difference is what fills the proof phase:
+**Reveal timing** — Future Pacing is the **very-early-reveal** archetype. AgentGPT names the product at scene 2 of 12 (17%, within the first 4-8 seconds of runtime). AgentGPT is canonically labeled "Before-After-Bridge (BAB) / Feature-Benefit Cascade" — Future Pacing and BAB are sibling patterns; the difference is what fills the proof phase:
 
 - **Future Pacing**: proof = capability demonstrations + mechanism explanation (how the AI actually works)
 - **BAB**: proof = workflow walkthrough (process improvement step-by-step)
@@ -72,14 +72,6 @@ Future Pacing very often runs with **Feature-Benefit Cascade as its inner rhythm
 
 <agentgpt path="agentgpt.md">
 **AgentGPT — Vision-Proof-Trust** (60s, AI Customer Support SaaS)
-Opens with "Imagine next generation AI" — names the product at 4s. Uses Micro-to-Macro zoom (specific query → system-wide capability) and Human-in-the-Loop reassurance to counter AI skepticism. The reverse-engineered phase_2 file labels it as compound "BAB / Feature-Benefit Cascade" — same video, different framing lens. Treat as a hybrid example.
+Opens with "Imagine next generation AI" — names the product at 4s. Uses Micro-to-Macro zoom (specific query → system-wide capability) and Human-in-the-Loop reassurance to counter AI skepticism. Canonically labeled compound "BAB / Feature-Benefit Cascade" — same video, different framing lens. Treat as a hybrid example.
 Key technique: Concept-Example-Validation rhythm, bold absolutes ("Omniscient AI"), proactive objection handling.
 </agentgpt>
-
-## Additional reverse-engineered references
-
-The `/phase_2/` archive contains Future-Pacing-adjacent samples worth scanning:
-
-- **AgentGPT** (`AgentGPT_-_Product_Teaser_Video [c3YRRnfQb5w].visual_description.md`) — the same video as the existing sample, but in structured-plan format. Labels itself "Before-After-Bridge (BAB) / Feature-Benefit Cascade" — confirms Future Pacing and BAB are sibling framings of the same vision-led arc.
-- **Kyvos** — opens with "Cloud BI Acceleration" (category announcement); reverse file labels it BAB, but the visionary opening is pure Future Pacing in spirit.
-- **Skye** (affable.ai's AI influencer tool) — "Introducing the future of influencer marketing" hook; pure trend-positioning Future Pacing with Feature-Benefit Cascade body.

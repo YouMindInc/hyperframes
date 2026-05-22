@@ -4,7 +4,7 @@
 
 Show the _friction state_ (Before) → contrast with the _desired state_ (After) → walk the audience across the _bridge_ (the product's workflow) that gets you there. The headline is the **process improvement**, not the pain (PAS) or the vision alone (Future Pacing). The bridge is the proof — viewers leave knowing the _steps_, not just the value.
 
-The reverse-engineered samples in `/phase_2/` label three videos as BAB: Kyvos (B2B BI accelerator), DeskLog (auto-dealership SaaS), and AgentGPT (which is compound-labeled `"Before-After-Bridge / Feature-Benefit Cascade"` — BAB outer arc, Cascade inner rhythm).
+Canonical BAB samples: Kyvos (B2B BI accelerator), DeskLog (auto-dealership SaaS), AgentGPT (compound-labeled `"Before-After-Bridge / Feature-Benefit Cascade"` — BAB outer arc, Cascade inner rhythm).
 
 ## Emotional Arc Pattern
 
@@ -93,8 +93,3 @@ Key technique: Category-first opening, "We Plug. You Play." effort-reversal beat
 Opens with poetic friction validation ("the heart of your dealership... every step must flow seamlessly. Because when it doesn't..."), names the product at scene 2, then walks the bridge through 4 sequential workflow steps (check-in → journey tracking → manager control → vision AI). The Vision AI scene is the "wow climax" that elevates the bridge from organized to predictive.
 Key technique: Poetic-pain hook (3-sentence prose, anaphora), tight 7-scene runtime, wow-climax feature near the end of the bridge, contrast-via-transition (messy tags morph into clean logo).
 </desklog>
-
-## Additional reverse-engineered references
-
-- **AgentGPT** (`AgentGPT_-_Product_Teaser_Video [c3YRRnfQb5w].visual_description.md`) — labeled `"Before-After-Bridge / Feature-Benefit Cascade"`. Compound archetype: BAB outer arc, Cascade inner rhythm in scenes 4-10. Demonstrates BAB hybridized with Future Pacing (the "imagine" hook).
-- For pure Future-Pacing variants (vision-led without explicit bridge walk), see `archetypes/future-pacing/overview.md`.

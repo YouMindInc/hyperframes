@@ -6,47 +6,30 @@ category: visual-design
 
 # Color System for Video
 
-**Pair with `./design-system/design.html` §2 (Color system)** — that's where the actual brand palette hex values live (primary, accent, ink, canvas, neutrals). This file is the **video-craft numeric overlay** — 60-30-10 allocation, off-black/off-white targets, dual-radial glow recipe, dark-scene compensations — calibrated against the golden-sample archive (codex-plugin, timeline-editor-launch-v5, fadeglow-v4, hermes, inspector-logo-intro). The hex values come from design.html; the allocation rules come from here.
+**Palette hex values come from `./design-system/design.html` §2. This file owns video-craft numerics** — 60-30-10 allocation, off-black/off-white targets, dual-radial glow recipe, dark-scene compensations — calibrated against the golden-sample archive.
 
-## Copy the palette from `./design-system/design.html` (Phase 1b output)
+## Palette comes from `./design-system/design.html` §2
 
-This pipeline extracts the **actual brand palette** from the target site in Phase 1b. `design-system/design.html` §2 (Color system) is the **single source of truth** — read the `:root` variable block and the named-hex table verbatim.
+design.html §2 is the **single source of truth** for this brand's palette. Read the `:root` variable block and named-hex table verbatim — `--canvas` / `--paper-2` / `--ink` / `--ink-soft` / `--rule` / `--brand-primary` / `--brand-accent` etc. (names vary per brand).
 
-You will find these variables on `:root` (names may vary slightly per brand; the build script auto-derives):
+In every scene's prose body, cite the **actual hex** (not the variable name alone, not a placeholder like "brand cyan"). Example: `palette: --canvas #f6f3ec 60%, --paper-2 #efebe1 30%, --accent #00c3ff 10%`.
 
-| design.html variable             | Role in your scenes  | Usage share | Example (heygen.com extraction) |
-| -------------------------------- | -------------------- | ----------- | ------------------------------- |
-| `--paper` / `--canvas`           | Neutral background   | 60%         | `#f6f3ec` (warm paper)          |
-| `--paper-2` / `--surface`        | Secondary surface    | ~20%        | `#efebe1`                       |
-| `--ink`                          | Foreground text      | ~10%        | `#131313` (off-black)           |
-| `--ink-soft`                     | Muted body / labels  | secondary   | `#555048`                       |
-| `--ink-faint`                    | Eyebrows / metadata  | rare        | `#8a8579`                       |
-| `--rule`                         | Hairlines / dividers | rare        | `#e0dccf`                       |
-| `--brand-primary` / `--accent`   | Primary brand accent | ~10%        | `#00c3ff` (heygen cyan)         |
-| `--brand-secondary` (if present) | Secondary accent     | ~5%         | (varies)                        |
-
-**Steps**:
-
-1. Open `./design-system/design.html`. Find §2 Color system.
-2. Read the `:root` block — note every `--*` variable and its hex value.
-3. Map each variable to one of the roles above. Most extractions yield primary + accent + ink + canvas + 2-3 supporting neutrals.
-4. In every scene's prose body, cite the **actual hex** (not the variable name alone, and not a placeholder like "brand cyan"). Example: `palette: --canvas #f6f3ec 60%, --paper-2 #efebe1 30%, --accent #00c3ff 10%`.
-5. If a scene's `narrativeIntent.emotionalBeat` calls for a deliberate palette shift (e.g., a single pain-point scene needs dread/restraint), invert the canvas/ink relationship using design.html's own dark-theme block (look for `[data-theme="dark"]` overrides) — don't swap in foreign palettes.
+If a scene's `narrativeIntent.emotionalBeat` calls for a deliberate palette shift (e.g., a pain-point scene needs dread/restraint), invert canvas/ink using design.html's own dark-theme block (look for `[data-theme="dark"]` overrides) — don't swap in foreign palettes.
 
 **Never** invent hex values. **Never** substitute pure `#000` / `#fff` for design.html's off-black / off-white. **Never** pick a palette from anywhere else.
 
-## Assign palette roles
+## Map design.html variables to video-craft roles
 
-Every video needs these roles filled:
+Each variable plays a role in the 60-30-10 allocation:
 
-| Role                   | Source                           | Usage share | Archive example                                                  |
+| Role                   | design.html source               | Usage share | Archive example                                                  |
 | ---------------------- | -------------------------------- | ----------- | ---------------------------------------------------------------- |
-| **Primary accent**     | Brand's main color from tokens   | ~10%        | HyperFrames cyan `#06E3FA` on hero word; Vercel red on geometry  |
-| **Secondary accent**   | Brand's second color (optional)  | ~5%         | HyperFrames lime `#4FDB5E` paired with cyan in codex scan bars   |
-| **Restrained third**   | Used only on one beat            | <2%         | Codex amber `#F5B84B` — only on plugin-card moments              |
-| **Neutral background** | Tinted toward brand hue          | 60%         | `#0B0D0E` graphite (codex), `#f5f5f7` warm-paper (timeline)      |
-| **Neutral surface**    | One step warmer/lighter than bg  | ~20%        | Codex panels `#141A1B` / `#1C2424` — barely brighter than bg     |
-| **Foreground text**    | Brand-tinted off-white / off-ink | ~10%        | `#F2F6EF` text on graphite; `#1d1d1f` ink on warm paper          |
+| **Primary accent**     | `--brand-primary` / `--accent`   | ~10%        | HyperFrames cyan `#06E3FA` on hero word; Vercel red on geometry  |
+| **Secondary accent**   | `--brand-secondary` (if present) | ~5%         | HyperFrames lime `#4FDB5E` paired with cyan in codex scan bars   |
+| **Restrained third**   | A neutral or paper tone          | <2%         | Codex amber `#F5B84B` — only on plugin-card moments              |
+| **Neutral background** | `--canvas` / `--paper`           | 60%         | `#0B0D0E` graphite (codex), `#f5f5f7` warm-paper (timeline)      |
+| **Neutral surface**    | `--paper-2` / `--surface`        | ~20%        | Codex panels `#141A1B` / `#1C2424` — barely brighter than bg     |
+| **Foreground text**    | `--ink` / `--ink-soft`           | ~10%        | `#F2F6EF` text on graphite; `#1d1d1f` ink on warm paper          |
 | **Semantic**           | Derived from brand palette       | Sparingly   | Green for success, red for error — both shifted toward brand hue |
 
 ### The 60-30-10 rule in video

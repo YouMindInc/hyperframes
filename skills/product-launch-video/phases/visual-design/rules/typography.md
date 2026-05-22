@@ -8,47 +8,19 @@ category: visual-design
 
 Video typography differs from web typography. There is no scrolling, no responsive reflow, and the viewer cannot control the pace. Every text element must be legible at a glance within its visible window (typically 1-5 seconds) and must do _real work_ in the frame — type is rarely decoration in a strong launch video, it is the scene's emotional anchor.
 
-**Pair with `./design-system/design.html` §3 (Typography)** — that's where the actual display / body / mono font families for this brand live. This file is the **video-craft numeric overlay** — type scale, CJK fallback, letter-spacing values — calibrated against the golden-sample archive. The font family names come from design.html; the sizes and tracking come from here.
+**Font families come from `./design-system/design.html` §3. This file owns video-craft numerics** — type scale, CJK fallback, letter-spacing — calibrated against the golden-sample archive.
 
 ## Font Selection Strategy
 
-### Copy fonts from `./design-system/design.html` (Phase 1b output)
+### Font families come from `./design-system/design.html` §3
 
-This pipeline extracts the **actual brand fonts** from the target site in Phase 1b. `design-system/design.html` §3 (Typography) is the **single source of truth** — read the `:root` font-family declarations verbatim.
+design.html §3 is the **single source of truth** for this brand's fonts. Variables on `:root`: `--display` (headline), `--body` (UI prose), `--mono` (code / labels / eyebrows). The HyperFrames compiler auto-embeds Google Fonts; design.html already loads them in its `<head>`. Cite the **actual font name** in every scene's prose (e.g., "Instrument Serif at 132px"), never "display font" or a font from elsewhere.
 
-You will find these variables on `:root` (the build script extracts up to 3 families):
-
-| design.html variable           | Role                     | Example (heygen.com extraction) |
-| ------------------------------ | ------------------------ | ------------------------------- |
-| `--display` / `--font-display` | Headline / display       | `'Instrument Serif'`            |
-| `--body` / `--font-body`       | Body / UI prose          | `'Inter'`                       |
-| `--mono` / `--font-mono`       | Code / labels / eyebrows | `'JetBrains Mono'`              |
-
-**Implementation**:
-
-1. Open `./design-system/design.html`. Find §3 Typography.
-2. Read the `:root` font-family declarations — note each font name and its role (display / body / mono).
-3. In every scene's prose body, cite the **actual font name** (e.g., "Instrument Serif at 132px for the hero word"), not a placeholder like "display font" or a font from elsewhere.
-4. The HyperFrames compiler auto-embeds Google Fonts (no `<link>` needed) and any font files under `hyperframes/public/fonts/`. design.html already loads the right Google Fonts in its `<head>` — Phase 4b workers paste the `:root` block and the page renders correctly.
-5. If design.html lacks a mono font (single-family extraction), fall back to `ui-monospace, 'SF Mono', monospace` — call this out explicitly in the prose body.
+If design.html lacks a mono font (single-family extraction), fall back to `ui-monospace, 'SF Mono', monospace` — call this out explicitly in the prose body.
 
 **Never** invent font names. **Never** pick fonts based on archetype alone — design.html overrides any "feel" matching.
 
-### Reference: feel-by-feel pairings (only if design.html is missing or fails)
-
-**Recommended alternatives by feel** — these are the actual pairings used across the golden-sample archive:
-
-| Feel                        | Display font                                                               | Body font                               | Reference project                             |
-| --------------------------- | -------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------- |
-| Modern launch / product     | Inter Tight (800-900), Bricolage Grotesque (800)                           | Inter (400-500), IBM Plex Sans          | timeline-editor-launch-v5, playground-launch  |
-| Premium editorial           | Fraunces (700-900 italic), Playfair Display (900 italic), DM Serif Display | Inter (400), IBM Plex Sans              | article-walkthrough, timeline-editor Act 0    |
-| Maker tool / dev workspace  | Inter Tight (700-900), Arial Narrow                                        | IBM Plex Mono (400-700), JetBrains Mono | hyperframes-codex-plugin-announcement, hermes |
-| Hacker / terminal nostalgia | VT323, IBM Plex Mono                                                       | IBM Plex Mono                           | hermes-hyperframes, vfx-text-cursor           |
-| Storybook / playful         | Caprasimo, DM Serif Display italic                                         | Familjen Grotesk, Inter                 | playground-launch beat 2D                     |
-| Vercel-house                | Geist (700-900)                                                            | Geist Mono                              | vercel-intro-hyperframes                      |
-
-**Fonts to avoid as display choices** (overused in AI output, never seen carrying a hero in the archive):
-Inter (as display only — fine as body), Roboto, Open Sans, Lato, Montserrat. Inter dominates the archive as a _body_ font and as a 900-weight tight-tracking display, but never as a default plain-weight headline. Use it heavy and tight, or don't use it for display at all.
+**Fonts to avoid as display choices** (overused in AI output): Inter as plain-weight display (fine as body or as a 900-weight tight-tracking display), Roboto, Open Sans, Lato, Montserrat. Use Inter heavy and tight, or don't use it for display at all.
 
 ### Priority 3: One font family is often enough
 
