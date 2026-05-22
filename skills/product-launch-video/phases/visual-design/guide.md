@@ -95,6 +95,8 @@ One section per scene, in scene order. Each scene block has a **strict header co
 
 **Effects:** [`<rule-id>`, `<rule-id>`, `<rule-id>`]
 **Duration:** <X.XXs>
+**Continuity:** break | continue
+**PrimaryAsset:** public/<filename> | (none)
 
 <free-prose body — see "Prose contents" below>
 ```
@@ -103,8 +105,10 @@ Rules:
 
 - **`**Effects:**` line** — 4-7 backtick-wrapped rule ids, comma-separated, inside square brackets. Every id must appear in the embedded catalog. The order matters: it's the timeline-layering order Phase 4 workers will use.
 - **`**Duration:**` line** — float seconds, parsed from this scene's `estimatedDuration` in `narrator_scripts.json` (strip the trailing `"s"` → number).
-- Both lines on their own line, exactly as shown. No surrounding text, no merging onto one line.
-- A scene block missing either anchor is a fatal Phase 3 error — Phase 4a will STOP and report.
+- **`**Continuity:**` line** — `break` (this scene is a hard visual cut from the previous one — full subject change, palette flip, deliberate narrative pivot) or `continue` (same hero asset / palette beat / narrative arc as the previous scene). **Scene 1 is always `break`.** Phase 4a uses this to pack `continue` runs into the same worker (cap = 2 scenes per worker); a `break` always starts a new worker. Decide based on the transition you spec in prose body item 8 — `hard cut` / `jump cut` ↔ `break`; `cut-the-curve` / `morph` / `scale+fade` over the same asset ↔ `continue`.
+- **`**PrimaryAsset:**` line** — the `public/<basename>` path of this scene's focal visual (the one that covers ≥40% of canvas, per the composition rules). Use `(none)` only for genuinely text-only scenes (title-card, pure typography reveal). The basename must match a file copied from `extraction/` (Phase 4a copies the union into `hyperframes/public/`). Phase 4b worker uses this as the dispatched `primary_visual_asset` — it is the asset the scene's effects are choreographed around.
+- All four lines on their own line, exactly as shown. No surrounding text, no merging onto one line.
+- A scene block missing any of the four anchors is a fatal Phase 3 error — Phase 4a's `prep.mjs` will exit 1 and the orchestrator will re-dispatch Phase 3.
 
 ### Prose contents (free form, but cover these)
 

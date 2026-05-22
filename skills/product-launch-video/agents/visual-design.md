@@ -37,18 +37,26 @@ Do not invent effect names — if a needed effect doesn't exist in the catalog, 
 
 ## Output format — anchor contract (HARD)
 
-Each scene block in `section_plan.md` MUST start with two anchor lines on their own lines:
+Each scene block in `section_plan.md` MUST start with **four** anchor lines, each on its own line:
 
 ```markdown
 ## Scene <N>: <scene name>
 
 **Effects:** [`<rule-id>`, `<rule-id>`, `<rule-id>`]
 **Duration:** <X.XXs>
+**Continuity:** break | continue
+**PrimaryAsset:** public/<filename> | (none)
 
 <free-prose body>
 ```
 
-Phase 4a greps these anchors. Missing either anchor → Phase 4a STOPs and reports. See the phase guide's "Per-scene anchor format" section for the full rules.
+Phase 4a's `prep.mjs` parses these four anchors deterministically — there is no LLM in Phase 4a. Any missing anchor or malformed value exits 1.
+
+- **Effects / Duration**: as before.
+- **Continuity**: `break` = hard visual cut from the previous scene (full subject change, palette flip, narrative pivot). `continue` = same hero asset / palette beat / narrative arc as the previous scene. **Scene 1 is always `break`.** Phase 4a packs consecutive `continue` scenes into the same Phase 4b worker (cap 2 scenes/worker); every `break` starts a new worker. Tie this decision to the transition you spec in prose body item 8 — `hard cut` / `jump cut` ↔ `break`; `cut-the-curve` / `morph` / `scale+fade` over the same asset ↔ `continue`.
+- **PrimaryAsset**: the `public/<basename>` of the focal visual (the ≥40%-canvas hero asset). Use `(none)` only for genuinely text-only scenes. Basename must correspond to a file that exists in `extraction/` (Phase 4a copies the union into `hyperframes/public/`); the worker takes this verbatim as its `primary_visual_asset` input.
+
+See the phase guide's "Per-scene anchor format" section for the full rules.
 
 ## Self-validate before reporting done
 
@@ -58,7 +66,7 @@ The Dispatch context block of your prompt contains a "Schema validator:" line wi
 node <validator-path> ./section_plan.md
 ```
 
-The validator asserts every effect name in the plan exists in `hyperframes-animation/rules/`. Iterate until it exits 0.
+The validator asserts: (a) every effect name in the plan exists in `hyperframes-animation/rules/`, (b) every scene has all four anchors (`Effects` / `Duration` / `Continuity` / `PrimaryAsset`), (c) `Continuity` is `break` or `continue` and scene 1 is `break`, (d) `PrimaryAsset` is `public/<basename>` or `(none)`. Iterate until it exits 0.
 
 Do not report done until the validator passes.
 

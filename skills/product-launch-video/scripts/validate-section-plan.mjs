@@ -98,6 +98,82 @@ for (const s of suspicious) {
   );
 }
 
+// ---- Per-scene anchor validation (Phase 4a contract) ----
+// Every "## Scene N:" block must have all four anchors. Phase 4a's prep.mjs
+// reads these deterministically; missing anchors break the build.
+const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
+const heads = [...plan.matchAll(sceneHeadRe)];
+const ANCHORS = ["Effects", "Duration", "Continuity", "PrimaryAsset"];
+
+if (heads.length === 0) {
+  errors.push("No '## Scene N: <name>' headings found — section_plan must have at least one scene block.");
+}
+
+for (let i = 0; i < heads.length; i++) {
+  const m = heads[i];
+  const sceneNumber = m[1];
+  const sceneId = `scene_${sceneNumber}`;
+  const start = m.index + m[0].length;
+  const end = i + 1 < heads.length ? heads[i + 1].index : plan.length;
+  const body = plan.slice(start, end);
+
+  const found = {};
+  for (const a of ANCHORS) {
+    const re = new RegExp(`^\\*\\*${a}:\\*\\*\\s*(.*)$`, "m");
+    const am = body.match(re);
+    if (!am) {
+      errors.push(`${sceneId}: missing **${a}:** anchor`);
+    } else {
+      found[a] = am[1].trim();
+    }
+  }
+
+  if (found.Continuity != null) {
+    const v = found.Continuity.toLowerCase();
+    if (v !== "break" && v !== "continue") {
+      errors.push(
+        `${sceneId}: **Continuity:** must be "break" or "continue" (got "${found.Continuity}")`,
+      );
+    } else if (i === 0 && v !== "break") {
+      errors.push(`${sceneId}: scene 1 must be **Continuity:** break`);
+    }
+  }
+
+  if (found.PrimaryAsset != null) {
+    const v = found.PrimaryAsset.trim();
+    const isNone = v === "" || /^\(?none\)?$/i.test(v);
+    if (!isNone && !v.startsWith("public/")) {
+      errors.push(
+        `${sceneId}: **PrimaryAsset:** must start with "public/" or be "(none)" (got "${found.PrimaryAsset}")`,
+      );
+    }
+  }
+
+  if (found.Duration != null) {
+    const dm = found.Duration.match(/[\d.]+/);
+    if (!dm || !(parseFloat(dm[0]) > 0)) {
+      errors.push(
+        `${sceneId}: **Duration:** must be a positive float (got "${found.Duration}")`,
+      );
+    }
+  }
+
+  if (found.Effects != null) {
+    const ids = [...found.Effects.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+    if (ids.length === 0) {
+      errors.push(`${sceneId}: **Effects:** has no backtick-wrapped ids`);
+    } else {
+      for (const id of ids) {
+        if (!known.has(id)) {
+          errors.push(
+            `${sceneId}: **Effects:** cites unknown rule "${id}" — not under hyperframes-animation/rules/`,
+          );
+        }
+      }
+    }
+  }
+}
+
 if (errors.length) {
   console.error(`✗ ${planPath}: ${errors.length} issue(s)`);
   for (const e of errors) console.error(`  - ${e}`);
