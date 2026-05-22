@@ -6,7 +6,7 @@ category: visual-design
 
 # Composition for 1920x1080 Video
 
-**Pair with `hyperframes-creative/references/composition-patterns.md` and `references/video-composition.md`** for ready-made HyperFrames composition patterns (picture-in-picture, text-behind-subject, slideshow) and the broader "video frames are not pages" framing. This file is the **numeric overlay** — exact safe margins, canvas zones, density targets, depth values calibrated against the actual layouts in the golden samples (hyperframes-animation/examples × 13, codex-plugin, timeline-editor-launch-v5, playground-launch, hermes, inspector-logo-intro, article-walkthrough).
+This file is the **video-craft numeric overlay** — exact safe margins, canvas zones, density targets, depth values calibrated against the actual layouts in the golden samples (hyperframes-animation/examples × 13, codex-plugin, timeline-editor-launch-v5, playground-launch, hermes, inspector-logo-intro, article-walkthrough). Composition is brand-agnostic — pair the geometry below with the actual palette/typography from `./design-system/design.html`.
 
 Video composition is closer to film and poster design than web layout. There is no scroll, no responsive reflow. Every frame is a fixed canvas where every pixel matters.
 

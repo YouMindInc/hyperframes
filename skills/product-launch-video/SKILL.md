@@ -1,6 +1,6 @@
 ---
 name: product-launch-video
-description: End-to-end pipeline that turns a website URL (or product brief) into a 60-90s product-launch / SaaS explainer / promo video as a HyperFrames composition. Orchestrates six subagent dispatches — web-extraction, story-design, visual-design, then a parallel HyperFrames build (prep → scene workers fanned out → finalize, where finalize also runs the render). Use when the user provides a URL and asks for a launch video, a promo video, a SaaS explainer, a feature reveal, or otherwise says "make me a video for <url>". You dispatch subagents via the Agent tool; you do NOT execute phase work yourself.
+description: End-to-end pipeline that turns a website URL (or product brief) into a 60-90s product-launch / SaaS explainer / promo video as a HyperFrames composition. Phase 1 (web-research, browser capture) and Phase 1b (design-system, brand-token extraction → design.html) run in parallel; Phase 2 (story-design) consumes the research pack to write the narrative + per-scene asset candidates; Phase 3 (visual-design) reads narrator_scripts.json + design.html only (design.html is the single source of truth for palette / typography / motion). Then a parallel HyperFrames build (prep → scene workers fanned out → finalize, where finalize also runs the render). Use when the user provides a URL and asks for a launch video, a promo video, a SaaS explainer, a feature reveal, or otherwise says "make me a video for <url>". You dispatch subagents via the Agent tool; you do NOT execute phase work yourself.
 metadata:
   tags: orchestrator, pipeline, product-launch, promo, saas-explainer, web-to-video
 ---
@@ -11,27 +11,30 @@ You are the orchestrator. You dispatch one specialized subagent per phase, pass 
 
 The pipeline separates **workflow-internal phases** (this workflow's owned procedures) from **shared domain skills** (cross-workflow technical references):
 
-- **Phases** (this workflow's `phases/` dir — `web-extraction`, `story-design`, `visual-design`) — each phase has its own `guide.md` + supporting scripts / archetypes / rules. They are NOT standalone skills; they exist only as part of this pipeline.
-- **Domain skills** (top-level, cross-workflow) — `/hyperframes-core`, `/hyperframes-animation`, `/hyperframes-cli`, `/hyperframes-creative`, `/hyperframes-media`, `/hyperframes-registry`. Each describes general technical capabilities of HyperFrames.
+- **Phases** (this workflow's `phases/` dir — `web-research`, `design-system`, `story-design`, `audio`, `visual-design`) — each phase has its own `guide.md` + supporting scripts / archetypes / rules / references. They are NOT standalone skills; they exist only as part of this pipeline. All capture, token-extraction, and design tooling lives under `phases/` — there are no cross-skill dependencies for the pre-build stages.
+- **Domain skills** (top-level, cross-workflow) — `/hyperframes-core`, `/hyperframes-animation`, `/hyperframes-cli`, `/hyperframes-media`, `/hyperframes-registry`. These are loaded by Phase 4 only and describe general HyperFrames technical capabilities.
 - **Subagent prompts** (this skill's `agents/` dir) — pipeline-specific wrappers. Each says "you are Phase N of THIS pipeline, here's your cwd contract, read this guide, here's how to report". You inject these as the `prompt` to the Agent tool.
 
 ## Pipeline
 
-| Phase | Subagent prompt file              | Subagent reads / loads                                               | Writes                                                                                         |
-| ----- | --------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1     | `agents/web-extraction.md`        | `phases/web-extraction/guide.md` (+ scripts)                         | `extraction/`                                                                                  |
-| 2     | `agents/story-design.md`          | `phases/story-design/guide.md` (+ archetypes)                        | `narrator_scripts.json`                                                                        |
-| 2.5   | `scripts/audio.mjs` (no subagent) | `narrator_scripts.json` + `extraction/shared/tokens.json` (optional) | `audio_meta.json` + `hyperframes/assets/voice/*` + `hyperframes/assets/bgm.wav` (BGM detached) |
-| 3     | `agents/visual-design.md`         | `phases/visual-design/guide.md` (+ rules + effects-catalog.md)       | `section_plan.md`                                                                              |
-| 4a    | `scripts/prep.mjs` (no subagent)  | section_plan.md + narrator_scripts.json + audio_meta.json (optional) | `group_spec.json` + `hyperframes/public/`                                                      |
-| 4b    | `agents/hyperframes-scene.md` × N | `/hyperframes-core` + `/hyperframes-animation` (Skill tool)          | `hyperframes/compositions/scene_*.html`                                                        |
-| 4c    | `agents/hyperframes-finalize.md`  | `/hyperframes-core` + `/hyperframes-cli` (Skill tool)                | `hyperframes/index.html` + gates + `hyperframes/renders/video.mp4`                             |
+| Phase | Subagent prompt file              | Subagent reads / loads                                                                                                 | Writes                                                                                         |
+| ----- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1     | `agents/web-research.md`          | `phases/web-research/guide.md` (+ capture script)                                                                      | `research/` (context_pack.md, extraction.json, assets/, screenshot_full.png, page.html)        |
+| 1b    | `agents/design-system.md`         | `phases/design-system/guide.md` (+ build script)                                                                       | `design-system/` (design.html + ~30 token JSON files)                                          |
+| 2     | `agents/story-design.md`          | `phases/story-design/guide.md` (+ archetypes) + `research/`                                                            | `narrator_scripts.json` (includes `assetCandidates` per scene)                                 |
+| 2.5   | `scripts/audio.mjs` (no subagent) | `narrator_scripts.json`                                                                                                | `audio_meta.json` + `hyperframes/assets/voice/*` + `hyperframes/assets/bgm.wav` (BGM detached) |
+| 3     | `agents/visual-design.md`         | `phases/visual-design/guide.md` (+ rules + effects-catalog.md) + `narrator_scripts.json` + `design-system/design.html` | `section_plan.md`                                                                              |
+| 4a    | `scripts/prep.mjs` (no subagent)  | section_plan.md + narrator_scripts.json + audio_meta.json (optional) + `research/assets/`                              | `group_spec.json` + `hyperframes/public/`                                                      |
+| 4b    | `agents/hyperframes-scene.md` × N | `/hyperframes-core` + `/hyperframes-animation` (Skill tool) + `design-system/design.html`                              | `hyperframes/compositions/scene_*.html`                                                        |
+| 4c    | `agents/hyperframes-finalize.md`  | `/hyperframes-core` + `/hyperframes-cli` (Skill tool)                                                                  | `hyperframes/index.html` + gates + `hyperframes/renders/video.mp4`                             |
+
+**Phase 1 ‖ Phase 1b run in parallel** — both only need the target URL and write disjoint directories (`research/` vs `design-system/`). Orchestrator launches both subagents in ONE assistant message, **both with `run_in_background: true`**. Phase 2 (story-design) cannot start until **both** finish.
 
 **Phase 2.5 ‖ Phase 3 run in parallel** — orchestrator **launches both simultaneously**: ONE assistant message containing TWO tool_use blocks (a `Bash` for `audio.mjs` + an `Agent` for visual-design), **both with `run_in_background: true`**. They share `narrator_scripts.json` (read-only for both) and write disjoint files. Phase 4a merges `audio_meta.json` into `group_spec.json` so workers + finalize see the real `voiceDuration`. **Lyria BGM is spawned detached by `audio.mjs` and may finish minutes after the script exits** — `audio_meta.bgm_pending: true` signals this; Phase 4c re-checks `bgm.wav` on disk before emitting the `<audio>` element.
 
-> ❌ **Critical anti-pattern**: do NOT issue Phase 2.5 first, wait for it to finish, then issue Phase 3. That serializes a flow that's designed parallel and adds 30-90s of wall-clock waste. The Bash (audio.mjs) and the Agent (visual-design) MUST be in the same assistant message, both with `run_in_background: true`. The same rule applies to Phase 4b's N scene workers.
+> ❌ **Critical anti-pattern**: do NOT issue Phase 1 first, wait for it to finish, then issue Phase 1b (nor 2.5 then 3). That serializes a flow that's designed parallel and adds 30-90s of wall-clock waste. Each parallel pair MUST be in the same assistant message, both with `run_in_background: true`. The same rule applies to Phase 4b's N scene workers.
 
-Phases 1-3 read **local files** (`phases/<name>/guide.md`); Phase 4 loads **shared domain skills** via the Skill tool.
+Phases 1–3 read **local files** (`phases/<name>/guide.md`). Phase 4 loads **shared domain skills** via the Skill tool. Phase 4b also reads `design-system/design.html` for `:root` tokens and component HTML+CSS.
 
 Phase 4 is split into three flat sub-phases so the orchestrator can fan out N scene workers **in parallel** in 4b. Each worker writes 1–2 scenes with a tiny per-worker context — only the rule bodies it owns, no `section_plan.md` walk, no asset copy, no gates.
 
@@ -44,7 +47,8 @@ Phase 4 is split into three flat sub-phases so the orchestrator can fan out N sc
 ├── audio_meta.json                       # Phase 2.5 output (side file, do NOT mutate narrator_scripts.json)
 ├── section_plan.md                       # Phase 3 output
 ├── group_spec.json                       # Phase 4a output (scene groups + per-scene paths + audio refs)
-├── extraction/                           # Phase 1 output
+├── research/                             # Phase 1 output (web-research)
+├── design-system/                        # Phase 1b output (design.html + token JSON files)
 └── hyperframes/                          # Phase 2.5 + Phase 4 outputs
     ├── public/                            # Phase 4a (bulk-copied visual assets)
     ├── assets/
@@ -78,9 +82,11 @@ It then follows the guide / skill procedure with this pipeline's contract overla
 
 Read `./context.log` if it exists:
 
-- **Missing or empty** → first run. Dispatch Phase 1 → 2 → **(3 ‖ 2.5 in parallel)** → 4a → 4b (parallel fan-out) → 4c in order (autopilot). Phase 4c produces and verifies the final mp4 — no separate render step.
+- **Missing or empty** → first run. Dispatch **(1 ‖ 1b in parallel)** → 2 → **(3 ‖ 2.5 in parallel)** → 4a → 4b (parallel fan-out) → 4c in order (autopilot). Phase 4c produces and verifies the final mp4 — no separate render step.
 - **Has completed phases, last entry not `[interrupted]`** → interactive mode (user is iterating). Dispatch only the phase relevant to their request, then any downstream cascade.
-- **Last entry ends with `[interrupted]`** → resume from that phase. For Phase 4 interruptions, inspect disk to decide where to pick up:
+- **Last entry ends with `[interrupted]`** → resume from that phase. Inspect disk to decide where to pick up:
+  - For Phase 1 / 1b interruptions: if one of (`research/context_pack.md` / `design-system/design.html`) is missing, re-dispatch only the missing phase (the other is unaffected and stays on disk).
+  - `research/` + `design-system/design.html` both present, no `narrator_scripts.json` → resume from Phase 2.
   - `narrator_scripts.json` present, no `audio_meta.json` and no `section_plan.md` → resume parallel (3 ‖ 2.5)
   - One of (`audio_meta.json` / `section_plan.md`) present, other missing → resume just the missing one
   - Both audio + section_plan present, no `group_spec.json` → resume from Phase 4a
@@ -90,24 +96,62 @@ Read `./context.log` if it exists:
 
 If audio is intentionally skipped (user said "no audio" or env lacks all TTS providers): orchestrator omits the `audio.mjs` Bash call and proceeds directly from Phase 2 → Phase 3 → 4a. Phase 4a tolerates a missing `audio_meta.json` and falls back to `estimatedDuration` everywhere.
 
-## Phase 1 — dispatch web-extraction
+## Phase 1 ‖ Phase 1b — dispatch web-research + design-system in parallel
+
+Phase 1 (web-research, page capture) and Phase 1b (design-system, brand-token extraction) both only need the target URL and write to disjoint directories (`research/` vs `design-system/`). Both must complete before Phase 2 can start. The orchestrator launches them in ONE assistant message with TWO `Agent` tool_use blocks, both with `run_in_background: true`.
+
+### Phase 1 — web-research dispatch
 
 ```
-1. Read product-launch-video/agents/web-extraction.md
+1. Read product-launch-video/agents/web-research.md
 2. Compose prompt = <its contents>
                   + "\n\n## Dispatch context\n"
                   + "SKILL_DIR: <abs-path-to-this-skill>\n"
                   + "Target URL: <USER_URL>\n"
-3. Agent(
+3. Agent block:
      subagent_type: "general-purpose",
-     description: "Phase 1: web extraction",
+     description: "Phase 1: web research",
      prompt: <composed>,
-   )
+     run_in_background: true,    ← MANDATORY for parallelism
 ```
 
-`SKILL_DIR` is the absolute path of the directory containing this SKILL.md. The subagent reads `<SKILL_DIR>/phases/web-extraction/guide.md` to get its procedure.
+The subagent reads `<SKILL_DIR>/phases/web-research/guide.md` and runs the capture script with `--out ./research --download-assets`. Output: `research/context_pack.md`, `research/extraction.json`, `research/screenshot_full.png`, `research/page.html`, `research/assets/`. The phase does **NOT** generate an `analysis.json` — analysis is fused into Phase 2 (story-design).
 
-**Immediately after dispatching Phase 1, kick off model pre-warm in background** so Kokoro + Whisper models are loaded into the OS page cache by the time Phase 2.5 needs them. This is fire-and-forget — failures are silent and harmless. Use a single Bash with `run_in_background: true`:
+### Phase 1b — design-system dispatch
+
+```
+1. Read product-launch-video/agents/design-system.md
+2. Compose prompt = <its contents>
+                  + "\n\n## Dispatch context\n"
+                  + "SKILL_DIR: <abs-path-to-this-skill>\n"
+                  + "Target URL: <USER_URL>\n"
+3. Agent block:
+     subagent_type: "general-purpose",
+     description: "Phase 1b: design system",
+     prompt: <composed>,
+     run_in_background: true,    ← MANDATORY for parallelism
+```
+
+The subagent reads `<SKILL_DIR>/phases/design-system/guide.md` and runs `npx designlang` + `build-design-html.mjs`. Output: `design-system/design.html` plus ~30 token JSON sidecar files. **`design.html` is the single source of truth for all design decisions in Phases 3 and 4b** — palette, typography, motion eases, and component HTML+CSS are all defined there.
+
+### Dispatch both in ONE message — concrete shape
+
+The first autopilot turn after the user provides a URL MUST look like this:
+
+```
+<one sentence text: "Dispatching web-research + design-system subagents in parallel.">
+<tool_use block 1: Agent(... Phase 1 web-research, run_in_background: true)>
+<tool_use block 2: Agent(... Phase 1b design-system, run_in_background: true)>
+<tool_use block 3 (optional): Bash(model pre-warm, run_in_background: true)>
+```
+
+Two `Agent` blocks, same message, both backgrounded. Then stop emitting tool calls in that turn — the next turn is when results come back.
+
+**Self-check before sending**: is your draft about to emit only ONE block, planning to launch the other after? STOP — reconstruct as two blocks in this same message. That intent is the exact serialization bug this section exists to prevent.
+
+### Model pre-warm (optional, fire-and-forget)
+
+**While dispatching Phase 1 + 1b, kick off model pre-warm in background** so Kokoro + Whisper models are loaded into the OS page cache by the time Phase 2.5 needs them. This is fire-and-forget — failures are silent and harmless. Use a single Bash with `run_in_background: true` in the **same assistant message** as the Phase 1 + 1b dispatches:
 
 ```bash
 ( WARM_DIR=$(mktemp -d) && \
@@ -119,7 +163,17 @@ If audio is intentionally skipped (user said "no audio" or env lacks all TTS pro
 
 (Skip the pre-warm if the user has explicitly asked for "no audio" — there's nothing to warm.)
 
-After Phase 1 returns: read `extraction/report.json` to confirm shape; relay key facts to the user (pages crawled, asset counts). Proceed to Phase 2.
+### After both Phase 1 + 1b return
+
+Verify on disk:
+
+```bash
+[ -s research/context_pack.md ] && [ -s research/extraction.json ] && [ -s design-system/design.html ] && echo "ok" || echo "missing artifacts"
+```
+
+If `design-system/design.html` is missing, Phase 1b failed — read its report and decide whether to re-dispatch Phase 1b only, or proceed without it (in which case Phase 3 and 4b must fall back to defaults; this is a degraded mode, warn the user). If `research/` artifacts are missing, re-dispatch Phase 1 only.
+
+Relay key facts to the user (page captured, asset count under `research/assets/`, primary/accent hex from design.html, fonts chosen). Proceed to Phase 2.
 
 ## Phase 2 — dispatch story-design
 
@@ -128,7 +182,7 @@ After Phase 1 returns: read `extraction/report.json` to confirm shape; relay key
 2. Compose prompt = <its contents>
                   + "\n\n## Dispatch context\n"
                   + "SKILL_DIR: <abs-path-to-this-skill>\n"
-                  + "Phase 1 summary: <one-paragraph: pages crawled, brand colors, fonts noted>\n"
+                  + "Phase 1 + 1b summary: <one-paragraph: page captured, asset count under research/assets/, hero candidates seen in context_pack.md; design.html primary/accent hex, font choices>\n"
                   + "Schema validator: <SKILL_DIR>/scripts/validate-narrator-scripts.mjs\n"
 3. Agent(
      subagent_type: "general-purpose",
@@ -184,11 +238,12 @@ If the user has explicitly asked for "no audio" (or no TTS provider is available
 ```bash
 node <SKILL_DIR>/scripts/audio.mjs \
   --narrator-scripts ./narrator_scripts.json \
-  --tokens ./extraction/shared/tokens.json \
   --hyperframes ./hyperframes \
   --out ./audio_meta.json \
   --lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py
 ```
+
+`audio.mjs` infers a BGM mood from `narrator_scripts.json` content directly (project + archetype + arc + per-scene script and intent fields). Use `--bgm-prompt "<text>"` to override the inferred mood.
 
 Optional flags:
 
@@ -209,6 +264,7 @@ The script exits 0 once voice + transcribe + ffprobe are done. BGM keeps renderi
                   + "\n\n## Dispatch context\n"
                   + "SKILL_DIR: <abs-path-to-this-skill>\n"
                   + "Phase 2 summary: <archetype + scene count + emotional arc>\n"
+                  + "Design system: ./design-system/design.html  (Phase 1b output — single source of truth for palette/typography/motion)\n"
                   + "Schema validator: <SKILL_DIR>/scripts/validate-section-plan.mjs\n"
                   + "\n## Effects catalog (single source of truth — your `**Effects:**` anchor lines must cite ids from this list)\n\n"
                   + <effects-catalog.md contents>
@@ -218,6 +274,8 @@ The script exits 0 once voice + transcribe + ffprobe are done. BGM keeps renderi
      prompt: <composed>,
      run_in_background: true,    ← MANDATORY for parallelism
 ```
+
+The subagent reads `narrator_scripts.json` (for scenes + assetCandidates) AND `design-system/design.html` (for actual brand palette/fonts/easing). Section_plan.md must quote real hex values from design.html, not invented ones.
 
 ### Dispatch both in ONE message — concrete shape
 
@@ -270,7 +328,7 @@ node <SKILL_DIR>/scripts/prep.mjs \
   --narrator-scripts ./narrator_scripts.json \
   $( [ -f audio_meta.json ] && echo "--audio-meta ./audio_meta.json" ) \
   --rules-dir <SKILL_DIR>/../hyperframes-animation/rules \
-  --extraction ./extraction \
+  --research ./research \
   --hyperframes ./hyperframes \
   --out ./group_spec.json
 ```
@@ -278,7 +336,7 @@ node <SKILL_DIR>/scripts/prep.mjs \
 The script:
 
 1. Scaffolds `hyperframes/` via `npx hyperframes init … --example blank --non-interactive --skip-skills` if the dir is missing.
-2. Recursively copies `extraction/**/*.{png,jpg,jpeg,webp,svg}` into `hyperframes/public/` with first-wins semantics (collisions skipped, reported).
+2. Recursively copies `research/**/*.{png,jpg,jpeg,webp,svg}` into `hyperframes/public/` with first-wins semantics (collisions skipped, reported). Asset basenames must match the `assetCandidates[].path` values that story-design wrote into `narrator_scripts.json`.
 3. Parses each `## Scene N:` block's four anchors (`Effects` / `Duration` / `Continuity` / `PrimaryAsset`) — missing or malformed anchor → exit 1.
 4. Resolves `effects` ids to `<rules-dir>/<id>.md` and `statSync`-verifies each — missing rule → exit 1.
 5. Merges `audio_meta.json` if present (`voiceDuration` wins over the section_plan duration; captures `voicePath` / `wordsPath` / `bgm_path`; drops paths that aren't on disk).
@@ -307,6 +365,7 @@ For each group g in group_spec.json.groups:
   Compose prompt = <agents/hyperframes-scene.md contents>
                  + "\n\n## Dispatch context\n"
                  + "Worker ID: " + g.worker_id + "\n"
+                 + "Design system: ./design-system/design.html  (Phase 1b output — copy :root tokens and component HTML+CSS verbatim into your scene's scoped <style>)\n"
                  + "\nScenes you own:\n"
   For each scene_id in g.scene_ids:
     s = g.scenes[scene_id]
@@ -400,7 +459,8 @@ When `context.log` shows a full pipeline already ran, **don't redispatch everyth
 - **Voice / BGM change only** (same script, swap voice id or BGM mood) → re-run `audio.mjs` (Phase 2.5) with `--voice <id>` and/or `--bgm-prompt "..."` → 4a (re-merge audio_meta.json into group_spec.json) → 4c. Phase 3 / 4b unchanged.
 - **Drop audio entirely** → delete `audio_meta.json` + `hyperframes/assets/voice/` + `hyperframes/assets/bgm.wav` → dispatch 4a → 4c (no `<audio>` elements emitted; everything falls back to `estimatedDuration`)
 - **Narrative change** (reorder scenes, new archetype) → Phase 2 → (3 ‖ 2.5) → 4a → 4b → 4c
-- **More assets needed** → Phase 1 with a scoped URL/scope hint in the Dispatch context, then cascade through (3 ‖ 2.5) → 4a → 4b → 4c
+- **More assets needed** → re-run **(Phase 1 ‖ Phase 1b)** with a scoped URL/scope hint in the Dispatch context, then cascade through 2 → (3 ‖ 2.5) → 4a → 4b → 4c
+- **Brand styling change only** (same URL, want different palette/fonts after iterating on extracted tokens) → re-run **Phase 1b only** (or edit the design-system JSON tokens by hand, then re-run only the build script per `phases/design-system/guide.md` "Re-build pattern"), then cascade through 3 → 4a → 4b → 4c
 - **Faster iteration** → pass `Render quality: draft` in the 4c dispatch context to cut render time roughly in half; switch back to `high` for the final pass
 
 ## `context.log` format
@@ -418,5 +478,5 @@ If a phase fails or you abort mid-run, mark `[interrupted]` instead of `[done]`.
 
 - `/hyperframes-animation` — atomic rules + blueprints + per-runtime adapters (Phase 4's main motion reference)
 - `/hyperframes-core` + `/hyperframes-cli` — composition contract + dev loop (Phase 4's other Skill-tool loads)
-- `phases/web-extraction/`, `phases/story-design/`, `phases/visual-design/` — workflow-internal phase guides for Phases 1–3
+- `phases/web-research/`, `phases/design-system/`, `phases/story-design/`, `phases/audio/`, `phases/visual-design/` — workflow-internal phase guides + scripts for all pre-build phases
 - `/video-workflows` (router) — the cross-workflow router that hands off to this orchestrator

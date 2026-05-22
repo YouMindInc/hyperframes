@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Phase 2.5 — audio (deterministic replacement for the audio subagent).
 //
-// Reads:  narrator_scripts.json (Phase 2), extraction/shared/tokens.json (optional).
+// Reads:  narrator_scripts.json (Phase 2).
 // Writes: hyperframes/assets/voice/scene_*.wav, hyperframes/assets/voice/scene_*_words.json,
 //         ./audio_meta.json, and (eventually) hyperframes/assets/bgm.wav.
 //
@@ -13,10 +13,15 @@
 //     in the background. audio_meta.json sets `bgm_pending: true` so prep.mjs
 //     trusts the path and Phase 4c does the final on-disk check before render.
 //
+// BGM prompt inference: the script reads concatenated `script` + `keyMessage`
+// fields from narrator_scripts.json (no tokens.json side file — Phase 1
+// web-research writes asset/section data into research/extraction.json which
+// this script doesn't need). Override with --bgm-prompt "..." if the
+// auto-inferred mood is wrong.
+//
 // Usage:
 //   node audio.mjs \
 //     --narrator-scripts ./narrator_scripts.json \
-//     [--tokens ./extraction/shared/tokens.json] \
 //     --hyperframes ./hyperframes \
 //     --out ./audio_meta.json \
 //     [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
@@ -54,7 +59,6 @@ function die(msg) {
 }
 
 const narratorPath = resolve(flag("narrator-scripts", "./narrator_scripts.json"));
-const tokensPath = flag("tokens") ? resolve(flag("tokens")) : null;
 const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
 const outPath = resolve(flag("out", "./audio_meta.json"));
 const lyriaRecipe = flag("lyria-recipe") ? resolve(flag("lyria-recipe")) : null;
@@ -106,18 +110,25 @@ for (const s of scenes) {
     die(`${s.sceneId}: empty "script" field in narrator_scripts.json`);
 }
 
-const tokens =
-  tokensPath && existsSync(tokensPath)
-    ? safeJson(readFileSync(tokensPath, "utf8"))
-    : null;
-
-function safeJson(str) {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return null;
+// BGM-inference corpus: concatenate every scene's narrative metadata so we can
+// look for category keywords (SaaS / crypto / creative / fintech / etc.) and
+// pick a matching Lyria prompt. Replaces the old tokens.json-based inference.
+const bgmInferenceBlob = (() => {
+  const parts = [
+    narrator.project || "",
+    narrator.narrativeArchetype || "",
+    narrator.emotionalArc || "",
+  ];
+  for (const s of narrator.scenes || []) {
+    parts.push(s.sceneName || "");
+    parts.push(s.script || "");
+    if (s.narrativeIntent) {
+      parts.push(s.narrativeIntent.narrativeRole || "");
+      parts.push(s.narrativeIntent.keyMessage || "");
+    }
   }
-}
+  return parts.join(" ").toLowerCase();
+})();
 
 // ---------- Step 3: provider detection ----------
 function elevenlabsAvailable() {
@@ -196,7 +207,7 @@ if (noBgm) {
 
 function inferBgmPrompt() {
   if (userBgmPrompt) return userBgmPrompt;
-  const blob = JSON.stringify(tokens || {}).toLowerCase();
+  const blob = bgmInferenceBlob;
   if (
     /\b(saas|api|cloud|developer|platform|workspace|dashboard|infra|devtool|sdk)\b/.test(
       blob,

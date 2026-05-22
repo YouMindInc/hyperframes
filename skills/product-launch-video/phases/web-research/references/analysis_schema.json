@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PromotionalWebResearchAnalysis",
+  "type": "object",
+  "required": ["source", "product_analysis", "sections", "asset_recommendations", "creative_notes"],
+  "properties": {
+    "source": {
+      "type": "object",
+      "required": ["url", "final_url", "captured_at"],
+      "properties": {
+        "url": { "type": "string" },
+        "final_url": { "type": "string" },
+        "captured_at": { "type": "string" },
+        "page_title": { "type": "string" }
+      }
+    },
+    "product_analysis": {
+      "type": "object",
+      "required": [
+        "product_name",
+        "tagline",
+        "product_category",
+        "target_audience",
+        "key_value_props",
+        "problem_solved",
+        "confidence"
+      ],
+      "properties": {
+        "product_name": { "type": "string" },
+        "tagline": { "type": "string" },
+        "product_category": { "type": "string" },
+        "target_audience": { "type": "string" },
+        "key_value_props": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "problem_solved": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "type", "headline", "description", "assets", "confidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hero",
+              "feature",
+              "how_it_works",
+              "social_proof",
+              "pricing",
+              "cta",
+              "faq",
+              "footer",
+              "other"
+            ]
+          },
+          "headline": { "type": "string" },
+          "description": { "type": "string" },
+          "position": {
+            "type": "object",
+            "properties": {
+              "top": { "type": "number" },
+              "height": { "type": "number" }
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["url", "role", "reason"],
+              "properties": {
+                "url": { "type": "string" },
+                "local_path": { "type": "string" },
+                "role": { "type": "string" },
+                "reason": { "type": "string" }
+              }
+            }
+          },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "asset_recommendations": {
+      "type": "object",
+      "required": ["use", "avoid"],
+      "properties": {
+        "use": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url", "local_path", "why"],
+            "properties": {
+              "url": { "type": "string" },
+              "local_path": { "type": "string" },
+              "why": { "type": "string" }
+            }
+          }
+        },
+        "avoid": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url", "why"],
+            "properties": {
+              "url": { "type": "string" },
+              "local_path": { "type": "string" },
+              "why": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "creative_notes": {
+      "type": "object",
+      "required": ["ad_angle", "scene_plan", "visual_style", "open_questions"],
+      "properties": {
+        "ad_angle": { "type": "string" },
+        "scene_plan": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["scene", "purpose", "source_section", "visual_idea"],
+            "properties": {
+              "scene": { "type": "integer" },
+              "purpose": { "type": "string" },
+              "source_section": { "type": "string" },
+              "visual_idea": { "type": "string" },
+              "asset_urls": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "visual_style": { "type": "string" },
+        "open_questions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

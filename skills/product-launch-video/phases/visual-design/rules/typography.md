@@ -8,32 +8,33 @@ category: visual-design
 
 Video typography differs from web typography. There is no scrolling, no responsive reflow, and the viewer cannot control the pace. Every text element must be legible at a glance within its visible window (typically 1-5 seconds) and must do _real work_ in the frame — type is rarely decoration in a strong launch video, it is the scene's emotional anchor.
 
-**Pair with `hyperframes-creative/references/typography.md`** for banned fonts (Inter as default-only, Roboto, Syne…), register-based font selection, and the Google Fonts discovery script. This file is the **numeric overlay** — scale, CJK fallback, letter-spacing values — calibrated against the actual font choices seen in the golden samples (Inter, IBM Plex Mono, Fraunces, Bricolage Grotesque, Playfair Display, DM Serif Display, Geist, VT323, JetBrains Mono).
+**Pair with `./design-system/design.html` §3 (Typography)** — that's where the actual display / body / mono font families for this brand live. This file is the **video-craft numeric overlay** — type scale, CJK fallback, letter-spacing values — calibrated against the golden-sample archive. The font family names come from design.html; the sizes and tracking come from here.
 
 ## Font Selection Strategy
 
-### Priority 1: Use the website's own fonts
+### Copy fonts from `./design-system/design.html` (Phase 1b output)
 
-The extracted `tokens.json` and `assets/fonts/` contain the brand's typefaces. These are the primary choice because:
+This pipeline extracts the **actual brand fonts** from the target site in Phase 1b. `design-system/design.html` §3 (Typography) is the **single source of truth** — read the `:root` font-family declarations verbatim.
 
-- They maintain brand consistency between the website and its promo video
-- The client or brand owner chose them deliberately
-- Using them signals professionalism and attention to detail
+You will find these variables on `:root` (the build script extracts up to 3 families):
+
+| design.html variable           | Role                     | Example (heygen.com extraction) |
+| ------------------------------ | ------------------------ | ------------------------------- |
+| `--display` / `--font-display` | Headline / display       | `'Instrument Serif'`            |
+| `--body` / `--font-body`       | Body / UI prose          | `'Inter'`                       |
+| `--mono` / `--font-mono`       | Code / labels / eyebrows | `'JetBrains Mono'`              |
 
 **Implementation**:
 
-1. Check `tokens.json` → `fonts` for the font family names
-2. Check `extraction/assets/fonts/` for actual font files (.woff2, .ttf, .otf)
-3. The HyperFrames compiler auto-embeds supported fonts via inline-data `@font-face` — just write the `font-family` in CSS and put the file under `hyperframes/public/fonts/<file>`. No `<link>` tag, no `@import`. If you need to declare a face explicitly (variable axes, weight range), write the `@font-face` rule yourself pointing at `public/fonts/<file>`.
-4. If the site uses a Google Font, write the `font-family` in CSS — the compiler picks it up. Do NOT add `<link rel="stylesheet" href="fonts.googleapis.com/...">`; renders run in headless Chrome with no network.
+1. Open `./design-system/design.html`. Find §3 Typography.
+2. Read the `:root` font-family declarations — note each font name and its role (display / body / mono).
+3. In every scene's prose body, cite the **actual font name** (e.g., "Instrument Serif at 132px for the hero word"), not a placeholder like "display font" or a font from elsewhere.
+4. The HyperFrames compiler auto-embeds Google Fonts (no `<link>` needed) and any font files under `hyperframes/public/fonts/`. design.html already loads the right Google Fonts in its `<head>` — Phase 4b workers paste the `:root` block and the page renders correctly.
+5. If design.html lacks a mono font (single-family extraction), fall back to `ui-monospace, 'SF Mono', monospace` — call this out explicitly in the prose body.
 
-### Priority 2: Curated fallbacks (only when needed)
+**Never** invent font names. **Never** pick fonts based on archetype alone — design.html overrides any "feel" matching.
 
-Use fallback fonts only when:
-
-- The site has no custom fonts (uses system defaults)
-- The extracted fonts are low-quality or unsuitable for video (e.g. monospace-only, bitmap fonts)
-- The site font is a generic choice that adds no brand value (Arial, Times New Roman)
+### Reference: feel-by-feel pairings (only if design.html is missing or fails)
 
 **Recommended alternatives by feel** — these are the actual pairings used across the golden-sample archive:
 
@@ -169,7 +170,7 @@ Headless Chromium has no CJK or emoji fonts unless explicitly installed. The Doc
 
 2. **For Chinese-primary content**, use a CJK font as the display font — don't rely on fallback rendering:
    - `Noto Sans CJK SC` (system font in Docker, clean and modern)
-   - Site's own CJK font from `extraction/assets/fonts/` if available
+   - Any CJK Google Font that matches the chosen feel (e.g., `Noto Serif SC` for editorial, `LXGW WenKai` for handwritten warmth)
 
 3. **Emoji** renders automatically via the system `Noto Color Emoji` font — no CSS changes needed. Avoid using emoji as critical UI elements (they render differently across platforms).
 

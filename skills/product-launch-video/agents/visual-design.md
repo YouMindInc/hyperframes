@@ -8,26 +8,28 @@ Read the phase guide at `<SKILL_DIR>/phases/visual-design/guide.md` (path inject
 
 The guide describes design principles (typography / color / composition / motion), scene quality baseline, the animation effects catalog (reference by name), and how to write the plan. The four design-pillar references live at `phases/visual-design/rules/`.
 
-## Design sources — primary / secondary
+## Design sources
 
-Load **`hyperframes-creative`** via the **Skill tool** first — that is the **primary** source of design direction (banned fonts, easing-as-emotion, build/breathe/resolve, register-based font thinking, load-bearing GSAP rules, palettes, beat direction, house style). Treat its routing table as the canonical map for typography / color / composition / motion / palettes / beat-direction lookups.
+**Primary source: `./design-system/design.html`** (from Phase 1b). It owns the **actual brand values** for this video — palette hex, font families, GSAP eases, border-radius scale, component snippets. **Every brand value you cite in `section_plan.md` must come from design.html verbatim** — don't invent hex, don't pick fonts from elsewhere, don't substitute ease curves.
 
-Then read the local `phases/visual-design/rules/*.md` as **pipeline-specific overlays** on top of creative — they hold this pipeline's exact numbers (1920×1080 safe margins, 5-tier type scale, 60-30-10 allocation, spring presets, scene-quality baseline minimums). Local rules are HyperFrames/GSAP-native — never mix in Remotion APIs even if older references show up elsewhere.
+**Secondary: local `phases/visual-design/rules/*.md`** — these hold this pipeline's video-craft numbers (1920×1080 safe margins, 5-tier type scale, 60-30-10 allocation, spring presets, scene-quality baseline minimums, cut-the-curve transition spec). They tell you _how_ to deploy the brand tokens, not what the tokens are.
 
-If creative and a local rule disagree, prefer creative for **principles** and local for **specific numbers** scoped to this pipeline's 1920×1080 / 30 fps render contract.
+If design.html and a local rule disagree:
 
-Do NOT load `hyperframes-animation` here — Phase 3 only writes names from the embedded effects catalog; the build agent (Phase 4b) is the one that opens rule bodies.
+- On **brand values** (palette / fonts / eases) → design.html wins.
+- On **video-craft numbers** (safe margins / 1920×1080 zones / stagger caps) → local rules win.
+
+Do NOT load `hyperframes-animation` here — Phase 3 only writes names from the embedded effects catalog; the build agent (Phase 4b) is the one that opens rule bodies. Do NOT load `hyperframes-creative` either — `design.html` replaces it as the design canon for this pipeline.
 
 ## Pipeline contract (this run's specifics)
 
 - Your cwd is the project root. **NEVER** run `cd` as a standalone command. Use subshells.
 - All output paths relative to cwd. Write `./section_plan.md`.
 - **No audio in this pipeline** — use each scene's `estimatedDuration` from `narrator_scripts.json` as the timing target. Do not assume narration timing data.
-- Inputs ready:
-  - `./narrator_scripts.json` (from Phase 2 — narrative, scene list, `estimatedDuration`)
-  - `extraction/shared/tokens.json` and `extraction/pages/<page>/tokens.json` (brand + accents)
-  - `extraction/pages/<page>/sections.json` (content available per page)
-  - `extraction/screenshots/` (reference)
+- **Two input files**:
+  - `./narrator_scripts.json` (from Phase 2) — scenes with `narrativeIntent`, `transition`, `assetCandidates[]` (path + description), `estimatedDuration`; top-level `narrativeArchetype` + `emotionalArc`.
+  - `./design-system/design.html` (from Phase 1b) — the single source of truth for palette, typography, motion eases, border-radius scale, and component snippets. **Read §1–§7 to absorb the brand.**
+- **Do NOT read `research/`.** That's Phase 2's territory. Per-scene `**PrimaryAsset:**` comes from picking one of the candidates in the scene's `assetCandidates[]` list (in `narrator_scripts.json`) based on description + composition fit.
 
 ## Effect names — single source of truth
 
@@ -54,7 +56,7 @@ Phase 4a's `prep.mjs` parses these four anchors deterministically — there is n
 
 - **Effects / Duration**: as before.
 - **Continuity**: `break` = hard visual cut from the previous scene (full subject change, palette flip, narrative pivot). `continue` = same hero asset / palette beat / narrative arc as the previous scene. **Scene 1 is always `break`.** Phase 4a packs consecutive `continue` scenes into the same Phase 4b worker (cap 2 scenes/worker); every `break` starts a new worker. Tie this decision to the transition you spec in prose body item 8 — `hard cut` / `jump cut` ↔ `break`; `cut-the-curve` / `morph` / `scale+fade` over the same asset ↔ `continue`.
-- **PrimaryAsset**: the `public/<basename>` of the focal visual (the ≥40%-canvas hero asset). Use `(none)` only for genuinely text-only scenes. Basename must correspond to a file that exists in `extraction/` (Phase 4a copies the union into `hyperframes/public/`); the worker takes this verbatim as its `primary_visual_asset` input.
+- **PrimaryAsset**: the `public/<basename>` of the focal visual (the ≥40%-canvas hero asset). Use `(none)` only for genuinely text-only scenes. **Pick the basename from the scene's `assetCandidates[]` array in `narrator_scripts.json`** — that is the bounded asset pool story-design assembled for this scene. Phase 4a copies the union of all candidates' assets from `research/` into `hyperframes/public/`; the worker takes this verbatim as its `primary_visual_asset` input. Picking a basename that isn't in `assetCandidates` is a Phase 4a fatal error.
 
 See the phase guide's "Per-scene anchor format" section for the full rules.
 
