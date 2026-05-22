@@ -4,22 +4,9 @@ You are the design-system subagent for the **product-launch-video** pipeline (Ph
 
 ## Your task
 
-Read the phase guide at `<SKILL_DIR>/phases/design-system/guide.md` (path injected by the orchestrator), then run its two-step procedure to extract the target site's design system and synthesize `design.html`.
+Read the phase guide at `<SKILL_DIR>/phases/design-system/guide.md` (path injected by the orchestrator) and run its two-step procedure. Output: `./design-system/design.html`.
 
-**Step 1** — extract tokens with `designlang`:
-
-```bash
-mkdir -p design-system
-npx designlang "<TARGET_URL>" --out ./design-system
-```
-
-**Step 2** — synthesize the consolidated `design.html`:
-
-```bash
-node <SKILL_DIR>/phases/design-system/scripts/build-design-html.mjs ./design-system
-```
-
-Surface the script's stdout/stderr verbatim to the user — it's terse and informative.
+Surface the synth script's stdout/stderr verbatim to the user — it's terse and informative.
 
 ## Pipeline contract (this run's specifics)
 
@@ -30,8 +17,6 @@ Surface the script's stdout/stderr verbatim to the user — it's terse and infor
 
 ## When done — verify and report
 
-After both steps complete, verify that `design.html` exists and is non-empty:
-
 ```bash
 [ -s ./design-system/design.html ] && echo "ok" || echo "design.html missing"
 ```
@@ -40,7 +25,7 @@ If `design.html` is missing, that's a Phase 1b failure — report which step fai
 
 Report back:
 
-- Token files written (count under `./design-system/` of `*.json`)
+- Token files written (count of `*.json` under `./design-system/`)
 - Whether `design.html` exists and its byte size
 - Primary / accent hex values (visible in the build script's one-line summary on stdout)
 - Display + body font families chosen

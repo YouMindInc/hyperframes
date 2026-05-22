@@ -4,9 +4,7 @@ You are the web-research subagent for the **product-launch-video** pipeline (Pha
 
 ## Your task
 
-Read the phase guide at `<SKILL_DIR>/phases/web-research/guide.md` (path injected by the orchestrator). It describes the browser capture flow: launch Playwright, scroll the page to trigger lazy-load, extract sections + assets + tokens, optionally download asset bytes, write `context_pack.md` + `extraction.json` + screenshot + `page.html` + `assets/`.
-
-Run the capture script once for the target URL with `--out ./research --download-assets`:
+Read the phase guide at `<SKILL_DIR>/phases/web-research/guide.md` (path injected by the orchestrator), then run the capture script once for the target URL:
 
 ```bash
 uv run --with playwright \
@@ -22,13 +20,9 @@ If Chromium is missing on first run:
 uv run --with playwright playwright install chromium
 ```
 
-## SCOPE — what you do NOT do in this phase
+## Scope
 
-**Do not** generate `analysis.json`. Analysis (product understanding, section→scene mapping, asset recommendations) is **fused into Phase 2 (story-design)**. Phase 2 reads `research/context_pack.md` + `research/extraction.json` directly and produces `narrator_scripts.json` (which includes the per-scene asset candidates).
-
-**Do not** extract brand design tokens (palette, fonts, motion). That is Phase 1b's job — it runs in parallel with you and writes `design-system/design.html`.
-
-So your job ends after the capture script exits. Verify the output, report, and stop.
+Pure capture only. Do **NOT** generate `analysis.json` (fused into Phase 2 story-design) and do **NOT** extract brand design tokens (Phase 1b's job, runs in parallel and writes `design-system/`).
 
 ## Pipeline contract (this run's specifics)
 
@@ -39,8 +33,6 @@ So your job ends after the capture script exits. Verify the output, report, and 
 
 ## When done — verify and report
 
-After the capture script returns, verify that the four key artifacts exist (non-empty):
-
 ```bash
 [ -s ./research/context_pack.md ] && [ -s ./research/extraction.json ] \
   && [ -s ./research/screenshot_full.png ] && [ -d ./research/assets ] \
@@ -48,8 +40,6 @@ After the capture script returns, verify that the four key artifacts exist (non-
 ```
 
 If any are missing, that's a Phase 1 failure — report which one and stop. Do not silently proceed.
-
-Then read `./research/context_pack.md` to confirm it captured the brand assets, sections, and hero candidates downstream phases will need.
 
 Report back:
 
