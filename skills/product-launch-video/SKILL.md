@@ -23,7 +23,7 @@ The pipeline separates **workflow-internal phases** (this workflow's owned proce
 | 2     | `agents/story-design.md`          | `phases/story-design/guide.md` (+ archetypes)                                     | `narrator_scripts.json`                                                         |
 | 2.5   | `agents/audio.md`                 | `phases/audio/guide.md` (+ `lyria-recipe.py`) + `/hyperframes-media` (Skill tool) | `audio_meta.json` + `hyperframes/assets/voice/*` + `hyperframes/assets/bgm.wav` |
 | 3     | `agents/visual-design.md`         | `phases/visual-design/guide.md` (+ rules + effects-catalog.md)                    | `section_plan.md`                                                               |
-| 4a    | `agents/hyperframes-prep.md`      | `/hyperframes-core` + `/hyperframes-cli` (Skill tool)                             | `group_spec.json` + `hyperframes/public/`                                       |
+| 4a    | `scripts/prep.mjs` (no subagent)  | section_plan.md + narrator_scripts.json + audio_meta.json (optional)              | `group_spec.json` + `hyperframes/public/`                                       |
 | 4b    | `agents/hyperframes-scene.md` × N | `/hyperframes-core` + `/hyperframes-animation` (Skill tool)                       | `hyperframes/compositions/scene_*.html`                                         |
 | 4c    | `agents/hyperframes-finalize.md`  | `/hyperframes-core` + `/hyperframes-cli` (Skill tool)                             | `hyperframes/index.html` + gates + `hyperframes/renders/video.mp4`              |
 
@@ -244,29 +244,41 @@ The Phase 3 validator (`scripts/validate-section-plan.mjs`) asserts every effect
 
 Phase 4 used to be one monolithic agent writing N scenes serially. It's now `prep → scene fan-out → finalize` so worker contexts stay tiny and scene authoring runs in parallel.
 
-### Phase 4a — dispatch hyperframes-prep
+### Phase 4a — run `prep.mjs` directly (no subagent)
 
-```
-1. Read product-launch-video/agents/hyperframes-prep.md
-2. Compose prompt = <its contents>
-                  + "\n\n## Dispatch context\n"
-                  + "Phase 3 summary: <scene count + dominant effects in section_plan.md>\n"
-                  + "Rules dir: <SKILL_DIR>/../hyperframes-animation/rules\n"
-                  + "Audio meta: <present|absent — `[ -f audio_meta.json ]`>\n"
-3. Agent(
-     subagent_type: "general-purpose",
-     description: "Phase 4a: HyperFrames prep + group plan",
-     prompt: <composed>,
-   )
-```
-
-After it returns:
+Phase 4a is **deterministic** — `section_plan.md` carries the `**Continuity:**` and `**PrimaryAsset:**` anchors that Phase 3 owns, and `prep.mjs` packs scenes into worker groups by those anchors. No LLM judgment needed; no Agent dispatch. The orchestrator runs one Bash command:
 
 ```bash
-python3 -m json.tool < group_spec.json > /dev/null   # sanity-parse
+node <SKILL_DIR>/scripts/prep.mjs \
+  --section-plan ./section_plan.md \
+  --narrator-scripts ./narrator_scripts.json \
+  $( [ -f audio_meta.json ] && echo "--audio-meta ./audio_meta.json" ) \
+  --rules-dir <SKILL_DIR>/../hyperframes-animation/rules \
+  --extraction ./extraction \
+  --hyperframes ./hyperframes \
+  --out ./group_spec.json
 ```
 
-Read `group_spec.json["groups"]` — that's the fan-out plan for Phase 4b. Surface to user: total scenes, total groups, total duration.
+The script:
+
+1. Scaffolds `hyperframes/` via `npx hyperframes init … --example blank --non-interactive --skip-skills` if the dir is missing.
+2. Recursively copies `extraction/**/*.{png,jpg,jpeg,webp,svg}` into `hyperframes/public/` with first-wins semantics (collisions skipped, reported).
+3. Parses each `## Scene N:` block's four anchors (`Effects` / `Duration` / `Continuity` / `PrimaryAsset`) — missing or malformed anchor → exit 1.
+4. Resolves `effects` ids to `<rules-dir>/<id>.md` and `statSync`-verifies each — missing rule → exit 1.
+5. Merges `audio_meta.json` if present (`voiceDuration` wins over the section_plan duration; captures `voicePath` / `wordsPath` / `bgm_path`; drops paths that aren't on disk).
+6. Groups scenes by `Continuity` (`break` starts a new worker, `continue` extends the current one) with cap = 2 scenes/worker.
+7. Writes `./group_spec.json` and prints a stdout summary.
+
+**On exit 0**: read the stdout summary (scenes, groups, total duration, per-group breakdown, anomalies). Surface to user. Proceed to Phase 4b.
+
+**On exit 1**: stderr names the failing scene + anchor. The fix is upstream (Phase 3), not Phase 4. Re-dispatch Phase 3 with the validator's stderr in the Dispatch context — `validate-section-plan.mjs` also enforces these anchors, so a Phase 3 that passes the validator will never fail `prep.mjs` on anchor structure.
+
+Then append to `./context.log`:
+
+```
+## Phase 4a: prep [done <ISO timestamp>]
+Scenes: <N>, Groups: <G>, Total: <D>s
+```
 
 ### Phase 4b — spawn N scene-worker subagents to work simultaneously in parallel
 
