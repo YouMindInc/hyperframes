@@ -1,5 +1,5 @@
 ---
-id: takeover-ticker-displace
+id: content-displace-reveal
 role: takeover
 duration_seconds: [5, 8]
 phases: 4
@@ -13,7 +13,7 @@ when_to_use:
   - Hero feels like it has physical "weight" — it pushes content aside
   - Transition from text to visual should be a physical collision, not a fade
 when_not_to_use:
-  - Text and hero coexist throughout — see brand-reveal-assemble-zoom
+  - Text and hero coexist throughout — see assembly-focus-reveal
   - Camera zoom required (this uses entry translation)
   - Multiple hero elements enter simultaneously
   - Text should exit voluntarily (fade / slide)
@@ -47,7 +47,7 @@ All boundaries are in **seconds**.
 
 ## Layout Strategy
 
-Unlike shared-flex layouts (see [brand-reveal-assemble-zoom](brand-reveal-assemble-zoom.md)), this pattern uses **absolute stacking** — text group and hero occupy the same centered space; `z-index` controls layering during the overlap window.
+Unlike shared-flex layouts (see [assembly-focus-reveal](assembly-focus-reveal.md)), this pattern uses **absolute stacking** — text group and hero occupy the same centered space; `z-index` controls layering during the overlap window.
 
 ```html
 <div
@@ -392,4 +392,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [takeover-ticker-displace.html](../examples/takeover-ticker-displace.html) — typewriter phrase + three-word ticker → hero logo enters from off-screen right with rotation + scale impact → text pushed left and fades → logo breathes with dual-frequency sine. Single paused GSAP timeline drives all four phases.
+- [content-displace-reveal.html](../examples/content-displace-reveal.html) — "Ask about any" typewriter + "audience/topic/market" ticker → logo enters from off-screen right with rotation + scale impact → text pushed left and fades → logo breathes with dual-frequency sine. Single paused GSAP timeline drives all four phases.

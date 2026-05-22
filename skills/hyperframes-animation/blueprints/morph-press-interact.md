@@ -1,5 +1,5 @@
 ---
-id: cta-morph-press
+id: morph-press-interact
 role: cta
 duration_seconds: [4, 6]
 phases: 4
@@ -15,8 +15,8 @@ when_to_use:
   - Simulated user interaction (cursor click) on the final element
   - Hero should feel "alive" before transforming (breathing idle)
 when_not_to_use:
-  - Hero and CTA coexist on screen — see brand-reveal-assemble-zoom
-  - CTA enters from off-screen — see takeover-ticker-displace
+  - Hero and CTA coexist on screen — see assembly-focus-reveal
+  - CTA enters from off-screen — see content-displace-reveal
   - No click interaction — use scale-swap-transition alone
   - Multiple CTAs need sequential interaction
 triggers:
@@ -416,4 +416,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [cta-morph-press.html](../examples/cta-morph-press.html) — concrete realization of this four-phase arc on a single paused GSAP timeline. See the file for the brand, copy, asset, color, font, and timing values it instantiates.
+- [morph-press-interact.html](../examples/morph-press-interact.html) — "GWI Spark" lockup with breathing-rotated star logo → morphs into a pink "Find out more" CTA pill → cursor enters from off-screen bottom-right → physics-based click compresses both cursor and CTA together. Single paused GSAP timeline drives all four phases over 5.5 seconds.

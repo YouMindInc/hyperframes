@@ -1,5 +1,5 @@
 ---
-id: workflow-approve-press
+id: interactive-workflow-showcase
 role: workflow
 duration_seconds: [4, 6]
 phases: 4
@@ -489,4 +489,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [workflow-approve-press.html](../examples/workflow-approve-press.html) — runnable composition that realizes every named constant in this blueprint with concrete values. Single paused GSAP timeline drives all four phases.
+- [interactive-workflow-showcase.html](../examples/interactive-workflow-showcase.html) — "AI edits WITH you" headline, editor demo center, 3 review steps on left (3D-tilted +15°), Approve button on right (3D-tilted -15°) depresses linearly → color shifts to green → checkmark pops with `back.out(1.6)`. Demonstrates the "tactile but not bouncy" press variant, step state machine via `tl.set({ attr: data-state })`, and a finite-yoyo pulsing glow via CSS variable. Single paused GSAP timeline drives all four phases over 5.5 seconds.

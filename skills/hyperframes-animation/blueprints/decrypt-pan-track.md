@@ -1,5 +1,5 @@
 ---
-id: concept-demo-decode-pan
+id: decrypt-pan-track
 role: concept-demo
 duration_seconds: [6, 10]
 phases: 4
@@ -15,7 +15,7 @@ when_to_use:
   - Second shot demonstrates product interaction (typing, search, input)
   - "Reveal the concept → show it in action" flow
 when_not_to_use:
-  - Single scene, no transition — see brand-reveal-assemble-zoom or takeover-ticker-displace
+  - Single scene, no transition — see assembly-focus-reveal or content-displace-reveal
   - Shots should cross-fade rather than pan
   - No text decode in the first shot
   - Second shot is static (no dynamic tracking)
@@ -362,4 +362,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [concept-demo-decode-pan.html](../examples/concept-demo-decode-pan.html) — runnable composition that realizes every named constant in this blueprint with concrete values. Single paused GSAP timeline drives all four phases: Shot 1 phrase + accent-word hacker-flip decode → horizontal pan with parallax → Shot 2 cursor-tracked search-bar typing with piecewise `Math.min` camera handoff.
+- [decrypt-pan-track.html](../examples/decrypt-pan-track.html) — "Spark your next campaign" hacker-flip decode → horizontal pan with parallax → "Tell me how to target parents" cursor-tracked search-bar typing. Single paused GSAP timeline drives all four phases.

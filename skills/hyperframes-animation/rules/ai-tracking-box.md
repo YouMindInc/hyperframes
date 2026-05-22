@@ -82,9 +82,16 @@ All driven by GSAP timeline so HF seeks deterministically.
 
 .track-box {
   position: absolute;
-  /* Position + size set by GSAP onUpdate */
+  /* Pre-positioned at SCREEN_CENTER-SIZE_BASE/2 (e.g. left:800px; top:380px)
+     and pre-sized to SIZE_BASE (e.g. width:320px; height:320px). GSAP onUpdate
+     drives motion via transform x/y/scale ONLY — never width/height/left/top. */
+  left: 800px;
+  top: 380px;
+  width: 320px;
+  height: 320px;
+  transform-origin: center center;
   pointer-events: none;
-  will-change: transform, width, height;
+  will-change: transform;
 }
 .corner {
   position: absolute;
@@ -169,6 +176,18 @@ All driven by GSAP timeline so HF seeks deterministically.
   // CONFIDENCE_MEAN / CONFIDENCE_VAR — center + half-range of the flickering confidence %
   // CONFIDENCE_FREQ_MULT — how fast confidence flickers relative to drift
 
+  // PREREQUISITE — CSS for .mascot and .box:
+  //   .mascot { position: absolute; left: 840px; top: 420px; width: 240px; height: 240px; }
+  //                 /* SCREEN_CENTER.x - 120, SCREEN_CENTER.y - 120 */
+  //   .box    { position: absolute; left: 800px; top: 380px; width: 320px; height: 320px;
+  //             transform-origin: center center; }
+  //                 /* SCREEN_CENTER.x - SIZE_BASE/2, SCREEN_CENTER.y - SIZE_BASE/2 */
+  //
+  // The onUpdate below mutates ONLY transform (x / y / scale) and textContent.
+  // It does NOT touch style.left / style.top / style.width / style.height —
+  // those would reflow on every seek frame and cause sub-pixel jitter. CSS
+  // pre-positions everything; transforms do the motion.
+
   const tracking = { p: 0 };
   tl.to(
     tracking,
@@ -177,24 +196,26 @@ All driven by GSAP timeline so HF seeks deterministically.
       duration: TRACK_DUR,
       ease: "none",
       onUpdate: () => {
-        // Target position (the mascot moves on a wider arc)
-        const mx = SCREEN_CENTER.x + Math.cos(tracking.p) * DRIFT_X;
-        const my = SCREEN_CENTER.y + Math.sin(tracking.p) * DRIFT_Y;
-        mascot.style.position = "absolute";
-        mascot.style.left = `${mx - MASCOT_SIZE / 2}px`;
-        mascot.style.top = `${my - MASCOT_SIZE / 2}px`;
+        // Drift offsets — pure TRANSFORM deltas from CSS-positioned origin.
+        // CSS pre-positions .mascot and .box at SCREEN_CENTER (left/top set
+        // once); onUpdate only writes transform x/y/scaleX/scaleY, never
+        // style.left/top/width/height — those layout properties reflow on
+        // every seek and produce sub-pixel jitter on the corner brackets.
+        const mx = Math.cos(tracking.p) * DRIFT_X;
+        const my = Math.sin(tracking.p) * DRIFT_Y;
+        // gsap.set for batched style write (GSAP normalizes transform string)
+        gsap.set(mascot, { x: mx, y: my });
 
-        // Box size oscillates slightly (size confidence variation)
-        const w = SIZE_BASE + Math.sin(tracking.p * SIZE_FREQ_MULT) * SIZE_VAR;
-        const h = SIZE_BASE + Math.sin(tracking.p * SIZE_FREQ_MULT + Math.PI / 2) * SIZE_VAR;
-
-        // Box position centers on mascot
-        box.style.width = `${w}px`;
-        box.style.height = `${h}px`;
-        box.style.left = `${mx - w / 2}px`;
-        box.style.top = `${my - h / 2}px`;
+        // Box size oscillates via SCALE, not width/height. Scale factor is the
+        // ratio of (BASE + variation) / BASE, so the box visually breathes
+        // around SIZE_BASE without any layout reflow.
+        const sx = 1 + (Math.sin(tracking.p * SIZE_FREQ_MULT) * SIZE_VAR) / SIZE_BASE;
+        const sy = 1 + (Math.sin(tracking.p * SIZE_FREQ_MULT + Math.PI / 2) * SIZE_VAR) / SIZE_BASE;
+        // Box position follows the mascot drift; size oscillates independently
+        gsap.set(box, { x: mx, y: my, scaleX: sx, scaleY: sy });
 
         // Confidence label fluctuates inside [CONFIDENCE_MEAN ± CONFIDENCE_VAR]
+        // — text mutation only, no layout.
         const confidence = Math.round(
           CONFIDENCE_MEAN + Math.sin(tracking.p * CONFIDENCE_FREQ_MULT) * CONFIDENCE_VAR,
         );
@@ -365,7 +386,8 @@ After tracking, the camera (via [viewport-change](viewport-change.md)) zooms int
 - **Timeline must be paused**: `gsap.timeline({ paused: true })`
 - **Registry key = `data-composition-id`**
 - **No CSS animation on `.track-box` or `.corner`** — must be timeline-driven
-- **`will-change: transform, width, height`** on `.track-box`
+- **Box position + size driven by `transform` ONLY** — never `style.left/top/width/height` inside `onUpdate`. Pre-position via CSS at the rest pose (SCREEN_CENTER-SIZE_BASE/2, SIZE_BASE), then animate via `gsap.set` with `x/y/scaleX/scaleY`. Layout-property writes reflow on every seek frame and produce sub-pixel jitter on the L-bracket corners and label.
+- **`will-change: transform`** on `.track-box`
 - **`pointer-events: none`** on `.track-box` — decorative overlay
 - **Box position recomputed per-frame from target** — never tween box position separately from target
 

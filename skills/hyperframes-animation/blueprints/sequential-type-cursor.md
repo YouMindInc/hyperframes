@@ -1,5 +1,5 @@
 ---
-id: messaging-multi-phrase
+id: sequential-type-cursor
 role: messaging
 duration_seconds: [7, 8]
 phases: 3
@@ -16,10 +16,10 @@ when_to_use:
   - Phrase content varies in length, needs proportional screen time
   - "Statement after statement" cadence for layered messaging
 when_not_to_use:
-  - Text coexists with a visual hero — see brand-reveal-assemble-zoom or takeover-ticker-displace
+  - Text coexists with a visual hero — see assembly-focus-reveal or content-displace-reveal
   - Phrases should cross-dissolve, not hard-cut
   - Single phrase only — use [context-sensitive-cursor](../rules/context-sensitive-cursor.md) alone
-  - Need camera movement / zoom between phrases — see concept-demo-decode-pan
+  - Need camera movement / zoom between phrases — see decrypt-pan-track
 triggers: [multiple phrases typing, sequential statements, typing with highlight, text carousel, dual-color text, rhythmic messaging]
 ---
 
@@ -358,4 +358,4 @@ But this departs from the source's "hard-cut" semantic — use sparingly.
 
 ## Golden Sample
 
-- [messaging-multi-phrase.html](../examples/messaging-multi-phrase.html) — three-phrase statement scene on a dark gradient background. Demonstrates the single-paused-timeline + master `onUpdate` engine, the cursor color swap between main and accent segments, the square-wave blink via modulo, the seek-safe `lastIdx` cache, and a `data-duration` deliberately set under the computed `TOTAL` to trim a long closing hold. Refer to the example for concrete colors, font sizing, copy, and timings.
+- [sequential-type-cursor.html](../examples/sequential-type-cursor.html) — "Build video with **HTML**" → "Seek **any frame**" → "Render to **MP4**" sequential typing on a dark gradient background. Single paused GSAP timeline, one master `onUpdate` drives text content, cursor color (white during main, cyan during accent) and cursor blink (1 s square wave). Typing rate 0.083 s/char ≈ 12 chars/sec. Holds: 1.0 s, 1.0 s, 2.0 s. Natural computed TOTAL ≈ 7.98 s; the composition's `data-duration="7.5"` caps the render window slightly under TOTAL (final phrase's hold is truncated by ~0.5 s but the accent word is fully typed and held well before the cap).

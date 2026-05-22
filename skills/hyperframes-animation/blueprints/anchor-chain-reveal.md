@@ -1,5 +1,5 @@
 ---
-id: proof-logo-chain
+id: anchor-chain-reveal
 role: social-proof
 duration_seconds: [6, 10]
 phases: 5
@@ -349,4 +349,4 @@ Phase 4 → Phase 5:
 
 ## Golden Sample
 
-- [proof-logo-chain.html](../examples/proof-logo-chain.html) — runnable composition realizing every named constant in this blueprint with concrete values. Single paused GSAP timeline drives all five phases.
+- [anchor-chain-reveal.html](../examples/anchor-chain-reveal.html) — full Authority scene: hacker-flip "HyperFrames" → `HTML Video` lockup with rolling `render / ship` ticker → logo recenters → `60 FPS` counter with scale-pulse + avatar cloud + SVG connection lines → partner brand logos scroll. Single paused GSAP timeline drives all five phases.

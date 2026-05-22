@@ -73,6 +73,36 @@ Exit animations should be ~75% of the entry duration — not 70%, not 50%. Arriv
 
 An exit that is too fast (50%) feels like a glitch. An exit that matches entry duration (100%) feels sluggish and blocks the next scene.
 
+### Element outros vs scene transitions — scope, not timing
+
+The Duration table above lists both "Element exit" and "Transition between scenes" as separate rows on purpose. They are two **different things** that happen to share the same time slot at the end of a scene. Be explicit about which one you're specifying in `section_plan.md`, because they have different rules and different owners.
+
+These are the four rules for multi-scene compositions:
+
+**1. Every multi-scene composition uses scene transitions.** The composition's master timeline owns scene-to-scene visual handoffs via a defined transition vocabulary (cross-paper flash, lift-and-cut shutter, element-morph bridge, blur crossfade, push slide, etc. — see [Transition consistency](#transition-consistency) below for picking 2-3 and reusing them). Without transitions, scene swaps feel like jump cuts.
+
+**2. Every scene specifies element entrances.** Every element that appears in a scene needs an entry tween — opacity, position, scale, rotation, etc. Use the duration norms above (300-500 ms primary, snappier for ambient, hero entries up to 800 ms). No element should pop fully-formed into the scene; the entry beat is what gives the eye something to follow.
+
+**3. Element outros are a design choice — not required, not prohibited.** This is the rule designers most often get wrong, in both directions:
+
+> An **element outro** is _not_ the same as a **scene transition**. The scene transition is what the master timeline does to hand off between scene N and scene N+1 (the page turn / the shutter / the morph). An element outro is what an _individual element_ does within scene N's own time budget before that handoff begins — for instance, "the GPT-4o card desaturates after typing completes," or "the chart card scales up + glow-brightens as a lead-in to the element-morph transition," or "the row of feature pills collapse together to bridge into the next scene's hero element."
+
+When to specify an element outro:
+
+- The design has an intentional beat where an element should fade / scale / collapse / morph _before_ the next scene starts — write it.
+- The design has an element that should be visually consumed by the transition (e.g. a hero element that the element-morph circle bursts out of) — write the lead-in.
+- The design is silent about the element's exit — leave it implicit; the master timeline's transition handles the visual handoff and the element rides along with the rest of the scene.
+
+When you DO specify an element outro, these constraints apply:
+
+- **The outro must complete strictly BEFORE the scene transition window starts.** The two motions do not overlap in time. If the scene transition occupies the last 0.5 s of scene N, the element outro must finish by `boundary - 0.5s - 0.05s margin` (i.e. wrap up at least 50 ms before the transition fires). The transition window is reserved for the master timeline; element-level tweens that bleed into it will fight the transition and look like a glitch.
+- **The outro is NOT a substitute for the scene transition.** Even if every element on screen has its own outro, the scene still needs its master-timeline transition. Outros are intra-scene element lifecycle; transitions are inter-scene visual handoff. They serve different purposes.
+- **The 75% rule applies to outros, not to scene transitions.** A 500 ms entry → ~375 ms outro (per the rule above). Scene transitions follow the transition-vocabulary's own durations (400-600 ms typical, see [Transition consistency](#transition-consistency)). Don't conflate the two timings.
+
+**4. The transition window uses transition motion only.** During the master timeline's transition window, no per-element opacity / scale / position tween should be running — the master timeline owns every visible pixel of motion in that window. If you want an element to participate in the transition (e.g. the outgoing scene's hero element morphing into the incoming scene's central divider), specify it as a _transition_ — the build agent will hoist it onto the master timeline — not as a scene-level element tween.
+
+**5. Final-scene exception.** The composition's last scene is the only scene with no scene-transition window at the end (the composition just ends). On the final scene, element outros can freely use the closing time (fade-to-black, scale-down to logo, depth-layer collapse) — there's no transition to coordinate with.
+
 ### Total stagger cap
 
 When staggering N items, the total stagger time must stay reasonable:

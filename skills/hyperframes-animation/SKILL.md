@@ -21,15 +21,12 @@ For the broader HyperFrames composition contract see `hyperframes-core`. For GSA
 
 ## Scene Blueprints
 
-Each blueprint describes a complete multi-phase choreography with phase pipeline, glue code, and a working sample composition.
-
-**`aka` lookup**: when a section_plan (from `/visual-design`) references an effect by its catalog name and that name does NOT match an atomic rule filename, search this list for a blueprint whose `aka` matches. The catalog-facing name and the implementation filename intentionally differ — `aka` is the bridge.
+Each blueprint describes a complete multi-phase choreography with phase pipeline, glue code, and a working sample composition. Filenames match the visual-design catalog vocabulary — a `section_plan.md` reference like `**Choreography reference**: anchor-chain-reveal` maps directly to `blueprints/anchor-chain-reveal.md`. (Earlier versions used implementation-side names with an `aka="..."` bridge; that indirection was removed 2026-05-22 so catalog name = file name.)
 
 <blueprints>
 <blueprint
-  id="proof-logo-chain"
-  path="blueprints/proof-logo-chain.md"
-  aka="anchor-chain-reveal"
+  id="anchor-chain-reveal"
+  path="blueprints/anchor-chain-reveal.md"
   role="social-proof"
   duration="6-10s"
   phases="5"
@@ -38,9 +35,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Logo threads through 5 phases: hacker-flip text → text swap → logo centers → avatar cloud + counter → partner brand logos.
 </blueprint>
 <blueprint
-  id="concept-demo-decode-pan"
-  path="blueprints/concept-demo-decode-pan.md"
-  aka="decrypt-pan-track"
+  id="decrypt-pan-track"
+  path="blueprints/decrypt-pan-track.md"
   role="concept-demo"
   duration="6-10s"
   phases="4"
@@ -49,9 +45,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Shot 1 hacker-flip decode → horizontal camera pan with parallax → Shot 2 cursor-tracked typing.
 </blueprint>
 <blueprint
-  id="brand-reveal-assemble-zoom"
-  path="blueprints/brand-reveal-assemble-zoom.md"
-  aka="assembly-focus-reveal"
+  id="assembly-focus-reveal"
+  path="blueprints/assembly-focus-reveal.md"
   role="brand-reveal"
   duration="4-6s"
   phases="5"
@@ -60,9 +55,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Companion text assembles beside hero → companion exits + recenters → camera zooms into hero → hero breathes.
 </blueprint>
 <blueprint
-  id="takeover-ticker-displace"
-  path="blueprints/takeover-ticker-displace.md"
-  aka="content-displace-reveal"
+  id="content-displace-reveal"
+  path="blueprints/content-displace-reveal.md"
   role="takeover"
   duration="5-8s"
   phases="4"
@@ -71,9 +65,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Typewriter + ticker build context → hero enters from off-screen and physically pushes the text out → hero breathes.
 </blueprint>
 <blueprint
-  id="demo-page-scroll-spotlight"
-  path="blueprints/demo-page-scroll-spotlight.md"
-  aka="contextual-product-showcase"
+  id="contextual-product-showcase"
+  path="blueprints/contextual-product-showcase.md"
   role="demo"
   duration="5-9s"
   phases="4"
@@ -82,9 +75,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   3D-tilted webpage card → scrolls to feature section → keywords glow synced to ASR → key element pops forward in 3D with a radial spotlight.
 </blueprint>
 <blueprint
-  id="hook-counter-burst"
-  path="blueprints/hook-counter-burst.md"
-  aka="counting-icon-burst"
+  id="counting-icon-burst"
+  path="blueprints/counting-icon-burst.md"
   role="opening-hook"
   duration="3-5s"
   phases="4"
@@ -93,9 +85,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Counter grows + enriched SVG icons expand outward from center, wrapped in multi-phase camera.
 </blueprint>
 <blueprint
-  id="workflow-approve-press"
-  path="blueprints/workflow-approve-press.md"
-  aka="interactive-workflow-showcase"
+  id="interactive-workflow-showcase"
+  path="blueprints/interactive-workflow-showcase.md"
   role="workflow"
   duration="4-6s"
   phases="4"
@@ -104,9 +95,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Headline top + center video demo + 3D-tilted step indicators left + action button right that presses to confirm.
 </blueprint>
 <blueprint
-  id="problem-mockup-overwhelm"
-  path="blueprints/problem-mockup-overwhelm.md"
-  aka="mockup-morph-overwhelm"
+  id="mockup-morph-overwhelm"
+  path="blueprints/mockup-morph-overwhelm.md"
   role="problem"
   duration="4-6s"
   phases="4"
@@ -115,9 +105,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Mockups appear → platform icons scatter → center mockup scales down + crossfades into avatar → task bubbles surround.
 </blueprint>
 <blueprint
-  id="cta-orbit-collapse"
-  path="blueprints/cta-orbit-collapse.md"
-  aka="orbit-collapse-action"
+  id="orbit-collapse-action"
+  path="blueprints/orbit-collapse-action.md"
   role="cta"
   duration="5-8s"
   phases="5"
@@ -126,9 +115,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Category icons enter with 3D flip and orbit a center CTA → cursor clicks → icons collapse inward → product demo springs out and floats.
 </blueprint>
 <blueprint
-  id="cta-morph-press"
-  path="blueprints/cta-morph-press.md"
-  aka="morph-press-interact"
+  id="morph-press-interact"
+  path="blueprints/morph-press-interact.md"
   role="cta"
   duration="4-6s"
   phases="4"
@@ -137,9 +125,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Hero enters and breathes → morphs into CTA via scale-swap → cursor enters via spring path → physics-based click compresses cursor + CTA together.
 </blueprint>
 <blueprint
-  id="comparison-split-cards"
-  path="blueprints/comparison-split-cards.md"
-  aka="split-comparison-reveal"
+  id="split-comparison-reveal"
+  path="blueprints/split-comparison-reveal.md"
   role="comparison"
   duration="4-6s"
   phases="3"
@@ -148,9 +135,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Title slides down → two feature cards enter from opposite sides with opposing 3D tilts (+12° / -12°) → floating pill badges attach to each card's inner edge.
 </blueprint>
 <blueprint
-  id="metric-video-text-pivot"
-  path="blueprints/metric-video-text-pivot.md"
-  aka="video-kinetic-text-pivot"
+  id="video-kinetic-text-pivot"
+  path="blueprints/video-kinetic-text-pivot.md"
   role="metric"
   duration="5-8s"
   phases="4"
@@ -159,9 +145,8 @@ Each blueprint describes a complete multi-phase choreography with phase pipeline
   Product video centered + floating → video slides left and giant stat (3D depth layers) appears right → both exit and kinetic text types center-screen with accent keywords → gradient pill scales behind a closing phrase.
 </blueprint>
 <blueprint
-  id="messaging-multi-phrase"
-  path="blueprints/messaging-multi-phrase.md"
-  aka="sequential-type-cursor"
+  id="sequential-type-cursor"
+  path="blueprints/sequential-type-cursor.md"
   role="messaging"
   duration="7-8s"
   phases="3"
@@ -237,93 +222,93 @@ Use when you need a specific effect detail, or when no blueprint matches your ta
 
 <examples>
 <example
-  id="proof-logo-chain"
-  path="examples/proof-logo-chain.html"
-  blueprint="proof-logo-chain"
+  id="anchor-chain-reveal"
+  path="examples/anchor-chain-reveal.html"
+  blueprint="anchor-chain-reveal"
   duration="8s">
   Full Authority scene — hacker-flip 'HyperFrames' → 'HTML Video' lockup with rolling `render / ship` ticker → logo recenters → '60 FPS' static label with scale-pulse + avatar cloud + SVG connection lines → partner brand-logo strip. Single paused GSAP timeline drives all five phases.
 </example>
 <example
-  id="concept-demo-decode-pan"
-  path="examples/concept-demo-decode-pan.html"
-  blueprint="concept-demo-decode-pan"
+  id="decrypt-pan-track"
+  path="examples/decrypt-pan-track.html"
+  blueprint="decrypt-pan-track"
   duration="7s">
   Shot 1 "HyperFrames renders" static rise + hacker-flip decode of the accent word ("video") → horizontal pan with parallax exit + scale-in → Shot 2 cursor-tracked typing "HTML, CSS and JS become MP4" inside a pre-allocated search-bar. Demonstrates browser-native text measurement (no charWidthRatio constant) and piecewise Math.min camera tracking.
 </example>
 <example
-  id="brand-reveal-assemble-zoom"
-  path="examples/brand-reveal-assemble-zoom.html"
-  blueprint="brand-reveal-assemble-zoom"
+  id="assembly-focus-reveal"
+  path="examples/assembly-focus-reveal.html"
+  blueprint="assembly-focus-reveal"
   duration="5s">
   'Just use' discrete-assembly companion beside 'Hyperframes' + logo image → companion slides out and container recenters → camera zooms 5.5× into the logo → logo breathes (sine onUpdate, multiplicative). Demonstrates three nested transform layers (scale → translate → recenter) and brandTextWidth measurement after fonts.ready.
 </example>
 <example
-  id="takeover-ticker-displace"
-  path="examples/takeover-ticker-displace.html"
-  blueprint="takeover-ticker-displace"
+  id="content-displace-reveal"
+  path="examples/content-displace-reveal.html"
+  blueprint="content-displace-reveal"
   duration="7.5s">
   'Ask about any' typewriter + 'audience → topic → market' ticker → pink-magenta logo enters from offscreen-right with rotation+scale impact → text pushed left and fades (40-50% of hero duration) → logo breathes with dual-frequency sine (1.0s scale, 1.33s rotation). Demonstrates reactive-displacement causal link and multiplicative breathing on a non-1 final scale.
 </example>
 <example
-  id="demo-page-scroll-spotlight"
-  path="examples/demo-page-scroll-spotlight.html"
-  blueprint="demo-page-scroll-spotlight"
+  id="contextual-product-showcase"
+  path="examples/contextual-product-showcase.html"
+  blueprint="contextual-product-showcase"
   duration="9s">
   OpusClip landing page recreated as a 3D-tilted card with navbar, hero title, CTA row, and video carousel. Six title keywords ('1 long video, 10 viral clips') glow synced to ASR timestamps via CSS `--glow` variable + per-word two-tween envelopes. Page scrolls down 280 px to reveal the carousel; main video pops forward 80 px in 3D with a radial spotlight dimming surroundings.
 </example>
 <example
-  id="hook-counter-burst"
-  path="examples/hook-counter-burst.html"
-  blueprint="hook-counter-burst"
+  id="counting-icon-burst"
+  path="examples/counting-icon-burst.html"
+  blueprint="counting-icon-burst"
   duration="3.5s">
   Counter "0 → 90 %" with dynamic font scaling (0.20W → 0.42W), four enriched SVG icons (clock with linearly rotating minute hand, scissors oscillating ±15°, video frame with phase-offset pulsing red dot, play button with scale pulse) expanding outward from center, multi-phase camera (0.92 → 1.0 → 1.08). Demonstrates shared-ease lockstep sync between counter and icon expansion + a single scene-ticker onUpdate consolidating all internal SVG motion.
 </example>
 <example
-  id="cta-morph-press"
-  path="examples/cta-morph-press.html"
-  blueprint="cta-morph-press"
+  id="morph-press-interact"
+  path="examples/morph-press-interact.html"
+  blueprint="morph-press-interact"
   duration="5.5s">
   "GWI Spark" lockup with breathing-rotated star logo → morphs into a pink "Find out more" CTA pill via scale-swap (hero shrinks + fades, CTA pops with back.out(2)) → cursor hard-cuts in at off-screen bottom-right and approaches via spring path → physics-based click compresses both cursor and CTA together using a single GSAP target array. Demonstrates conditional-render-free morph via permanent DOM + opacity tweens, hard-cut cursor opacity via 0.001s fromTo, and synchronized press via shared tween targets.
 </example>
 <example
-  id="workflow-approve-press"
-  path="examples/workflow-approve-press.html"
-  blueprint="workflow-approve-press"
+  id="interactive-workflow-showcase"
+  path="examples/interactive-workflow-showcase.html"
+  blueprint="interactive-workflow-showcase"
   duration="5.5s">
   "AI edits WITH you" headline slides down → center editor mockup scales in (CSS-mockup fallback when ./assets/editor-demo.mp4 is missing) → 3 review steps stagger-enter on the left flank (3D-tilted +15°) and snap through pending → active → complete states via `tl.set({ attr: data-state })` → Approve button (3D-tilted -15°) bouncy entry with finite-yoyo glow pulse on `--btn-glow-blur` → linear depression then linear return (no overshoot per the "tactile not bouncy" rule) → backgroundColor crossfades to success green + label swaps via `tl.set({ textContent })` + checkmark pops with back.out(1.6). Demonstrates a discrete state machine driven by timeline-positioned `tl.set` calls.
 </example>
 <example
-  id="problem-mockup-overwhelm"
-  path="examples/problem-mockup-overwhelm.html"
-  blueprint="problem-mockup-overwhelm"
+  id="mockup-morph-overwhelm"
+  path="examples/mockup-morph-overwhelm.html"
+  blueprint="mockup-morph-overwhelm"
   duration="6s">
   Three video-platform mockups (YouTube Studio left, TikTok Creator center, Instagram Reels right) spring-in with back.out(1.4) → nine scattered platform icons stagger-enter with back.out(1.6) → at 3.20s the center mockup morphs via uniform `scale: 1 → 0.6875` (HyperFrames forbids width/height tweens) + paint-only `borderRadius: 28 → 110px` + `background` gradient swap + `boxShadow` glow ramp, all driven by power3.out tweens at the same timeline position → at 85% of morph the mockup container fades to 0 revealing a cyan-teal-blue avatar circle rendered underneath at z-index 20 (the "hand-off" trick) → 8 task bubbles ("Edit hours of raw footage", "Reframe for vertical", …) stagger-enter in a radial pattern around the avatar with back.out(1.4) → idle phase: shared scene-ticker onUpdate drives mockup floating (gated to pre-morph), orbit-dot cycling, avatar breath (multiplicative on pop scale), and bubble micro-float. Demonstrates `card-morph-anchor` hand-off, conditional-render-free DOM with opacity gating, and continuous motion consolidated into a single shared `onUpdate` scene-ticker reading `tl.time()`.
 </example>
 <example
-  id="comparison-split-cards"
-  path="examples/comparison-split-cards.html"
-  blueprint="comparison-split-cards"
+  id="split-comparison-reveal"
+  path="examples/split-comparison-reveal.html"
+  blueprint="split-comparison-reveal"
   duration="5s">
   Title slides down → left card (+18° rotateY, shadow falls right) and right card (-18° rotateY, shadow falls left) enter from their sides with `power3.out` over 0.7s (right staggers ~0.33s after left) → pill badges pop in at the cards' inner edges with `back.out(1.7)`. Continuous floating consolidated in one scene-ticker onUpdate: cards y ±6px / rotation ±1° with `Math.PI` phase offset between left and right (opposed breathing); badges shared y ±5px. Ambient dual-glow tints background.
 </example>
 <example
-  id="messaging-multi-phrase"
-  path="examples/messaging-multi-phrase.html"
-  blueprint="messaging-multi-phrase"
+  id="sequential-type-cursor"
+  path="examples/sequential-type-cursor.html"
+  blueprint="sequential-type-cursor"
   duration="7.5s">
   "Build video with **HTML**" → "Seek **any frame**" → "Render to **MP4**" typed sequentially on black at 150 px. Three phrases in `SCRIPT`, timeline computed from `chars × 0.083s + hold`. One master `onUpdate` writes `textContent` to `.phrase-main` + `.phrase-accent`, switches cursor `background-color` between white and cyan (`#32FFF6`) at each phrase's main → accent boundary, and drives a 1.0s square-wave blink via `(tl.time() % 1.0) < 0.5`. Holds: 1.0s, 1.0s, 2.0s (longer closing beat). Natural TOTAL ≈ 7.98s; `data-duration="7.5"` clips the final hold. Cached `lastIdx` pointer with bidirectional fallback makes the linear scan seek-safe under preview scrubbing.
 </example>
 <example
-  id="cta-orbit-collapse"
-  path="examples/cta-orbit-collapse.html"
-  blueprint="cta-orbit-collapse"
+  id="orbit-collapse-action"
+  path="examples/orbit-collapse-action.html"
+  blueprint="orbit-collapse-action"
   duration="6.5s">
   Six genre icons (Music, Gaming, Education, Sports, Vlogs, Podcast) enter staggered with 3D flip (`rotateX:90 → 0`, `back.out(1.4)`) and orbit a central "Drop a video link · Get free clips" CTA at 0.25 rad/s. Three nested wrappers per icon (`.icon-pos` orbit x/y, `.icon-collapse` scale/opacity, `.icon-entry` 3D flip) separate concerns so the master `onUpdate` writing orbit + collapse never collides with the per-icon entry `fromTo`. Cursor enters off-screen-right, slides to the white button via `back.out(1.3)`, depresses cursor (0.85) + button (0.95) + boxShadow glow + single white ripple via GSAP `keyframes` (`scale: 0.3 → 5.0`, `opacity: 0 → 0.7 → 0`). Icons collapse via `gsap.parseEase("back.out(1.6)")` called inside the onUpdate (radiusFactor 1→0, two-segment opacity envelope 1→0.5→0). Demo card springs out from the collapse point with `back.out(1.6)`, CTA + cursor fade out concurrently, demo floats with finite-yoyo breathing (±8 px, ±1°). Internal SVG enrichment (note bounce, button pulse, book sway, ball spin, record blink, podcast waves) on a separate shared scene-ticker.
 </example>
 <example
-  id="metric-video-text-pivot"
-  path="examples/metric-video-text-pivot.html"
-  blueprint="metric-video-text-pivot"
+  id="video-kinetic-text-pivot"
+  path="examples/video-kinetic-text-pivot.html"
+  blueprint="video-kinetic-text-pivot"
   duration="6.5s">
   "Hyper**Frames**" badge top; mock captioned video card centered (3D-tilted +15° rotateY, slow float ±6px) → at 2.20s video slides to 29% W and "MP4" appears on right as a 5-layer green depth stack (built with `document.createElement`) with `back.out(1.6)` entry + breathing → at 3.86s both video and stat exit left (`x: -W*0.5 / -W*0.7`, scale 0.8), kinetic text typing-stage fades in center → 23-char line 1 "HTML **pages** become **video**" + 15-char line 2 "frame by frame." type char-by-char at 30 ch/s with accent-green segments (static CSS `.accent` color, not ASR glow envelope) → gradient pill (purple → green) scales in behind line 2 (`scaleX 0→1`, `scaleY 0.5→1`) with radial glow halo. Three nested wrappers per moving element (`.pos / .float-or-breath / .tilt`) isolate concerns. Cursor blink derived from `Math.floor(t * 2) % 2` with color swap (green on accent segments).
 </example>

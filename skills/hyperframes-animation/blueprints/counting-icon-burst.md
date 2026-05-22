@@ -1,5 +1,5 @@
 ---
-id: hook-counter-burst
+id: counting-icon-burst
 role: opening-hook
 duration_seconds: [3, 5]
 phases: 4
@@ -7,7 +7,7 @@ visual_arc: empty → icons-cluster → count-and-expand → camera-push
 uses_rules:
   [counting-dynamic-scale, center-outward-expansion, multi-phase-camera, svg-icon-enrichment]
 element_roles:
-  counter: Central number counts 0 → target while growing in font size
+  counter: Central number counts 0 → target while scaling up (transform, not font-size)
   icons: 3-5 enriched SVG icons expand outward from center
   camera: Multi-phase zoom (pull-back → focus → push) wraps the scene
   background: Video or animated gradient with dark overlay for contrast
@@ -131,7 +131,13 @@ See [svg-icon-enrichment](../rules/svg-icon-enrichment.md) for the four internal
 A shared ease and duration drive **both** the counter and the icon expansion. Because GSAP tweens with identical `duration` + `ease` advance their progress in lockstep, the counter's display number and the icons' positions stay mathematically synchronized — no shared driver needed.
 
 ```js
-// (a) Counter — proxy tween. onUpdate writes text + font size to one element.
+// (a) Counter — proxy tween for the numeric value. onUpdate writes TEXT ONLY.
+// Visual growth is handled by a parallel scale tween below (transform = no reflow).
+// CSS must set .counter-number font-size to the END size; the parallel scale
+// tween (a2) shrinks it down at the start and brings it back to 1.0 by the end.
+// COUNT_AT, COUNT_DUR, COUNT_EASE, COUNT_TARGET, ICON_SIZE, START_OFFSET,
+// CENTER_X, CENTER_Y — all named; values per How to Choose Values.
+const counterEl = document.querySelector(".counter-number");
 const counterProxy = { p: 0 };
 
 tl.to(
@@ -141,16 +147,19 @@ tl.to(
     duration: COUNT_DUR,
     ease: COUNT_EASE,
     onUpdate: () => {
+      // TEXT ONLY — no style.fontSize mutation here. The visual size growth
+      // happens via the parallel scale tween (a2) below.
       counterEl.textContent = Math.round(counterProxy.p * COUNT_TARGET);
-      counterEl.style.fontSize =
-        W *
-          (COUNT_START_FONT_RATIO +
-            counterProxy.p * (COUNT_END_FONT_RATIO - COUNT_START_FONT_RATIO)) +
-        "px";
     },
   },
   COUNT_AT,
 );
+
+// (a2) Parallel scale tween — same time-offset, duration, ease, so size stays
+// locked to the numeric value. Start scale 0.2/0.42 ≈ 0.476 matches the source's
+// W*0.2 starting font-size; end scale 1.0 matches W*0.42.
+gsap.set(counterEl, { scale: 0.476, transformOrigin: "center center" });
+tl.to(counterEl, { scale: 1.0, duration: COUNT_DUR, ease: "power2.out" }, COUNT_AT);
 
 // (b) Icons — per-icon tween to (x: 0, y: 0). gsap.set() positioned them at
 // START_OFFSET before the timeline; this tween moves them the rest of the way.
@@ -300,7 +309,8 @@ Continuous (Phase 1+):
 
 ## Critical Constraints
 
-- **Single progress source for count + expansion**: identical `COUNT_AT`, `COUNT_DUR`, `COUNT_EASE` on the counter proxy and each icon's x/y tween. Drift in any of these breaks the synchronization.
+- **Single progress source for count + expansion**: identical `COUNT_AT`, `COUNT_DUR`, `COUNT_EASE` on the counter proxy, the counter scale tween, and each icon's x/y tween. Drift in any of these breaks the synchronization.
+- **NEVER mutate `style.fontSize` (or any layout property) in `onUpdate`**: HF renders frame-by-frame; tweening `font-size` / `width` / `height` / `padding` / `line-height` triggers a reflow on every seek, producing sub-pixel text jitter. Set the END font-size in CSS, use `transform: scale` to grow visually. The counter's onUpdate writes TEXT ONLY; the parallel scale tween handles size growth.
 - **`font-variant-numeric: tabular-nums`** on the counter element — prevents layout shift as digit count changes (single → double → triple digits).
 - **Icon entry overlaps or precedes count**: icons should be visible (entry spring well underway) before the expansion they participate in begins.
 - **3–5 icons maximum** in the cluster. More than 5 reads as collision even with high `START_OFFSET`.
@@ -328,4 +338,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [hook-counter-burst.html](../examples/hook-counter-burst.html)
+- [counting-icon-burst.html](../examples/counting-icon-burst.html) — "90%" opening hook with four enriched SVG icons (clock with rotating minute hand, scissors oscillating ±15°, video frame with pulsing red record dot, play button with pulse scale). Single paused GSAP timeline drives all four phases over 3.5 seconds.

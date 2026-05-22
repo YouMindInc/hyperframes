@@ -170,11 +170,18 @@ cursorEl.style.opacity = isTyping ? "1" : Math.sin(blink.p) > 0 ? "1" : "0";
 
 ### Cursor HEIGHT shifts on segment
 
-Larger cursor on brand segment for emphasis (`cursorHeightEmphasis > cursorHeight`):
+Larger cursor on brand segment for emphasis. Use `transform: scaleY` (composited),
+not `style.height` (reflows on every seek and produces jitter). CSS pre-sizes
+the cursor at the LARGER value (`cursorHeightEmphasis`) so layout is reserved;
+the brand segment renders at `scaleY(1)`, the default segment at the ratio
+`cursorHeight / cursorHeightEmphasis`:
 
 ```js
-cursorEl.style.height =
-  entry.segment === "brand" ? `${cursorHeightEmphasis}px` : `${cursorHeight}px`;
+const HEIGHT_RATIO = cursorHeight / cursorHeightEmphasis;
+cursorEl.style.transform = entry.segment === "brand" ? "scaleY(1)" : `scaleY(${HEIGHT_RATIO})`;
+// Set transform-origin: bottom center on .cursor so the shrink reads as "shorter
+// from the top," not "centered." Combine with the opacity/blink transform string
+// if blinking is also active.
 ```
 
 ### Cursor reverses contrast on dark text

@@ -93,7 +93,11 @@ Placeholders: `{font}` is the project sans-serif stack; `{bgColor1}`/`{bgColor2}
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, {accentColor} 0%, {accentColor2} 100%);
-  width: 0%;
+  /* Full-width element; GSAP tweens scaleX to grow it. Avoids per-frame width
+     mutation which would trigger layout reflow and cause sub-pixel jitter. */
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
 }
 .brand {
   position: absolute;
@@ -186,8 +190,9 @@ Placeholders: `{font}` is the project sans-serif stack; `{bgColor1}`/`{bgColor2}
           bodyEl.textContent = entry.body;
           lastTitle = entry.title;
         }
-        // Progress bar fills 0% → 100% as composition advances
-        progressEl.style.width = `${(driver.t / TOTAL_DURATION) * 100}%`;
+        // Progress bar fills 0 → 1 as composition advances (transform scale,
+        // not width — width tweens reflow on every seek frame and produce jitter).
+        progressEl.style.transform = `scaleX(${driver.t / TOTAL_DURATION})`;
       },
     },
     0,

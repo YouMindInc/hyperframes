@@ -1,5 +1,5 @@
 ---
-id: cta-orbit-collapse
+id: orbit-collapse-action
 role: cta
 duration_seconds: [5, 8]
 phases: 5
@@ -530,4 +530,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [cta-orbit-collapse.html](../examples/cta-orbit-collapse.html) — runnable instance of this blueprint. Demonstrates the three-wrapper icon anatomy and the `gsap.parseEase` pattern for spring-shaped collapse driven from inside a master `onUpdate`.
+- [orbit-collapse-action.html](../examples/orbit-collapse-action.html) — Six genre icons (music, gaming, education, sports, vlog, podcast) orbit a "Drop a video link · Get free clips" CTA input; cursor enters and clicks the white button; one ripple expands; icons collapse inward; a video demo card springs out from the collapse point and floats. Single paused GSAP timeline drives all five phases over 6.5 seconds. Demonstrates the three-wrapper icon anatomy and the `gsap.parseEase` pattern for spring-shaped collapse driven from inside a master `onUpdate`.

@@ -1,5 +1,5 @@
 ---
-id: demo-page-scroll-spotlight
+id: contextual-product-showcase
 role: demo
 duration_seconds: [5, 9]
 phases: 4
@@ -359,4 +359,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [demo-page-scroll-spotlight.html](../examples/demo-page-scroll-spotlight.html) — 4-phase, 9-second scene applying this blueprint to a concrete brand and page. See the file for the resolved values of every constant listed above.
+- [contextual-product-showcase.html](../examples/contextual-product-showcase.html) — OpusClip landing page recreated as a 3D-tilted card: title with 6 ASR-glowable keywords → scroll down 280 px → main video pops forward 80 px in Z with a radial spotlight dimming the rest. Single paused GSAP timeline drives all four phases over 9 seconds.

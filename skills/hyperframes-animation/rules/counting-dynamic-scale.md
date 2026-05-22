@@ -1,22 +1,24 @@
 ---
 name: counting-dynamic-scale
-description: Counter animation where font size grows with the counting value, creating escalating visual weight.
+description: Counter animation where the number scales up as it counts, creating escalating visual weight. Uses transform scale (not font-size tween) for jitter-free rendering.
 metadata:
-  tags: counter, counting, scale, font-size, number, dynamic, emphasis
+  tags: counter, counting, scale, number, dynamic, emphasis
 ---
 
 # Counting with Dynamic Scale
 
-A number counts from A → B while its font size simultaneously grows, creating escalating visual weight that reinforces magnitude.
+A number counts from A → B while it simultaneously scales up, creating escalating visual weight that reinforces magnitude.
 
 ## How It Works
 
 A single eased timeline drives **two synchronized properties**:
 
 1. The numeric value (rendered as DOM text via `onUpdate`)
-2. The font size (tweened from `START_SIZE` → `END_SIZE`)
+2. The visual size (tweened via `transform: scale()` on the counter element — CSS reserves the END font-size; GSAP tweens scale from `START_SCALE` to 1.0)
 
-As the number gets bigger, the text gets larger — visually communicating "this is impressive."
+As the number gets bigger, the text grows larger — visually communicating "this is impressive."
+
+> **Why scale, not font-size?** HyperFrames renders frame-by-frame by seeking the timeline. Tweening `font-size` (or any layout-affecting property: `width` / `height` / `top` / `left` / `padding` / `line-height`) triggers a layout reflow on every seek, which produces visible sub-pixel jitter even when the visual delta is small. `transform: scale` is composited on the GPU — no reflow, no jitter. The counter's font-size stays fixed at the END size in CSS; the tween scales it down at the start and up to 1.0 at the end.
 
 ## Easing
 
@@ -76,10 +78,15 @@ Pick by drama desired (the choice is discrete; coefficient is implicit):
   color: {textColor};
   /* MANDATORY — tabular-nums keeps digits the same width */
   font-variant-numeric: tabular-nums;
-  /* Initial font-size; GSAP will tween this */
-  font-size: {startSize};
+  /* Font-size is FIXED at the END value — GSAP tweens scale, not font-size.
+     CSS reserves layout for the largest state so smaller scales don't reflow neighbors. */
+  font-size: {endSize};
   letter-spacing: -2px;
   line-height: 1;
+  /* Scale origin: anchor to baseline-center so the number grows upward, not from top-left */
+  transform-origin: center bottom;
+  /* Initial scale — GSAP will tween to 1.0 */
+  transform: scale(0.5);
 }
 
 .counter-suffix {
@@ -109,20 +116,32 @@ Pick by drama desired (the choice is discrete; coefficient is implicit):
   const tl = gsap.timeline({ paused: true });
 
   const counter = document.getElementById("counter");
-  const state = { value: 0, fontSize: START_SIZE };
+  // State holds only the numeric value — visual size is driven by a parallel
+  // scale tween on the counter element, not a fontSize property on state.
+  const state = { value: 0 };
 
-  // Synchronized count + font-size tween
+  // Numeric value tween — onUpdate writes text only (no layout-affecting mutations)
   tl.to(
     state,
     {
       value: TARGET_VALUE,
-      fontSize: END_SIZE,
       duration: COUNT_DUR,
       ease: COUNT_EASE,
       onUpdate: () => {
         counter.textContent = Math.round(state.value).toLocaleString();
-        counter.style.fontSize = `${state.fontSize}px`;
       },
+    },
+    0,
+  );
+
+  // Synchronized scale tween — runs in parallel at the same time-offset, same duration & ease
+  // so size and value stay locked together. Transform is GPU-composited; no reflow.
+  tl.to(
+    counter,
+    {
+      scale: 1.0,
+      duration: 2.0,
+      ease: "power3.out",
     },
     0,
   );
@@ -239,20 +258,22 @@ For 3 stats counting in parallel, share the SAME ease and duration so they finis
 
 ## Key Principles
 
-- **Synchronized value + size in ONE tween** so they share an ease and stay coordinated
+- **Two parallel tweens at the same time-offset with matching duration + ease** — one for value, one for `scale`. They stay coordinated because they share timing, not because they're in the same tween call.
 - **`font-variant-numeric: tabular-nums` is mandatory** — without it digit-count transitions (e.g. 9 → 10 → 100) cause visible jitter as glyph widths change
-- **Fixed-width container** as belt-and-suspenders — even with tabular-nums, glyph shape changes can shift baselines
+- **CSS reserves the END font-size**, scale handles the visual growth — this avoids layout reflow on every seeked frame (the cause of sub-pixel text jitter in HF renders)
+- **Fixed-width container** as belt-and-suspenders (overflow:hidden + width:N) — even with tabular-nums, glyph shape changes can shift baselines
 - **Grow in place, don't bounce** — the number should feel weighty, not springy. `power3.out` ends at exact value; `back.out` overshoots and feels cartoonish
-- **Start small enough to grow noticeably** (~50 % of final size); end large enough to feel decisive but not clip viewport
+- **Start scale small enough to grow noticeably** (~0.5); end at 1.0 (full CSS font-size). Sub-1.0 scaling can look soft — if crispness matters more than starting small, start at 0.7 instead.
 - **Suffix animates AFTER the count, not during** — gives the number its own beat
 - **❗ Label is BIG TEXT, not a page-style tiny caption** — for VIDEO, a small paragraph-style caption below a hero-size number reads as visual noise. Use display-size, uppercase, tracked label so the layout is "two-line big-text"; the label is part of the headline, not a footer.
 
 ## Critical Constraints
 
+- **NEVER tween `font-size` (or any layout property) in `onUpdate` or via GSAP `to(...)` directly.** HF seeks frame-by-frame; every reflow shows as jitter. Use `scale` transform. This applies even to apparently-small deltas — the reflow happens regardless of magnitude.
 - **`tabular-nums` mandatory** — required CSS for layout stability
 - **Timeline must be paused**: `gsap.timeline({ paused: true })`. Never `tl.play()`
 - **Registry key = `data-composition-id`**: `window.__timelines["counter-scene"]` must match scene root
-- **`onUpdate` mutates DOM**: HF runtime seeks the timeline frame-by-frame, so `onUpdate` runs on every seek call. Keep `onUpdate` work O(1) — set text + font-size, no DOM creation
+- **`onUpdate` writes text only** — `counter.textContent = ...`. No `style.fontSize`, no `style.width`, no `style.padding`. The HF runtime calls `onUpdate` on every seek frame; keep it to a single text mutation. Scale is on its own parallel tween, not in `onUpdate`.
 - **`Math.round` not `Math.floor`** — half-way through the final integer should display the final value briefly, not the previous one
 - **Avoid `back.out` / `elastic.out`** for the counter itself — overshoot makes the number look unstable (it's data, not decoration)
 

@@ -91,5 +91,5 @@ When the cursor lands and then triggers a click ripple, the ripple anchors to th
 ## See also
 
 - `cursor-click-ripple.md` — uses this pattern for cursor entry; covers ripple expansion and press feedback
-- `cta-morph-press.md` — full blueprint for hero → CTA → cursor lands → click reaction
+- `morph-press-interact.md` — full blueprint for hero → CTA → cursor lands → click reaction
 - `hyperframes-build.md` Hard Rules — animate only via transforms + opacity; this rule is how cursor-to-target lands while honoring that constraint

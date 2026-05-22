@@ -1,5 +1,5 @@
 ---
-id: metric-video-text-pivot
+id: video-kinetic-text-pivot
 role: metric
 duration_seconds: [5, 8]
 phases: 4
@@ -520,4 +520,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [metric-video-text-pivot.html](../examples/metric-video-text-pivot.html) — concrete instance with all placeholders filled in: timings, copy, colors, fonts, and the chosen video asset. Use it to verify the orchestration end-to-end (lint + render).
+- [video-kinetic-text-pivot.html](../examples/video-kinetic-text-pivot.html) — "HyperFrames" badge top, showcase video card center (3D-tilted +15° rotateY) → at 2.2 s video slides to 29% W, "MP4" appears on right with 5-layer green depth stack + breathing → at 3.86 s both exit left, typing "HTML **pages** become **video**" / "frame by frame." begins center-screen → gradient pill (purple→green) scales in behind "frame by frame." with radial glow halo. Single paused GSAP timeline drives all four phases over 6.5 seconds.

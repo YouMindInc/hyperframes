@@ -1,5 +1,5 @@
 ---
-id: problem-mockup-overwhelm
+id: mockup-morph-overwhelm
 role: problem
 duration_seconds: [4, 6]
 phases: 4
@@ -571,7 +571,7 @@ Placeholder content (replace in the example)
 
 ## Critical Constraints
 
-- **Single paused GSAP timeline**: One `gsap.timeline({ paused: true })` per composition, registered to `window.__timelines["problem-mockup-overwhelm"]`. HyperFrames seeks it. Don't fork into multiple timelines.
+- **Single paused GSAP timeline**: One `gsap.timeline({ paused: true })` per composition, registered to `window.__timelines["mockup-morph-overwhelm"]`. HyperFrames seeks it. Don't fork into multiple timelines.
 - **DOM-permanent layers**: Both the mockup cluster and the avatar-with-bubbles layer stay in the DOM the entire scene. Seek can move time backward — conditional rendering would create flicker. Use `opacity` to gate visibility, not React conditionals.
 - **No `width` / `height` / `left` / `top` tweens**: Forbidden by the HyperFrames animated-property allowlist (they trigger layout reflows). The morph uses `scale` + `borderRadius` instead.
 - **`borderRadius` tween is OK**: Paint-only, no reflow. GSAP can tween it as a CSS property with a unit string.
@@ -611,4 +611,4 @@ Placeholder content (replace in the example)
 
 ## Golden Sample
 
-- [problem-mockup-overwhelm.html](../examples/problem-mockup-overwhelm.html) — three workflow-tool mockups (left / center / right phone shells), nine scattered platform icons around the cluster, morph of the center phone card into a cyan-teal-blue avatar circle, then eight short task-label bubbles overwhelm the avatar in a radial layout. Single paused GSAP timeline; one shared scene-ticker `onUpdate` drives mockup floating, orbit dots, avatar breath, and bubble micro-float.
+- [mockup-morph-overwhelm.html](../examples/mockup-morph-overwhelm.html) — YouTube Studio / TikTok Creator / Instagram Reels mockups, nine scattered platform icons (Google, Twitter, LinkedIn, Yelp, TripAdvisor, Facebook…), morph center TikTok card → cyan-teal-blue avatar circle, eight task bubbles ("Edit hours of raw footage", "Reframe for vertical", "Post to 7+ platforms"…) overwhelm the avatar. Single paused GSAP timeline; one shared scene-ticker `onUpdate` drives mockup floating, orbit dots, avatar breath, and bubble micro-float. 6 seconds.

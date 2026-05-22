@@ -20,8 +20,24 @@ These are non-negotiable for every multi-scene composition:
 
 1. **Every composition uses transitions.** No exceptions. Scenes without transitions feel like jump cuts.
 2. **Every scene uses entrance animations.** Elements animate IN via `gsap.from()` — opacity, position, scale, etc. No scene should pop fully-formed onto screen.
-3. **Exit animations are BANNED** except on the final scene. Do NOT use `gsap.to()` to animate elements out before a transition fires. The transition IS the exit. Outgoing scene content must be fully visible when the transition starts — the transition handles the visual handoff.
-4. **Final scene exception:** The last scene MAY fade elements out (e.g., fade to black at the end of the composition). This is the only scene where exit animations are allowed.
+3. **Element outros are a design choice — allowed when the section_plan calls for them.** The previous version of this rule banned element-level `gsap.to(..., { opacity: 0 })` before the transition fires. That blanket ban is **withdrawn**, because it ate legitimate design beats (mid-scene state changes, transition lead-ins, element-replacement choreography like `reactive-displacement` / `scale-swap-transition` / `card-morph-anchor`). The current convention:
+   - **Element outros, if specified, MUST complete strictly before the scene transition fires.** The transition window is reserved for the master timeline. Outgoing element outros and the transition tween must not overlap — by the time the cross-paper / lift-and-cut / element-morph starts, every element outro is already done.
+   - **The transition is still authoritative for the scene handoff.** Don't rely on a per-element fade to do the scene swap; the transition does that.
+   - **If the section_plan doesn't specify an element outro, default to "no outro" and let the transition own the exit window** — same effect as the old ban, applied when the design is silent.
+4. **The transition window itself uses transition tweens only** — no element `gsap.to(opacity:0)` competing with the cross-paper / lift-and-cut / element-morph during that window.
+<!--
+HISTORICAL (banned rule, withdrawn 2026-05-22):
+"Exit animations are BANNED except on the final scene. Do NOT use gsap.to()
+to animate elements out before a transition fires. The transition IS the exit.
+Outgoing scene content must be fully visible when the transition starts."
+Why withdrawn: too broad — also forbade mid-scene state transitions and the
+lead-in element collapse/expand patterns that `element-morph` transitions
+explicitly depend on (e.g. hero element scaling up + glow-brightening as the
+master tl pulls it into the morph circle). The new rule (#3 above) keeps the
+"transition window stays clean" intent without forbidding element outros that
+finish before the transition.
+-->
+5. **Final scene exception:** The last scene MAY fade elements out (e.g., fade to black at the end of the composition). The composition's tail is the natural place for closing exit choreography.
 
 ## Energy → Primary Transition
 

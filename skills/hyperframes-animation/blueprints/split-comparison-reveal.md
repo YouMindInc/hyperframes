@@ -1,5 +1,5 @@
 ---
-id: comparison-split-cards
+id: split-comparison-reveal
 role: comparison
 duration_seconds: [4, 6]
 phases: 3
@@ -18,8 +18,8 @@ when_to_use:
 when_not_to_use:
   - More than 2 items to compare (use a different layout)
   - Items are sequential, not parallel (use step indicators)
-  - Cards contain interactive elements (use workflow-approve-press)
-triggers: [two features, side by side, comparison, dual capabilities, paired concepts]
+  - Cards contain interactive elements (use interactive-workflow-showcase)
+triggers: [two features, side by side, brand + team, comparison, dual capabilities, scale your]
 ---
 
 # Comparison · Split Cards (HyperFrames)
@@ -399,4 +399,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [comparison-split-cards.html](../examples/comparison-split-cards.html) — paired-feature split-card scene with title, two opposed-tilt cards (left `+BASE_TILT°`, right `-BASE_TILT°`), and floating pill badges at the cards' inner edges. Cards and badges float continuously with phase-opposed sines. Ambient dual-glow tints the background with the two brand accents. Single paused GSAP timeline drives all three phases over `TOTAL_DUR` seconds.
+- [split-comparison-reveal.html](../examples/split-comparison-reveal.html) — "Scale Your **Creative Output**" title, "Brand Templates" card (left, +18° tilt) and "Team Workspace" card (right, -18° tilt) with mock UI placeholders, "Brand Voice" and "Team Autopilot" pill badges at the cards' inner edges. Cards and badges float continuously with phase-opposed sines. Ambient dual-glow tints the background purple-left / green-right. Single paused GSAP timeline drives all three phases over 5 seconds.

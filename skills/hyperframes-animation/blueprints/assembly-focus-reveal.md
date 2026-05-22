@@ -1,5 +1,5 @@
 ---
-id: brand-reveal-assemble-zoom
+id: assembly-focus-reveal
 role: brand-reveal
 duration_seconds: [4, 6]
 phases: 5
@@ -16,7 +16,7 @@ when_not_to_use:
   - All elements remain throughout (no exit phase)
   - Scene is purely text-based, no visual hero
   - Multiple elements need equal focus
-  - Interactive elements required — see cta-morph-press
+  - Interactive elements required — see morph-press-interact
 triggers: [brand reveal, zoom into logo, text leads to, wide to close-up, hero focus]
 ---
 
@@ -446,4 +446,4 @@ See [hyperframes-animation/SKILL.md](../SKILL.md) for the full spring → ease m
 
 ## Golden Sample
 
-- [brand-reveal-assemble-zoom.html](../examples/brand-reveal-assemble-zoom.html) — runnable 5-second composition that realizes every named constant in this blueprint with concrete values. Single paused GSAP timeline drives all five phases.
+- [assembly-focus-reveal.html](../examples/assembly-focus-reveal.html) — "Just ask" assembles beside "GWISpark" + Logo → companion exits → camera zooms 5.5× into logo → logo breathes. Single paused GSAP timeline drives all five phases.
