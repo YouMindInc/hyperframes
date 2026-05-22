@@ -54,6 +54,10 @@ compositions/**/*.MOV
 # npm pack artifacts
 *.tgz
 
+# Python bytecode cache
+__pycache__/
+*.pyc
+
 # Logs
 *.log
 npm-debug.log*
