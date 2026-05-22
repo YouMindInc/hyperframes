@@ -190,22 +190,65 @@ How a planner identifies a UI demo sequence:
 - Transition type is `ui_morphing` or `camera_zoom_pan`
 - Preceding scene is `product_intro`; following scenes continue the showcase or pivot to `social_proof` / `cta`
 
+## Inputs from Phase 1 — web-research
+
+Phase 1 (web-research) writes its capture pack into `./research/`. You read four things from there:
+
+| File                           | What it gives you                                                                                                                                                                                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `research/context_pack.md`     | **Read first.** Compact LLM-friendly digest: source metadata, section candidates with CTAs, asset inventory with `alt` + `nearbyText`, visible-text excerpt. One scan = enough context for hero / social-proof / feature identification.       |
+| `research/extraction.json`     | Drill-down when you need full asset URLs, section rectangles, computed colors, font families, etc. ~175 KB.                                                                                                                                    |
+| `research/screenshot_full.png` | Full-page rendered screenshot. Use it when visual judgment matters (does this asset _look_ like a hero?).                                                                                                                                      |
+| `research/assets/`             | Downloaded image/SVG/video/font files. The `assetCandidates[].path` values you write per scene MUST be `public/<basename>` where `<basename>` is a file in `research/assets/` (Phase 4a's `prep.mjs` copies these into `hyperframes/public/`). |
+
+There is no separate `tokens.json`, `sections.json`, or `report.json` — that was the old Phase 1 format. `extraction.json` consolidates all of that. There is also no `analysis.json` — generating that file is **out of scope for this pipeline's Phase 1**; you produce the higher-fidelity `narrator_scripts.json` instead, which captures everything `analysis.json` would have (product understanding via archetype choice, section→scene mapping, asset recommendations via `assetCandidates`).
+
 ## Workflow
 
-1. Review extraction data: skim screenshots, read `report.json` for an index, then deep-read `sections.json` + `tokens.json` for pages you care about.
-2. Choose an archetype that fits the product and audience (read the relevant `archetypes/<name>/overview.md`). If two archetypes are operating, name the compound (e.g., `"PAS with Feature-Benefit Cascade"`).
-3. Pick the hook strategy from the taxonomy above. Write the opening line in the _voice_ you'll use throughout.
-4. Design the scene sequence — purely narrative, not webpage order. Plan for one UI demo _sequence_ (3+ scenes), not one demo scene.
-5. Define the Narrative Intent for each scene (all 5 fields, drawing persuasion from the catalog and emotional beat from the constrained vocab).
-6. Pick a transition for every scene from the taxonomy. Write a 10-30 word description per transition that names what's morphing/wiping/zooming and where the eye lands.
-7. Write narrator scripts for each scene (plain text, no markdown). Use the script voice quality bar — anaphora, specificity, imperative verbs, humor, cultural signaling. Set `script: ""` when the visual carries the message (and strengthen the `narrativeIntent` fields to compensate).
-8. Set a realistic `estimatedDuration` per scene (e.g. `"5-6s"` or `"5.5"`). Downstream tooling treats this as the timing contract.
-9. Write `narrator_scripts.json` using the canonical schema below.
+1. **Review research data**: read `context_pack.md` end-to-end. Skim `screenshot_full.png`. Drill into `extraction.json` only when you need exact asset URLs or color tokens. List the downloaded assets under `research/assets/` so you know your asset pool.
+2. **Choose an archetype** that fits the product and audience (read the relevant `archetypes/<name>/overview.md`). If two archetypes are operating, name the compound (e.g., `"PAS with Feature-Benefit Cascade"`).
+3. **Pick the hook strategy** from the taxonomy above. Write the opening line in the _voice_ you'll use throughout.
+4. **Design the scene sequence** — purely narrative, not webpage order. Plan for one UI demo _sequence_ (3+ scenes), not one demo scene.
+5. **Define the Narrative Intent** for each scene (all 5 fields, drawing persuasion from the catalog and emotional beat from the constrained vocab).
+6. **Pick a transition** for every scene from the taxonomy. Write a 10-30 word description per transition that names what's morphing/wiping/zooming and where the eye lands.
+7. **List per-scene `assetCandidates`** — one or more `{path, description}` entries (see "Asset candidates per scene" below). This is the bridge from research → visual-design: downstream Phase 3 reads only `narrator_scripts.json`, never `research/`, so the asset pool for each scene must be named here.
+8. **Write narrator scripts** for each scene (plain text, no markdown). Use the script voice quality bar — anaphora, specificity, imperative verbs, humor, cultural signaling. Set `script: ""` when the visual carries the message (and strengthen the `narrativeIntent` fields to compensate).
+9. **Set a realistic `estimatedDuration`** per scene (e.g. `"5-6s"` or `"5.5"`). Downstream tooling treats this as the timing contract.
+10. **Write `narrator_scripts.json`** using the canonical schema below.
+
+## Asset candidates per scene
+
+Phase 3 (visual-design) and Phase 4b (scene workers) **never read `research/`** — they consume `narrator_scripts.json` and `section_plan.md` only. That means every visual asset a downstream scene might use must be named on the scene in `narrator_scripts.json`.
+
+For each scene, list one or more `assetCandidates` — visual assets that fit the scene's narrative intent. visual-design picks one for the `**PrimaryAsset:**` anchor based on composition fit; workers may reference others as supporting visuals in the creative brief.
+
+```jsonc
+"assetCandidates": [
+  {
+    "path": "public/dashboard-hero.png",
+    "description": "main product UI showing the feature timeline, 1920x1080, dark theme"
+  },
+  {
+    "path": "public/dashboard-detail.svg",
+    "description": "isolated icon of the timeline component, suitable as a supporting motif"
+  }
+]
+```
+
+Rules:
+
+- **`path`** — exactly `public/<basename>`. The `<basename>` must correspond to a file in `research/assets/` (Phase 4a copies that union into `hyperframes/public/`).
+- **`description`** — short prose (≤25 words) that names what's in the asset, rough dimensions if you know them, and any visual notes (dark/light, dominant color, photo vs. UI vs. icon). visual-design uses this to pick without seeing the file.
+- **At least 1 candidate per scene that has a visual hero.** Title-only / pure-typography scenes may use an empty array `[]` — visual-design will treat that as a text-only scene and set `**PrimaryAsset:** (none)`.
+- **Order matters when there's ambiguity** — put the most narratively-aligned asset first; visual-design tends to take the first one if no other signal favors a different pick.
+- **Pick from what was actually downloaded.** Cross-reference `research/extraction.json` → asset list or `ls research/assets/`. Inventing a basename that doesn't exist is a Phase 4a fatal error.
+- **A single asset MAY appear across multiple scenes** when narratively the same hero carries through (e.g., scenes 3–7 all showcase the same dashboard).
 
 ## Validation checklist
 
 - Does every scene have a complete Narrative Intent (all 5 fields)?
 - Does every scene have a `transition` with `type` (from taxonomy) and `description` (10-30 words)?
+- Does every scene have `assetCandidates` (array, may be empty for text-only scenes)? For visual scenes, does each candidate's `path` correspond to a real file in `research/assets/`?
 - Does the emotional arc rise and fall meaningfully (not monotone)? Does it match the archetype's pattern (PAS = negative valley → relief; Cascade = steady positive climb)?
 - Is the sequence narrative-driven, not webpage-ordered?
 - Is there at least one UI demo _sequence_ (3+ consecutive feature/benefit scenes with ui_morphing or camera_zoom_pan transitions)?
@@ -238,6 +281,12 @@ The frontend (and downstream agents) expect these **exact** field names. Wrong n
         "persuasion": "named technique from the catalog (combine if multiple operate)",
         "emotionalBeat": "single word or short compound from the vocabulary"
       },
+      "assetCandidates": [
+        {
+          "path": "public/<basename-from-research-assets>",
+          "description": "short prose: what's in the asset + rough dims + visual notes"
+        }
+      ],
       "script": "plain text narration, no markdown. May be empty string when the visual carries the message.",
       "estimatedDuration": "5-6s"
     }
@@ -245,10 +294,16 @@ The frontend (and downstream agents) expect these **exact** field names. Wrong n
 }
 ```
 
-Use `sceneNumber` (not `scene_id`), `sceneName` (not `scene_name`), `script` (not `narration`), and nest intent fields inside `narrativeIntent` (not flat on the scene object). The `transition` field is required for every scene including scene 1 (use `none_first_scene`).
+Field rules:
+
+- Use `sceneNumber` (not `scene_id`), `sceneName` (not `scene_name`), `script` (not `narration`), and nest intent fields inside `narrativeIntent` (not flat on the scene object).
+- The `transition` field is required for every scene including scene 1 (use `none_first_scene`).
+- `assetCandidates` is **required** and must be an array. Use `[]` for genuinely text-only scenes (title cards, pure typography). For any scene with a visual hero, include at least one `{path, description}` entry.
+- Each `assetCandidates[].path` must be `public/<basename>` where the basename exists in `research/assets/`. Phase 4a's `prep.mjs` will fail on missing files.
 
 ## See also
 
-- `phases/visual-design/guide.md` — visual treatment for each scene (downstream; consumes `narrator_scripts.json` including `transition` and `narrativeIntent`).
+- `phases/visual-design/guide.md` — visual treatment for each scene (downstream; consumes `narrator_scripts.json` only — `transition`, `narrativeIntent`, and `assetCandidates` — never reads `research/`).
+- `phases/web-research/guide.md` — upstream Phase 1. Owns the capture script and writes `research/`.
 - `/product-launch-video` (this skill's `SKILL.md`) — orchestrator that calls this guide as Phase 2 of the website-to-launch-video pipeline.
-- Reverse-engineered reference plans: `/Users/caleb/Documents/projects/golden_sample_reverse/Iteration/dataset-creation/data/phase_2/*.visual_description.md` — 22 real videos analyzed into this exact schema. Use the HRS file (`1.gemini_3_1_pro.visual_description.md`) as the canonical complete-schema example.
+- Reverse-engineered reference plans: `/Users/caleb/Documents/projects/golden_sample_reverse/Iteration/dataset-creation/data/phase_2/*.visual_description.md` — 22 real videos analyzed into the narrative half of this schema (pre-`assetCandidates` era). Use the HRS file (`1.gemini_3_1_pro.visual_description.md`) as the canonical complete-narrative example.

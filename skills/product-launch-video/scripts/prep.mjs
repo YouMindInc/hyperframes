@@ -3,14 +3,14 @@
 // hyperframes-prep subagent).
 //
 // Reads:  section_plan.md (Phase 3), narrator_scripts.json (Phase 2),
-//         audio_meta.json (Phase 2.5, optional), extraction/ assets,
+//         audio_meta.json (Phase 2.5, optional), research/ assets (Phase 1),
 //         hyperframes-animation/rules/*.md (existence only).
 // Writes: hyperframes/public/<assets>, ./group_spec.json.
 //         If hyperframes/ is missing, scaffolds it via `npx hyperframes init`.
 //
 // Usage:
 //   node prep.mjs --section-plan <path> --narrator-scripts <path> \
-//                 --rules-dir <abs> --extraction <path> --hyperframes <path> \
+//                 --rules-dir <abs> --research <path> --hyperframes <path> \
 //                 --out <path> [--audio-meta <path>] [--scenes-per-group <int>]
 //
 // Exit 0 = group_spec.json written + summary on stdout.
@@ -47,7 +47,7 @@ const audioMetaPath = flag("audio-meta") ? resolve(flag("audio-meta")) : null;
 const rulesDirArg = flag("rules-dir");
 if (!rulesDirArg) die("Missing required --rules-dir");
 const rulesDir = resolve(rulesDirArg);
-const extractionDir = resolve(flag("extraction", "./extraction"));
+const researchDir = resolve(flag("research", "./research"));
 const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
 const outPath = resolve(flag("out", "./group_spec.json"));
 const scenesPerGroupMax = parseInt(flag("scenes-per-group", "2"), 10);
@@ -74,7 +74,7 @@ if (!existsSync(hyperframesDir)) {
   if (r.status !== 0) die("npx hyperframes init failed");
 }
 
-// ---------- Step 2: copy extraction assets → hyperframes/public/ ----------
+// ---------- Step 2: copy research assets → hyperframes/public/ ----------
 const publicDir = join(hyperframesDir, "public");
 mkdirSync(publicDir, { recursive: true });
 
@@ -98,7 +98,7 @@ function walk(dir) {
     }
   }
 }
-walk(extractionDir);
+walk(researchDir);
 
 // ---------- Step 3: parse section_plan.md ----------
 if (!existsSync(sectionPlanPath))

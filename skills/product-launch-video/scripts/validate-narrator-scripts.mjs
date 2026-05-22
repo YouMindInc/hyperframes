@@ -15,6 +15,7 @@ const REQUIRED_SCENE = [
   "sceneNumber",
   "sceneName",
   "narrativeIntent",
+  "assetCandidates",
   "script",
   "estimatedDuration",
 ];
@@ -110,6 +111,34 @@ function validate(filePath) {
           errors.push(
             `${ctx}: "${intentKey}" flat on the scene — must live inside "narrativeIntent"`,
           );
+        }
+      }
+
+      // assetCandidates shape — must be an array of {path, description}.
+      // Empty array is allowed (text-only scenes).
+      if ("assetCandidates" in scene) {
+        if (!Array.isArray(scene.assetCandidates)) {
+          errors.push(
+            `${ctx}.assetCandidates must be an array (use [] for text-only scenes)`,
+          );
+        } else {
+          scene.assetCandidates.forEach((cand, j) => {
+            const cctx = `${ctx}.assetCandidates[${j}]`;
+            if (!cand || typeof cand !== "object") {
+              errors.push(`${cctx}: must be an object with {path, description}`);
+              return;
+            }
+            if (typeof cand.path !== "string" || !cand.path) {
+              errors.push(`${cctx}: missing or empty "path"`);
+            } else if (!cand.path.startsWith("public/")) {
+              errors.push(
+                `${cctx}.path: must start with "public/" (got "${cand.path}")`,
+              );
+            }
+            if (typeof cand.description !== "string" || !cand.description) {
+              errors.push(`${cctx}: missing or empty "description"`);
+            }
+          });
         }
       }
     });

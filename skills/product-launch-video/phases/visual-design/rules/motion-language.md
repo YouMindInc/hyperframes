@@ -8,7 +8,7 @@ category: visual-design
 
 A good promo video feels like one continuous piece, not a slideshow of unrelated animations. This requires a consistent motion language: the same easing curves, the same timing rhythm, and the same spring feel across all scenes.
 
-**Pair with `hyperframes-creative/references/motion-principles.md`** for the qualitative guardrails (easing-as-emotion, build/breathe/resolve, load-bearing GSAP rules — no double transforms, prefer `fromTo` over `from`). This file is the **numeric overlay** — spring intents, frame counts at 30 fps, stagger caps, the "cut-the-curve" transition spec — calibrated against the actual eases and durations counted across the golden samples (hyperframes-animation/examples × 13, playground-launch, timeline-editor-launch-v5, codex-plugin, fadeglow-v4, inspector-logo-intro).
+**Pair with `./design-system/design.html` §5 (Motion)** — that's where the actual brand `EASE` / `DUR` JS constants live (mapped from the site's CSS cubic-beziers to GSAP eases). This file is the **video-craft numeric overlay** — spring intents, frame counts at 30 fps, stagger caps, the "cut-the-curve" transition spec — calibrated against the golden-sample archive. The ease names come from design.html; the duration tables and rhythm rules come from here.
 
 ## Spring intents
 

@@ -13,7 +13,11 @@ Load these skills via the **Skill tool**:
 - `hyperframes-core` — composition contract, data-attributes, timeline contract, non-negotiable runtime rules
 - `hyperframes-animation` — load SKILL.md only (rules index + routing table). Open individual rule bodies from your `rule_paths` list. The SKILL.md's "Routing" table tells you which `adapters/<runtime>.md` file to open if a rule's body needs detail beyond what's inlined — default is `adapters/gsap.md` for GSAP timeline / easing / transform-alias allowlist; `adapters/lottie.md` / `three.md` / `animejs.md` / `css-animations.md` / `waapi.md` / `typegpu.md` only when a rule explicitly cites that runtime.
 
-Do NOT load `hyperframes-cli`, `hyperframes-creative`, or `hyperframes-registry` — Phase 4a/4c scope.
+Also read this file directly (NOT via Skill tool — it's a project artifact):
+
+- `./design-system/design.html` — Phase 1b output. Single source of truth for **brand tokens** (palette `:root` vars, font families, `EASE` / `DUR` consts, border-radius scale, component HTML+CSS snippets). The Dispatch context tells you where it lives; read §2 (color `:root`), §3 (typography font-family), §4 (radius), §5 (motion EASE / DUR), and §8 (components) — paste the relevant blocks into your scene's scoped `<style>` and inline `<script>`. Cite design.html values **verbatim** — don't invent palette hex, font names, or eases.
+
+Do NOT load `hyperframes-cli`, `hyperframes-creative`, or `hyperframes-registry` — Phase 4a/4c scope. `design.html` already encodes all brand design decisions, so `hyperframes-creative` is redundant.
 
 ## Scope (HARD)
 
@@ -68,9 +72,9 @@ For each scene id, write `hyperframes/compositions/<scene-id>.html`:
 
 1. Outer `<template id="<scene-id>-template">`.
 2. Inner `<div id="root" data-composition-id="<scene-id>" data-width="1920" data-height="1080" data-duration="<estimatedDuration_s>" style="position:relative; width:1920px; height:1080px; overflow:hidden;">`.
-3. Scene `<style>` inside the root. Scope every selector to a visual-root id derived from the scene id (e.g. `#scene_1-root`). Never write unscoped `body` / `html` / `:root` / bare `.stage` / `.card` selectors.
-4. Visual DOM driven by `primary_visual_asset` + the `creative_brief`'s effect→asset mapping.
-5. Inline `<script>` at the end of the root (before `</template>`): build one paused GSAP timeline, lay down one block per effect in the `effects` order, register on `window.__timelines["<scene-id>"]`.
+3. Scene `<style>` inside the root. **Open `./design-system/design.html` and copy its §2 `:root` block (color vars) + §3 font-family declarations + §4 `--r-*` radius vars into your scene's `<style>` — but scope each CSS variable selector to a visual-root id derived from the scene id** (e.g. paste `:root { --canvas: #f6f3ec; ... }` as `#scene_1-root { --canvas: #f6f3ec; ... }`). Then add scene-specific selectors, all scoped to `#<scene-id>-root`. Never write unscoped `body` / `html` / `:root` / bare `.stage` / `.card` selectors.
+4. Visual DOM driven by `primary_visual_asset` + the `creative_brief`'s effect→asset mapping. When the brief names a brand component (e.g. "hero gradient text", "chip"), paste design.html §8's HTML+CSS for that component verbatim.
+5. Inline `<script>` at the end of the root (before `</template>`): **paste design.html §5's `EASE` and `DUR` const declarations at the top of the script**, then build one paused GSAP timeline using those constants (e.g. `tl.from(el, { duration: DUR.med, ease: EASE.entry, ... })`), lay down one block per effect in the `effects` order, register on `window.__timelines["<scene-id>"]`.
 
 Skeleton (change only `<scene-id>` and the visual-root id; library `<script>` tags from the host page remain in `<head>` — you do not touch them):
 

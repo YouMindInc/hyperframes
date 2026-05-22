@@ -4,7 +4,7 @@ Phase 2.5 is **deterministic** — owned by [`scripts/audio.mjs`](../../scripts/
 
 ## What the script does
 
-1. Reads `narrator_scripts.json` (and optionally `extraction/shared/tokens.json` for BGM mood inference).
+1. Reads `narrator_scripts.json`. BGM mood inference looks at the script bodies + `narrativeArchetype` + `emotionalArc` directly — no `tokens.json` side file (Phase 1 web-research writes asset/section data, not styling tokens; styling lives in Phase 1b's `design-system/`).
 2. Picks TTS provider once at startup:
    - `$ELEVENLABS_API_KEY` set **and** `python3 -c 'import elevenlabs'` succeeds → **ElevenLabs** (cloud).
    - Otherwise → **Kokoro** (local, free) via `npx hyperframes tts`.
@@ -52,7 +52,6 @@ hyperframes/assets/bgm.wav                          # background music (lands af
 ```bash
 node <SKILL_DIR>/scripts/audio.mjs \
   --narrator-scripts ./narrator_scripts.json \
-  [--tokens ./extraction/shared/tokens.json] \
   --hyperframes ./hyperframes \
   --out ./audio_meta.json \
   [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
@@ -75,7 +74,7 @@ Exit 1 = zero scenes got voice; stderr names the reason.
 
 ## BGM mood prompt (auto-inferred)
 
-The script reads `extraction/shared/tokens.json` (if provided) and looks for industry hints in the token blob. Defaults by industry:
+The script concatenates `project` + `narrativeArchetype` + `emotionalArc` + every scene's `sceneName` / `script` / `narrativeIntent.{narrativeRole, keyMessage}` into a single lowercased blob, then matches industry keywords against it. Defaults by industry:
 
 | Heuristic                                                | Default prompt                                                                                |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
