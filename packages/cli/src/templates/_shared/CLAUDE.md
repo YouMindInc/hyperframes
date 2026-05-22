@@ -1,85 +1,81 @@
-# HyperFrames Composition Project
+# Hyperframes
 
-## Skills — USE THESE FIRST
+Open-source video rendering framework: write HTML, render video.
 
-**Always invoke the relevant skill before writing or modifying compositions.** Skills encode framework-specific patterns (e.g., `window.__timelines` registration, `data-*` attribute semantics, shader-compatible CSS rules) that are NOT in generic web docs. Skipping them produces broken compositions.
+```
+packages/
+  cli/       → hyperframes CLI (create, preview, lint, render)
+  core/      → Types, parsers, generators, linter, runtime, frame adapters
+  engine/    → Seekable page-to-video capture engine (Puppeteer + FFmpeg)
+  player/    → Embeddable <hyperframes-player> web component
+  producer/  → Full rendering pipeline (capture + encode + audio mix)
+  studio/    → Browser-based composition editor UI
+```
 
-| Skill                      | Command                   | When to use                                                                                       |
-| -------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------- |
-| **hyperframes**            | `/hyperframes`            | Creating or editing HTML compositions, captions, TTS, audio-reactive animation, marker highlights |
-| **hyperframes-cli**        | `/hyperframes-cli`        | Dev-loop CLI: init, lint, inspect, preview, render, doctor                                        |
-| **hyperframes-media**      | `/hyperframes-media`      | Asset preprocessing: tts (Kokoro), transcribe (Whisper), remove-background (u2net)                |
-| **hyperframes-registry**   | `/hyperframes-registry`   | Installing blocks and components via `hyperframes add`                                            |
-| **website-to-hyperframes** | `/website-to-hyperframes` | Capturing a URL and turning it into a video — full website-to-video pipeline                      |
-| **tailwind**               | `/tailwind`               | Tailwind v4 browser-runtime styles for projects created with `hyperframes init --tailwind`        |
-| **gsap**                   | `/gsap`                   | GSAP animations for HyperFrames — tweens, timelines, easing, performance                          |
-| **animejs**                | `/animejs`                | Anime.js animations registered on `window.__hfAnime`                                              |
-| **css-animations**         | `/css-animations`         | CSS keyframes that HyperFrames can pause and seek                                                 |
-| **lottie**                 | `/lottie`                 | `lottie-web` and dotLottie players registered on `window.__hfLottie`                              |
-| **three**                  | `/three`                  | Three.js scenes rendered from HyperFrames `hf-seek` events                                        |
-| **waapi**                  | `/waapi`                  | Web Animations API motion driven through `document.getAnimations()`                               |
-
-> **Skills not available?** Ask the user to run `npx hyperframes skills` and restart their
-> agent session, or install manually: `npx skills add heygen-com/hyperframes`.
-
-## Commands
+## Development
 
 ```bash
-npm run dev          # start the preview server (long-running — keep it alive in background)
-npm run check        # lint + validate + inspect
-npm run render       # render to MP4
-npm run publish      # publish and get a shareable link
-npx hyperframes lint --verbose  # include info-level findings
-npx hyperframes lint --json     # machine-readable output for CI
-npx hyperframes docs <topic> # reference docs in terminal
+bun install     # Install dependencies
+bun run build   # Build all packages
+bun run test    # Run tests
 ```
 
-> **`npm run dev` is a long-running server, not a one-shot command.** It blocks until stopped.
-> In Claude Code, always run it with `run_in_background: true`. Never run it as a foreground
-> command — it will time out and the server will die, breaking the browser preview.
+**This repo uses bun**, not pnpm. Do NOT run `pnpm install` — it creates a `pnpm-lock.yaml` that should not exist. Workspace linking relies on bun's resolution from `"workspaces"` in root `package.json`.
 
-## Documentation
+### Linting & Formatting
 
-**For quick reference**, use the local CLI docs command (no network required):
+This project uses **oxlint** and **oxfmt** (not biome, not eslint, not prettier).
 
 ```bash
-npx hyperframes docs <topic>
+bunx oxlint <files>        # Lint
+bunx oxfmt <files>         # Format (write)
+bunx oxfmt --check <files> # Format (check only, used by pre-commit hook)
 ```
 
-Topics: `data-attributes`, `gsap`, `compositions`, `rendering`, `examples`, `troubleshooting`
+Always run both on changed files before committing. The lefthook pre-commit hook runs `bunx oxlint` and `bunx oxfmt --check` automatically.
 
-**For full documentation**, discover pages via the machine-readable index — do NOT guess URLs:
+### Adding CLI Commands
 
-```
-https://hyperframes.heygen.com/llms.txt
-```
+When adding a new CLI command:
 
-## Project Structure
+1. Define the command in `packages/cli/src/commands/<name>.ts` using `defineCommand` from citty
+2. **Export `examples`** in the same file — `export const examples: Example[] = [...]` (import `Example` from `./_examples.js`). These are displayed by `--help`.
+3. Register it in `packages/cli/src/cli.ts` under `subCommands` (lazy-loaded)
+4. **Add to help groups** in `packages/cli/src/help.ts` — add the command name and description to the appropriate `GROUPS` entry. Without this, the command won't appear in `hyperframes --help` even though it works.
+5. **Document it** in `docs/packages/cli.mdx` — add a section with usage examples and flags.
+6. Validate by running `npx tsx packages/cli/src/cli.ts --help` (command appears in the list) and `npx tsx packages/cli/src/cli.ts <name> --help` (examples appear).
 
-- `index.html` — main composition (root timeline)
-- `compositions/` — sub-compositions referenced via `data-composition-src`
-- `meta.json` — project metadata (id, name)
-- `transcript.json` — whisper word-level transcript (if generated)
+### Regression Test Golden Baselines (producer)
 
-## Linting — ALWAYS RUN AFTER CHANGES
-
-After creating or editing any `.html` composition, **always** run the full check before considering the task complete:
+`packages/producer/tests/<name>/output/output.mp4` baselines MUST be generated
+inside `Dockerfile.test`, not on your host. CI renders inside that Docker image
+with a specific Chrome + ffmpeg build; pixel-level output drifts across
+different host Chrome/ffmpeg versions and will fail PSNR at dozens of
+checkpoints even when the code is correct.
 
 ```bash
-npm run check
+# Build the test image once:
+docker build -t hyperframes-producer:test -f Dockerfile.test .
+
+# Generate or update a baseline (runs the harness with --update inside Docker):
+bun run --cwd packages/producer docker:test:update <test-name>
 ```
 
-Fix all errors before presenting the result. Inspect warnings should be reviewed before rendering.
+Never run `bun run --cwd packages/producer test:update` directly from the
+host to capture a baseline that will be committed — the resulting output.mp4
+will not match CI. Use it only for local-only experimentation.
 
-## Key Rules
+## Skills
 
-1. Every timed element needs `data-start`, `data-duration`, and `data-track-index`
-2. Elements with timing **MUST** have `class="clip"` — the framework uses this for visibility control
-3. Timelines must be paused and registered on `window.__timelines`:
-   ```js
-   window.__timelines = window.__timelines || {};
-   window.__timelines["composition-id"] = gsap.timeline({ paused: true });
-   ```
-4. Videos use `muted` with a separate `<audio>` element for the audio track
-5. Sub-compositions use `data-composition-src="compositions/file.html"` to reference other HTML files
-6. Only deterministic logic — no `Date.now()`, no `Math.random()`, no network fetches
+Composition authoring (not repo development) is guided by skills installed via `npx skills add heygen-com/hyperframes`. See `skills/` for source. The active skills are:
+
+- `/video-workflows` (router) — First stop for any video-creation intent ("make me a video", "promo for X", "launch video", "explainer", "tutorial", etc.). Maps the request to the right workflow via an INPUT × OUTPUT-length decision table, asks clarifying questions when intent is under-specified, and refuses to fake-route when no matching workflow exists. **Use BEFORE invoking a specific workflow.**
+- `/hyperframes-core` — HTML composition contract: data attributes, clips, tracks, sub-compositions, variables, media playback, deterministic render rules, and validation of minimal renderable projects.
+- `/hyperframes-creative` — Non-animation creative direction: `design.md` handling, palettes, typography, narration, beat planning, audio-reactive, composition patterns. For atomic motion patterns and scene blueprints use `/hyperframes-animation`.
+- `/hyperframes-animation` — All motion knowledge in one skill: atomic rules (`rules-index.md`), multi-phase scene blueprints (`blueprints-index.md`), scene transitions (`transitions/`), broader motion-design techniques (`techniques.md`), runtime adapters (`adapters/{gsap,lottie,three,animejs,css-animations,waapi,typegpu}.md`), and animation-map analysis (`scripts/animation-map.mjs`). GSAP is the default; other runtimes loaded on demand from `adapters/`.
+- `/product-launch-video` — End-to-end orchestrator that turns a URL into a 60-90s launch / SaaS explainer / promo video. Internally runs five subagent phases: `web-extraction → story-design → (audio ‖ visual-design) → hyperframes build`. The build is split into `4a prep → 4b scene workers (parallel fan-out, ≤2 scenes/group) → 4c finalize`, and **finalize itself owns the render** (lint → validate → inspect → snapshot → render + ffprobe verify) — there is no separate Phase 5. **Phase 2.5 (audio) runs in parallel with Phase 3** and writes a side file `audio_meta.json` that 4a merges into `group_spec.json`. Phase guides / scripts / archetypes live at `skills/product-launch-video/phases/<phase>/`; subagent wrappers at `skills/product-launch-video/agents/<phase>.md` (injected into Agent dispatches). Build-phase wrappers load `/hyperframes-core` + `/hyperframes-animation` + `/hyperframes-cli` via the Skill tool; audio wrapper loads `/hyperframes-media`. Audio is optional and gracefully degrades: TTS prefers `$ELEVENLABS_API_KEY` and falls back to local Kokoro (`npx hyperframes tts`); BGM via Google Lyria requires `$GOOGLE_API_KEY` (skipped if absent).
+- `/hyperframes-cli` — CLI dev loop: `init`, `lint`, `validate`, `inspect`, `preview`, `render`, `doctor`, `browser`, `info`, `upgrade`, `compositions`, `docs`, `benchmark`, and environment troubleshooting.
+- `/hyperframes-registry` — Installing registry blocks and components via `hyperframes add`, wiring them into `index.html`, and working with `hyperframes.json`.
+- `/hyperframes-media` — Asset preprocessing (`tts` / `transcribe` / `remove-background`) plus caption authoring — subtitles, lyrics, karaoke, per-word styling, transcript JSON/SRT/VTT import, timing from audio. Captions live with the asset they consume.
+
+Tailwind v4 projects (`hyperframes init --tailwind`): see `/hyperframes-core` → `references/tailwind.md`.
