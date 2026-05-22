@@ -349,7 +349,13 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
         }, opts.seekTime);
         const manifestContent = readStudioManualEditManifestContent(opts.project.dir);
         await applyStudioManualEditsToThumbnailPage(page, manifestContent, opts.compPath);
-        await page.evaluate(() => document.fonts?.ready);
+        await page.evaluate(() => {
+          void document.fonts?.ready;
+          const body = document.body;
+          if (body && getComputedStyle(body).backgroundColor === "rgba(0, 0, 0, 0)") {
+            body.style.backgroundColor = "#1c2028";
+          }
+        });
         await new Promise((r) => setTimeout(r, 200));
         await reapplyStudioManualEditsToThumbnailPage(page);
         let clip: ScreenshotClip | undefined;
@@ -392,8 +398,38 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
     async installRegistryBlock(opts) {
       const { resolveItem } = await import("../registry/resolver.js");
       const { installItem } = await import("../registry/installer.js");
+      const { readFileSync, writeFileSync, existsSync } = await import("node:fs");
+      const { join } = await import("node:path");
       const item = await resolveItem(opts.blockName);
       const { written } = await installItem(item, { destDir: opts.project.dir });
+
+      const indexPath = join(opts.project.dir, "index.html");
+      if (existsSync(indexPath)) {
+        const indexHtml = readFileSync(indexPath, "utf-8");
+        const hostW = indexHtml.match(/data-width="(\d+)"/)?.[1];
+        const hostH = indexHtml.match(/data-height="(\d+)"/)?.[1];
+        if (hostW && hostH) {
+          for (const absPath of written) {
+            if (!absPath.endsWith(".html")) continue;
+            let content = readFileSync(absPath, "utf-8");
+            content = content.replace(
+              /(<meta\s+name="viewport"\s+content="width=)\d+(,\s*height=)\d+/i,
+              `$1${hostW}$2${hostH}`,
+            );
+            content = content.replace(
+              /(\bwidth:\s*)\d+(px;\s*\n?\s*height:\s*)\d+(px;)/g,
+              (match, pre, mid, post) => {
+                if (match.includes("1920") || match.includes("1080")) {
+                  return `${pre}${hostW}${mid}${hostH}${post}`;
+                }
+                return match;
+              },
+            );
+            writeFileSync(absPath, content, "utf-8");
+          }
+        }
+      }
+
       const relativePaths = written.map((abs) => {
         const rel = abs.startsWith(opts.project.dir) ? abs.slice(opts.project.dir.length + 1) : abs;
         return rel;
@@ -475,6 +511,22 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
   app.get("/icons/*", serveStudioStaticFile);
   app.get("/favicon.svg", serveStudioStaticFile);
 
+  // ── Runtime env injection ───────────────────────────────────────────────
+  // When the studio is served as a pre-built SPA, Vite `VITE_STUDIO_*` env
+  // vars were baked at build time. Collect any such vars from the current
+  // process.env and inject them as `window.__HF_STUDIO_ENV__` so the client
+  // can pick them up at runtime, overriding the baked defaults.
+  function buildRuntimeEnvScript(): string {
+    const overrides: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.startsWith("VITE_STUDIO_") && value !== undefined) {
+        overrides[key] = value;
+      }
+    }
+    if (Object.keys(overrides).length === 0) return "";
+    return `<script>window.__HF_STUDIO_ENV__=${JSON.stringify(overrides)};</script>`;
+  }
+
   // SPA fallback
   app.get("*", (c) => {
     const indexPath = resolve(studioDir, "index.html");
@@ -534,7 +586,12 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
         500,
       );
     }
-    return c.html(readFileSync(indexPath, "utf-8"));
+    let html = readFileSync(indexPath, "utf-8");
+    const envScript = buildRuntimeEnvScript();
+    if (envScript) {
+      html = html.replace("<head>", `<head>${envScript}`);
+    }
+    return c.html(html);
   });
 
   return { app, watcher };

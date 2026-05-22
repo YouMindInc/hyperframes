@@ -248,6 +248,24 @@ export function useAppHotkeys({
       }
     }
 
+    // F — toggle fullscreen preview
+    if (
+      event.key.toLowerCase() === "f" &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      !isEditableTarget(event.target)
+    ) {
+      event.preventDefault();
+      if (document.fullscreenElement) {
+        void document.exitFullscreen();
+      } else {
+        document.querySelector<HTMLElement>("[data-studio-fullscreen-target]")?.requestFullscreen();
+      }
+      return;
+    }
+
     // Delete / Backspace — remove selected element (timeline clip or preview selection)
     if (
       (event.key === "Delete" || event.key === "Backspace") &&
