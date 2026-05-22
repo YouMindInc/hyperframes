@@ -1,16 +1,25 @@
-# Audio (Phase 2.5)
+# Audio (Phase 2.5) — reference
 
-Generate per-scene voice-over + word-level timestamps + a single background music track in parallel. Output: `audio_meta.json` (side file, **do NOT mutate** `narrator_scripts.json`) + `hyperframes/assets/voice/*` + `hyperframes/assets/bgm.wav`.
+Phase 2.5 is **deterministic** — owned by [`scripts/audio.mjs`](../../scripts/audio.mjs). No subagent. This document is a reference for the script's contract and design choices; not a procedure (the script _is_ the procedure).
 
-Runs in parallel with Phase 3 (visual-design); the two are dispatched from the same orchestrator message. They share `narrator_scripts.json` (read-only for both) and write disjoint files.
+## What the script does
+
+1. Reads `narrator_scripts.json` (and optionally `extraction/shared/tokens.json` for BGM mood inference).
+2. Picks TTS provider once at startup:
+   - `$ELEVENLABS_API_KEY` set **and** `python3 -c 'import elevenlabs'` succeeds → **ElevenLabs** (cloud).
+   - Otherwise → **Kokoro** (local, free) via `npx hyperframes tts`.
+3. Writes every scene's narration to `/tmp/scene_<N>.txt`.
+4. Per-scene **pipelined** TTS → transcribe: each scene's whisper run starts the moment its own TTS finishes (does NOT wait for sibling scenes). All scenes run in parallel via `Promise.all`.
+5. Spawns Lyria BGM **detached** in parallel (if `$GOOGLE_API_KEY` set and `--lyria-recipe` path provided). The BGM child outlives the script — `audio.mjs` exits as soon as voice + transcribe finish.
+6. ffprobes each voice file for true `voiceDuration` and writes `./audio_meta.json`.
 
 ## Outputs
 
 ```
 ./audio_meta.json                                   # index for Phase 4a / 4c
 hyperframes/assets/voice/scene_<N>.wav              # narration audio
-hyperframes/assets/voice/scene_<N>_words.json       # Whisper word-level timestamps
-hyperframes/assets/bgm.wav                          # background music (optional)
+hyperframes/assets/voice/scene_<N>_words.json       # Whisper word-level timestamps (omitted if transcribe failed or count=0)
+hyperframes/assets/bgm.wav                          # background music (lands after audio.mjs exits if Lyria takes longer)
 ```
 
 `audio_meta.json` schema:
@@ -21,6 +30,7 @@ hyperframes/assets/bgm.wav                          # background music (optional
   "voice_id": "<voice id used>",
   "bgm_enabled": true | false,
   "bgm_path": "assets/bgm.wav" | null,
+  "bgm_pending": true | false,
   "total_duration_s": <Σ voiceDuration>,
   "scenes": {
     "scene_1": {
@@ -33,157 +43,65 @@ hyperframes/assets/bgm.wav                          # background music (optional
 }
 ```
 
-`wordsPath` is omitted (or empty string) for any scene whose transcribe step failed. Scenes whose TTS failed are omitted from `scenes` entirely (Phase 4a falls back to `estimatedDuration`).
+- `bgm_pending: true` means Lyria is still rendering when the script exited. `prep.mjs` (Phase 4a) trusts the path; `finalize` (Phase 4c) re-checks `[ -s hyperframes/assets/bgm.wav ]` before emitting the `<audio>` element.
+- `wordsPath` is `""` when transcribe failed or the JSON has zero words. Downstream effects (e.g. `asr-keyword-glow`) detect this and degrade.
+- Scenes whose TTS failed are **omitted from `scenes` entirely** — Phase 4a falls back to `estimatedDuration` for those.
 
-## Provider selection — once at the start
+## CLI
 
-Choose TTS provider once and stick with it for every scene (do not mix voices):
+```bash
+node <SKILL_DIR>/scripts/audio.mjs \
+  --narrator-scripts ./narrator_scripts.json \
+  [--tokens ./extraction/shared/tokens.json] \
+  --hyperframes ./hyperframes \
+  --out ./audio_meta.json \
+  [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
+  [--voice <id>] [--lang en] \
+  [--provider kokoro|elevenlabs] \
+  [--no-bgm] [--bgm-prompt "<custom prompt>"]
+```
 
-- `$ELEVENLABS_API_KEY` set **and** `python3 -c 'import elevenlabs' 2>/dev/null` succeeds → **ElevenLabs (Path A)**, cloud
-- Otherwise → **Kokoro (Path B)** via `npx hyperframes tts`, fully local, free
+Exit 0 = voice + transcribe + `audio_meta.json` done (BGM may still be rendering).
+Exit 1 = zero scenes got voice; stderr names the reason.
 
-Decision is the first thing the agent logs in its report.
+## Voice IDs
 
-## Voice IDs (Kokoro path B)
-
-Default English: `am_michael`. Other options (see `/hyperframes-media` → `references/tts.md`):
+**Kokoro (Path B)** — default `am_michael` for English. Other options (see `/hyperframes-media` → `references/tts.md`):
 
 - English: `am_michael`, `af_heart`, `af_sky`, `af_nova`, `bf_emma`, `bm_george`
-- Non-English: pass `--language <iso>` to `tts` AND use a non-`.en` Whisper model in transcribe
+- Non-English: pass `--voice <id> --lang <iso>` AND the script switches Whisper to `small` + `--language <iso>` for transcribe.
 
-Voice id is recorded in `audio_meta.json["voice_id"]`.
+**ElevenLabs (Path A)** — default voice id `21m00Tcm4TlvDq8ikWAM` (Rachel). Override with `--voice <voice-id-from-elevenlabs-dashboard>`.
 
-## TTS — parallel batch (single Bash call)
+## BGM mood prompt (auto-inferred)
 
-Read narration for each scene from `narrator_scripts.json` (the `script` field). Write all `/tmp/scene_<N>.txt` files in ONE Bash invocation via multi-heredoc, then kick off TTS for each + BGM in parallel.
+The script reads `extraction/shared/tokens.json` (if provided) and looks for industry hints in the token blob. Defaults by industry:
 
-**Kokoro pattern (Path B)**:
+| Heuristic                                                | Default prompt                                                                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `saas / api / cloud / developer / platform / sdk` …      | `"Uplifting corporate tech, bright and modern, gentle piano with synth pads, BPM 110, MAJOR"` |
+| `crypto / nft / web3 / defi / token / blockchain` …      | `"Atmospheric electronic, deep bass, futuristic synths, restrained percussion, BPM 100"`      |
+| `creative / agency / design / studio / art / brand` …    | `"Playful electronic, warm pads, light percussion, BPM 115, MAJOR"`                           |
+| `finance / fintech / bank / payment / invest / wealth` … | `"Calm cinematic, soft strings, restrained percussion, BPM 95"`                               |
+| _(default)_                                              | `"Uplifting corporate tech, bright and modern, gentle piano with synth pads, BPM 110, MAJOR"` |
 
-```bash
-mkdir -p hyperframes/assets/voice
+Override the entire prompt with `--bgm-prompt "..."`. The Lyria recipe at [`lyria-recipe.py`](./lyria-recipe.py) accepts `--prompt / --duration / --output`; tune with `--bpm` (90-110 calm, 110-130 energetic), `--brightness ≥ 0.7` for promotional, `--scale MAJOR` upbeat / `MINOR` somber by editing the recipe call.
 
-# Write all narration files in ONE Bash call — one heredoc per scene id
-cat > /tmp/scene_1.txt <<'EOF'
-<scene 1 script verbatim>
-EOF
-cat > /tmp/scene_2.txt <<'EOF'
-<scene 2 script verbatim>
-EOF
-# ... repeat for every scene in narrator_scripts.json
+## Failure modes (built into the script)
 
-# Parallel TTS (one process per scene) — same Bash invocation as BGM below
-for txt in /tmp/scene_*.txt; do
-  id=$(basename "$txt" .txt)
-  (cd hyperframes && npx hyperframes tts "$txt" \
-    --voice am_michael \
-    --output "assets/voice/$id.wav") &
-done
+| Failure                                                  | Behavior                                                                                                                                                                                      |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$ELEVENLABS_API_KEY` unset OR `import elevenlabs` fails | Auto-fallback to Kokoro.                                                                                                                                                                      |
+| Both providers unavailable                               | The script logs the missing dep and exits 1 with an empty `scenes` map written. Orchestrator decides to skip audio (Phase 4a falls back to `estimatedDuration`) or install the dep and retry. |
+| Single scene TTS fails                                   | Omit that scene from `audio_meta.json["scenes"]`. Other scenes proceed.                                                                                                                       |
+| `$GOOGLE_API_KEY` missing or Lyria fails                 | `"bgm_enabled": false`, `"bgm_path": null`. Voice + transcribe still complete.                                                                                                                |
+| Single scene transcribe fails OR word count 0            | Keep `voicePath` + `voiceDuration`, set `wordsPath: ""`. Downstream effects detect missing word data and avoid `asr-keyword-glow` for that scene.                                             |
 
-# BGM in parallel with TTS (skip block if $GOOGLE_API_KEY unset)
-SKIP_BGM=""
-if [ -n "$GOOGLE_API_KEY" ]; then
-  # Try in order, least invasive first. Falls through to graceful skip if all fail.
-  python3 -c 'import google.genai' 2>/dev/null \
-    || pip install -q google-genai python-dotenv mutagen 2>/dev/null \
-    || pip install -q --break-system-packages google-genai python-dotenv mutagen 2>/dev/null \
-    || pip install -q --user google-genai python-dotenv mutagen 2>/dev/null \
-    || { echo "BGM skipped: cannot install google-genai (try a venv or pipx)" >> context.log; SKIP_BGM=1; }
-
-  if [ -z "$SKIP_BGM" ]; then
-    (python3 "$SKILL_DIR/phases/audio/lyria-recipe.py" \
-      --output hyperframes/assets/bgm.wav \
-      --duration "$TOTAL_S" \
-      --prompt "<brand-mood prompt — see below>") &
-  fi
-fi
-
-wait
-```
-
-`$TOTAL_S` = sum of `estimatedDuration` (parse "4.83s" → 4.83) across all scenes from `narrator_scripts.json`.
-
-**ElevenLabs pattern (Path A)**: use a Python `concurrent.futures.ThreadPoolExecutor` (or `asyncio.gather`) over the scene list. Do NOT issue one sequential `python -c` per scene. Install on demand: `pip install -q elevenlabs mutagen` if missing.
-
-## BGM — brand-mood prompt
-
-Read `extraction/shared/tokens.json` for brand palette + industry hint, then write a one-sentence prompt:
-
-- tech / SaaS → `"Uplifting corporate tech, bright and modern, gentle piano with synth pads"`
-- creative agency → `"Playful electronic, warm pads, light percussion"`
-- finance / serious → `"Calm cinematic, soft strings, restrained percussion"`
-
-Tuning: `--bpm 90-110` calm, `110-130` energetic; `--brightness ≥ 0.7` for promotional; `--scale MAJOR` upbeat, `MINOR` somber.
-
-The Lyria recipe at `phases/audio/lyria-recipe.py` accepts these as CLI flags.
-
-## Transcribe — parallel batch (after TTS)
-
-After every TTS file lands, batch transcribe in ONE Bash invocation:
-
-```bash
-# Model selection — see /hyperframes-media references/transcribe.md "Language Rule"
-#   English voices (am_*, af_*, bf_*, bm_*)  →  small.en
-#   Non-English                              →  small  + --language <iso>
-MODEL=small.en
-
-for vf in hyperframes/assets/voice/scene_*.wav; do
-  [ -e "$vf" ] || continue
-  id=$(basename "$vf" .wav)
-  (cd hyperframes && npx hyperframes transcribe \
-    "assets/voice/$id.wav" \
-    --model "$MODEL" \
-    --output "assets/voice/${id}_words.json") &
-done
-wait
-```
-
-Output shape (CLI writes a flat array):
-
-```json
-[
-  { "id": "w0", "text": "Every", "start": 0.12, "end": 0.38 },
-  { "id": "w1", "text": "day", "start": 0.4, "end": 0.62 }
-]
-```
-
-**Sanity check** before emitting `audio_meta.json`:
-
-```bash
-for f in hyperframes/assets/voice/scene_*_words.json; do
-  [ -e "$f" ] || continue
-  count=$(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))))" "$f")
-  echo "$f: $count words"
-done
-```
-
-Word count 0 = silent file or wrong-language model. Investigate before emitting `wordsPath` for that scene.
-
-## Measure durations + emit audio_meta.json
-
-```bash
-for f in hyperframes/assets/voice/scene_*.wav; do
-  printf '%s\t' "$f"
-  ffprobe -v error -show_entries format=duration -of csv=p=0 "$f"
-done
-```
-
-Assemble `audio_meta.json` with the schema above. Compute `total_duration_s = Σ voiceDuration`. Set `bgm_enabled` + `bgm_path` based on whether `hyperframes/assets/bgm.wav` lands non-empty.
-
-## Failure handling — graceful degradation
-
-| Failure                                                                                            | Behavior                                                                                                                                                                   |
-| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Both TTS providers unavailable (no ElevenLabs key + Kokoro deps missing and `pip install` blocked) | Emit `audio_meta.json` with `"scenes": {}` + `"bgm_enabled": false`. STOP and report — orchestrator decides to skip audio (4a falls back to `estimatedDuration`) or abort. |
-| Single scene TTS fails                                                                             | Omit that scene from `audio_meta.json["scenes"]`. Log to `context.log`. Other scenes proceed.                                                                              |
-| `$GOOGLE_API_KEY` missing or Lyria fails                                                           | `"bgm_enabled": false`, `"bgm_path": null`. Pipeline continues without BGM.                                                                                                |
-| Single scene transcribe fails                                                                      | Keep `voicePath` + `voiceDuration`, omit `wordsPath`. Phase 3 / Phase 4 detect missing `wordsPath` and avoid `asr-keyword-glow`.                                           |
-| Word count 0 (silent / wrong language)                                                             | Same as transcribe failure — omit `wordsPath`, log reason.                                                                                                                 |
-
-Never block the pipeline on BGM failure. Block only when no scene got voice at all.
+BGM failure never blocks the pipeline. Only "zero scenes got voice" exits 1.
 
 ## See also
 
 - `/hyperframes-media` → `references/tts.md` (Kokoro voice list, language flag)
 - `/hyperframes-media` → `references/transcribe.md` (Whisper Language Rule, output shape)
 - `/hyperframes-media` → `references/tts-to-captions.md` (full TTS → captions chain context)
-- `phases/audio/lyria-recipe.py` (BGM generator script in this phase dir)
+- [`lyria-recipe.py`](./lyria-recipe.py) — BGM generator script (Google Lyria)
