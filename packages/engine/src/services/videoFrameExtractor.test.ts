@@ -17,6 +17,7 @@ import {
   parseImageElements,
   extractAllVideoFrames,
   createFrameLookupTable,
+  getFrameAtTime,
   resolveProjectRelativeSrc,
   codecMayHaveAlpha,
   decoderForCodec,
@@ -259,6 +260,17 @@ describe("FrameLookupTable", () => {
     const pastEnd = table.getActiveFramePayloads(1.5);
     expect(pastEnd.has("hero")).toBe(true);
     expect(pastEnd.get("hero")!.frameIndex).toBe(29);
+    const nearTimelineEnd = table.getActiveFramePayloads(4.9);
+    expect(nearTimelineEnd.has("hero")).toBe(true);
+    expect(nearTimelineEnd.get("hero")!.frameIndex).toBe(29);
+  });
+
+  it("getFrameAtTime returns last frame for non-looping video past source end", () => {
+    const extracted = fakeExtracted(90, 30); // 3s @ 30fps
+    expect(getFrameAtTime(extracted, 1.0, 0, false, 0)).toBe("frame-30.jpg");
+    expect(getFrameAtTime(extracted, 5.0, 0, false, 0)).toBe("frame-89.jpg");
+    expect(getFrameAtTime(extracted, 10.0, 0, false, 0)).toBe("frame-89.jpg");
+    expect(getFrameAtTime(extracted, -1.0, 0, false, 0)).toBeNull();
   });
 });
 
