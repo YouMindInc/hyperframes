@@ -925,10 +925,10 @@ export function getFrameAtTime(
     localTime %= loopDuration;
   }
   const frameIndex = Math.floor(localTime * extracted.fps);
-  if (loop && frameIndex >= extracted.totalFrames && extracted.totalFrames > 0) {
+  if (frameIndex >= extracted.totalFrames && extracted.totalFrames > 0) {
     return extracted.framePaths.get(extracted.totalFrames - 1) || null;
   }
-  if (frameIndex < 0 || frameIndex >= extracted.totalFrames) return null;
+  if (frameIndex < 0) return null;
   return extracted.framePaths.get(frameIndex) || null;
 }
 
@@ -1035,7 +1035,7 @@ export class FrameLookupTable {
         localTime %= loopDuration;
       }
       const frameIndex = Math.floor(localTime * video.extracted.fps);
-      if (video.loop && frameIndex >= video.extracted.totalFrames) {
+      if (frameIndex >= video.extracted.totalFrames && video.extracted.totalFrames > 0) {
         const framePath = video.extracted.framePaths.get(video.extracted.totalFrames - 1);
         if (framePath) {
           frames.set(videoId, { framePath, frameIndex: video.extracted.totalFrames - 1 });

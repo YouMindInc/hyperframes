@@ -239,7 +239,7 @@ describe("FrameLookupTable", () => {
     expect(table.getActiveFramePayloads(4.5).get("hero")?.frameIndex).toBe(15);
   });
 
-  it("does not hold stale frames for non-looping clips after extracted frames end", () => {
+  it("holds last frame for non-looping clips when source is shorter than data-duration", () => {
     const table = createFrameLookupTable(
       [
         {
@@ -256,7 +256,9 @@ describe("FrameLookupTable", () => {
     );
 
     expect(table.getActiveFramePayloads(0.5).has("hero")).toBe(true);
-    expect(table.getActiveFramePayloads(1.5).has("hero")).toBe(false);
+    const pastEnd = table.getActiveFramePayloads(1.5);
+    expect(pastEnd.has("hero")).toBe(true);
+    expect(pastEnd.get("hero")!.frameIndex).toBe(29);
   });
 });
 
