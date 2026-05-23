@@ -21,7 +21,7 @@ import {
   type ResolvedDuration,
   type UnresolvedElement,
 } from "@hyperframes/core";
-import { inlineSubCompositions as inlineSubCompositionsShared } from "@hyperframes/core/compiler";
+import { inlineSubCompositions as inlineSubCompositionsShared, stripEmbeddedRuntimeScripts } from "@hyperframes/core/compiler";
 import { extractMediaMetadata, extractAudioMetadata } from "../utils/ffprobe.js";
 import { isPathInside, toExternalAssetKey } from "../utils/paths.js";
 import {
@@ -933,8 +933,9 @@ export async function compileForRender(
     /(<(?:video|audio)\b[^>]*?)\s+preload\s*=\s*["']none["']/gi,
     "$1",
   );
-  const renderModeHints = detectRenderModeHints(sanitizedHtml);
-  const hasShaderTransitions = detectShaderTransitionUsage(sanitizedHtml);
+  const htmlForAnalysis = stripEmbeddedRuntimeScripts(sanitizedHtml);
+  const renderModeHints = detectRenderModeHints(htmlForAnalysis);
+  const hasShaderTransitions = detectShaderTransitionUsage(htmlForAnalysis);
 
   const coalescedHtml = await injectDeterministicFontFaces(
     injectTextRenderingRule(
