@@ -8,6 +8,7 @@
 import { spawn } from "child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
+import { trackChildProcess } from "../utils/processTracker.js";
 import { DEFAULT_CONFIG, type EngineConfig } from "../config.js";
 import {
   type GpuEncoder,
@@ -404,6 +405,7 @@ export async function encodeFramesFromDir(
 
   return new Promise((resolve) => {
     const ffmpeg = spawn("ffmpeg", args);
+    trackChildProcess(ffmpeg);
     let stderr = "";
     const onAbort = () => {
       ffmpeg.kill("SIGTERM");
@@ -535,6 +537,7 @@ export async function encodeFramesChunkedConcat(
     const args = buildEncoderArgs(options, inputArgs, chunkPath, gpuEncoder);
     const chunkResult = await new Promise<{ success: boolean; error?: string }>((resolve) => {
       const ffmpeg = spawn("ffmpeg", args);
+      trackChildProcess(ffmpeg);
       let stderr = "";
       ffmpeg.stderr.on("data", (d) => {
         stderr += d.toString();
@@ -578,6 +581,7 @@ export async function encodeFramesChunkedConcat(
   ];
   const concatResult = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     const ffmpeg = spawn("ffmpeg", concatArgs);
+    trackChildProcess(ffmpeg);
     let stderr = "";
     ffmpeg.stderr.on("data", (d) => {
       stderr += d.toString();

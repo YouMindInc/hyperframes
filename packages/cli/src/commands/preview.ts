@@ -28,6 +28,7 @@ import {
   killActiveServers,
   type FindPortResult,
 } from "../server/portUtils.js";
+import { killOrphanedProcesses, killProcessTree } from "../utils/orphanCleanup.js";
 
 export default defineCommand({
   meta: { name: "preview", description: "Start the studio for previewing compositions" },
@@ -94,6 +95,14 @@ export default defineCommand({
       const killed = await killActiveServers(startPort);
       console.log(`\n  Killed ${killed} preview server${killed === 1 ? "" : "s"}.\n`);
       return;
+    }
+
+    // Kill orphaned chrome-headless-shell processes from previous crashed sessions.
+    const orphansKilled = killOrphanedProcesses();
+    if (orphansKilled > 0) {
+      console.log(
+        `  ${c.dim(`Cleaned up ${orphansKilled} orphaned process${orphansKilled === 1 ? "" : "es"} from a previous session.`)}`,
+      );
     }
 
     const rawArg = args.dir;
@@ -249,8 +258,16 @@ async function runDevMode(
     });
   }
 
-  // Wait for child to exit. Ctrl+C sends SIGINT to the entire process group,
-  // so the child (Vite) receives it directly — no need to intercept or forward.
+  // Kill the child's entire process tree on SIGTERM/SIGINT. Ctrl+C sends
+  // SIGINT to the foreground process group (covers the common case), but
+  // `kill <pid>` only targets this process — the child tree (Vite + Chrome)
+  // would survive without explicit cleanup.
+  const shutdown = () => {
+    if (child.pid) killProcessTree(child.pid);
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+
   return new Promise<void>((resolve) => {
     child.on("close", () => resolve());
   });
@@ -348,6 +365,12 @@ async function runLocalStudioMode(
       }
     });
   }
+
+  const shutdown = () => {
+    if (child.pid) killProcessTree(child.pid);
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 
   return new Promise<void>((resolve) => {
     child.on("close", () => resolve());
@@ -477,19 +500,27 @@ async function runEmbeddedMode(
       shuttingDown = true;
       process.off("SIGINT", shutdown);
       process.off("SIGTERM", shutdown);
-      // Close the readline interface so a second Ctrl+C during the grace
-      // period below doesn't re-emit SIGINT and trigger Node's default
-      // exit-130 behaviour, contradicting our intent to exit cleanly.
       rl?.close();
-      // `server.close()` can take a second or two to drain keep-alive
-      // connections; surface progress so the terminal doesn't look frozen.
       console.log();
       console.log(`  ${c.dim("Shutting down studio...")}`);
-      result.server.close(() => resolveRun());
-      // If close() hangs on an open connection, force exit after a short
-      // grace period. Exit 0 because user-initiated Ctrl+C isn't an error
-      // — a non-zero code makes pnpm / npm print ELIFECYCLE.
-      setTimeout(() => process.exit(0), 2000).unref();
+
+      // Kill all child processes (browsers, ffmpeg) before closing the server.
+      // This is the centralized cleanup path — studioServer no longer registers
+      // its own per-process signal handlers.
+      const cleanup = async () => {
+        const { closeThumbnailBrowser } = await import("../server/studioServer.js");
+        const { drainBrowserPool, killTrackedProcesses } = await import("@hyperframes/engine");
+        await closeThumbnailBrowser().catch(() => {});
+        await drainBrowserPool().catch(() => {});
+        killTrackedProcesses();
+      };
+
+      cleanup()
+        .catch(() => {})
+        .finally(() => {
+          result.server.close(() => resolveRun());
+          setTimeout(() => process.exit(0), 3000).unref();
+        });
     };
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
