@@ -156,6 +156,6 @@ describe("insertTimelineAssetIntoSource", () => {
     );
 
     expect(html).toContain('data-composition-id="main">');
-    expect(html).toContain('<img id="photo_asset"');
+    expect(html).toContain('<img id="photo_asset" data-start="0" data-duration="3" />');
   });
 });

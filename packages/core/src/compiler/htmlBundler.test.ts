@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { parseHTML } from "linkedom";
 import { describe, it, expect } from "vitest";
 import { bundleToSingleHtml } from "./htmlBundler";
+import { getHyperframeRuntimeScript } from "../generated/runtime-inline";
 
 function makeTempProject(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), "hf-bundler-test-"));
@@ -80,6 +81,55 @@ describe("bundleToSingleHtml", () => {
     // Must have a non-trivial inlined body (the runtime IIFE is ~150KB).
     const innerLength = (runtimeBlock!.match(/>([\s\S]*?)<\/script>/)?.[1] ?? "").length;
     expect(innerLength).toBeGreaterThan(1000);
+  });
+
+  it("preserves `$&` replace-pattern characters in the inlined runtime body", async () => {
+    // Regression guard: `injectInterceptor` used to insert the runtime via
+    // `sanitized.replace("</head>", `${tag}\n</head>`)`. `String.prototype.replace`'s
+    // second argument is a substitution template — `$&` expands to the matched
+    // substring (here, `</head>`). The minified runtime IIFE contains legitimate
+    // `$&` sequences (e.g. `if(te&&$&!y.hasAttribute(...))`), so the bundler
+    // silently injected stray `</head>` tags inside the runtime, producing a JS
+    // SyntaxError that broke every timeline in the bundle. Switching to the
+    // function-replacer form passes the runtime body through verbatim.
+    // Use a document with an explicit `<head>` so the bundler takes the
+    // `sanitized.replace("</head>", …)` injection path — the only branch that
+    // exercises the substitution-template behavior. Authoring without a
+    // `<head>` falls back to slice+concat (safe but doesn't catch this bug).
+    const dir = makeTempProject({
+      "index.html": `<!doctype html>
+<html><head></head><body>
+  <div data-composition-id="root" data-width="320" data-height="180"></div>
+</body></html>`,
+    });
+
+    const previousUrl = process.env.HYPERFRAME_RUNTIME_URL;
+    delete process.env.HYPERFRAME_RUNTIME_URL;
+    let bundled: string;
+    try {
+      bundled = await bundleToSingleHtml(dir);
+    } finally {
+      if (previousUrl !== undefined) process.env.HYPERFRAME_RUNTIME_URL = previousUrl;
+    }
+
+    const original = getHyperframeRuntimeScript();
+    // Sanity: the built runtime exercises this regression (no `$&` means the
+    // test would tautologically pass even with the broken implementation).
+    expect(original).toContain("$&");
+
+    const runtimeBlock = bundled.match(
+      /<script\b[^>]*data-hyperframes-preview-runtime[^>]*>([\s\S]*?)<\/script>/i,
+    );
+    expect(runtimeBlock).not.toBeNull();
+    const runtimeBody = runtimeBlock?.[1] ?? "";
+    expect(runtimeBody).toBe(original);
+
+    // Defense in depth: the entire bundled document should contain exactly one
+    // `</head>` — the real closing tag. Before the fix, every `$&` in the
+    // runtime expanded to an extra `</head>` inside the inlined IIFE,
+    // producing a `Unexpected token '<'` SyntaxError at parse time.
+    const headCloses = bundled.match(/<\/head>/g) ?? [];
+    expect(headCloses.length).toBe(1);
   });
 
   it("preserves chunk integrity when a chunk ends with a line comment (ASI hazard guard)", async () => {

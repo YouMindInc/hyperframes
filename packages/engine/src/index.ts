@@ -186,6 +186,8 @@ export {
   type RunFfmpegResult,
 } from "./utils/runFfmpeg.js";
 
+export { trackChildProcess, killTrackedProcesses } from "./utils/processTracker.js";
+
 export {
   decodePng,
   decodePngToRgb48le,

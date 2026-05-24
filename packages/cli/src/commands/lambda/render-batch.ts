@@ -28,6 +28,7 @@ import type {
   SerializableDistributedRenderConfig,
   SiteHandle,
 } from "@hyperframes/aws-lambda/sdk";
+import type { CanvasResolution } from "@hyperframes/core";
 import { c } from "../../ui/colors.js";
 import { errorBox } from "../../ui/format.js";
 import {
@@ -35,6 +36,7 @@ import {
   reportVariableIssues,
   validateVariablesAgainstSchema,
 } from "../../utils/variables.js";
+import { warnOnDimensionMismatch } from "./_dimensions.js";
 import { requireStack } from "./state.js";
 
 // Dynamic-import the SDK so tsup keeps it out of the static-import head of
@@ -60,6 +62,8 @@ export interface RenderBatchArgs {
   fps: 24 | 30 | 60;
   width: number;
   height: number;
+  /** See {@link RenderArgs.outputResolution}. */
+  outputResolution?: CanvasResolution;
   format: DistributedFormat;
   codec?: "h264" | "h265";
   quality?: "draft" | "standard" | "high";
@@ -162,6 +166,14 @@ export async function runRenderBatch(args: RenderBatchArgs): Promise<void> {
     process.exit(1);
   }
 
+  warnOnDimensionMismatch({
+    projectDir,
+    cliWidth: args.width,
+    cliHeight: args.height,
+    outputResolution: args.outputResolution,
+    quiet: args.json,
+  });
+
   // Pre-validate every entry's variables against the composition's
   // schema. Mismatches print as warnings; strict mode aborts before any
   // AWS call. Schema is loaded once and reused across entries — a 10k-row
@@ -199,6 +211,7 @@ export async function runRenderBatch(args: RenderBatchArgs): Promise<void> {
     fps: args.fps,
     width: args.width,
     height: args.height,
+    outputResolution: args.outputResolution,
     format: args.format,
     codec: args.codec,
     quality: args.quality,
