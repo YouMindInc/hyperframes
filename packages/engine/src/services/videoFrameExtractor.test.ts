@@ -395,8 +395,10 @@ describe.skipIf(!HAS_FFMPEG)("extractAllVideoFrames on a VFR source", () => {
     expect(result.extracted).toHaveLength(1);
     const frames = readdirSync(join(outputDir, "v1")).filter((f) => f.endsWith(".jpg"));
     // Pre-fix behavior produced ~90 frames (a 25% shortfall).
-    expect(frames.length).toBeGreaterThanOrEqual(119);
-    expect(frames.length).toBeLessThanOrEqual(121);
+    // ±3 tolerance: FFmpeg's VFR→CFR normalization yields slightly different
+    // frame counts across versions (timestamp rounding in the fps filter).
+    expect(frames.length).toBeGreaterThanOrEqual(117);
+    expect(frames.length).toBeLessThanOrEqual(123);
 
     expect(result.phaseBreakdown).toBeDefined();
     expect(result.phaseBreakdown.extractMs).toBeGreaterThan(0);
@@ -656,8 +658,9 @@ describe.skipIf(!HAS_FFMPEG)("extractAllVideoFrames on a VFR source", () => {
     const frames = readdirSync(frameDir)
       .filter((f) => f.endsWith(".jpg"))
       .sort();
-    expect(frames.length).toBeGreaterThanOrEqual(299);
-    expect(frames.length).toBeLessThanOrEqual(301);
+    // ±3 tolerance: same FFmpeg VFR→CFR rounding variance as the mid-segment test.
+    expect(frames.length).toBeGreaterThanOrEqual(297);
+    expect(frames.length).toBeLessThanOrEqual(303);
 
     let prevHash: string | null = null;
     let duplicates = 0;
