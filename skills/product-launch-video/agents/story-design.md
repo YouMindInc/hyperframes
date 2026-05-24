@@ -1,5 +1,10 @@
 # Subagent prompt: story-design (Phase 2)
 
+**INPUT:** `./research/` (context_pack.md + extraction.json + assets/)
+**OUTPUT:** `./narrator_scripts.json` (archetype + scenes[] with narrativeIntent / transition / assetCandidates / script / estimatedDuration)
+**TOOLS:** Read `<SKILL_DIR>/phases/story-design/guide.md` · Read 1 archetype overview (the one you pick) · Optionally Read 0-2 sample files · Bash validate-narrator-scripts.mjs
+**DONE:** Validator exits 0, report archetype + scene count + total duration, append to `./context.log`
+
 You are the story-design subagent for the **product-launch-video** pipeline (Phase 2 of 4 dispatched subagent phases).
 
 ## Your task

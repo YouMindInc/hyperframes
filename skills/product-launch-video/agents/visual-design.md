@@ -1,12 +1,17 @@
 # Subagent prompt: visual-design (Phase 3)
 
+**INPUT:** `./narrator_scripts.json` + `./design-system/design.html` + embedded Effects catalog (in Dispatch context)
+**OUTPUT:** `./section_plan.md` — one `## Scene N: <name>` block per scene with 3 anchors (`Effects` / `Duration` / `Continuity`) + prose body
+**TOOLS:** Read `<SKILL_DIR>/phases/visual-design/guide.md` · Read all 4 `rules/*.md` in parallel · Bash validate-section-plan.mjs
+**DONE:** Validator exits 0, report scene count + total duration + per-scene 1-liner, append to `./context.log`
+
 You are the visual-design subagent for the **product-launch-video** pipeline (Phase 3 of 4 dispatched subagent phases).
 
 ## Your task
 
 Read the phase guide at `<SKILL_DIR>/phases/visual-design/guide.md` (path injected by the orchestrator), then follow its full procedure to design the visual treatment and animation choreography for each scene. Output: `./section_plan.md`.
 
-The guide describes design principles (typography / color / composition / motion), scene quality baseline, the four-anchor contract, and how to write the plan. Detailed design-pillar references live at `phases/visual-design/rules/`.
+The guide describes design principles (typography / color / composition / motion), scene quality baseline, the three-anchor contract, and how to write the plan. Detailed design-pillar references live at `phases/visual-design/rules/`.
 
 ## Pipeline contract (this run's specifics)
 
@@ -16,7 +21,7 @@ The guide describes design principles (typography / color / composition / motion
 - **Two input files**:
   - `./narrator_scripts.json` (from Phase 2) — scenes with `narrativeIntent`, `transition`, `assetCandidates[]` (path + description), `estimatedDuration`; top-level `narrativeArchetype` + `emotionalArc`.
   - `./design-system/design.html` (from Phase 1b) — the single source of truth for palette, typography, motion eases, border-radius scale, and component snippets. **Read §1–§7 to absorb the brand.**
-- **Do NOT read `research/`.** That's Phase 2's territory. Per-scene `**PrimaryAsset:**` comes from picking one of the candidates in the scene's `assetCandidates[]` list (in `narrator_scripts.json`) based on description + composition fit.
+- **Do NOT read `research/`.** That's Phase 2's territory. Reference assets in your prose body using `public/<basename>` paths from each scene's `assetCandidates[]` list (in `narrator_scripts.json`); the Phase 4b worker receives the full candidate list at dispatch.
 - **Do NOT load `hyperframes-animation` or `hyperframes-creative` skills** — Phase 3 only writes effect names from the embedded catalog; the build agent (Phase 4b) opens rule bodies. `design.html` replaces `hyperframes-creative` as the design canon.
 - **Do NOT Read `effects-catalog.md` from disk** — the orchestrator embeds it in your Dispatch context under `## Effects catalog`. Pull effect names from there.
 
@@ -28,7 +33,7 @@ The Dispatch context contains a "Schema validator:" line with an absolute path. 
 node <validator-path> ./section_plan.md
 ```
 
-The validator asserts: (a) every effect name exists in `hyperframes-animation/rules/`, (b) every scene has all four anchors (`Effects` / `Duration` / `Continuity` / `PrimaryAsset`), (c) `Continuity` is `break` or `continue` and scene 1 is `break`, (d) `PrimaryAsset` is `public/<basename>` or `(none)`. Iterate until it exits 0.
+The validator asserts: (a) every effect name exists in `hyperframes-animation/rules/`, (b) every scene has all three anchors (`Effects` / `Duration` / `Continuity`), (c) `Continuity` is `break` or `continue` and scene 1 is `break`. Iterate until it exits 0.
 
 Do not report done until the validator passes.
 

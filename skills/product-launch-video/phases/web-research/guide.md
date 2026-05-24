@@ -4,6 +4,12 @@ Browser-based capture of a marketing/landing page into a research pack: visible 
 
 Pure capture — no LLM call, no analysis. Phase 2 (story-design) does the analysis directly into `narrator_scripts.json`.
 
+## Procedure at a glance
+
+1. Run `capture_web_context.py` with the target URL → writes `./research/`
+2. Verify the 4 artifacts (context_pack.md / extraction.json / screenshot_full.png / assets/)
+3. Report findings + append to `context.log`
+
 ## What the script produces
 
 ```

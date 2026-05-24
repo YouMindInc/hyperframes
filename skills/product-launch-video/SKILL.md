@@ -320,7 +320,7 @@ Phase 4 used to be one monolithic agent writing N scenes serially. It's now `pre
 
 ### Phase 4a — run `prep.mjs` directly (no subagent)
 
-Phase 4a is **deterministic** — `section_plan.md` carries the `**Continuity:**` and `**PrimaryAsset:**` anchors that Phase 3 owns, and `prep.mjs` packs scenes into worker groups by those anchors. No LLM judgment needed; no Agent dispatch. The orchestrator runs one Bash command:
+Phase 4a is **deterministic** — `section_plan.md` carries the `**Continuity:**` anchor that Phase 3 owns, and `prep.mjs` packs scenes into worker groups by it. Assets for each scene come from `narrator_scripts.json`'s `assetCandidates[]` (forwarded verbatim to the Phase 4b worker). No LLM judgment needed; no Agent dispatch. The orchestrator runs one Bash command:
 
 ```bash
 node <SKILL_DIR>/scripts/prep.mjs \
@@ -329,6 +329,7 @@ node <SKILL_DIR>/scripts/prep.mjs \
   $( [ -f audio_meta.json ] && echo "--audio-meta ./audio_meta.json" ) \
   --rules-dir <SKILL_DIR>/../hyperframes-animation/rules \
   --research ./research \
+  --design-system ./design-system \
   --hyperframes ./hyperframes \
   --out ./group_spec.json
 ```
@@ -337,11 +338,12 @@ The script:
 
 1. Scaffolds `hyperframes/` via `npx hyperframes init … --example blank --non-interactive --skip-skills` if the dir is missing.
 2. Recursively copies `research/**/*.{png,jpg,jpeg,webp,svg}` into `hyperframes/public/` with first-wins semantics (collisions skipped, reported). Asset basenames must match the `assetCandidates[].path` values that story-design wrote into `narrator_scripts.json`.
-3. Parses each `## Scene N:` block's four anchors (`Effects` / `Duration` / `Continuity` / `PrimaryAsset`) — missing or malformed anchor → exit 1.
-4. Resolves `effects` ids to `<rules-dir>/<id>.md` and `statSync`-verifies each — missing rule → exit 1.
-5. Merges `audio_meta.json` if present (`voiceDuration` wins over the section_plan duration; captures `voicePath` / `wordsPath` / `bgm_path`; drops paths that aren't on disk).
-6. Groups scenes by `Continuity` (`break` starts a new worker, `continue` extends the current one) with cap = 2 scenes/worker.
-7. Writes `./group_spec.json` and prints a stdout summary.
+3. Copies `design-system/fonts/*.{woff2,woff,ttf,otf}` into `hyperframes/public/fonts/` (if any — Phase 1b's `download-fonts.mjs` writes them there). Phase 4b workers paste design.html's `@font-face` rules into each scene's scoped `<style>`; those rules reference these files.
+4. Parses each `## Scene N:` block's three anchors (`Effects` / `Duration` / `Continuity`) — missing or malformed anchor → exit 1.
+5. Resolves `effects` ids to `<rules-dir>/<id>.md` and `statSync`-verifies each — missing rule → exit 1.
+6. Merges `audio_meta.json` if present (`voiceDuration` wins over the section_plan duration; captures `voicePath` / `wordsPath` / `bgm_path`; drops paths that aren't on disk).
+7. Groups scenes by `Continuity` (`break` starts a new worker, `continue` extends the current one) with cap = 2 scenes/worker.
+8. Writes `./group_spec.json` and prints a stdout summary.
 
 **On exit 0**: read the stdout summary (scenes, groups, total duration, per-group breakdown, anomalies). Surface to user. Proceed to Phase 4b.
 
@@ -374,8 +376,11 @@ For each group g in group_spec.json.groups:
             +  "rule_paths:\n"
     For each p in s.rule_paths:
       Compose += "  - " + p + "\n"
-    Compose += "primary_visual_asset: " + s.primary_visual_asset + "\n"
-            +  "estimatedDuration_s: " + s.estimatedDuration_s + "\n"
+    Compose += "assetCandidates:\n"
+    For each c in s.assetCandidates:
+      Compose += "  - path: " + c.path + "\n"
+              +  "    description: " + c.description + "\n"
+    Compose += "estimatedDuration_s: " + s.estimatedDuration_s + "\n"
             +  "creative_brief: |\n" + indent(s.creative_brief, 2) + "\n"
 
   Agent(

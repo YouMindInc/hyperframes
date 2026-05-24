@@ -4,14 +4,17 @@
 //
 // Reads:  section_plan.md (Phase 3), narrator_scripts.json (Phase 2),
 //         audio_meta.json (Phase 2.5, optional), research/ assets (Phase 1),
+//         design-system/fonts/ (Phase 1b, optional),
 //         hyperframes-animation/rules/*.md (existence only).
-// Writes: hyperframes/public/<assets>, ./group_spec.json.
+// Writes: hyperframes/public/<assets>, hyperframes/public/fonts/<woff2>,
+//         ./group_spec.json.
 //         If hyperframes/ is missing, scaffolds it via `npx hyperframes init`.
 //
 // Usage:
 //   node prep.mjs --section-plan <path> --narrator-scripts <path> \
 //                 --rules-dir <abs> --research <path> --hyperframes <path> \
-//                 --out <path> [--audio-meta <path>] [--scenes-per-group <int>]
+//                 --out <path> [--audio-meta <path>] [--design-system <path>] \
+//                 [--scenes-per-group <int>]
 //
 // Exit 0 = group_spec.json written + summary on stdout.
 // Exit 1 = structural failure (missing anchor / missing rule / bad value) on stderr.
@@ -40,14 +43,13 @@ function die(msg) {
 }
 
 const sectionPlanPath = resolve(flag("section-plan", "./section_plan.md"));
-const narratorScriptsPath = resolve(
-  flag("narrator-scripts", "./narrator_scripts.json"),
-);
+const narratorScriptsPath = resolve(flag("narrator-scripts", "./narrator_scripts.json"));
 const audioMetaPath = flag("audio-meta") ? resolve(flag("audio-meta")) : null;
 const rulesDirArg = flag("rules-dir");
 if (!rulesDirArg) die("Missing required --rules-dir");
 const rulesDir = resolve(rulesDirArg);
 const researchDir = resolve(flag("research", "./research"));
+const designSystemDir = resolve(flag("design-system", "./design-system"));
 const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
 const outPath = resolve(flag("out", "./group_spec.json"));
 const scenesPerGroupMax = parseInt(flag("scenes-per-group", "2"), 10);
@@ -100,17 +102,56 @@ function walk(dir) {
 }
 walk(researchDir);
 
+// ---------- Step 2b: copy design-system/fonts → hyperframes/public/fonts/ ----------
+// Phase 1b's download-fonts.mjs writes self-hosted brand fonts into
+// design-system/fonts/. Copy them into hyperframes/public/fonts/ so the
+// renderer resolves the @font-face rules that index.html declares.
+const fontsSrcDir = join(designSystemDir, "fonts");
+let fontsCopied = 0;
+const FONT_EXTS = new Set([".woff2", ".woff", ".ttf", ".otf"]);
+if (existsSync(fontsSrcDir)) {
+  const fontsDestDir = join(publicDir, "fonts");
+  mkdirSync(fontsDestDir, { recursive: true });
+  for (const ent of readdirSync(fontsSrcDir, { withFileTypes: true })) {
+    if (!ent.isFile()) continue;
+    if (!FONT_EXTS.has(extname(ent.name).toLowerCase())) continue;
+    const src = join(fontsSrcDir, ent.name);
+    const dest = join(fontsDestDir, ent.name);
+    if (!existsSync(dest)) {
+      copyFileSync(src, dest);
+      fontsCopied++;
+    }
+  }
+}
+
+// ---------- Step 2c: extract @font-face block from design.html ----------
+// download-fonts.mjs wraps its injection with two comment anchors. Pull the
+// block out, rewrite url('fonts/<file>') → url('public/fonts/<file>') so the
+// paths resolve against hyperframes/, and emit into group_spec.font_face_css
+// so Phase 4c can paste it into index.html's <head>. @font-face is global by
+// spec and cannot be class-scoped — declaring it once at the document root is
+// the only way it actually loads.
+let fontFaceCss = "";
+const designHtmlPath = join(designSystemDir, "design.html");
+if (existsSync(designHtmlPath)) {
+  const designHtml = readFileSync(designHtmlPath, "utf8");
+  const m = designHtml.match(
+    /\/\*\s*===\s*auto-injected by download-fonts\.mjs\s*===\s*\*\/([\s\S]*?)\/\*\s*===\s*end download-fonts\.mjs block\s*===\s*\*\//,
+  );
+  if (m) {
+    fontFaceCss = m[1].trim().replace(/url\(\s*(['"]?)fonts\//g, "url($1public/fonts/");
+  }
+}
+
 // ---------- Step 3: parse section_plan.md ----------
-if (!existsSync(sectionPlanPath))
-  die(`section_plan.md not found at ${sectionPlanPath}`);
+if (!existsSync(sectionPlanPath)) die(`section_plan.md not found at ${sectionPlanPath}`);
 const planText = readFileSync(sectionPlanPath, "utf8");
 
 const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
 const heads = [...planText.matchAll(sceneHeadRe)];
-if (heads.length === 0)
-  die("no '## Scene N: <name>' headings found in section_plan.md");
+if (heads.length === 0) die("no '## Scene N: <name>' headings found in section_plan.md");
 
-const ANCHORS = ["Effects", "Duration", "Continuity", "PrimaryAsset"];
+const ANCHORS = ["Effects", "Duration", "Continuity"];
 
 function anchorRe(name) {
   return new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`, "m");
@@ -129,13 +170,11 @@ function parseSceneBlock(body, sceneId, isFirst) {
 
   // Effects: ordered backtick-wrapped ids inside [...]
   const effects = [...raw.Effects.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-  if (effects.length === 0)
-    die(`${sceneId}: **Effects:** has no backtick-wrapped ids`);
+  if (effects.length === 0) die(`${sceneId}: **Effects:** has no backtick-wrapped ids`);
 
   // Duration: leading float
   const durM = raw.Duration.match(/[\d.]+/);
-  if (!durM)
-    die(`${sceneId}: **Duration:** could not parse float from "${raw.Duration}"`);
+  if (!durM) die(`${sceneId}: **Duration:** could not parse float from "${raw.Duration}"`);
   const estimatedDuration_s = parseFloat(durM[0]);
   if (!isFinite(estimatedDuration_s) || estimatedDuration_s <= 0)
     die(`${sceneId}: **Duration:** ${estimatedDuration_s} is not a positive float`);
@@ -143,19 +182,8 @@ function parseSceneBlock(body, sceneId, isFirst) {
   // Continuity: break | continue (scene 1 must be break)
   const cont = raw.Continuity.toLowerCase();
   if (cont !== "break" && cont !== "continue")
-    die(
-      `${sceneId}: **Continuity:** must be "break" or "continue" (got "${raw.Continuity}")`,
-    );
-  if (isFirst && cont !== "break")
-    die(`${sceneId}: scene 1 must be **Continuity:** break`);
-
-  // PrimaryAsset: empty or starts with "public/"
-  let primary = raw.PrimaryAsset.trim();
-  if (primary === "" || /^\(?none\)?$/i.test(primary)) primary = "";
-  if (primary && !primary.startsWith("public/"))
-    die(
-      `${sceneId}: **PrimaryAsset:** must start with "public/" or be empty/none (got "${raw.PrimaryAsset}")`,
-    );
+    die(`${sceneId}: **Continuity:** must be "break" or "continue" (got "${raw.Continuity}")`);
+  if (isFirst && cont !== "break") die(`${sceneId}: scene 1 must be **Continuity:** break`);
 
   // creative_brief = everything after the LAST anchor line, verbatim
   const brief = body.slice(lastAnchorEnd).replace(/^\s*\n+/, "");
@@ -164,7 +192,6 @@ function parseSceneBlock(body, sceneId, isFirst) {
     effects,
     estimatedDuration_s,
     continuity: cont,
-    primary_visual_asset: primary,
     creative_brief: brief,
   };
 }
@@ -199,8 +226,7 @@ for (const s of scenes) {
   s.rule_paths = s.effects.map((id) => {
     const p = join(rulesDir, `${id}.md`);
     const st = statRule(p);
-    if (!st || !st.isFile() || st.size === 0)
-      die(`${s.sceneId}: rule file empty or missing: ${p}`);
+    if (!st || !st.isFile() || st.size === 0) die(`${s.sceneId}: rule file empty or missing: ${p}`);
     return p;
   });
 }
@@ -209,18 +235,14 @@ for (const s of scenes) {
 if (!existsSync(narratorScriptsPath))
   die(`narrator_scripts.json not found at ${narratorScriptsPath}`);
 const narratorScripts = JSON.parse(readFileSync(narratorScriptsPath, "utf8"));
-const narratorByNumber = new Map(
-  (narratorScripts.scenes || []).map((s) => [s.sceneNumber, s]),
-);
+const narratorByNumber = new Map((narratorScripts.scenes || []).map((s) => [s.sceneNumber, s]));
 
 let audioMeta = null;
 if (audioMetaPath) {
   if (existsSync(audioMetaPath)) {
     audioMeta = JSON.parse(readFileSync(audioMetaPath, "utf8"));
   } else {
-    console.log(
-      `audio-meta path given but file missing — proceeding without audio`,
-    );
+    console.log(`audio-meta path given but file missing — proceeding without audio`);
   }
 }
 
@@ -232,10 +254,7 @@ for (const s of scenes) {
   if (narrator?.estimatedDuration != null) {
     const m = String(narrator.estimatedDuration).match(/[\d.]+/);
     const narratorDur = m ? parseFloat(m[0]) : NaN;
-    if (
-      isFinite(narratorDur) &&
-      Math.abs(narratorDur - s.estimatedDuration_s) > 0.01
-    ) {
+    if (isFinite(narratorDur) && Math.abs(narratorDur - s.estimatedDuration_s) > 0.01) {
       anomalies.push(
         `${s.sceneId}: duration mismatch — section_plan ${s.estimatedDuration_s}s vs narrator ${narratorDur}s (using section_plan)`,
       );
@@ -258,35 +277,40 @@ for (const s of scenes) {
 
   // disk checks (drop missing voice/words paths to empty + record anomaly)
   if (s.voicePath && !existsSync(join(hyperframesDir, s.voicePath))) {
-    anomalies.push(
-      `${s.sceneId}: voicePath "${s.voicePath}" not on disk — dropping to ""`,
-    );
+    anomalies.push(`${s.sceneId}: voicePath "${s.voicePath}" not on disk — dropping to ""`);
     s.voicePath = "";
   }
   if (s.wordsPath && !existsSync(join(hyperframesDir, s.wordsPath))) {
-    anomalies.push(
-      `${s.sceneId}: wordsPath "${s.wordsPath}" not on disk — dropping to ""`,
-    );
+    anomalies.push(`${s.sceneId}: wordsPath "${s.wordsPath}" not on disk — dropping to ""`);
     s.wordsPath = "";
   }
-  if (
-    s.primary_visual_asset &&
-    !existsSync(join(hyperframesDir, s.primary_visual_asset))
-  ) {
-    anomalies.push(
-      `${s.sceneId}: primary_visual_asset "${s.primary_visual_asset}" not on disk — Phase 4b worker may fail`,
-    );
+  // Check assetCandidates[] — worker may reference any of them as
+  // assets in the scene HTML. Missing assets caused 50s+ of finalize
+  // "hunt-and-cp" debugging in past runs.
+  const narratorScene = narratorByNumber.get(s.sceneNumber);
+  const candidates = Array.isArray(narratorScene?.assetCandidates)
+    ? narratorScene.assetCandidates
+    : [];
+  for (const cand of candidates) {
+    if (
+      cand?.path &&
+      typeof cand.path === "string" &&
+      cand.path.startsWith("public/") &&
+      !existsSync(join(hyperframesDir, cand.path))
+    ) {
+      anomalies.push(
+        `${s.sceneId}: assetCandidate "${cand.path}" listed in narrator_scripts.json but not in hyperframes/public/ — Phase 4b worker may fail`,
+      );
+    }
   }
+  s.assetCandidates = candidates;
 }
 
 // ---------- Step 6: group by continuity, cap=N ----------
 const groups = [];
 let cur = null;
 for (const s of scenes) {
-  const startNew =
-    s.continuity === "break" ||
-    !cur ||
-    cur.scene_ids.length >= scenesPerGroupMax;
+  const startNew = s.continuity === "break" || !cur || cur.scene_ids.length >= scenesPerGroupMax;
   if (startNew) {
     if (cur) groups.push(cur);
     cur = {
@@ -299,7 +323,7 @@ for (const s of scenes) {
   cur.scenes[s.sceneId] = {
     effects: s.effects,
     rule_paths: s.rule_paths,
-    primary_visual_asset: s.primary_visual_asset,
+    assetCandidates: s.assetCandidates,
     estimatedDuration_s: s.estimatedDuration_s,
     voicePath: s.voicePath,
     wordsPath: s.wordsPath,
@@ -309,10 +333,7 @@ for (const s of scenes) {
 if (cur) groups.push(cur);
 
 // ---------- Step 7: emit group_spec.json ----------
-const total_duration_s = scenes.reduce(
-  (sum, s) => sum + s.estimatedDuration_s,
-  0,
-);
+const total_duration_s = scenes.reduce((sum, s) => sum + s.estimatedDuration_s, 0);
 // BGM may still be rendering (audio.mjs spawns Lyria detached and exits before
 // it finishes). Trust audio_meta.bgm_path; Phase 4c does the final on-disk
 // check before emitting the <audio> element.
@@ -337,6 +358,7 @@ const spec = {
   total_scenes: scenes.length,
   total_duration_s: Number(total_duration_s.toFixed(3)),
   bgm_path,
+  font_face_css: fontFaceCss,
   groups,
 };
 
@@ -349,18 +371,19 @@ console.log(
 );
 console.log(`  bgm: ${bgm_path || "(none)"}`);
 console.log(`  assets copied: ${copied} (collisions skipped: ${collisions.length})`);
+console.log(`  fonts copied:  ${fontsCopied}`);
+console.log(
+  `  @font-face block: ${fontFaceCss ? `${fontFaceCss.length}B extracted (Phase 4c will inject into index.html <head>)` : "(none — design.html has no auto-injected block)"}`,
+);
 for (const g of groups) {
-  const items = g.scene_ids
-    .map((id) => `${id}(${g.scenes[id].estimatedDuration_s}s)`)
-    .join(", ");
+  const items = g.scene_ids.map((id) => `${id}(${g.scenes[id].estimatedDuration_s}s)`).join(", ");
   console.log(`  ${g.worker_id}: ${items}`);
 }
 if (collisions.length) {
   console.log(`\nasset collisions (first-wins, skipped duplicates):`);
   for (const c of collisions.slice(0, 5))
     console.log(`  ${basename(c.kept)} ← skipped ${c.skipped}`);
-  if (collisions.length > 5)
-    console.log(`  …and ${collisions.length - 5} more`);
+  if (collisions.length > 5) console.log(`  …and ${collisions.length - 5} more`);
 }
 if (anomalies.length) {
   console.log(`\nanomalies (non-fatal):`);

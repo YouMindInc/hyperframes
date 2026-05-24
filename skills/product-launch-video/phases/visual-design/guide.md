@@ -2,6 +2,12 @@
 
 The visual layer of a promotional video. Given the story (from Phase 2 — `narrator_scripts.json`) and the extracted brand design system (from Phase 1b — `design-system/design.html`), design the visual treatment and animation choreography for each scene. Output: `section_plan.md`.
 
+## Procedure at a glance
+
+1. Read `narrator_scripts.json` + `design-system/design.html` (§1–§7) + all 4 `rules/*.md` (issue all Reads in parallel — every scene needs all four pillars)
+2. For each scene: pick 4-7 effects from the embedded catalog, decide Continuity (`break`/`continue`), write 3-anchor block + prose body (8 items). Reference assets from the scene's `assetCandidates[]` in the prose body — the worker gets the full candidate list at dispatch.
+3. Run `node <validator> ./section_plan.md` until exit 0
+
 **Your two inputs are:**
 
 1. `./narrator_scripts.json` — scene list with `narrativeIntent`, `transition`, `assetCandidates`, `estimatedDuration` (per scene); plus top-level `narrativeArchetype` + `emotionalArc`.
@@ -107,7 +113,7 @@ You read TWO files:
 - `sceneNumber` + `sceneName` — used in your `## Scene N: <name>` heading
 - `narrativeIntent.{type, narrativeRole, keyMessage, persuasion, emotionalBeat}` — drives effect/composition choice
 - `transition.{type, description}` — informs Continuity (`break` vs `continue`) + your prose item 8
-- `assetCandidates[]` — your bounded asset pool for `**PrimaryAsset:**`; each candidate has `path` + `description`
+- `assetCandidates[]` — the bounded asset pool for this scene; each candidate has `path` + `description`. Reference these by `public/<basename>` in your prose body (item 3 effect→asset mapping). The full list is dispatched verbatim to the Phase 4b scene worker — you do not need to nominate a single "primary".
 - `estimatedDuration` — strip the trailing `"s"` → float seconds → `**Duration:**`
 
 Top-level `narrativeArchetype` + `emotionalArc` inform pacing decisions across the whole video.
@@ -136,7 +142,6 @@ One section per scene, in scene order. Each scene block has a **strict header co
 **Effects:** [`<rule-id>`, `<rule-id>`, `<rule-id>`]
 **Duration:** <X.XXs>
 **Continuity:** break | continue
-**PrimaryAsset:** public/<filename> | (none)
 
 <free-prose body — see "Prose contents" below>
 ```
@@ -146,13 +151,13 @@ Rules:
 - **`**Effects:**` line** — 4-7 backtick-wrapped rule ids, comma-separated, inside square brackets. Every id must appear in the embedded catalog. The order matters: it's the timeline-layering order Phase 4 workers will use.
 - **`**Duration:**` line** — float seconds, parsed from this scene's `estimatedDuration` in `narrator_scripts.json` (strip the trailing `"s"` → number).
 - **`**Continuity:**` line** — `break` (this scene is a hard visual cut from the previous one — full subject change, palette flip, deliberate narrative pivot) or `continue` (same hero asset / palette beat / narrative arc as the previous scene). **Scene 1 is always `break`.** Phase 4a uses this to pack `continue` runs into the same worker (cap = 2 scenes per worker); a `break` always starts a new worker. Decide based on the transition you spec in prose body item 8 — `hard cut` / `jump cut` ↔ `break`; `cut-the-curve` / `morph` / `scale+fade` over the same asset ↔ `continue`.
-- **`**PrimaryAsset:**` line** — the `public/<basename>` path of this scene's focal visual (the one that covers ≥40% of canvas, per the composition rules). **Pick it from the scene's `assetCandidates[]` list in `narrator_scripts.json`** — that is the bounded asset pool story-design assembled for this scene. Read each candidate's `description` field and choose the one that best fits the composition template you'll use. If a scene's `assetCandidates` is `[]`, that's a deliberate text-only scene — use `(none)`. **Do not invent paths or pick basenames you didn't see in `assetCandidates`** — Phase 4a's `prep.mjs` will exit 1 on a `public/<basename>` that wasn't copied from research output. Phase 4b worker uses this as the dispatched `primary_visual_asset` — it is the asset the scene's effects are choreographed around.
-- All four lines on their own line, exactly as shown. No surrounding text, no merging onto one line.
-- A scene block missing any of the four anchors is a fatal Phase 3 error — Phase 4a's `prep.mjs` will exit 1 and the orchestrator will re-dispatch Phase 3.
+- All three lines on their own line, exactly as shown. No surrounding text, no merging onto one line.
+- A scene block missing any of the three anchors is a fatal Phase 3 error — Phase 4a's `prep.mjs` will exit 1 and the orchestrator will re-dispatch Phase 3.
+- **Assets are referenced in the prose body, not in an anchor.** Phase 4b workers receive the full `assetCandidates[]` from `narrator_scripts.json` at dispatch — your prose names which candidates each scene uses and how (see "Prose contents" item 3).
 
 ### Prose contents (free form, but cover these)
 
-After the two anchor lines, write a free-prose body that describes:
+After the three anchor lines, write a free-prose body that describes:
 
 1. **Tone and pacing footnote first** — one sentence that names the _feeling_ and the _rhythm_ of this beat ("frustrated, slightly-off comma", "luminous launch-film slow build", "neobrutalist crunch on the 1, then breath"). The archive's strongest plans always name the emotional intent before the mechanic — generic "the scene fades in" is the failure mode.
 2. **Spatial relationships in natural language** — "product screenshot dominates the left two-thirds of the frame with a slight 3D tilt; feature bullets enter from the right with staggered timing." Be specific about composition template (centered / split / layered / triptych / asymmetric / strip), primary asset's canvas-area occupancy (target ≥40%), and safe margins.

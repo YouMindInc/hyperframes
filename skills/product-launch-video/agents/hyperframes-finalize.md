@@ -1,5 +1,10 @@
 # Subagent prompt: hyperframes-finalize (Phase 4c)
 
+**INPUT:** `./group_spec.json` + `hyperframes/compositions/*.html` + `hyperframes/public/` + `hyperframes/assets/` (voice/bgm)
+**OUTPUT:** `hyperframes/index.html` (assembled clip refs + audio tracks) + `hyperframes/snapshots/*.png` + `hyperframes/renders/video.mp4`
+**TOOLS:** Skill `hyperframes-core` · Skill `hyperframes-cli` · Bash `(cd hyperframes && npx hyperframes lint / validate / inspect / snapshot / render)` · Bash `ffprobe`
+**DONE:** mp4 verified (size ≥10KB, ffprobe duration ±0.5s of total_duration_s), report mp4 path + size + duration + quality, append to `./context.log`
+
 You are the finalize subagent for the **product-launch-video** pipeline. Scene workers (Phase 4b) have written every `hyperframes/compositions/<scene-id>.html`; prep (Phase 4a) placed assets under `hyperframes/public/`. **You own the final mp4 end-to-end** — assemble, gate, render, verify.
 
 ## Your task
@@ -40,7 +45,7 @@ Dispatch context contains:
 
 ## Procedure
 
-### Step 1: Verify inputs
+### Step 1: Verify inputs + pre-flight harness
 
 ```bash
 [ -s group_spec.json ] || echo MISSING_GROUP_SPEC
@@ -53,9 +58,44 @@ Parse `group_spec.json`:
 - `total_duration_s` = the value already in `group_spec.json`.
 - For each scene id: confirm `[ -s "hyperframes/compositions/<scene-id>.html" ]`. STOP and list any missing — the orchestrator will re-dispatch the affected worker.
 
+**Pre-flight harness** (catches 4 classes of worker bugs that historically cost 8-13 min of finalize edit-and-retry):
+
+```bash
+node <SKILL_DIR>/scripts/check-compositions.mjs \
+  --hyperframes ./hyperframes \
+  --group-spec ./group_spec.json
+```
+
+`<SKILL_DIR>` is the orchestrator-injected absolute path of the product-launch-video skill directory.
+
+The harness verifies, per scene:
+
+- root contract: `<div id="root" class="<scene-id>-root" data-composition-id=... data-duration=...>`
+- timeline registration: `window.__timelines["<scene-id>"] = ...` (verbatim scene id)
+- **CSS scope**: no `#root` or `#<scene-id>-root` selectors in `<style>` blocks (must be `.<scene-id>-root` class selectors)
+- **JS scope**: no `#root` / `#<scene-id>-root` / `getElementById("root")` in `<script>` blocks
+- asset references: every `public/...` path in the HTML exists in `hyperframes/public/`
+- forbidden patterns: no CSS `transition:` / `animation:`, no `Date.now()` / `Math.random()` / `performance.now()` / `fetch(` / `repeat: -1`
+- no leading slash in asset paths
+
+**Exit 0 → proceed to Step 2.** Exit 1 → STOP and report the per-scene violation list to the orchestrator. The fix is upstream (re-dispatch the affected worker), not patch-in-finalize.
+
+(Edit-fixing in finalize is allowed only for `lint` / `validate` / `inspect` warnings that the harness did NOT catch — i.e. structural issues that pass these regex checks but fail HyperFrames' runtime validators.)
+
 ### Step 2: Assemble hyperframes/index.html
 
 Set the root composition's `data-duration` to `total_duration_s`.
+
+**Inject the brand `@font-face` block into `<head>`.** `group_spec.json.font_face_css` (a string, may be empty) holds the `@font-face` rules Phase 4a extracted from `design.html` with URLs already rewritten to `url('public/fonts/<file>')`. `@font-face` is global by CSS spec and cannot live inside a scoped `<style>` — declaring it once in `index.html`'s `<head>` is what makes the brand fonts actually load (otherwise Chrome silently falls back to system fonts; `document.fonts.ready` resolves either way, so the failure is invisible until you watch the mp4). When `font_face_css` is non-empty, paste it verbatim inside a `<style>` block in `<head>`, e.g.:
+
+```html
+<style>
+  /* Brand fonts (Phase 4a, from design-system/design.html) */
+  <font_face_css verbatim>
+</style>
+```
+
+If `font_face_css` is empty (no brand fonts were extracted), skip the block — the video will render with system fallbacks, which is acceptable for sites that don't self-host fonts.
 
 For each scene in playback order, with cumulative start `S` (running sum of preceding `estimatedDuration_s`), emit:
 

@@ -99,14 +99,16 @@ for (const s of suspicious) {
 }
 
 // ---- Per-scene anchor validation (Phase 4a contract) ----
-// Every "## Scene N:" block must have all four anchors. Phase 4a's prep.mjs
+// Every "## Scene N:" block must have all three anchors. Phase 4a's prep.mjs
 // reads these deterministically; missing anchors break the build.
 const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
 const heads = [...plan.matchAll(sceneHeadRe)];
-const ANCHORS = ["Effects", "Duration", "Continuity", "PrimaryAsset"];
+const ANCHORS = ["Effects", "Duration", "Continuity"];
 
 if (heads.length === 0) {
-  errors.push("No '## Scene N: <name>' headings found — section_plan must have at least one scene block.");
+  errors.push(
+    "No '## Scene N: <name>' headings found — section_plan must have at least one scene block.",
+  );
 }
 
 for (let i = 0; i < heads.length; i++) {
@@ -139,22 +141,10 @@ for (let i = 0; i < heads.length; i++) {
     }
   }
 
-  if (found.PrimaryAsset != null) {
-    const v = found.PrimaryAsset.trim();
-    const isNone = v === "" || /^\(?none\)?$/i.test(v);
-    if (!isNone && !v.startsWith("public/")) {
-      errors.push(
-        `${sceneId}: **PrimaryAsset:** must start with "public/" or be "(none)" (got "${found.PrimaryAsset}")`,
-      );
-    }
-  }
-
   if (found.Duration != null) {
     const dm = found.Duration.match(/[\d.]+/);
     if (!dm || !(parseFloat(dm[0]) > 0)) {
-      errors.push(
-        `${sceneId}: **Duration:** must be a positive float (got "${found.Duration}")`,
-      );
+      errors.push(`${sceneId}: **Duration:** must be a positive float (got "${found.Duration}")`);
     }
   }
 

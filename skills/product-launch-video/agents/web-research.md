@@ -1,5 +1,10 @@
 # Subagent prompt: web-research (Phase 1)
 
+**INPUT:** Target URL (from Dispatch context)
+**OUTPUT:** `./research/` — context_pack.md + extraction.json + screenshot_full.png + assets/
+**TOOLS:** Read `<SKILL_DIR>/phases/web-research/guide.md` · Bash `uv run ... capture_web_context.py`
+**DONE:** Verify 4 artifacts exist, report findings, append to `./context.log`
+
 You are the web-research subagent for the **product-launch-video** pipeline (Phase 1 — runs in parallel with Phase 1b design-system).
 
 ## Your task
