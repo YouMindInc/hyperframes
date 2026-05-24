@@ -2,6 +2,14 @@
 
 Phase 2.5 is **deterministic** — owned by [`scripts/audio.mjs`](../../scripts/audio.mjs). No subagent. This document is a reference for the script's contract and design choices; not a procedure (the script _is_ the procedure).
 
+## Procedure at a glance (what the script does)
+
+1. Detect TTS provider (ElevenLabs if `$ELEVENLABS_API_KEY` + python `elevenlabs` import OK, else Kokoro)
+2. For each scene in parallel: TTS → Whisper transcribe (chained per-scene, not waiting for siblings)
+3. Spawn Lyria BGM **detached** (if `$GOOGLE_API_KEY` + `--lyria-recipe` set) — does NOT block voice
+4. ffprobe each voice wav → write `audio_meta.json` with real `voiceDuration` per scene
+5. Exit 0 the moment voice + transcribe done; BGM keeps rendering in the background
+
 ## What the script does
 
 1. Reads `narrator_scripts.json`. BGM mood inference looks at the script bodies + `narrativeArchetype` + `emotionalArc` directly — no `tokens.json` side file (Phase 1 web-research writes asset/section data, not styling tokens; styling lives in Phase 1b's `design-system/`).

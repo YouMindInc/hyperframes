@@ -2,6 +2,14 @@
 
 The story layer of a promotional video. Pick a storytelling archetype, design the scene sequence, define each scene's narrative intent, choose a transition for each seam, and write narrator scripts. Output: `narrator_scripts.json`.
 
+## Procedure at a glance
+
+1. Read `research/context_pack.md` end-to-end + skim `screenshot_full.png` + `ls research/assets/`
+2. Pick **one** archetype (5 options below) — read **only that one's** `archetypes/<name>/overview.md`. Optionally read 0-2 of its `<sample>.md` files for modeling, never all of them
+3. Pick hook strategy + design scene sequence + assign 5 narrative fields + transition + assetCandidates + script + estimatedDuration per scene
+4. Write `narrator_scripts.json` using the canonical schema (at the bottom of this guide)
+5. Run `node <validator> ./narrator_scripts.json` until exit 0
+
 ## Core principle
 
 Video narrative is independent from webpage structure. A webpage is an information layout; a video is an emotional journey.
@@ -199,7 +207,7 @@ Phase 1 writes `./research/`. You read: `context_pack.md` (read first — compac
 
 Phase 3 (visual-design) and Phase 4b (scene workers) **never read `research/`** — they consume `narrator_scripts.json` and `section_plan.md` only. That means every visual asset a downstream scene might use must be named on the scene in `narrator_scripts.json`.
 
-For each scene, list one or more `assetCandidates` — visual assets that fit the scene's narrative intent. visual-design picks one for the `**PrimaryAsset:**` anchor based on composition fit; workers may reference others as supporting visuals in the creative brief.
+For each scene, list one or more `assetCandidates` — visual assets that fit the scene's narrative intent. The full list is forwarded verbatim to the Phase 4b scene worker (via Phase 4a's `prep.mjs`); visual-design references the candidates in its prose brief, and the worker decides which to make focal vs. supporting based on that brief.
 
 ```jsonc
 "assetCandidates": [
@@ -217,9 +225,9 @@ For each scene, list one or more `assetCandidates` — visual assets that fit th
 Rules:
 
 - **`path`** — exactly `public/<basename>`. The `<basename>` must correspond to a file in `research/assets/` (Phase 4a copies that union into `hyperframes/public/`).
-- **`description`** — short prose (≤25 words) that names what's in the asset, rough dimensions if you know them, and any visual notes (dark/light, dominant color, photo vs. UI vs. icon). visual-design uses this to pick without seeing the file.
-- **At least 1 candidate per scene that has a visual hero.** Title-only / pure-typography scenes may use an empty array `[]` — visual-design will treat that as a text-only scene and set `**PrimaryAsset:** (none)`.
-- **Order matters when there's ambiguity** — put the most narratively-aligned asset first; visual-design tends to take the first one if no other signal favors a different pick.
+- **`description`** — short prose (≤25 words) that names what's in the asset, rough dimensions if you know them, and any visual notes (dark/light, dominant color, photo vs. UI vs. icon). visual-design uses this to decide how each asset fits the scene's composition; the worker uses it to lay the assets out without opening the files.
+- **At least 1 candidate per scene that has a visual hero.** Title-only / pure-typography scenes may use an empty array `[]` — visual-design and the Phase 4b worker treat that as a deliberately text-only scene.
+- **Order matters when there's ambiguity** — put the most narratively-aligned asset first. Downstream picks tend to favor the first entry when the description otherwise leaves the choice open.
 - **Pick from what was actually downloaded.** Cross-reference `research/extraction.json` → asset list or `ls research/assets/`. Inventing a basename that doesn't exist is a Phase 4a fatal error.
 - **A single asset MAY appear across multiple scenes** when narratively the same hero carries through (e.g., scenes 3–7 all showcase the same dashboard).
 
