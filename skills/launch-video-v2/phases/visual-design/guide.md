@@ -23,11 +23,12 @@
 
 **路径固定**：`./design-system/chunks/index.json`（cwd 相对）。这是 Phase 1b 的 `emit-chunks.mjs` 切出来的 manifest，包含 preset 名、source URL、组件清单。
 
-**Plan 对 chunks 只做 3 件事，不读 design.html、不读组件 HTML 本体**：
+**Plan 对 chunks 只做 4 件事，不读 design.html、不读组件 HTML 本体**：
 
 1. Read `chunks/index.json`（必读，~1 KB）→ 拿到 `preset`（neo-brutalism / editorial / saas / …）和 `components[]` 清单（每个 `{id, file}`）—— 决定调色纪律 + 哪些组件可被场景引用
 2. （可选）Read `chunks/tokens.css`（~1 KB）→ 看 `:root` 里实际定义了哪些角色 token（特别是有没有 `--surface` / `--paper-warm` / `--ink` / decoration colors）—— 决定 30% 中间层 / 痛点场景的写法
 3. （可选）Read `chunks/easings.js`（~0.5 KB）→ 看 `EASE.entry / emphasis / exit / drift` 这套 ease 角色键名是否齐全 —— 决定散文用哪些 ease 意图角色
+4. （可选）Read `chunks/voice.md`（~0.5 KB）→ 看本 preset 的 DOM 文字 register —— 散文里可以承诺"本场 headline 走 UPPERCASE 三段式 / 句号断行"等。具体改写是 Phase 4b worker 的事，plan **不抄**改写后的英文文案
 
 **不读**：组件 HTML 本体（`chunks/components/<id>.html`）—— 那是 Phase 4b worker 的事；plan 只看 component **id** 列表来挑场景需要哪些。**不读** legacy `design.html`（已被 chunks 取代）。
 
@@ -39,6 +40,7 @@
 | **用途**（display / body / mono）                   | 具体字体名（`Instrument Serif`） |
 | **意图**（`EASE.entry` / `DUR.med`）                | 具体曲线（`power3.out`）         |
 | **Component id**（`hero` / `chip` / `dot-grid-bg`） | 内部 HTML / `<style>` 块         |
+| **Voice register**（"UPPERCASE 三段式"）            | 改写后的英文文案（worker 的活）  |
 
 ### 不读
 

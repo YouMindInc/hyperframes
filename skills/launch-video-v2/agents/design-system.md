@@ -16,7 +16,7 @@
 
 ## 自检
 
-guide.md 的"产物"小节列了 `design-system/chunks/index.json` 的必备字段。emit-chunks 退 0 后再用一行 `node -e` 抽查 `chunks/index.json` 含 `preset` / `tokens_file` / `easings_file` / `components[]`。失败 → 回去看 build-design.mjs 是否正确写了 `<!-- ROOT-START -->` / `<!-- MOTION-START -->` / `<!-- COMPONENT: <id> -->` 锚点，不要去改 emit-chunks。
+guide.md 的"产物"小节列了 `design-system/chunks/index.json` 的必备字段。emit-chunks 退 0 后再用一行 `node -e` 抽查 `chunks/index.json` 含 `preset` / `tokens_file` / `easings_file` / `voice_file` / `components[]`。失败 → 回去看 build-design.mjs 是否正确写了 `<!-- ROOT-START -->` / `<!-- MOTION-START -->` / `<!-- VOICE-START -->` / `<!-- COMPONENT: <id> -->` 锚点，不要去改 emit-chunks。
 
 ## 完成时报告
 

@@ -245,41 +245,55 @@ const voiceCtaVerbs = (voice?.ctaVerbs || []).map((v) => v.value || v).slice(0, 
 const sampleHeadings = (voice?.sampleHeadings || []).slice(0, 6);
 
 // ═══════════════════ Load all presets ════════════════════
+// Each preset is a directory under style-presets/:
+//   style-presets/<name>/
+//   ├── preset.md              ← preset-meta + §A/§B/§D/§E/§G/§H/§I
+//   └── components/<id>.md     ← one paste-ready component per file (raw body, no markers)
+// The parser synthesizes §F by concatenating every components/*.md file in alphabetical
+// order and wrapping each in <!-- COMPONENT: <id> --> markers, so downstream code
+// (design.html render, emit-chunks anchor scan) sees the same structure as before.
 const presets = (() => {
   if (!fs.existsSync(PRESETS_DIR)) {
     console.error(`✗ No style-presets/ directory at ${PRESETS_DIR}`);
     process.exit(1);
   }
   return fs
-    .readdirSync(PRESETS_DIR)
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => parsePreset(path.join(PRESETS_DIR, f)));
+    .readdirSync(PRESETS_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => parsePreset(path.join(PRESETS_DIR, e.name)));
 })();
 
 if (presets.length === 0) {
-  console.error(`✗ No presets found in ${PRESETS_DIR}`);
+  console.error(
+    `✗ No presets found in ${PRESETS_DIR}. Each preset must be a directory containing preset.md + components/<id>.md files.`,
+  );
   process.exit(1);
 }
 
 // ═══════════════════ Preset parser ═══════════════════════
-function parsePreset(filepath) {
-  const raw = fs.readFileSync(filepath, "utf8");
-  // Frontmatter is now a fenced ```preset-meta { JSON } ``` block at top of file.
+function parsePreset(presetDir) {
+  const presetMd = path.join(presetDir, "preset.md");
+  if (!fs.existsSync(presetMd)) {
+    console.error(`✗ ${presetDir} missing preset.md`);
+    process.exit(1);
+  }
+  const raw = fs.readFileSync(presetMd, "utf8");
+  // Frontmatter is a fenced ```preset-meta { JSON } ``` block at top of file.
   const fmMatch = raw.match(/```preset-meta\n([\s\S]+?)\n```\n([\s\S]*)$/);
   if (!fmMatch) {
-    console.error(`✗ ${filepath} missing \`\`\`preset-meta block`);
+    console.error(`✗ ${presetMd} missing \`\`\`preset-meta block`);
     process.exit(1);
   }
   let meta;
   try {
     meta = JSON.parse(fmMatch[1]);
   } catch (e) {
-    console.error(`✗ ${filepath} preset-meta is invalid JSON: ${e.message}`);
+    console.error(`✗ ${presetMd} preset-meta is invalid JSON: ${e.message}`);
     process.exit(1);
   }
   const body = fmMatch[2];
 
-  // Parse §A-§H sections by heading
+  // Parse §A-§I sections by heading (preset.md never contains §F; we synthesize it below).
   const sections = {};
   const headingRe = /^##\s+§([A-Z])\s+(.+?)$/gm;
   const positions = [];
@@ -293,14 +307,48 @@ function parsePreset(filepath) {
     const content = body.slice(cur.start + cur.headerLen, next ? next.start : body.length).trim();
     sections[cur.key] = { title: cur.title, content };
   }
-
-  // Components: parse <!-- COMPONENT: name --> ... <!-- /COMPONENT --> blocks (in §F)
-  const components = [];
-  const componentRe = /<!--\s*COMPONENT:\s*([\w-]+)\s*-->\s*([\s\S]*?)<!--\s*\/COMPONENT\s*-->/g;
-  const fContent = sections.F?.content || "";
-  while ((m = componentRe.exec(fContent))) {
-    components.push({ name: m[1], block: m[2].trim() });
+  if (sections.F) {
+    console.error(
+      `✗ ${presetMd} declares §F inline — §F is now sourced from ${presetDir}/components/<id>.md files. Move components out and remove the §F heading.`,
+    );
+    process.exit(1);
   }
+
+  // Components: one file per id, filename (sans .md) IS the id. Body is raw HTML.
+  // Order is alphabetical by filename so design.html and chunks are deterministic.
+  const componentsDir = path.join(presetDir, "components");
+  const components = [];
+  if (fs.existsSync(componentsDir)) {
+    const files = fs
+      .readdirSync(componentsDir)
+      .filter((f) => f.endsWith(".md"))
+      .sort();
+    for (const f of files) {
+      const id = f.replace(/\.md$/, "");
+      if (!/^[a-z0-9-]+$/.test(id)) {
+        console.error(`✗ ${componentsDir}/${f}: component id must match [a-z0-9-]+`);
+        process.exit(1);
+      }
+      const block = fs.readFileSync(path.join(componentsDir, f), "utf8").trim();
+      if (!block) {
+        console.error(`✗ ${componentsDir}/${f}: empty component file`);
+        process.exit(1);
+      }
+      components.push({ name: id, block });
+    }
+  }
+  if (components.length === 0) {
+    console.error(`✗ ${presetDir} has no components — add at least one components/<id>.md file`);
+    process.exit(1);
+  }
+  // Synthesize §F so downstream rendering code (renderComponents, emit-chunks anchor scan)
+  // sees the same shape as the legacy single-file format.
+  sections.F = {
+    title: "Components (paste-ready, use brand vars from §B)",
+    content: components
+      .map((c) => `<!-- COMPONENT: ${c.name} -->\n\n${c.block}\n\n<!-- /COMPONENT -->`)
+      .join("\n\n"),
+  };
 
   return {
     name: meta.name,
@@ -694,12 +742,37 @@ ${esc(motionJs)}
 }
 
 // ═══════════════════ Render: §5 Voice ════════════════════
+// Two artifacts live in this section:
+//   1. Human-readable cards (DNA dl + recipe prose) — for design.html browsers.
+//   2. <pre class="ds-code"><!-- VOICE-START --> ... <!-- VOICE-END --></pre>
+//      — the paste-ready block that emit-chunks.mjs extracts to chunks/voice.md.
+//      Phase 4b scene workers consume this when writing on-screen copy
+//      (headlines, chips, buttons) so the brand register hits the DOM text.
+//      Narrator scripts (TTS-bound) are NOT in scope — Phase 2 ignores it.
 function renderVoice() {
-  const recipe = preset.sections.G?.content || "";
+  const recipe = (preset.sections.G?.content || "").trim();
+  const dnaLines = [
+    voiceTone && `- Tone: ${voiceTone}`,
+    voiceHeading && `- Heading style: ${voiceHeading}`,
+    sampleHeadings.length &&
+      "- Sample headings:\n" + sampleHeadings.map((s) => `  - ${s}`).join("\n"),
+  ].filter(Boolean);
+  const voiceMd = `# Voice register: ${preset.name}
+
+## From the site (DNA)
+${dnaLines.join("\n")}
+
+## Transform recipe
+
+${recipe}
+
+> Phase 4b scene workers: apply to DOM text only (headline / chip / button copy).
+> Phase 2 narrator scripts are TTS-bound — do NOT uppercase or strip articles.`;
+
   return `
 <section id="voice" class="ds-section">
   <div class="eyebrow">§5 · Voice (site × style transform)</div>
-  <h2>How to write copy in ${esc(preset.label)} register</h2>
+  <h2>How to write on-screen copy in ${esc(preset.label)} register</h2>
 
   <div class="voice-grid">
     <div>
@@ -725,12 +798,17 @@ function renderVoice() {
       (s) => `
   <div class="voice-pair">
     <div class="voice-in"><span class="voice-tag">IN (site)</span> ${esc(s)}</div>
-    <div class="voice-out"><span class="voice-tag">OUT (apply recipe in Phase 2)</span> <em>recipe applied by LLM in Phase 2 — see §G</em></div>
+    <div class="voice-out"><span class="voice-tag">OUT (Phase 4b applies recipe to DOM copy)</span> <em>worker writes register-shaped HTML text</em></div>
   </div>`,
     )
     .join("")}`
       : ""
   }
+
+  <h3 class="ds-h3" style="margin-top: 32px;">Paste-ready (Phase 4b reads chunks/voice.md)</h3>
+  <pre class="ds-code"><!-- VOICE-START -->
+${esc(voiceMd)}
+<!-- VOICE-END --></pre>
 </section>`;
 }
 
@@ -910,8 +988,8 @@ const html = `<!DOCTYPE html>
   Downstream usage (Phase 4b scene workers):
     - §2: grep <!-- ROOT-START --> .. <!-- ROOT-END --> → paste into scene <style>
     - §4: grep <!-- MOTION-START --> .. <!-- MOTION-END --> → paste into <script>
+    - §5: grep <!-- VOICE-START --> .. <!-- VOICE-END --> → register for DOM text copy
     - §6: grep <!-- COMPONENT: <name> --> .. <!-- /COMPONENT --> → paste by name
-    - §5: voice transform recipe applied by Phase 2 LLM rewrites
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

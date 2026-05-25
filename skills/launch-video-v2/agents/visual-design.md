@@ -10,7 +10,7 @@
 
 - cwd 是项目根。不要单独运行 `cd`，用子 shell。所有路径相对 cwd。
 - 不要 Read `effects-catalog.md`、不要 Read `blueprints-index.md`、不要 Read `research/`、不要 Read blueprint 全文（`blueprints/<id>.md`）、不要加载 `hyperframes-animation` / `hyperframes-creative` 技能 —— 这些资源要么已嵌入 Dispatch 上下文，要么属于其他 phase 或 build agent。
-- **品牌来自 chunks，不读 `design.html`** —— 按 guide.md §1 读 `./design-system/chunks/`；详情（哪些文件必读 / 哪些可选 / 不读什么）见 guide。
+- **品牌来自 chunks，不读 `design.html`** —— 按 guide.md §1 读 `./design-system/chunks/`；详情（哪些文件必读 / 哪些可选 / 不读什么）见 guide。可选读 `chunks/voice.md`（~0.5 KB）来在散文里承诺该场 headline / chip 文字的 register（如"本场 hero 文字走 UPPERCASE 三段式"），具体改写由 Phase 4b worker 做。
 - `audio_meta.json` 若存在：当 `scenes[].duration_s` 与 `narrator_scripts.json` 的 `estimatedDuration` 相差 >10%，`**Duration:**` 锚点优先用 `audio_meta.json` 的值。
 - **Components 锚点（强烈推荐）**：每个场景在必选锚点之后加 `**Components:** [\`<id>\`, ...]`。详细语法、为什么要标、写错的代价见 guide.md §2 的 "Components 锚点" 段。
 
