@@ -28,17 +28,14 @@ const AUTHORED_END_ATTR = "data-hf-authored-end";
 
 export function initSandboxRuntimeModular(): void {
   const state = createRuntimeState();
-  const runtimeWindow = window as Window & {
-    __hfRuntimeTeardown?: (() => void) | null;
-  };
   let runtimeErrorListener: ((event: ErrorEvent) => void) | null = null;
   let runtimeUnhandledRejectionListener: ((event: PromiseRejectionEvent) => void) | null = null;
   const runtimeCleanupCallbacks: Array<() => void> = [];
   const postedDiagnosticKeys = new Set<string>();
   let rootStageDiagnosticRafId: number | null = null;
-  if (typeof runtimeWindow.__hfRuntimeTeardown === "function") {
+  if (typeof window.__hfRuntimeTeardown === "function") {
     try {
-      runtimeWindow.__hfRuntimeTeardown();
+      window.__hfRuntimeTeardown();
     } catch (err) {
       // keep runtime resilient across reinits
       swallow("runtime.init.site1", err);
@@ -1244,6 +1241,10 @@ export function initSandboxRuntimeModular(): void {
     for (const mediaEl of mediaEls) {
       if (metadataBoundMedia.has(mediaEl)) continue;
       metadataBoundMedia.add(mediaEl);
+      const parsedVolume = Number.parseFloat(mediaEl.dataset.volume ?? "");
+      if (Number.isFinite(parsedVolume)) {
+        mediaEl.volume = Math.max(0, Math.min(1, parsedVolume));
+      }
       mediaEl.addEventListener("loadedmetadata", scheduleMetadataDurationHydration);
       mediaEl.addEventListener("durationchange", scheduleMetadataDurationHydration);
 
@@ -1315,6 +1316,7 @@ export function initSandboxRuntimeModular(): void {
       userMuted: state.bridgeMuted,
       userVolume: state.bridgeVolume,
       forceSync,
+      onElementVolume: (el, volume) => webAudio.setElementVolume(el, volume),
       onAutoplayBlocked: () => {
         if (state.mediaAutoplayBlockedPosted) return;
         state.mediaAutoplayBlockedPosted = true;
@@ -1463,8 +1465,9 @@ export function initSandboxRuntimeModular(): void {
       .finally(() => {
         externalCompositionsReady = true;
         bindRootTimelineIfAvailable();
-        runAdapters("discover", state.currentTime);
+        window.__renderReady = true;
         bindMediaMetadataListeners();
+        runAdapters("discover", state.currentTime);
         installAssetFailureDiagnostics();
         applyCaptionOverrides();
         postTimeline();
@@ -1543,8 +1546,7 @@ export function initSandboxRuntimeModular(): void {
   });
 
   window.__player = createPlayerApiCompat(player);
-  (window as Window & { __playerReady?: boolean }).__playerReady = true;
-  (window as Window & { __renderReady?: boolean }).__renderReady = true;
+  window.__playerReady = true;
 
   // Wire analytics event emission through the bridge
   initRuntimeAnalytics(postRuntimeMessage as (payload: unknown) => void);
@@ -1634,6 +1636,12 @@ export function initSandboxRuntimeModular(): void {
     player._timeline = state.capturedTimeline;
   }
 
+  // __renderReady = timeline binding attempted, safe for deterministic seeking.
+  // Set unconditionally: renderSeek works with or without a GSAP timeline
+  // (CSS/WAAPI/Lottie compositions use adapter-only seeking).
+  // fileServer.ts sets this immediately (no timeline to bind in its runtime).
+  window.__renderReady = true;
+
   // When the bundler inlines compositions, data-composition-src is removed so
   // loadExternalCompositions() is skipped. But inline scripts registering child
   // timelines in __timelines haven't executed yet (they run in the browser's next
@@ -1644,8 +1652,8 @@ export function initSandboxRuntimeModular(): void {
       if (bindRootTimelineIfAvailable() && state.capturedTimeline !== prevTimeline) {
         player._timeline = state.capturedTimeline;
       }
-      // Re-run adapters to discover new elements
       runAdapters("discover", state.currentTime);
+      window.__renderReady = true;
       postTimeline();
       postState(true);
     }, 0);
@@ -1664,8 +1672,8 @@ export function initSandboxRuntimeModular(): void {
   ] as RuntimeDeterministicAdapter[];
   patchVideoTextureCompat();
   installRuntimeErrorDiagnostics();
-  runAdapters("discover");
   bindMediaMetadataListeners();
+  runAdapters("discover");
   // ── Single-clock transport ──
   //
   // TransportClock is the sole time authority. GSAP is always paused —
@@ -2159,11 +2167,11 @@ export function initSandboxRuntimeModular(): void {
     }
     state.injectedCompScripts = [];
     state.capturedTimeline = null;
-    if (runtimeWindow.__hfRuntimeTeardown === teardown) {
-      runtimeWindow.__hfRuntimeTeardown = null;
+    if (window.__hfRuntimeTeardown === teardown) {
+      window.__hfRuntimeTeardown = null;
     }
   };
-  runtimeWindow.__hfRuntimeTeardown = teardown;
+  window.__hfRuntimeTeardown = teardown;
   state.beforeUnloadHandler = teardown;
   window.addEventListener("beforeunload", state.beforeUnloadHandler);
 }
