@@ -325,10 +325,13 @@ for (const s of scenes) {
   }
   const tokensAbs = join(designSystemDir, chunksIndex.tokens_file || "chunks/tokens.css");
   const easingsAbs = join(designSystemDir, chunksIndex.easings_file || "chunks/easings.js");
+  const voiceAbs = join(designSystemDir, chunksIndex.voice_file || "chunks/voice.md");
   if (!existsSync(tokensAbs))
     die(`design_chunks: tokens_file "${tokensAbs}" referenced by index.json but missing on disk`);
   if (!existsSync(easingsAbs))
     die(`design_chunks: easings_file "${easingsAbs}" referenced by index.json but missing on disk`);
+  if (!existsSync(voiceAbs))
+    die(`design_chunks: voice_file "${voiceAbs}" referenced by index.json but missing on disk`);
 
   const componentPaths = [];
   for (const cid of s.componentIds) {
@@ -344,6 +347,7 @@ for (const s of scenes) {
   s.design_chunks = {
     tokens_file: tokensAbs,
     easings_file: easingsAbs,
+    voice_file: voiceAbs,
     components: componentPaths,
   };
 }

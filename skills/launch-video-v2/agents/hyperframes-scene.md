@@ -17,6 +17,7 @@
 6. **`design_chunks` 字段（替代旧的 `design.html` 通读）**：
    - `tokens_file` —— 绝对路径，必读，~1 KB。整段 `:root { ... }` 改写为 `[data-composition-id="<scene-id>"] { ... }` 粘进 scene `<style>`
    - `easings_file` —— 绝对路径，必读，~0.5 KB。整段 `const EASE = { ... }; const DUR = { ... }` 粘进 scene `<script>` 顶部
+   - `voice_file` —— 绝对路径，必读，~0.5 KB。DOM 里**所有可见文字**（headline / chip / button / stat label）按这份 register 写：照 recipe（strip articles、UPPERCASE、句号断行等）改写 creative_brief 里出现的英文短句。**不要**改 `<audio>` 关联的 narrator script（Phase 2 已把它定型给 TTS，大写会毁掉语音节奏）
    - `components[]` —— 0-N 个绝对路径（Phase 3 给本 scene 挑选的 design-system 组件 HTML 片段）。**全部 Read**（每份 0.3-1.5 KB），按 §3 token + §5 effect→asset 映射在 DOM 中粘贴并把所有 class 加 `s<N>-` 前缀避免 sibling 串扰
    - **不要读** `./design-system/design.html` —— 已被 chunks 取代；如果 `design_chunks` 为 null（chunks 缺失），回退去读 `./design-system/design.html` 并自报一个 anomaly
 

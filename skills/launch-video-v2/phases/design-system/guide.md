@@ -32,7 +32,7 @@ node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
 
 - **designlang**：`--wait 2000`（JS-heavy 页面，hero 文字还没注入就被截断）
 - **build-design**：`--style <name>`（强制 preset，跳过自动推断）；`--prefix <name>`（auto-detection 失败时）
-- **emit-chunks**：无 flag。失败 = build-design 没写 `<!-- ROOT-START -->` / `<!-- MOTION-START -->` / `<!-- COMPONENT: <id> -->` 锚点，回头排查 build-design 而不是修 chunker。
+- **emit-chunks**：无 flag。失败 = build-design 没写 `<!-- ROOT-START -->` / `<!-- MOTION-START -->` / `<!-- VOICE-START -->` / `<!-- COMPONENT: <id> -->` 锚点，回头排查 build-design 而不是修 chunker。
 
 ---
 
@@ -44,10 +44,11 @@ design-system/
 └── chunks/                  # 下游 phase 按文件粒度逐块加载（~10-15 KB）
     ├── tokens.css           # :root { ... }  ← <!-- ROOT-START --> 块
     ├── easings.js           # EASE / DUR const  ← <!-- MOTION-START --> 块
+    ├── voice.md             # DOM 文字 register  ← <!-- VOICE-START --> 块（Phase 4b 用）
     ├── components/
     │   ├── <id>.html        # 每个 <!-- COMPONENT: <id> --> 块一文件
     │   └── ...
-    └── index.json           # manifest: preset / source / tokens_file / easings_file / components[]
+    └── index.json           # manifest: preset / source / tokens_file / easings_file / voice_file / components[]
 ```
 
 ---
@@ -83,12 +84,13 @@ emit-chunks 形如：
 ✓ design-system/chunks/
   tokens.css         0.6 KB
   easings.js         0.4 KB
+  voice.md           0.5 KB
   components/        13 files
     hero.html  (0.7 KB)
     chip.html  (0.3 KB)
     ...
   index.json         lists 13 components (preset=neo-brutalism)
-  totals             chunks 10.9 KB vs design.html 44.7 KB (~24% of source)
+  totals             chunks 11.4 KB vs design.html 44.7 KB (~26% of source)
 ```
 
 把两段 stdout 原样抄进 agent 的完成汇报。`totals` 这一行很有用 —— 它给的是 chunk 加载预算的上限，下游 phase 读单文件时的 token 成本就直接对应。

@@ -167,9 +167,10 @@ prep 退出 0 后，读 `group_spec.json.groups[]`，得到 worker 数 N。**同
       design_chunks:
         tokens_file: <abs path to chunks/tokens.css>
         easings_file: <abs path to chunks/easings.js>
+        voice_file: <abs path to chunks/voice.md>
         components:
           - <abs path to chunks/components/<id>.html>
-          - ...      # 0-N 个，Phase 3 的 **Components:** 锚点决定；为空时 worker 仍拿 tokens + easings
+          - ...      # 0-N 个，Phase 3 的 **Components:** 锚点决定；为空时 worker 仍拿 tokens + easings + voice
       creative_brief: |
         <Phase 3 该 scene 的 prose body verbatim>
   ```

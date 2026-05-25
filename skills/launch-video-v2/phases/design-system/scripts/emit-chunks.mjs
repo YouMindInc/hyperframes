@@ -16,10 +16,11 @@
  * Outputs:
  *   <dir>/chunks/tokens.css                     — :root { ... } from §ROOT block
  *   <dir>/chunks/easings.js                     — EASE / DUR const from §MOTION block
+ *   <dir>/chunks/voice.md                       — DOM-copy register from §VOICE block
  *   <dir>/chunks/components/<id>.html           — one file per §COMPONENT block
  *   <dir>/chunks/index.json                     — manifest (preset, paths, component list)
  *
- * Exit 0 on success; 1 if design.html or required ROOT/MOTION markers are missing.
+ * Exit 0 on success; 1 if design.html or required ROOT/MOTION/VOICE markers are missing.
  */
 
 import fs from "node:fs";
@@ -72,7 +73,7 @@ const rootMatch = html.match(
 );
 if (!rootMatch) {
   console.error(
-    "✗ emit-chunks: missing <pre class=\"ds-code\"><!-- ROOT-START --> ... <!-- ROOT-END --> block in design.html",
+    '✗ emit-chunks: missing <pre class="ds-code"><!-- ROOT-START --> ... <!-- ROOT-END --> block in design.html',
   );
   process.exit(1);
 }
@@ -85,14 +86,30 @@ const motionMatch = html.match(
 );
 if (!motionMatch) {
   console.error(
-    "✗ emit-chunks: missing <pre class=\"ds-code\"><!-- MOTION-START --> ... <!-- MOTION-END --> block in design.html",
+    '✗ emit-chunks: missing <pre class="ds-code"><!-- MOTION-START --> ... <!-- MOTION-END --> block in design.html',
   );
   process.exit(1);
 }
 const easingsJs = htmlDecode(motionMatch[1]).trim();
 fs.writeFileSync(path.join(chunksDir, "easings.js"), easingsJs + "\n");
 
-// ─── 3. components ────────────────────────────────────────────────
+// ─── 3. voice.md ──────────────────────────────────────────────────
+// §5 ships a paste-ready register for Phase 4b workers writing on-screen copy
+// (headline / chip / button text). Narrator scripts are TTS-bound and stay in
+// Phase 2 — voice.md never enters that path.
+const voiceMatch = html.match(
+  new RegExp(`${PRE_OPEN}<!--\\s*VOICE-START\\s*-->([\\s\\S]*?)<!--\\s*VOICE-END\\s*-->`),
+);
+if (!voiceMatch) {
+  console.error(
+    '✗ emit-chunks: missing <pre class="ds-code"><!-- VOICE-START --> ... <!-- VOICE-END --> block in design.html',
+  );
+  process.exit(1);
+}
+const voiceMd = htmlDecode(voiceMatch[1]).trim();
+fs.writeFileSync(path.join(chunksDir, "voice.md"), voiceMd + "\n");
+
+// ─── 4. components ────────────────────────────────────────────────
 // Component blocks live inside <pre class="ds-code">...</pre> with HTML-entity-
 // escaped markers (so design.html renders the markers as visible text for human
 // readers). Match only when anchored to a ds-code <pre> opener to avoid the
@@ -112,13 +129,11 @@ while ((cm = compRe.exec(html)) !== null) {
 }
 
 if (components.length === 0) {
-  console.error(
-    "✗ emit-chunks: no COMPONENT blocks found — design.html may be malformed or empty",
-  );
+  console.error("✗ emit-chunks: no COMPONENT blocks found — design.html may be malformed or empty");
   process.exit(1);
 }
 
-// ─── 4. index.json (manifest) ─────────────────────────────────────
+// ─── 5. index.json (manifest) ─────────────────────────────────────
 // Parse the AGENT NOTE comment for preset / source URL so downstream phases
 // can route on preset without re-parsing the HTML themselves.
 let preset = null;
@@ -138,21 +153,24 @@ const index = {
   preset,
   tokens_file: "chunks/tokens.css",
   easings_file: "chunks/easings.js",
+  voice_file: "chunks/voice.md",
   components: components.map(({ id, file }) => ({ id, file })),
 };
 fs.writeFileSync(path.join(chunksDir, "index.json"), JSON.stringify(index, null, 2) + "\n");
 
-// ─── 5. report ────────────────────────────────────────────────────
+// ─── 6. report ────────────────────────────────────────────────────
 const fmt = (b) => (b / 1024).toFixed(1);
 const tokenBytes = Buffer.byteLength(tokensCss);
 const easingBytes = Buffer.byteLength(easingsJs);
+const voiceBytes = Buffer.byteLength(voiceMd);
 const compBytes = components.reduce((sum, c) => sum + c.size, 0);
 const designBytes = Buffer.byteLength(html);
-const chunksBytes = tokenBytes + easingBytes + compBytes;
+const chunksBytes = tokenBytes + easingBytes + voiceBytes + compBytes;
 
 console.log(`✓ ${path.relative(process.cwd(), chunksDir)}/`);
 console.log(`  tokens.css         ${fmt(tokenBytes)} KB`);
 console.log(`  easings.js         ${fmt(easingBytes)} KB`);
+console.log(`  voice.md           ${fmt(voiceBytes)} KB`);
 console.log(`  components/        ${components.length} files`);
 for (const c of components) {
   console.log(`    ${c.id}.html  (${fmt(c.size)} KB)`);
