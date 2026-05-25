@@ -7,6 +7,10 @@ description: TypeGPU and raw WebGPU adapter patterns for HyperFrames. Use when c
 
 HyperFrames supports TypeGPU and raw WebGPU through its `typegpu` runtime adapter. The adapter does not own your pipeline. It publishes HyperFrames time and dispatches a seek event so your composition can render the exact GPU frame.
 
+## Render-environment prerequisite (WebGPU + html-in-canvas)
+
+The render engine auto-passes `--enable-unsafe-webgpu` and `--enable-features=CanvasDrawElement` to its Chrome launch args. Stock Chromium and the bundled headless-shell **do not** support WebGPU + `drawElementImage` together — the combo that liquid-glass blocks need (`ios26-liquid-glass`, `macos-tahoe-liquid-glass`, `liquid-glass-*`, `vfx-liquid-glass`). For those blocks, point the engine at Brave (or Chrome canary) by setting `PRODUCER_HEADLESS_SHELL_PATH` to the browser binary before running `npx hyperframes render` / `preview`. Plain TypeGPU layers without HTML-as-texture work in headless-shell — only the html-in-canvas + WebGPU combination needs the override.
+
 ## Contract
 
 - Initialize WebGPU asynchronously (`await navigator.gpu.requestAdapter()`), but register all GSAP tweens **synchronously** — before any `await`. The HyperFrames player reads the timeline immediately at page load.

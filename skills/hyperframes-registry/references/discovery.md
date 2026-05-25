@@ -38,11 +38,124 @@ Where `<type-dir>` is `examples`, `blocks`, or `components`.
 
 ### Blocks
 
-| Name         | Description                                     | Tags                            |
-| ------------ | ----------------------------------------------- | ------------------------------- |
-| `data-chart` | Animated bar + line chart with staggered reveal | data, chart, statistics         |
-| `flowchart`  | Decision tree with SVG connectors and cursor    | diagram, flowchart, interactive |
-| `logo-outro` | Cinematic logo reveal with tagline              | branding, outro, logo           |
+For an always-current list run `npx hyperframes catalog --type block`. The tables below group the 64 blocks shipping today (as of 2026-05-25) by category. **Block name ≠ shader name**: shader-transition blocks (e.g. `domain-warp-dissolve`) wrap a HyperShader runtime whose internal name omits the `-dissolve`/`-warp` suffix — see the showcase HTML installed alongside the block for the canonical name.
+
+#### Shader transitions (14)
+
+Single-shader blocks; each installs one HyperShader runtime + a showcase composition. Use ≤2 per video.
+
+| Name                     | Description                                                              |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `chromatic-radial-split` | Chromatic aberration radial split                                        |
+| `cinematic-zoom`         | Dramatic zoom blur                                                       |
+| `cross-warp-morph`       | Cross-warped morphing                                                    |
+| `domain-warp-dissolve`   | Fractal noise domain warping                                             |
+| `flash-through-white`    | White flash crossfade (rarely a neutral default — see SKILL.md guidance) |
+| `glitch`                 | Digital glitch artifacts                                                 |
+| `gravitational-lens`     | Gravitational lensing distortion                                         |
+| `light-leak`             | Cinematic light leak overlay                                             |
+| `ridged-burn`            | Ridged turbulence burn                                                   |
+| `ripple-waves`           | Concentric ripple wave distortion                                        |
+| `sdf-iris`               | Signed-distance-field iris reveal                                        |
+| `swirl-vortex`           | Swirling vortex distortion                                               |
+| `thermal-distortion`     | Heat-haze thermal distortion                                             |
+| `whip-pan`               | Fast camera whip-pan                                                     |
+
+#### Transition galleries (13)
+
+Showcase compositions grouping multiple CSS / GSAP transition styles by family. Use as reference for picking a CSS scene transition; not meant to embed as-is.
+
+| Name                      | Description                         |
+| ------------------------- | ----------------------------------- |
+| `transitions-3d`          | 3D perspective flip and rotate      |
+| `transitions-blur`        | Blur-based scene transitions        |
+| `transitions-cover`       | Cover / uncover slide               |
+| `transitions-destruction` | Destructive break-apart             |
+| `transitions-dissolve`    | Dissolve and fade                   |
+| `transitions-distortion`  | Warp and distortion                 |
+| `transitions-grid`        | Grid-based tile                     |
+| `transitions-light`       | Light-based glow and flash          |
+| `transitions-mechanical`  | Mechanical shutter and iris         |
+| `transitions-other`       | Misc creative (VHS, gravity, morph) |
+| `transitions-push`        | Push and slide                      |
+| `transitions-radial`      | Radial wipe and reveal              |
+| `transitions-scale`       | Scale and zoom                      |
+
+#### Liquid Glass (7)
+
+WebGPU + html-in-canvas frosted-glass surfaces. **Require Brave / Chrome canary** with WebGPU enabled — set `PRODUCER_HEADLESS_SHELL_PATH` to point at the browser; engine auto-passes `--enable-unsafe-webgpu`. See `/hyperframes-animation` → `adapters/typegpu.md`.
+
+| Name                          | Description                                                                             |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| `ios26-liquid-glass`          | 3D iPhone (GLTF) + iOS 26 home screen, glass app icons, shader wallpaper, notifications |
+| `macos-tahoe-liquid-glass`    | 3D MacBook (GLTF) + macOS Tahoe-style desktop, glass menu bar, Finder, dock             |
+| `liquid-glass-widgets`        | Frosted stat cards, showcase panel, pill chips over aurora shader                       |
+| `liquid-glass-notification`   | Frosted notification cards floating over aurora shader                                  |
+| `liquid-glass-context-menu`   | Frosted context-menu panel drifting over aurora shader                                  |
+| `liquid-glass-media-controls` | Frosted media-control panels spreading over aurora shader                               |
+| `vfx-liquid-glass`            | Bare VFX composition shell for liquid-glass effects                                     |
+
+#### VFX (6)
+
+HTML-in-canvas + WebGL composition blocks. See `/hyperframes-animation` → `adapters/three.md` and `html-in-canvas-patterns` reference for the underlying APIs.
+
+| Name                    | Description                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `vfx-iphone-device`     | GLTF iPhone 15 Pro Max + MacBook Pro with live HTML-in-canvas screens, glass-lens morph, 360° turntable |
+| `vfx-liquid-background` | Organic liquid sim — vertex displacement on subdivided plane, HTML floats above                         |
+| `vfx-magnetic`          | VFX shell (magnetic field-line treatment)                                                               |
+| `vfx-portal`            | VFX shell (portal reveal)                                                                               |
+| `vfx-shatter`           | VFX shell (shatter into fragments)                                                                      |
+| `vfx-text-cursor`       | Cursor glow + chromatic shadow rays + spectral edges on a black stage                                   |
+
+#### Showcases (6)
+
+Story-driven showcase compositions — narrated YouTube-style inserts. Most include bundled SFX.
+
+| Name                       | Description                                                       |
+| -------------------------- | ----------------------------------------------------------------- |
+| `app-showcase`             | Three floating smartphone screens, fitness app product showcase   |
+| `apple-money-count`        | Counter $0 → $10,000, green flash, money-icon burst, SFX          |
+| `blue-sweater-intro-video` | Warm AI-creator intro resolving into an X follow card             |
+| `north-korea-locked-down`  | Map zoom with red scribble circle, locked-down pop-up label       |
+| `nyc-paris-flight`         | Map animation, plane NYC → Paris, marker circle, landing pop, SFX |
+| `vpn-youtube-spot`         | App-store scroll, VPN install flow, SFX                           |
+
+#### Maps + data viz (8)
+
+D3 + GSAP animated geographies and charts.
+
+| Name                               | Description                                                                                        |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `us-map`                           | US choropleth, staggered state reveals, value labels, gradient legend                              |
+| `us-map-bubble`                    | US bubble map — proportional city markers, callouts, connection lines                              |
+| `us-map-flow`                      | US flow map — animated origin-destination arcs                                                     |
+| `us-map-hex`                       | US hex-grid map — each state as equal-weight hex with data fill                                    |
+| `spain-map`                        | Spain choropleth by autonomous community — D3 conic conformal                                      |
+| `world-map`                        | World choropleth + rotating globe inset, D3 Natural Earth                                          |
+| `data-chart`                       | Animated bar + line chart, staggered reveal, NYT-style typography                                  |
+| `flowchart` / `flowchart-vertical` | Decision tree, SVG connectors, sticky-note nodes, cursor + typing correction (vertical = portrait) |
+
+#### Social overlays (7)
+
+Platform-recognizable UI overlays. Stamp on top of a beat or use as a beat closer.
+
+| Name                 | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `instagram-follow`   | Profile card + follow button                     |
+| `tiktok-follow`      | Profile card + follow button                     |
+| `yt-lower-third`     | YouTube subscribe lower third with avatar        |
+| `x-post`             | X/Twitter post card with engagement metrics      |
+| `reddit-post`        | Post card with upvotes and comments              |
+| `spotify-card`       | Now-playing card with album art and progress bar |
+| `macos-notification` | macOS-style banner with app icon and message     |
+
+#### Branding + 3D UI (2)
+
+| Name           | Description                                                         |
+| -------------- | ------------------------------------------------------------------- |
+| `logo-outro`   | Piece-by-piece logo assembly, glow bloom, tagline fade-in, URL pill |
+| `ui-3d-reveal` | Perspective 3D reveal for UI elements                               |
 
 ### Components
 
