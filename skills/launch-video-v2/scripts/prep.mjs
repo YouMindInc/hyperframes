@@ -19,6 +19,13 @@
 //                      "composed" | absent (→ "composed"). Passed through to
 //                      group_spec.json so Phase 4b workers can consult the
 //                      blueprint when wiring effects.
+//   **Components:**  — optional (soft), backtick-wrapped component ids that
+//                      reference design-system/chunks/components/<id>.html.
+//                      Resolved against design-system/chunks/index.json; each
+//                      scene's design_chunks.components[] in group_spec.json
+//                      becomes the absolute paths the Phase 4b worker reads.
+//                      Empty / absent → worker still gets tokens.css + easings.js
+//                      but no component paste-snippets.
 //
 // Usage:
 //   node prep.mjs --section-plan <path> --narrator-scripts <path> \
@@ -165,7 +172,7 @@ const heads = [...planText.matchAll(sceneHeadRe)];
 if (heads.length === 0) die("no '## Scene N: <name>' headings found in section_plan.md");
 
 const ANCHORS = ["Effects", "Duration", "Continuity"];
-const OPTIONAL_ANCHORS = ["Blueprint"];
+const OPTIONAL_ANCHORS = ["Blueprint", "Components"];
 
 function anchorRe(name) {
   return new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`, "m");
@@ -212,6 +219,13 @@ function parseSceneBlock(body, sceneId, isFirst) {
   // 不做格式校验 —— validator 可后补；id 引用是松绑定，build agent 自行处理
   const blueprint = raw.Blueprint || "composed";
 
+  // Components (soft): backtick-wrapped ids referencing
+  // design-system/chunks/components/<id>.html. Existence is checked later
+  // against design-system/chunks/index.json. Absent → empty list.
+  const componentIds = raw.Components
+    ? [...raw.Components.matchAll(/`([^`]+)`/g)].map((m) => m[1])
+    : [];
+
   // creative_brief = everything after the LAST anchor line, verbatim
   const brief = body.slice(lastAnchorEnd).replace(/^\s*\n+/, "");
 
@@ -220,6 +234,7 @@ function parseSceneBlock(body, sceneId, isFirst) {
     estimatedDuration_s,
     continuity: cont,
     blueprint,
+    componentIds,
     creative_brief: brief,
   };
 }
@@ -259,6 +274,80 @@ for (const s of scenes) {
   });
 }
 
+// anomalies collected throughout the rest of the script (non-fatal mismatches:
+// chunks missing → fallback, audio duration drift, voice file dropped, asset
+// candidate not on disk, BGM still rendering). Declared up-front so Step 4b
+// can append to it.
+const anomalies = [];
+
+// ---------- Step 4b: resolve design_chunks ----------
+// Phase 1b's emit-chunks.mjs writes design-system/chunks/{tokens.css, easings.js,
+// components/<id>.html, index.json}. Downstream Phase 4b workers read only the
+// chunks listed in their dispatch — never design.html — cutting per-worker
+// must-read load by ~4× (12 KB design.html → 1-3 KB per chunk file).
+//
+// Resolution policy:
+//   - chunks/index.json missing       → degrade gracefully: design_chunks = null
+//                                       for every scene, log an anomaly, and let
+//                                       the worker fall back to reading design.html.
+//   - index.json present              → every scene gets tokens_file + easings_file.
+//   - scene cites unknown component id → fatal (typo in section_plan that prep
+//                                        can catch up-front beats finalize rounding
+//                                        back to Phase 3 13 minutes later).
+const chunksDir = join(designSystemDir, "chunks");
+const chunksIndexPath = join(chunksDir, "index.json");
+let chunksIndex = null;
+if (existsSync(chunksIndexPath)) {
+  try {
+    chunksIndex = JSON.parse(readFileSync(chunksIndexPath, "utf8"));
+  } catch (e) {
+    anomalies.push(
+      `design-system/chunks/index.json present but unreadable (${e.message}) — workers will fall back to design.html`,
+    );
+  }
+} else {
+  anomalies.push(
+    `design-system/chunks/ missing — Phase 1b's emit-chunks.mjs was not run. Workers will fall back to reading design.html (slower).`,
+  );
+}
+
+let availableComponents = null;
+if (chunksIndex) {
+  availableComponents = new Map(
+    (chunksIndex.components || []).map((c) => [c.id, join(designSystemDir, c.file)]),
+  );
+}
+
+for (const s of scenes) {
+  if (!chunksIndex) {
+    s.design_chunks = null;
+    continue;
+  }
+  const tokensAbs = join(designSystemDir, chunksIndex.tokens_file || "chunks/tokens.css");
+  const easingsAbs = join(designSystemDir, chunksIndex.easings_file || "chunks/easings.js");
+  if (!existsSync(tokensAbs))
+    die(`design_chunks: tokens_file "${tokensAbs}" referenced by index.json but missing on disk`);
+  if (!existsSync(easingsAbs))
+    die(`design_chunks: easings_file "${easingsAbs}" referenced by index.json but missing on disk`);
+
+  const componentPaths = [];
+  for (const cid of s.componentIds) {
+    const abs = availableComponents.get(cid);
+    if (!abs)
+      die(
+        `${s.sceneId}: **Components:** id "${cid}" not in design-system/chunks/index.json. Known: [${[...availableComponents.keys()].join(", ")}]`,
+      );
+    if (!existsSync(abs))
+      die(`${s.sceneId}: component "${cid}" listed in index.json but file missing at ${abs}`);
+    componentPaths.push(abs);
+  }
+  s.design_chunks = {
+    tokens_file: tokensAbs,
+    easings_file: easingsAbs,
+    components: componentPaths,
+  };
+}
+
 // ---------- Step 5: cross-check narrator + audio merge ----------
 if (!existsSync(narratorScriptsPath))
   die(`narrator_scripts.json not found at ${narratorScriptsPath}`);
@@ -273,8 +362,6 @@ if (audioMetaPath) {
     console.log(`audio-meta path given but file missing — proceeding without audio`);
   }
 }
-
-const anomalies = [];
 
 // Duration truth ladder (highest → lowest):
 //   audio_meta.scenes[sceneId].voiceDuration   ← TTS wav 实测 = TRUE TRUTH
@@ -393,6 +480,7 @@ for (const s of scenes) {
     voicePath: s.voicePath,
     wordsPath: s.wordsPath,
     blueprint: s.blueprint,
+    design_chunks: s.design_chunks,
     creative_brief: s.creative_brief,
   };
 }
@@ -441,6 +529,21 @@ console.log(`  fonts copied:  ${fontsCopied}`);
 console.log(
   `  @font-face block: ${fontFaceCss ? `${fontFaceCss.length}B extracted (Phase 4c will inject into index.html <head>)` : "(none — design.html has no auto-injected block)"}`,
 );
+if (chunksIndex) {
+  const totalCompCitations = scenes.reduce(
+    (sum, s) => sum + (s.design_chunks?.components.length || 0),
+    0,
+  );
+  const uniqueComps = new Set();
+  for (const s of scenes) {
+    for (const p of s.design_chunks?.components || []) uniqueComps.add(basename(p, ".html"));
+  }
+  console.log(
+    `  design-chunks:    ${chunksIndex.components?.length || 0} components available, ${totalCompCitations} citation(s) across scenes (unique: ${[...uniqueComps].join(", ") || "none"})`,
+  );
+} else {
+  console.log(`  design-chunks:    none (workers will fall back to design.html)`);
+}
 for (const g of groups) {
   const items = g.scene_ids.map((id) => `${id}(${g.scenes[id].estimatedDuration_s}s)`).join(", ");
   console.log(`  ${g.worker_id}: ${items}`);

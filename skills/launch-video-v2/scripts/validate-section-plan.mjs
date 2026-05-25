@@ -46,13 +46,19 @@ try {
 
 const errors = [];
 let totalEffectsCited = 0;
+let totalComponentsCited = 0;
 
 // ---- Per-scene anchor validation (Phase 4a contract) ----
-// Every "## Scene N:" block must have all three anchors. Phase 4a's prep.mjs
-// reads these deterministically; missing anchors break the build.
+// Every "## Scene N:" block must have all three required anchors. Phase 4a's
+// prep.mjs reads these deterministically; missing anchors break the build.
+// **Components:** and **Blueprint:** are optional (soft) anchors; if present
+// they must parse cleanly. prep.mjs resolves Components ids against
+// design-system/chunks/index.json — this validator only enforces the syntactic
+// shape (backtick-wrapped ids), not the existence check.
 const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
 const heads = [...plan.matchAll(sceneHeadRe)];
 const ANCHORS = ["Effects", "Duration", "Continuity"];
+const OPTIONAL_ANCHORS = ["Blueprint", "Components"];
 
 if (heads.length === 0) {
   errors.push(
@@ -113,6 +119,34 @@ for (let i = 0; i < heads.length; i++) {
       }
     }
   }
+
+  // Optional **Components:** anchor — list of backticked ids referencing
+  // design-system/chunks/components/<id>.html. Existence is enforced by
+  // prep.mjs (which has filesystem access to chunks/index.json); here we only
+  // require well-formed syntax if the anchor is present.
+  for (const a of OPTIONAL_ANCHORS) {
+    const re = new RegExp(`^\\*\\*${a}:\\*\\*\\s*(.*)$`, "m");
+    const am = body.match(re);
+    if (!am) continue;
+    const raw = am[1].trim();
+    if (a === "Components") {
+      const ids = [...raw.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+      if (raw && ids.length === 0) {
+        errors.push(
+          `${sceneId}: **Components:** present but has no backtick-wrapped ids (got "${raw}")`,
+        );
+      }
+      for (const id of ids) {
+        if (!/^[a-z0-9-]+$/.test(id)) {
+          errors.push(
+            `${sceneId}: **Components:** id "${id}" — must be lowercase + digits + dashes (matches design-system/chunks/components/<id>.html)`,
+          );
+        } else {
+          totalComponentsCited++;
+        }
+      }
+    }
+  }
 }
 
 // Sanity: if no scenes had any known effect, complain at the top level (per-scene
@@ -130,6 +164,8 @@ if (errors.length) {
   process.exit(1);
 }
 
+const componentsNote =
+  totalComponentsCited > 0 ? `, ${totalComponentsCited} component citation(s)` : "";
 console.log(
-  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s) — OK`,
+  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote} — OK`,
 );

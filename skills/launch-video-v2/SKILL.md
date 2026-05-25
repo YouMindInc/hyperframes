@@ -7,16 +7,16 @@ metadata:
 
 # launch-video-v2 — dispatch entry
 
-| Phase                | 执行方式                            | Primary artifact                        | 详细流程                              |
-| -------------------- | ----------------------------------- | --------------------------------------- | ------------------------------------- |
-| web-research         | 主 agent 直跑                       | `research/context_pack.md`              | `phases/web-research/guide.md`        |
-| design-system        | subagent（general-purpose）         | `design-system/design.html`             | `agents/design-system.md`             |
-| story-design         | subagent（general-purpose）         | `narrator_scripts.json`                 | `agents/story-design.md`              |
-| audio                | Bash 直跑 audio.mjs                 | `audio_meta.json`                       | `phases/audio/guide.md`（脚本即流程） |
-| visual-design        | subagent（general-purpose）         | `section_plan.md`                       | `agents/visual-design.md`             |
-| prep                 | Bash 直跑 prep.mjs                  | `group_spec.json`                       | `scripts/prep.mjs`（脚本即流程）      |
-| hyperframes-scene    | N×subagent（general-purpose，并行） | `hyperframes/compositions/scene_*.html` | `agents/hyperframes-scene.md`         |
-| hyperframes-finalize | subagent（general-purpose）         | `hyperframes/renders/video.mp4`         | `agents/hyperframes-finalize.md`      |
+| Phase                | 执行方式                            | Primary artifact                                      | 详细流程                              |
+| -------------------- | ----------------------------------- | ----------------------------------------------------- | ------------------------------------- |
+| web-research         | 主 agent 直跑                       | `research/context_pack.md`                            | `phases/web-research/guide.md`        |
+| design-system        | subagent（general-purpose）         | `design-system/design.html` + `design-system/chunks/` | `agents/design-system.md`             |
+| story-design         | subagent（general-purpose）         | `narrator_scripts.json`                               | `agents/story-design.md`              |
+| audio                | Bash 直跑 audio.mjs                 | `audio_meta.json`                                     | `phases/audio/guide.md`（脚本即流程） |
+| visual-design        | subagent（general-purpose）         | `section_plan.md`                                     | `agents/visual-design.md`             |
+| prep                 | Bash 直跑 prep.mjs                  | `group_spec.json`                                     | `scripts/prep.mjs`（脚本即流程）      |
+| hyperframes-scene    | N×subagent（general-purpose，并行） | `hyperframes/compositions/scene_*.html`               | `agents/hyperframes-scene.md`         |
+| hyperframes-finalize | subagent（general-purpose）         | `hyperframes/renders/video.mp4`                       | `agents/hyperframes-finalize.md`      |
 
 ## 前置依赖（首次运行必装）
 
@@ -131,11 +131,12 @@ node <SKILL_DIR>/scripts/prep.mjs \
 1. 如果 `hyperframes/` 不存在 → `npx hyperframes init` scaffold
 2. 复制 `research/**/*.{png,jpg,jpeg,webp,svg}` 到 `hyperframes/public/`
 3. 复制 `design-system/fonts/*` 到 `hyperframes/public/fonts/`（v2 暂无 download-fonts 时静默跳过）
-4. 解析 `section_plan.md` 的 4 个 anchors（Effects / Duration / Continuity / 可选 Blueprint）
+4. 解析 `section_plan.md` 的 anchors：必选 Effects / Duration / Continuity，可选 Blueprint / Components
 5. 校验每个 effect id 都对应 `hyperframes-animation/rules/<id>.md` 存在
-6. 合并 `audio_meta.json` —— `voiceDuration` 覆盖 section_plan duration（差 >10% 时）
-7. 按 `Continuity` 分组（`break` 开新 worker、`continue` 续到 cap=2）
-8. 写 `./group_spec.json` + stdout summary
+6. 解析 `design-system/chunks/index.json` —— 把 Components 锚点引用的 component id 解析为绝对路径；id 不在 index.json 中 → fatal 退出
+7. 合并 `audio_meta.json` —— `voiceDuration` 覆盖 section_plan duration（差 >10% 时）
+8. 按 `Continuity` 分组（`break` 开新 worker、`continue` 续到 cap=2）
+9. 写 `./group_spec.json` + stdout summary（含每 scene 的 design_chunks 块）
 
 退出码：
 
@@ -151,7 +152,7 @@ prep 退出 0 后，读 `group_spec.json.groups[]`，得到 worker 数 N。**同
   ```
   SKILL_DIR: <绝对路径>
   Worker ID: <w1 / w2 / ...>
-  Design system: ./design-system/design.html
+  Design chunks dir: ./design-system/chunks/  # 若 design_chunks: null（chunks 缺失），回退到 ./design-system/design.html
   Scenes:
     - scene_id: scene_<N>
       effects: [...]
@@ -163,11 +164,19 @@ prep 退出 0 后，读 `group_spec.json.groups[]`，得到 worker 数 N。**同
       estimatedDuration_s: <float>
       voicePath: assets/voice/scene_<N>.wav (空字符串就略)
       blueprint: composed | based-on <id> | extended <id>
+      design_chunks:
+        tokens_file: <abs path to chunks/tokens.css>
+        easings_file: <abs path to chunks/easings.js>
+        components:
+          - <abs path to chunks/components/<id>.html>
+          - ...      # 0-N 个，Phase 3 的 **Components:** 锚点决定；为空时 worker 仍拿 tokens + easings
       creative_brief: |
         <Phase 3 该 scene 的 prose body verbatim>
   ```
 
-  每个 worker 的 Scenes 列表只放 group_spec.groups[i].scene_ids 对应的 scene（1-2 个）；字段从 `group_spec.json.groups[i].scenes[<sid>]` verbatim 抄。
+  每个 worker 的 Scenes 列表只放 group_spec.groups[i].scene_ids 对应的 scene（1-2 个）；字段从 `group_spec.json.groups[i].scenes[<sid>]` verbatim 抄。`design_chunks` 也是 verbatim 拷贝 —— prep.mjs 已经把 Phase 3 的 `**Components:**` 锚点解析为绝对路径放到 group_spec.json 里。
+
+  **`design_chunks: null`** 表示 Phase 1b 的 `emit-chunks.mjs` 没跑（或 `chunks/index.json` 缺失）—— prep.mjs 已在 anomalies 里报；worker 在 dispatch 里看到 null 时回退到 `./design-system/design.html` 通读模式（每个 worker 多 ~30-90s）。正常流程不应该走到 fallback。
 
 所有 worker 都返回后，跑预飞 harness：
 

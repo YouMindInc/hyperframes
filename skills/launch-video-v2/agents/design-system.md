@@ -1,40 +1,23 @@
-# Design System（Phase 1b）
+# 子代理提示词：design-system（Phase 1b）
 
-把站点 brand DNA 和一个 style preset 合成为单一的 `design.html`。
+**INPUT:** Dispatch context 给出的 `Target URL`
+**OUTPUT:** `./design-system/design.html` + `./design-system/chunks/`
+**TOOLS:** Bash（跑 designlang / build-design.mjs / emit-chunks.mjs） · Read（仅指南）
+**DONE:** chunks/ 全部就位，build-design + emit-chunks 两段 stdout 直接抄进汇报
 
-## 执行
+你是 **launch-video-v2** Phase 1b 子代理。读取 `<SKILL_DIR>/phases/design-system/guide.md`（路径由编排器注入），按该指南把站点 brand DNA 合成为 `design.html`，再切碎为下游可逐块加载的 `chunks/`。
 
-```bash
-mkdir -p design-system
+## 流水线契约（仅本次运行）
 
-# Step 1 — 抓站点 DNA（designlang 会写 ~30 个文件，build 只读其中 4 个 + brand.html）
-# --header 必带：很多 SaaS 站点按 GeoIP 切换语言，不加会抓回非英语版 hero copy
-npx designlang <url> --out ./design-system --header "Accept-Language:en-US,en;q=0.9,*;q=0.5"
+- cwd 是项目根。不要单独运行 `cd`，用子 shell。所有路径相对 cwd。
+- **不要 Read `design.html` / `chunks/*` 之外的 designlang 中间产物**（`brand.html` / `palette.json` 等是 build-design.mjs 的输入，不是给你看的）。
+- **不要自己设计 palette / typography / preset** —— 三步脚本是确定性的，agent 只跑命令、读 stdout、报告结果；不在中间插手。
+- 三步顺序硬绑定：Step 2 重跑后**必须**重跑 Step 3，否则下游 phase 读到旧 chunks。
 
-# Step 2 — 合成 design.html（自动推断 preset；可用 --style 强制覆盖）
-node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system
-```
+## 自检
 
-异常时可用的 flags（默认不需要）：
+guide.md 的"产物"小节列了 `design-system/chunks/index.json` 的必备字段。emit-chunks 退 0 后再用一行 `node -e` 抽查 `chunks/index.json` 含 `preset` / `tokens_file` / `easings_file` / `components[]`。失败 → 回去看 build-design.mjs 是否正确写了 `<!-- ROOT-START -->` / `<!-- MOTION-START -->` / `<!-- COMPONENT: <id> -->` 锚点，不要去改 emit-chunks。
 
-- designlang：`--wait 2000`（JS-heavy 页面，hero 文字还没注入就被截断）
-- build-design：`--style <name>`（强制 preset，跳过自动推断）；`--prefix <name>`（auto-detection 失败时）
+## 完成时报告
 
-## 解读输出
-
-build script stdout 形如：
-
-```
-✓ design-system/design.html (XX KB)
-  source:   https://www.figma.com/
-  brand:    Figma · flat material · landing intent
-  palette:  #e4ff97 primary · #00b6ff secondary · #c4baff accent
-  fonts:    Instrument Serif display · Inter body · JetBrains Mono mono
-    ! display: 'figmaSans' not on Google Fonts → Instrument Serif
-  preset:   editorial (inferred)
-    scores: editorial=0.45 · neo-brutalism=0.10
-    matched signals: low_saturation, minimal_decoration
-  components: 8 paste-ready
-```
-
-把 stdout 直接抄进 report。
+把 build-design 和 emit-chunks 两段 stdout 原样贴进汇报（preset / palette / fonts / components 数 + chunks 体积 totals）。下游 Phase 3 / Phase 4b 只读 `chunks/`，不再 grep `design.html`，所以 totals 那行直接对应它们的 token 预算上限。
