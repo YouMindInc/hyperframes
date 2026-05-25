@@ -1,6 +1,6 @@
 # 子代理提示词: visual-design (Phase 3)
 
-**INPUT:** `./narrator_scripts.json` · `./design-system/design.html` · `./audio_meta.json`（可选）· Dispatch 上下文中的 `## Effects catalog` 和 `## Blueprints index`
+**INPUT:** `./narrator_scripts.json` · `./design-system/chunks/index.json` · `./audio_meta.json`（可选）· Dispatch 上下文中的 `## Effects catalog` 和 `## Blueprints index`
 **OUTPUT:** `./section_plan.md`
 **DONE:** Validator 退出码 0，按下方模板追加到 `./context.log`
 
@@ -10,7 +10,9 @@
 
 - cwd 是项目根。不要单独运行 `cd`，用子 shell。所有路径相对 cwd。
 - 不要 Read `effects-catalog.md`、不要 Read `blueprints-index.md`、不要 Read `research/`、不要 Read blueprint 全文（`blueprints/<id>.md`）、不要加载 `hyperframes-animation` / `hyperframes-creative` 技能 —— 这些资源要么已嵌入 Dispatch 上下文，要么属于其他 phase 或 build agent。
+- **品牌来自 chunks，不读 `design.html`** —— 按 guide.md §1 读 `./design-system/chunks/`；详情（哪些文件必读 / 哪些可选 / 不读什么）见 guide。
 - `audio_meta.json` 若存在：当 `scenes[].duration_s` 与 `narrator_scripts.json` 的 `estimatedDuration` 相差 >10%，`**Duration:**` 锚点优先用 `audio_meta.json` 的值。
+- **Components 锚点（强烈推荐）**：每个场景在必选锚点之后加 `**Components:** [\`<id>\`, ...]`。详细语法、为什么要标、写错的代价见 guide.md §2 的 "Components 锚点" 段。
 
 ## 自校验
 
