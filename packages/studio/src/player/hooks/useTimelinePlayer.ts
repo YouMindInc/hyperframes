@@ -226,11 +226,12 @@ export function useTimelinePlayer() {
     const tick = () => {
       const adapter = getAdapter();
       if (adapter) {
-        const time = adapter.getTime();
+        const rawTime = adapter.getTime();
         const dur = adapter.getDuration();
+        const time = dur > 0 ? Math.min(rawTime, dur) : rawTime;
         liveTime.notify(time); // direct DOM updates, no React re-render
         const { inPoint, outPoint } = usePlayerStore.getState();
-        const rawLoopEnd = outPoint !== null ? outPoint : dur;
+        const rawLoopEnd = outPoint !== null ? Math.min(outPoint, dur) : dur;
         const rawLoopStart = inPoint !== null ? inPoint : 0;
         const loopEnd = rawLoopStart < rawLoopEnd ? rawLoopEnd : dur;
         const loopStart = rawLoopStart < rawLoopEnd ? rawLoopStart : 0;
@@ -258,7 +259,6 @@ export function useTimelinePlayer() {
   const stopRAFLoop = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
   }, []);
-
   const applyPlaybackRate = useCallback((rate: number) => {
     const iframe = iframeRef.current;
     if (!iframe) return;
@@ -280,7 +280,6 @@ export function useTimelinePlayer() {
       console.warn("[useTimelinePlayer] Could not set playback rate (cross-origin)", err);
     }
   }, []);
-
   const applyPreviewAudioState = useCallback((playbackRateOverride?: number) => {
     const { audioMuted, playbackRate } = usePlayerStore.getState();
     const effectivePlaybackRate = playbackRateOverride ?? playbackRate;
@@ -289,7 +288,6 @@ export function useTimelinePlayer() {
       shouldMutePreviewAudio(audioMuted, effectivePlaybackRate),
     );
   }, []);
-
   const play = useCallback(() => {
     stopRAFLoop();
     stopReverseLoop();
@@ -313,7 +311,6 @@ export function useTimelinePlayer() {
     stopRAFLoop,
     stopReverseLoop,
   ]);
-
   const playBackward = useCallback(
     (rate: number) => {
       stopRAFLoop();
@@ -334,7 +331,7 @@ export function useTimelinePlayer() {
         const elapsed = ((now - startedAt) / 1000) * speed;
         let nextTime = startTime - elapsed;
         const { inPoint, outPoint } = usePlayerStore.getState();
-        const rawLoopEnd = outPoint !== null ? outPoint : duration;
+        const rawLoopEnd = outPoint !== null ? Math.min(outPoint, duration) : duration;
         const rawLoopStart = inPoint !== null ? inPoint : 0;
         const loopEnd = rawLoopStart < rawLoopEnd ? rawLoopEnd : duration;
         const loopStart = rawLoopStart < rawLoopEnd ? rawLoopStart : 0;
@@ -373,7 +370,6 @@ export function useTimelinePlayer() {
       stopReverseLoop,
     ],
   );
-
   const pause = useCallback(() => {
     stopReverseLoop();
     const adapter = getAdapter();
@@ -385,7 +381,6 @@ export function useTimelinePlayer() {
     shuttleSpeedIndexRef.current = 0;
     stopRAFLoop();
   }, [getAdapter, setCurrentTime, setIsPlaying, stopRAFLoop, stopReverseLoop]);
-
   const seek = useCallback(
     (time: number, options?: { keepPlaying?: boolean }) => {
       // Reverse shuttle is always stopped: the RAF reverse tick can't survive
@@ -431,7 +426,6 @@ export function useTimelinePlayer() {
       }
     });
   }, [seek]);
-
   const { playbackKeyDownRef, playbackKeyUpRef, attachIframeShortcutListeners, togglePlay } =
     usePlaybackKeyboard({
       iframeRef,
@@ -460,7 +454,6 @@ export function useTimelinePlayer() {
       attachIframeShortcutListeners,
       applyPreviewAudioState,
     });
-
   const saveSeekPosition = useCallback(() => {
     const adapter = getAdapter();
     pendingSeekRef.current = adapter
@@ -471,19 +464,15 @@ export function useTimelinePlayer() {
     stopReverseLoop();
     setIsPlaying(false);
   }, [getAdapter, stopRAFLoop, setIsPlaying, stopReverseLoop]);
-
   const refreshPlayer = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-
     saveSeekPosition();
-
     const src = iframe.src;
     const url = new URL(src, window.location.origin);
     url.searchParams.set("_t", String(Date.now()));
     iframe.src = url.toString();
   }, [saveSeekPosition]);
-
   const getAdapterRef = useRef(getAdapter);
   getAdapterRef.current = getAdapter;
 

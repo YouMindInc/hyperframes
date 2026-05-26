@@ -6,6 +6,8 @@
  * fallbacks for backward compatibility during migration.
  */
 
+import { totalmem } from "os";
+
 /**
  * Full engine configuration. All fields are wired through the config
  * object; env vars serve as backward-compatible fallbacks resolved
@@ -208,6 +210,24 @@ export const DEFAULT_CONFIG: EngineConfig = {
   debug: false,
 };
 
+function getSystemTotalMb(): number {
+  return Math.floor(totalmem() / (1024 * 1024));
+}
+
+function memoryAdaptiveCacheLimit(): number {
+  const total = getSystemTotalMb();
+  if (total < 4096) return 32;
+  if (total < 8192) return 64;
+  return DEFAULT_CONFIG.frameDataUriCacheLimit;
+}
+
+function memoryAdaptiveCacheBytesMb(): number {
+  const total = getSystemTotalMb();
+  if (total < 4096) return 128;
+  if (total < 8192) return 256;
+  return DEFAULT_CONFIG.frameDataUriCacheBytesLimitMb;
+}
+
 /**
  * Resolve configuration by merging: defaults ← env vars ← explicit overrides.
  * Env vars provide backward compatibility during migration; explicit config
@@ -298,14 +318,11 @@ export function resolveConfig(overrides?: Partial<EngineConfig>): EngineConfig {
     audioGain: envNum("PRODUCER_AUDIO_GAIN", DEFAULT_CONFIG.audioGain),
     frameDataUriCacheLimit: Math.max(
       32,
-      envNum("PRODUCER_FRAME_DATA_URI_CACHE_LIMIT", DEFAULT_CONFIG.frameDataUriCacheLimit),
+      envNum("PRODUCER_FRAME_DATA_URI_CACHE_LIMIT", memoryAdaptiveCacheLimit()),
     ),
     frameDataUriCacheBytesLimitMb: Math.max(
       64,
-      envNum(
-        "PRODUCER_FRAME_DATA_URI_CACHE_BYTES_MB",
-        DEFAULT_CONFIG.frameDataUriCacheBytesLimitMb,
-      ),
+      envNum("PRODUCER_FRAME_DATA_URI_CACHE_BYTES_MB", memoryAdaptiveCacheBytesMb()),
     ),
 
     playerReadyTimeout: envNum(
