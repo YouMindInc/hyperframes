@@ -17,9 +17,7 @@ When handing a project back to the user, use the Studio project URL, not the sou
 http://localhost:<port>/#project/<project-name>
 ```
 
-Use the actual port from the preview output and the project directory name. For example, after `npx hyperframes preview --port 3017` in `codex-openai-video`, report `http://localhost:3017/#project/codex-openai-video`.
-
-Treat `index.html` as source-code context only. It is fine to link as an implementation file, but do not label it as the project or preview surface.
+Use the actual port and project directory name; treat `index.html` as source-code context, not the preview surface. For example, after `npx hyperframes preview --port 3017` in `codex-openai-video`, report `http://localhost:3017/#project/codex-openai-video`.
 
 ## play (lightweight player)
 
@@ -29,7 +27,27 @@ npx hyperframes play ./my-video       # specific project
 npx hyperframes play --port 8080      # custom port
 ```
 
-`play` serves the composition through the embeddable `<hyperframes-player>` web component instead of the full Studio UI. Use it when sharing a preview link or when Studio is heavier than needed (no editor, no panels).
+`play` serves the composition through the embeddable `<hyperframes-player>` web component instead of the full Studio UI. Use it when sharing a preview link or when Studio is heavier than needed (no editor, no panels). `play` reports the plain `http://localhost:<port>` URL — no `#project/<name>` fragment (that's a Studio routing convention only `preview` uses).
+
+### Launching with an external browser (preview + play)
+
+Both `preview` and `play` can open inside an explicit Chromium-compatible browser instead of the OS default. Two use cases: isolated Chromium profile, or external CDP attach (DevTools / Playwright / Puppeteer / browser-MCP). **HyperFrames itself does not own CDP automation** — this only exposes the endpoint; whatever connects to it is your problem. Not to be confused with `--browser-gpu` (a `render` flag controlling Chrome GPU access during capture).
+
+| Flag                      | Type            | Notes                                                                                                                                                                                           |
+| ------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--browser-path`          | path            | Absolute path to a Chromium-compatible executable (`/usr/bin/chromium`, `/Applications/Brave Browser.app/...`).                                                                                 |
+| `--user-data-dir`         | path            | Chromium-compatible profile directory. Requires `--browser-path`. Use a throwaway directory to keep state out of your main profile.                                                             |
+| `--remote-debugging-port` | integer 1-65535 | Open a Chromium CDP endpoint on the given port. **Requires both** `--browser-path` and `--user-data-dir` — refused otherwise, so a CDP endpoint cannot leak into your main profile by accident. |
+
+```bash
+# Open preview in an isolated Chromium profile
+npx hyperframes preview --browser-path /usr/bin/chromium --user-data-dir /tmp/hf-profile
+
+# Same plus a CDP endpoint on :9222 (attach DevTools / Playwright / etc.)
+npx hyperframes play --browser-path /usr/bin/chromium --user-data-dir /tmp/hf-profile --remote-debugging-port 9222
+```
+
+Validation runs before any server boots, so an invalid value exits cleanly without leaving a listening socket behind.
 
 ## render
 
