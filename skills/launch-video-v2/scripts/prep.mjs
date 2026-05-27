@@ -7,9 +7,9 @@
 //         design-system/fonts/ (Phase 1b, optional — silently skipped if
 //         download-fonts.mjs hasn't been ported to v2 yet),
 //         hyperframes-animation/rules/*.md (existence only).
-// Writes: hyperframes/public/<assets>, hyperframes/public/fonts/<woff2>,
-//         ./group_spec.json.
-//         If hyperframes/ is missing, scaffolds it via `npx hyperframes init`.
+// Writes: public/<assets>, public/fonts/<woff2>, ./group_spec.json inside the
+//         HyperFrames project root passed via --hyperframes. The launch-video-v2
+//         orchestrator initializes that project root before calling prep.
 //
 // section_plan.md anchors recognised:
 //   **Effects:**     — required, 4-7 backtick-wrapped rule ids
@@ -43,6 +43,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -67,16 +68,16 @@ if (!rulesDirArg) die("Missing required --rules-dir");
 const rulesDir = resolve(rulesDirArg);
 const researchDir = resolve(flag("research", "./research"));
 const designSystemDir = resolve(flag("design-system", "./design-system"));
-const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
+const hyperframesDir = resolve(flag("hyperframes", "."));
 const outPath = resolve(flag("out", "./group_spec.json"));
 const scenesPerGroupMax = parseInt(flag("scenes-per-group", "2"), 10);
 if (!isFinite(scenesPerGroupMax) || scenesPerGroupMax < 1) {
   die(`--scenes-per-group must be a positive integer (got "${flag("scenes-per-group")}")`);
 }
 
-// ---------- Step 1: bootstrap hyperframes/ ----------
+// ---------- Step 1: bootstrap HyperFrames project root ----------
 if (!existsSync(hyperframesDir)) {
-  console.log(`hyperframes/ missing → npx hyperframes init ${hyperframesDir}`);
+  console.log(`HyperFrames project root missing → npx hyperframes init ${hyperframesDir}`);
   const r = spawnSync(
     "npx",
     [
@@ -91,9 +92,11 @@ if (!existsSync(hyperframesDir)) {
     { stdio: "inherit" },
   );
   if (r.status !== 0) die("npx hyperframes init failed");
+  rmSync(join(hyperframesDir, "AGENTS.md"), { force: true });
+  rmSync(join(hyperframesDir, "CLAUDE.md"), { force: true });
 }
 
-// ---------- Step 2: copy research assets → hyperframes/public/ ----------
+// ---------- Step 2: copy research assets → public/ ----------
 const publicDir = join(hyperframesDir, "public");
 mkdirSync(publicDir, { recursive: true });
 
@@ -101,12 +104,19 @@ mkdirSync(publicDir, { recursive: true });
 // 缺失或被 CDN 改写）。下游 Phase 4b worker 把它们当 <img src> 引用 —— 浏览器会按 magic bytes
 // 渲染，绝大多数能正常显示。把它纳入白名单避免文件被孤立在 research/ 里。
 const ASSET_EXTS = new Set([
-  ".png", ".jpg", ".jpeg", ".webp", ".svg", ".bin",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".svg",
+  ".bin",
   // Video extensions — Phase 3 frequently quotes hero/demo .mp4 from research/.
   // Forgetting these forces Phase 4b workers to substitute poster .webp, losing
   // motion fidelity. Keep in sync with the playable formats hyperframes-core
   // accepts in <video>/clip sub-comps.
-  ".mp4", ".mov", ".webm",
+  ".mp4",
+  ".mov",
+  ".webm",
 ]);
 const collisions = [];
 let copied = 0;
@@ -129,9 +139,9 @@ function walk(dir) {
 }
 walk(researchDir);
 
-// ---------- Step 2b: copy design-system/fonts → hyperframes/public/fonts/ ----------
+// ---------- Step 2b: copy design-system/fonts → public/fonts/ ----------
 // Phase 1b's download-fonts.mjs writes self-hosted brand fonts into
-// design-system/fonts/. Copy them into hyperframes/public/fonts/ so the
+// design-system/fonts/. Copy them into public/fonts/ so the
 // renderer resolves the @font-face rules that index.html declares.
 const fontsSrcDir = join(designSystemDir, "fonts");
 let fontsCopied = 0;
@@ -154,7 +164,7 @@ if (existsSync(fontsSrcDir)) {
 // ---------- Step 2c: extract @font-face block from design.html ----------
 // download-fonts.mjs wraps its injection with two comment anchors. Pull the
 // block out, rewrite url('fonts/<file>') → url('public/fonts/<file>') so the
-// paths resolve against hyperframes/, and emit into group_spec.font_face_css
+// paths resolve against the HyperFrames project root, and emit into group_spec.font_face_css
 // so Phase 4c can paste it into index.html's <head>. @font-face is global by
 // spec and cannot be class-scoped — declaring it once at the document root is
 // the only way it actually loads.
@@ -466,7 +476,7 @@ for (const s of scenes) {
       !existsSync(join(hyperframesDir, cand.path))
     ) {
       anomalies.push(
-        `${s.sceneId}: assetCandidate "${cand.path}" listed in narrator_scripts.json but not in hyperframes/public/ — Phase 4b worker may fail`,
+        `${s.sceneId}: assetCandidate "${cand.path}" listed in narrator_scripts.json but not in public/ — Phase 4b worker may fail`,
       );
     }
   }

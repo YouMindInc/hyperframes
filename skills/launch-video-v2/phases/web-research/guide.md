@@ -1,13 +1,13 @@
 # web-research — how-to
 
-抓 marketing/landing page → 写 `./research/`。纯 capture，不调 LLM。
+抓 marketing/landing page → 写视频项目根下的 `./research/`。纯 capture，不调 LLM。
 
 ## 启动
 
 ```bash
-uv run --with playwright \
+(cd "$PROJECT_DIR" && uv run --with playwright \
   <SKILL_DIR>/phases/web-research/scripts/capture_web_context.py \
-  "<TARGET_URL>" --out ./research --download-assets
+  "<TARGET_URL>" --out ./research --download-assets)
 ```
 
 首次缺 Chromium → 先 `uv run --with playwright playwright install chromium`，再重跑。
@@ -46,7 +46,7 @@ research/
 
 ## 写日志
 
-追加到 `./context.log`：
+追加到视频项目根的 `./context.log`：
 
 ```
 ## web-research [done <ISO timestamp>]
@@ -57,5 +57,5 @@ Notes: <one line>
 
 ## 约束
 
-- cwd = 项目根。**绝不** 单独 `cd`；用子 shell（`(cd research && ls)`）。
+- 所有命令用 `(cd "$PROJECT_DIR" && ...)` subshell；不要单独 `cd`。
 - 只写 `./research/`，不碰 `./design-system/`。

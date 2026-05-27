@@ -2,8 +2,9 @@
 // Phase 2.5 — audio (deterministic replacement for the audio subagent).
 //
 // Reads:  narrator_scripts.json (Phase 2).
-// Writes: hyperframes/assets/voice/scene_*.wav, hyperframes/assets/voice/scene_*_words.json,
-//         ./audio_meta.json, and (eventually) hyperframes/assets/bgm.wav.
+// Writes: assets/voice/scene_*.wav, assets/voice/scene_*_words.json,
+//         ./audio_meta.json, and (eventually) assets/bgm.wav inside the
+//         HyperFrames project root passed via --hyperframes.
 //
 // Performance contract:
 //   * Per-scene TTS is chained into per-scene transcribe (a scene's whisper run
@@ -22,7 +23,7 @@
 // Usage:
 //   node audio.mjs \
 //     --narrator-scripts ./narrator_scripts.json \
-//     --hyperframes ./hyperframes \
+//     --hyperframes . \
 //     --out ./audio_meta.json \
 //     [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
 //     [--voice <id>] [--lang en] \
@@ -59,7 +60,7 @@ function die(msg) {
 }
 
 const narratorPath = resolve(flag("narrator-scripts", "./narrator_scripts.json"));
-const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
+const hyperframesDir = resolve(flag("hyperframes", "."));
 const outPath = resolve(flag("out", "./audio_meta.json"));
 const lyriaRecipe = flag("lyria-recipe") ? resolve(flag("lyria-recipe")) : null;
 const userVoice = typeof flag("voice") === "string" ? flag("voice") : null;
@@ -68,9 +69,9 @@ const noBgm = flag("no-bgm") === true;
 const userProvider = typeof flag("provider") === "string" ? flag("provider") : null;
 const lang = typeof flag("lang") === "string" ? flag("lang") : "en";
 
-// ---------- Step 1: bootstrap hyperframes/ ----------
+// ---------- Step 1: bootstrap HyperFrames project root ----------
 if (!existsSync(hyperframesDir)) {
-  console.log(`hyperframes/ missing → npx hyperframes init ${hyperframesDir}`);
+  console.log(`HyperFrames project root missing → npx hyperframes init ${hyperframesDir}`);
   const r = spawnSync(
     "npx",
     [
@@ -85,6 +86,8 @@ if (!existsSync(hyperframesDir)) {
     { stdio: "inherit" },
   );
   if (r.status !== 0) die("npx hyperframes init failed");
+  rmSync(join(hyperframesDir, "AGENTS.md"), { force: true });
+  rmSync(join(hyperframesDir, "CLAUDE.md"), { force: true });
 }
 const voiceDir = join(hyperframesDir, "assets", "voice");
 mkdirSync(voiceDir, { recursive: true });
@@ -295,7 +298,7 @@ async function ttsScene(s) {
 async function transcribeScene(s) {
   // `npx hyperframes transcribe` writes a fixed `transcript.json` into its
   // --dir. Parallel scenes would collide if they all wrote into
-  // hyperframes/assets/voice/transcript.json, so give each scene its own
+  // assets/voice/transcript.json, so give each scene its own
   // throwaway --dir and move the result into the canonical name afterwards.
   const wavRel = `assets/voice/${s.sceneId}.wav`;
   const model = lang === "en" ? "small.en" : "small";

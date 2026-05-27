@@ -1,9 +1,11 @@
 # 子代理提示词：design-system（Phase 1b）
 
 **INPUT:** `Target URL`
-**OUTPUT:** `./design-system/design.html` + `./design-system/chunks/` + `./design-system/inference.json`
+**OUTPUT:** `<PROJECT_DIR>/design-system/design.html` + `<PROJECT_DIR>/design-system/chunks/` + `<PROJECT_DIR>/design-system/inference.json`
 **TOOLS:** Bash · Read
 **DONE:** chunks/ 就位，汇报含 `preset review:` 块 + 两段 stdout
+
+**Path contract**：Dispatch 给 `PROJECT_DIR`（视频项目根，如 `./videos/heygen-promo`）。所有输出写到 `PROJECT_DIR/design-system/`；Bash 用 `(cd "$PROJECT_DIR" && <guide.md 命令>)` subshell；不在 `PROJECT_DIR` 下建 `hyperframes/` 子目录。
 
 按 `<SKILL_DIR>/phases/design-system/guide.md` §1 的命令模板逐步执行。
 
@@ -11,7 +13,7 @@
 
 1. **Step 1**：跑 designlang
 2. **Step 2a**：跑 `build-design.mjs --no-emit`
-3. **Step 2b**：Read `./design-system/inference.json`，按 guide.md §3 决策表选 chosen preset。capability_gated 选优时若 `auto_install` 非 null 就跑，跑完重跑 Step 2a 验证；`auto_install: null` 改选别的
+3. **Step 2b**：Read `<PROJECT_DIR>/design-system/inference.json`，按 guide.md §3 决策表选 chosen preset。capability_gated 选优时若 `auto_install` 非 null 就在 `PROJECT_DIR` 内跑，跑完重跑 Step 2a 验证；`auto_install: null` 改选别的
 4. **Step 2c**：用 chosen 跑 `build-design.mjs --style <chosen>`
 5. **Step 3**：跑 `emit-chunks.mjs`
 

@@ -28,9 +28,9 @@ Phase 2.5 is **deterministic** — owned by [`scripts/audio.mjs`](../../scripts/
 
 ```
 ./audio_meta.json                                   # index for Phase 4a / 4c
-hyperframes/assets/voice/scene_<N>.wav              # narration audio
-hyperframes/assets/voice/scene_<N>_words.json       # Whisper word-level timestamps (omitted if transcribe failed or count=0)
-hyperframes/assets/bgm.wav                          # background music (lands after audio.mjs exits if Lyria takes longer)
+assets/voice/scene_<N>.wav                          # narration audio
+assets/voice/scene_<N>_words.json                   # Whisper word-level timestamps (omitted if transcribe failed or count=0)
+assets/bgm.wav                                      # background music (lands after audio.mjs exits if Lyria takes longer)
 ```
 
 `audio_meta.json` schema:
@@ -54,7 +54,7 @@ hyperframes/assets/bgm.wav                          # background music (lands af
 }
 ```
 
-- `bgm_pending: true` means Lyria is still rendering when the script exited. `prep.mjs` (Phase 4a) trusts the path; `finalize` (Phase 4c) re-checks `[ -s hyperframes/assets/bgm.wav ]` before emitting the `<audio>` element.
+- `bgm_pending: true` means Lyria is still rendering when the script exited. `prep.mjs` (Phase 4a) trusts the path; `finalize` (Phase 4c) re-checks `[ -s "$PROJECT_DIR/assets/bgm.wav" ]` before emitting the `<audio>` element.
 - `wordsPath` is `""` when transcribe failed or the JSON has zero words. Downstream effects (e.g. `asr-keyword-glow`) detect this and degrade.
 - Scenes whose TTS failed are **omitted from `scenes` entirely** — Phase 4a falls back to `estimatedDuration` for those.
 
@@ -63,7 +63,7 @@ hyperframes/assets/bgm.wav                          # background music (lands af
 ```bash
 node <SKILL_DIR>/scripts/audio.mjs \
   --narrator-scripts ./narrator_scripts.json \
-  --hyperframes ./hyperframes \
+  --hyperframes . \
   --out ./audio_meta.json \
   [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
   [--voice <id>] [--lang en] \

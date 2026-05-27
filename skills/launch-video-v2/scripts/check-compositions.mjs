@@ -18,14 +18,14 @@
 //      root 只能用 `#root`；scene 内部元素用 `#s<N>-foo`。
 //   4. Root contract 缺 —— 没 `id="root"`、没 `class="<scene-id>-root"`、没
 //      `data-composition-id`、没 `data-duration`、没 `window.__timelines[...]`。
-//   5. Asset 引用了 hyperframes/public/ 里不存在的文件 —— worker 编造或拼写错
+//   5. Asset 引用了 <project-root>/public/ 里不存在的文件 —— worker 编造或拼写错
 //      了 basename。
 //   6. （v2 新增）blueprint 引用了 hyperframes-animation/blueprints/ 下不存在
 //      的 id —— anomaly，不 fatal（blueprint 是 soft 引用，worker 应该已经按
 //      composed 回退）。
 //
 // Usage:
-//   node check-compositions.mjs --hyperframes ./hyperframes --group-spec ./group_spec.json \
+//   node check-compositions.mjs --hyperframes . --group-spec ./group_spec.json \
 //                               [--blueprints-dir <abs>]
 //
 // 退出码：
@@ -44,7 +44,7 @@ const flag = (name, def) => {
 };
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
+const hyperframesDir = resolve(flag("hyperframes", "."));
 const groupSpecPath = resolve(flag("group-spec", "./group_spec.json"));
 const compositionsDir = join(hyperframesDir, "compositions");
 
@@ -80,6 +80,47 @@ for (const g of groupSpec.groups || []) {
   for (const sid of g.scene_ids || []) {
     sceneEntries.set(sid, g.scenes?.[sid] || {});
   }
+}
+
+// Component metadata lookup — chunks/index.json carries rank / forbidden_with /
+// trigger_signals / visual_role per component (written by emit-chunks.mjs).
+// Keyed by component id, which equals the html file's basename. Empty when the
+// preset hasn't migrated to the new schema; rank checks then silently skip.
+const componentMeta = new Map();
+{
+  // Resolve chunks/index.json off the first scene's design_chunks.tokens_file —
+  // tokens_file is required by prep.mjs so it's always present when chunks were
+  // emitted. Walk up from chunks/tokens.css → chunks/ → chunks/index.json.
+  const anyScene = [...sceneEntries.values()].find((e) => e.design_chunks?.tokens_file);
+  const tokensPath = anyScene?.design_chunks?.tokens_file;
+  if (tokensPath) {
+    const chunksDir = dirname(tokensPath);
+    const indexPath = join(chunksDir, "index.json");
+    if (existsSync(indexPath)) {
+      try {
+        const index = JSON.parse(readFileSync(indexPath, "utf8"));
+        for (const c of index.components || []) {
+          componentMeta.set(c.id, {
+            rank: c.rank ?? null,
+            trigger_signals: c.trigger_signals || [],
+            forbidden_with: c.forbidden_with || [],
+            visual_role: c.visual_role || null,
+          });
+        }
+      } catch {
+        // Malformed index.json — skip metadata-driven checks; let other gates flag the data issue
+      }
+    }
+  }
+}
+
+// Given an absolute path like "/.../chunks/components/hero.html", return the
+// component id "hero". Returns null if path doesn't fit the expected shape so
+// callers can skip safely.
+function componentIdFromPath(absPath) {
+  if (typeof absPath !== "string") return null;
+  const m = absPath.match(/\/chunks\/components\/([a-z0-9-]+)\.html$/);
+  return m ? m[1] : null;
 }
 
 const errors = []; // fatal: { sceneId, rule, detail }
@@ -277,7 +318,7 @@ for (const sceneId of sceneIds) {
       errors.push({
         sceneId,
         rule: "asset",
-        detail: `引用了 "${ref}" 但 hyperframes/public/ 里没这个文件`,
+        detail: `引用了 "${ref}" 但 project-root/public/ 里没这个文件`,
       });
     }
   }
@@ -359,6 +400,49 @@ for (const sceneId of sceneIds) {
         rule: "blueprint",
         detail: `blueprint 字段 "${bp}" 格式异常（既非 "composed" 也非 "based-on <id>" / "extended <id>"）`,
       });
+    }
+  }
+
+  // Rule 8 (v2 新增，fatal once metadata is present)：rank-1 唯一性 + forbidden_with 冲突
+  //
+  // 来源 = design-system/chunks/index.json.components[].{rank, forbidden_with}（由
+  // emit-chunks.mjs 写出，最初由 preset components/<id>.md 的 YAML frontmatter 声明）。
+  // 旧 preset 没有 frontmatter → componentMeta 为空 → 这条规则自动跳过；不破坏向后兼容。
+  //
+  // 检查 1：每个 scene 至多 1 个 rank=1（focal）component。两个 rank=1 同 scene =
+  //         "primary/supporting handoff" 失败（参考 commit a75be37 的历史 bug）。
+  // 检查 2：scene 引用的 components 之间没有 forbidden_with 冲突（如 hero-badge
+  //         的 forbidden_with: [chip] —— 两个不能同 scene）。
+  if (componentMeta.size > 0) {
+    const cited = (entry.design_chunks?.components || []).map(componentIdFromPath).filter(Boolean);
+
+    // Check 1: rank-1 uniqueness
+    const rank1 = cited.filter((id) => componentMeta.get(id)?.rank === 1);
+    if (rank1.length > 1) {
+      errors.push({
+        sceneId,
+        rule: "rank-1-overload",
+        detail: `scene declares ${rank1.length} focal (rank=1) components: [${rank1.join(", ")}] — at most 1 rank-1 element per scene. Split into separate scenes or downgrade one to rank=2 (supporting) / rank=3 (chrome).`,
+      });
+    }
+
+    // Check 2: forbidden_with conflicts
+    const citedSet = new Set(cited);
+    for (const id of cited) {
+      const meta = componentMeta.get(id);
+      if (!meta) continue;
+      for (const forbidden of meta.forbidden_with) {
+        if (citedSet.has(forbidden)) {
+          // Stable ordering for dedup — the same pair is found twice (a→b and b→a)
+          if (id < forbidden) {
+            errors.push({
+              sceneId,
+              rule: "forbidden-with",
+              detail: `scene cites components "${id}" and "${forbidden}" together — preset declares them mutually exclusive (forbidden_with). Drop one.`,
+            });
+          }
+        }
+      }
     }
   }
 }
