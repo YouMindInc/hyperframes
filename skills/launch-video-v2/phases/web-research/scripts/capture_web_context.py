@@ -179,7 +179,24 @@ async def collect_page_data(options: CaptureOptions) -> dict[str, Any]:
                 const pushAsset = (asset) => {
                     if (!asset.url) return;
                     const key = asset.url.split('#')[0];
-                    if (!key || key.startsWith('data:') || assetMap.has(key)) return;
+                    if (!key || key.startsWith('data:')) return;
+                    const existing = assetMap.get(key);
+                    if (existing) {
+                        // Merge richer info from a later push into the first
+                        // record rather than dropping the duplicate. Brand
+                        // fonts typically arrive twice: first via the DOM
+                        // walk of <link rel="preload" as="font"> (no family),
+                        // then via the CSSOM @font-face walk (with family).
+                        // Without this merge, the early link push would block
+                        // the CSSOM push and the family name would be lost
+                        // — silently falling back to preset typography
+                        // downstream.
+                        if (asset.family && !existing.family) existing.family = asset.family;
+                        if (asset.kind === 'font-face' && existing.kind !== 'font-face') {
+                            existing.kind = 'font-face';
+                        }
+                        return;
+                    }
                     assetMap.set(key, { ...asset, url: key });
                 };
 
@@ -470,6 +487,13 @@ def download_assets(out_dir: Path, data: dict[str, Any], max_assets: int) -> lis
         record = {
             "url": url,
             "kind": asset.get("kind"),
+            # Preserve the @font-face family name from the CSSOM walk so
+            # build-design.mjs can resolve hashed Next.js filenames
+            # (e.g. "1eff5a6cf292d683-s.p.woff2") back to their declared
+            # family (e.g. "flecha"). Without this, file-name based discovery
+            # can only see the hash and falls back to preset defaults,
+            # silently losing the site's real brand typeface.
+            "family": asset.get("family") or None,
             "local_path": str(path.relative_to(out_dir)) if ok else "",
             "success": ok,
             "error": error,

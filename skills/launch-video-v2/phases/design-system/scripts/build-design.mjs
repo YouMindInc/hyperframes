@@ -710,33 +710,110 @@ function fileBaseToFamily(fileName) {
   } while (base !== prev);
   return base;
 }
+// Looks like a content-hash family name? Next.js (and other build systems)
+// sometimes ship raw hashed identifiers as @font-face family — we want to
+// keep them out of the discovery map so designlang's "flecha" lookup
+// doesn't accidentally bind to "1eff5a6cf292d683".
+function looksLikeContentHash(name) {
+  const s = String(name || "").trim();
+  if (!s) return true;
+  // Strict: at least 8 consecutive hex characters anywhere in the name.
+  if (/[0-9a-f]{8,}/i.test(s)) return true;
+  // Whole string is dominated by hex / dot / dash separators.
+  if (/^[0-9a-f.\-_]+$/i.test(s) && /[0-9a-f]{6,}/i.test(s)) return true;
+  return false;
+}
+// Some build tools wrap the source family in markers like "__flecha_a1b2c3"
+// (Next.js next/font) or "flecha Fallback" (Next.js size-adjust). Recover
+// the source family name from these decorations so the lookup hits the
+// intended brand identity.
+function unwrapBundlerFamily(name) {
+  return String(name || "")
+    .replace(/^__/, "")
+    .replace(/\s+Fallback$/i, "")
+    .replace(/_Fallback_/i, "_")
+    .replace(/_[a-f0-9]{4,}$/i, "")
+    .trim();
+}
 function discoverLocalFonts(researchAssetsDir) {
   // Returns Map<normalized-family, { family: <display-cased>, files: [abs-path...] }>.
   // Each font is indexed under BOTH its strict normalized key and its loose
   // key (axis suffixes stripped), so lookups by either form hit the same entry.
+  //
+  // Two discovery passes:
+  //   1. PRIMARY — read research/assets/index.json. Records tagged
+  //      `kind: "font-face"` carry the authoritative `family` field captured
+  //      from the page's CSSOM @font-face rules. This handles hashed
+  //      bundler-emitted filenames (e.g. Next.js) where filename guessing
+  //      would only see hex.
+  //   2. FALLBACK — file-name based discovery for files that arrived without
+  //      family metadata (older captures, <link rel="preload"> files that
+  //      weren't part of a @font-face rule, etc).
   const found = new Map();
   if (!fs.existsSync(researchAssetsDir)) return found;
-  for (const ent of fs.readdirSync(researchAssetsDir, { withFileTypes: true })) {
-    if (!ent.isFile()) continue;
-    const ext = path.extname(ent.name).toLowerCase();
-    if (!FONT_FILE_EXTS.has(ext)) continue;
-    const familyRaw = fileBaseToFamily(ent.name);
-    // "DMSerifDisplay" → "DM Serif Display" so it survives as a valid CSS
-    // font-family identifier; one-word names ("Poppins") are left alone.
-    const familyDisplay = splitCamelToWords(familyRaw);
+  // local_path in research/assets/index.json is relative to the capture
+  // out_dir (i.e. the `research/` directory itself), not the project root.
+  // Resolve against research/ so e.g. "assets/001-…woff2" → <research>/assets/001-…woff2.
+  const researchDir = path.resolve(researchAssetsDir, "..");
+
+  function addEntry(familyDisplay, abs) {
     const norm = normalizeFamily(familyDisplay);
-    if (!norm) continue;
-    const abs = path.join(researchAssetsDir, ent.name);
+    if (!norm) return false;
     if (!found.has(norm)) {
       found.set(norm, { family: familyDisplay, files: [] });
     }
-    found.get(norm).files.push(abs);
-    // Alias the loose key (strip "VF" / "Variable" / axis tags) to the same
-    // entry so designlang's mashed "Geistvf" lookup finds the "Geist" files.
+    const entry = found.get(norm);
+    if (!entry.files.includes(abs)) entry.files.push(abs);
     const looseNorm = normalizeFamilyLoose(familyDisplay);
     if (looseNorm && looseNorm !== norm && !found.has(looseNorm)) {
-      found.set(looseNorm, found.get(norm));
+      found.set(looseNorm, entry);
     }
+    return true;
+  }
+
+  // 1. PRIMARY — index.json with CSSOM-sourced family info.
+  const claimed = new Set();
+  const indexPath = path.join(researchAssetsDir, "index.json");
+  if (fs.existsSync(indexPath)) {
+    try {
+      const records = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+      for (const rec of Array.isArray(records) ? records : []) {
+        if (!rec || !rec.success || !rec.family || !rec.local_path) continue;
+        const ext = path.extname(rec.local_path).toLowerCase();
+        if (!FONT_FILE_EXTS.has(ext)) continue;
+        const abs = path.resolve(researchDir, rec.local_path);
+        if (!fs.existsSync(abs)) continue;
+        const unwrapped = unwrapBundlerFamily(rec.family);
+        if (!unwrapped || looksLikeContentHash(unwrapped)) continue;
+        // Preserve the original casing reported by the page; light cleanup
+        // ("inter" → "Inter") for downstream readability is left to the
+        // emit-side which already does title-casing.
+        const familyDisplay = unwrapped.length <= 4
+          ? unwrapped.toUpperCase()
+          : unwrapped.replace(/\b([a-z])/g, (_, c) => c.toUpperCase());
+        if (addEntry(familyDisplay, abs)) claimed.add(path.basename(abs));
+      }
+    } catch {
+      // Silently fall through to file-name discovery on parse errors.
+    }
+  }
+
+  // 2. FALLBACK — file-name based discovery for files we didn't already
+  //    bind via index.json. Reject hash-dominated names so Next.js-style
+  //    files like "1eff5a6cf292d683-s.p" don't pollute the map.
+  for (const ent of fs.readdirSync(researchAssetsDir, { withFileTypes: true })) {
+    if (!ent.isFile()) continue;
+    if (claimed.has(ent.name)) continue;
+    const ext = path.extname(ent.name).toLowerCase();
+    if (!FONT_FILE_EXTS.has(ext)) continue;
+    const familyRaw = fileBaseToFamily(ent.name);
+    if (looksLikeContentHash(familyRaw)) continue;
+    // "DMSerifDisplay" → "DM Serif Display" so it survives as a valid CSS
+    // font-family identifier; one-word names ("Poppins") are left alone.
+    const familyDisplay = splitCamelToWords(familyRaw);
+    if (looksLikeContentHash(familyDisplay)) continue;
+    const abs = path.join(researchAssetsDir, ent.name);
+    addEntry(familyDisplay, abs);
   }
   return found;
 }
@@ -782,8 +859,34 @@ function resolveFont(siteName, role, presetFontFallback) {
       localFiles: localHit.files,
     };
   }
-  // 3. Preset §D bullet → first Google-Fonts-available name
-  // 4. Final hard-coded fallback
+  // 3. Site didn't name a family for this role, but research/assets/ has
+  //    a locally-downloaded font whose family hints at the role (a "Mono"
+  //    family for the mono role, a serif-named family for display). This
+  //    catches sites that ship a mono face via @font-face but never use
+  //    it in a body-style font-family declaration designlang scans —
+  //    e.g. Brex's "Space Mono" used only in small UI labels.
+  if (!siteName) {
+    const ROLE_HINTS = {
+      mono: /\b(mono|code)\b/i,
+      display: /\b(serif|display|headline)\b/i,
+      body: null, // body has no reliable name hint
+    };
+    const hint = ROLE_HINTS[role];
+    if (hint) {
+      for (const entry of new Set(localFonts.values())) {
+        if (hint.test(entry.family)) {
+          return {
+            name: entry.family,
+            source: "site-local",
+            localFiles: entry.files,
+            roleHintMatch: true,
+          };
+        }
+      }
+    }
+  }
+  // 4. Preset §D bullet → first Google-Fonts-available name
+  // 5. Final hard-coded fallback
   const fallback = presetFontFallback[role] || FINAL_FONT_FALLBACK[role];
   return { name: fallback, source: "preset", originalName: siteName };
 }
