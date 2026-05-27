@@ -1147,6 +1147,94 @@ function mdInlineToHtml(md) {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>");
 }
 
+// Block-level markdown for preset prose (§A intent, §G recipe, §H hints, …).
+// Replaces the old `mdInlineToHtml(text).replace(/\n/g,'<br>')` pattern which
+// collapsed bullet lists and tables into walls of text. Handles, in priority
+// order per block (blocks split by blank line):
+//   1. Heading: `## title` / `### title` / `#### title` → <h2>/<h3>/<h4>
+//   2. Pipe-table with `|---|` separator row → <table class="ds-table">
+//   3. Bullet list (`- foo` / `* foo`) → <ul><li>
+//   4. Numbered list (`1. foo`) → <ol><li>
+//   5. Fenced code (` ```lang ... ``` `) → <pre><code> (esc'd)
+//   6. Anything else → <p class="ds-prose"> with single \n → <br>
+// Inline markdown (**bold**, *em*, `code`) still runs via mdInlineToHtml inside.
+// Designed for short / well-formed preset prose, not arbitrary user markdown —
+// nested lists, blockquotes, link syntax not supported. Add as needed.
+function mdBlockToHtml(md) {
+  if (!md) return "";
+  const blocks = md.replace(/\r\n/g, "\n").split(/\n\s*\n/);
+  const out = [];
+  for (const raw of blocks) {
+    const block = raw.replace(/\n+$/, "").replace(/^\n+/, "");
+    if (!block.trim()) continue;
+
+    // Heading
+    const headingMatch = block.match(/^(#{2,4})\s+(.+)$/);
+    if (headingMatch && !block.includes("\n")) {
+      const lvl = headingMatch[1].length;
+      out.push(`<h${lvl} class="ds-h${lvl}">${mdInlineToHtml(headingMatch[2])}</h${lvl}>`);
+      continue;
+    }
+
+    // Pipe table — must have ≥2 lines and a separator row of pipes+dashes
+    if (/^\s*\|/m.test(block) && /\n\s*\|[\s\-:|]+\|/.test(block)) {
+      const lines = block.split("\n").filter((l) => /^\s*\|/.test(l));
+      if (lines.length >= 2) {
+        const splitCells = (line) =>
+          line
+            .trim()
+            .replace(/^\||\|$/g, "")
+            .split("|")
+            .map((c) => c.trim());
+        const header = splitCells(lines[0]);
+        const rows = lines.slice(2).map(splitCells);
+        const thead = `<thead><tr>${header.map((c) => `<th>${mdInlineToHtml(c)}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${rows
+          .map(
+            (row) =>
+              `<tr>${row.map((c) => `<td>${mdInlineToHtml(c)}</td>`).join("")}</tr>`,
+          )
+          .join("")}</tbody>`;
+        out.push(`<table class="ds-table">${thead}${tbody}</table>`);
+        continue;
+      }
+    }
+
+    // Bullet list — every non-empty line in the block must start with - or *
+    if (/^\s*[-*]\s/.test(block) && block.split("\n").every((l) => !l.trim() || /^\s*[-*]\s/.test(l))) {
+      const items = block
+        .split(/\n(?=\s*[-*]\s)/)
+        .map((line) => line.replace(/^\s*[-*]\s+/, "").replace(/\n\s+/g, " ").trim())
+        .filter(Boolean)
+        .map((line) => `<li>${mdInlineToHtml(line)}</li>`);
+      out.push(`<ul class="ds-list">${items.join("")}</ul>`);
+      continue;
+    }
+
+    // Numbered list — every non-empty line in the block must start with `\d+. `
+    if (/^\s*\d+\.\s/.test(block) && block.split("\n").every((l) => !l.trim() || /^\s*\d+\.\s/.test(l))) {
+      const items = block
+        .split(/\n(?=\s*\d+\.\s)/)
+        .map((line) => line.replace(/^\s*\d+\.\s+/, "").replace(/\n\s+/g, " ").trim())
+        .filter(Boolean)
+        .map((line) => `<li>${mdInlineToHtml(line)}</li>`);
+      out.push(`<ol class="ds-list">${items.join("")}</ol>`);
+      continue;
+    }
+
+    // Fenced code block
+    const codeMatch = block.match(/^```(\w*)\n([\s\S]+?)\n```$/);
+    if (codeMatch) {
+      out.push(`<pre class="ds-code"><code>${esc(codeMatch[2])}</code></pre>`);
+      continue;
+    }
+
+    // Default paragraph — inline md + soft line breaks
+    out.push(`<p class="ds-prose">${mdInlineToHtml(block).replace(/\n/g, "<br>")}</p>`);
+  }
+  return out.join("\n");
+}
+
 // ═══════════════════ Render: §0 Title card ═══════════════
 function renderTitleCard() {
   return `
@@ -1327,7 +1415,7 @@ function renderTypography() {
 
   <details>
     <summary class="ds-summary">Font pairing recipe (preset §D)</summary>
-    <div class="ds-prose">${mdInlineToHtml(recipe).replace(/\n/g, "<br>")}</div>
+    <div class="ds-prose-block">${mdBlockToHtml(recipe)}</div>
   </details>
 </section>`;
 }
@@ -1343,7 +1431,7 @@ function renderMotion() {
 <section id="motion" class="ds-section">
   <div class="eyebrow">§4 · Motion (preset)</div>
   <h2>${esc(preset.label)} motion language</h2>
-  <p class="ds-prose">${mdInlineToHtml(intent)}</p>
+  <div class="ds-prose-block">${mdBlockToHtml(intent)}</div>
   <p class="ds-prose"><strong>Paste these consts at the top of every scene's <code>&lt;script&gt;</code>:</strong></p>
   <pre class="ds-code"><!-- MOTION-START -->
 ${esc(motionJs)}
@@ -1396,7 +1484,7 @@ ${recipe}
     </div>
     <div>
       <h3 class="ds-h3">Transform recipe (preset §G)</h3>
-      <div class="ds-prose">${mdInlineToHtml(recipe).replace(/\n/g, "<br>")}</div>
+      <div class="ds-prose-block">${mdBlockToHtml(recipe)}</div>
     </div>
   </div>
 
@@ -1486,7 +1574,7 @@ function renderHints() {
   <div class="eyebrow">§H · Scene composition hints (plan agent reads these)</div>
   <h2>${esc(preset.label)} composition rules</h2>
   <p class="ds-prose">Surface contracts, material composition rules, brand-color placement, sound-design hooks — anything that constrains <strong>which</strong> components a Phase 3 plan can mix in a single scene. Pasted verbatim into <code>chunks/composition-hints.md</code> for the plan agent.</p>
-  <div class="ds-prose">${mdInlineToHtml(hintsContent || "_no §H declared_").replace(/\n\n/g, "</p><p class='ds-prose'>").replace(/\n/g, "<br>")}</div>
+  <div class="ds-prose-block">${mdBlockToHtml(hintsContent || "_no §H declared_")}</div>
   <pre class="ds-code"><!-- HINTS-START -->
 ${esc(hintsMd)}
 <!-- HINTS-END --></pre>
@@ -1675,7 +1763,28 @@ function renderPageStyles() {
   .comp-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: ${isLight(canvasHex) ? "#fafafa" : "#181818"}; border-bottom: 1px solid ${isLight(canvasHex) ? "#e5e5e5" : "#222"}; }
   .comp-name { font-family: '${esc(mono.name)}', monospace; font-size: 13px; font-weight: 700; }
   .comp-marker { font-family: '${esc(mono.name)}', monospace; font-size: 11px; opacity: 0.6; }
-  .comp-preview { padding: 32px; background: ${canvasHex}; }
+  /* Component preview: components are authored for 1920×1080 scenes. The doc
+     container is ~1056px wide, so wide components (mega-stat etc.) overflow.
+     Allow horizontal scroll so reviewers can pan; max-height caps vertical too. */
+  .comp-preview { padding: 32px; background: ${canvasHex}; overflow: auto; max-height: 720px; }
+  .comp-preview::-webkit-scrollbar { height: 8px; width: 8px; }
+  .comp-preview::-webkit-scrollbar-thumb { background: ${isLight(canvasHex) ? "#ccc" : "#444"}; border-radius: 4px; }
+
+  /* ── Markdown blocks (mdBlockToHtml output) */
+  .ds-prose-block { max-width: 80ch; margin: 16px 0; }
+  .ds-prose-block .ds-prose { margin: 0 0 12px; }
+  .ds-prose-block .ds-prose:last-child { margin-bottom: 0; }
+  .ds-prose-block .ds-h2 { font-family: '${esc(display.name)}', serif; font-size: 24px; margin: 24px 0 12px; }
+  .ds-prose-block .ds-h3 { font-size: 16px; font-weight: 700; margin: 20px 0 8px; opacity: 0.9; }
+  .ds-prose-block .ds-h4 { font-size: 14px; font-weight: 700; margin: 18px 0 6px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.06em; }
+  .ds-prose-block .ds-list { margin: 8px 0 16px; padding-left: 24px; }
+  .ds-prose-block .ds-list li { margin: 4px 0; line-height: 1.55; }
+  .ds-prose-block .ds-list li code { font-size: 0.92em; }
+  .ds-prose-block .ds-code { margin: 12px 0; }
+  .ds-table { border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  .ds-table th, .ds-table td { padding: 8px 12px; border: 1px solid ${isLight(canvasHex) ? "#e5e5e5" : "#222"}; vertical-align: top; text-align: left; }
+  .ds-table th { background: ${isLight(canvasHex) ? "#fafafa" : "#181818"}; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .ds-table td code { font-size: 0.92em; }
   `;
 }
 

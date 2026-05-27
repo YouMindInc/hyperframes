@@ -206,28 +206,61 @@ Scene transitions go through hard cut, not surface fade.
 body {
   background: var(--paper);
   color: var(--ink);
+  background-image: var(--grain-image);
+  background-size: var(--grain-size);
+  background-position: var(--grain-offset);
+  background-blend-mode: multiply;
 }
+
+/* ── Title card: cream-framed blue plate, peoples signature ── */
 .title-card {
-  background: var(--paper);
+  position: relative;
+  background: var(--blue);
+  color: var(--cream);
   border-bottom: 8px solid var(--orange);
-  padding: 96px 0 80px;
+  padding: 120px 0 96px;
+}
+.title-card::after {
+  content: "";
+  position: absolute;
+  inset: 48px 64px;
+  border: var(--frame-cream);
+  pointer-events: none;
+}
+.title-card-inner {
+  position: relative;
+  z-index: 1;
+}
+.brand-row {
+  color: var(--cream);
 }
 .title-display {
   text-transform: uppercase;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
   color: var(--orange);
-  text-shadow: var(--shadow-triple-md);
+  text-shadow: var(--shadow-triple-lg);
+  line-height: 0.86;
 }
 .brand-name {
-  color: var(--blue);
+  color: var(--cream);
   font-weight: 700;
+}
+.brand-x {
+  color: var(--orange);
+  opacity: 1;
 }
 .style-name {
-  color: var(--orange);
-  text-shadow: 3px 3px 0 var(--red);
+  color: var(--cream);
   font-weight: 700;
 }
+.title-meta {
+  color: color-mix(in srgb, var(--cream) 80%, transparent);
+}
+.title-meta strong {
+  color: var(--orange);
+}
 
+/* ── Section chrome: thick ink dividers, blue eyebrow, triple-shadow h2 ── */
 .ds-section {
   border-top: 4px solid var(--ink);
 }
@@ -238,10 +271,72 @@ body {
 }
 h2 {
   text-transform: uppercase;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
+  color: var(--blue);
+  text-shadow: var(--shadow-triple-sm);
+}
+h2 em {
+  font-style: normal;
+  color: var(--orange);
+  text-shadow: var(--shadow-triple-sm);
+}
+.ds-h3 {
+  color: var(--blue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-/* Cards take the peoples treatment: thick ink border, cream chrome on dark, no rounding bigger than 14px */
+/* ── Markdown table: peoples-flavor ── */
+.ds-table {
+  border: 3px solid var(--ink);
+  background: var(--paper);
+}
+.ds-table th {
+  background: var(--blue) !important;
+  color: var(--cream) !important;
+  border: 3px solid var(--ink) !important;
+}
+.ds-table td {
+  border: 1px solid var(--ink) !important;
+}
+.ds-table td code {
+  background: var(--orange);
+  color: var(--blue);
+  padding: 2px 6px;
+  font-weight: 700;
+}
+
+/* ── Lists in prose blocks ── */
+.ds-prose-block .ds-list {
+  list-style: none;
+  padding-left: 32px;
+}
+.ds-prose-block .ds-list li {
+  position: relative;
+}
+.ds-prose-block .ds-list li::before {
+  content: "";
+  position: absolute;
+  left: -28px;
+  top: 0.55em;
+  width: 14px;
+  height: 14px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+.ds-prose-block .ds-list.ds-list,
+.ds-prose-block ol.ds-list li::before {
+  /* numbered lists keep default markers */
+  display: revert;
+}
+.ds-prose-block ol.ds-list {
+  list-style: decimal;
+}
+.ds-prose-block ol.ds-list li::before {
+  content: none;
+}
+
+/* ── Cards take the peoples treatment: thick ink border, cream chrome on dark ── */
 .dna-swatch,
 .type-card,
 .voice-pair,
@@ -263,5 +358,19 @@ h2 {
   background-size: var(--grain-size);
   background-position: var(--grain-offset);
   background-blend-mode: multiply;
+}
+
+/* ── Code blocks: warmer than default ── */
+.ds-code {
+  border: 3px solid var(--ink) !important;
+  border-radius: 14px !important;
+  background: #0e0e14 !important;
+  color: var(--cream) !important;
+}
+.eyebrow code,
+.ds-prose code {
+  background: var(--orange);
+  color: var(--blue);
+  font-weight: 700;
 }
 ```
