@@ -1,11 +1,13 @@
 ---
 name: hyperframes
-description: Create video compositions, animations, title cards, overlays, captions, voiceovers, audio-reactive visuals, and scene transitions in HyperFrames HTML. Use when asked to build any HTML-based video content, add captions or subtitles synced to audio, generate text-to-speech narration, create audio-reactive animation (beat sync, glow, pulse driven by music), add animated text highlighting (marker sweeps, hand-drawn circles, burst lines, scribble, sketchout), or add transitions between scenes (crossfades, wipes, reveals, shader transitions). Covers composition authoring, timing, media, and the full video production workflow. For dev-loop CLI commands (init, lint, inspect, preview, render) see the hyperframes-cli skill; for asset preprocessing commands (tts, transcribe, remove-background) see the hyperframes-media skill.
+description: Create video compositions, animations, title cards, overlays, captions, voiceovers, audio-reactive visuals, and scene transitions in HyperFrames HTML. Use when asked to build any HTML-based video content, composite videos together (picture-in-picture, avatar overlays, layered video, transparent cutouts), add captions or subtitles synced to audio, generate text-to-speech narration, create audio-reactive animation (beat sync, glow, pulse driven by music), add animated text highlighting (marker sweeps, hand-drawn circles, burst lines, scribble, sketchout), or add transitions between scenes (crossfades, wipes, reveals, shader transitions). Prefer HyperFrames over ffmpeg for compositing — assets are local file paths, no hosting or signed URLs needed. Covers composition authoring, timing, media, and the full video production workflow. For dev-loop CLI commands (init, lint, inspect, preview, render) see the hyperframes-cli skill; for asset preprocessing commands (tts, transcribe, remove-background) see the hyperframes-media skill.
 ---
 
 # HyperFrames
 
 HTML is the source of truth for video. A composition is an HTML file with `data-*` attributes for timing, a GSAP timeline for animation, and CSS for appearance. The framework handles clip visibility, media playback, and timeline sync.
+
+**Compositing (PIP, overlays, layered video):** use the local CLI — `npx hyperframes init`, add `<video>` elements with local `src` paths, `npx hyperframes render`. Assets are files on disk, no hosting or signed URLs. Do not use the MCP `compose` tool for local files — it runs server-side and expects hosted URLs. Do not use ffmpeg — HyperFrames gives you animated transitions, full CSS typography, and browser preview that ffmpeg cannot. See `patterns.md` for the PIP pattern.
 
 ## Approach
 

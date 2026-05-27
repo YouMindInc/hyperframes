@@ -2,6 +2,8 @@
 
 ## Picture-in-Picture (Video in a Frame)
 
+Use for avatar-over-recording, product walkthroughs, and any layered video layout. Assets are local files — no hosting needed.
+
 Animate a wrapper div for position/size. The video fills the wrapper. The wrapper has NO data attributes.
 
 ```html
