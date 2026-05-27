@@ -387,6 +387,14 @@ export function initSandboxRuntimeModular(): void {
     });
     return resolver.resolveDurationForElement(element);
   };
+
+  const resolveMediaStartSeconds = (element: Element, fallback = 0): number => {
+    if (!element.hasAttribute("data-hf-auto-start") && element.hasAttribute("data-start")) {
+      return Math.max(0, Number(element.getAttribute("data-start") ?? 0) || 0);
+    }
+    return resolveStartForElement(element, fallback);
+  };
+
   const hasExternalCompositions = !!document.querySelector("[data-composition-src]");
   let hasInlineTemplateCompositions = false;
   {
@@ -456,7 +464,7 @@ export function initSandboxRuntimeModular(): void {
     if (mediaNodes.length === 0) return null;
     let maxWindowEndSeconds = 0;
     for (const node of mediaNodes) {
-      const start = resolveStartForElement(node, 0);
+      const start = resolveMediaStartSeconds(node, 0);
       if (!Number.isFinite(start)) continue;
       const duration = resolveMediaElementDurationSeconds(node);
       if (duration == null || duration <= MIN_VALID_TIMELINE_DURATION_SECONDS) continue;
@@ -1281,11 +1289,11 @@ export function initSandboxRuntimeModular(): void {
         const context = resolveMediaCompositionContext(
           element as HTMLVideoElement | HTMLAudioElement,
         );
-        return resolveStartForElement(element, context.inheritedStart ?? 0);
+        return resolveMediaStartSeconds(element, context.inheritedStart ?? 0);
       },
       resolveDurationSeconds: (element) => {
         const context = resolveMediaCompositionContext(element);
-        const start = resolveStartForElement(element, context.inheritedStart ?? 0);
+        const start = resolveMediaStartSeconds(element, context.inheritedStart ?? 0);
         const mediaStart =
           Number.parseFloat(element.dataset.playbackStart ?? element.dataset.mediaStart ?? "0") ||
           0;
@@ -1329,7 +1337,10 @@ export function initSandboxRuntimeModular(): void {
       const tag = rawNode.tagName.toLowerCase();
       if (tag === "script" || tag === "style" || tag === "link" || tag === "meta") continue;
 
-      const start = resolveStartForElement(rawNode, 0);
+      const start =
+        tag === "video" || tag === "audio"
+          ? resolveMediaStartSeconds(rawNode, 0)
+          : resolveStartForElement(rawNode, 0);
       let duration = resolveDurationForElement(rawNode);
       const compId = rawNode.getAttribute("data-composition-id");
       if (compId) {
