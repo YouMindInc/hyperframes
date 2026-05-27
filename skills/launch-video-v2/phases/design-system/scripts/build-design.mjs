@@ -782,14 +782,32 @@ function normalizeFamilyLoose(s) {
     .replace(/(wght|opsz|slnt|ital)$/i, "");
 }
 function splitCamelToWords(s) {
-  // "DMSerifDisplay" → "DM Serif Display"; "GeistVF" → "Geist VF"; "Poppins" → "Poppins".
-  // Two rules in order: insert a space between a lower→upper transition
-  // ("Geist|VF"), and between two uppers followed by a lower ("DM|Serif").
+  // "DMSerifDisplay" → "DM Serif Display"; "GeistVF" → "Geist VF"; "Poppins" → "Poppins";
+  // "tt_norms_pro_mono" → "TT Norms Pro Mono"; "tt_norms_pro" → "TT Norms Pro".
+  //
+  // Rules in order:
+  //   1. Insert a space between a lower→upper transition ("Geist|VF")
+  //   2. Insert a space between two uppers followed by a lower ("DM|Serif")
+  //   3. Underscores become spaces (handles "tt_norms_pro" naming common to
+  //      bundled woff2 from CMS / foundry distribution packages)
+  //   4. Collapse whitespace + trim
+  //   5. Title-case each word; words ≤2 chars treated as acronyms (uppercase)
+  //
+  // Step 5 matters for role-hint matching downstream: /\bmono\b/i needs a
+  // word boundary around "mono", which underscores would not provide. After
+  // the underscore→space + title-case normalization, "tt_norms_pro_mono"
+  // becomes "TT Norms Pro Mono" with proper \b on either side of "Mono".
   return String(s || "")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/_+/g, " ")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .split(" ")
+    .map((w) =>
+      w.length <= 2 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1),
+    )
+    .join(" ");
 }
 function fileBaseToFamily(fileName) {
   // Strip extension
@@ -813,9 +831,12 @@ function fileBaseToFamily(fileName) {
   // multiple suffixes (e.g. "AnthropicSans-Roman-Web", "Inter-Bold-Italic")
   // and a single pass would leave the inner one behind.
   const SUFFIX_RES = [
-    /[-_](Thin|ExtraLight|Light|Regular|Book|Roman|Upright|Medium|SemiBold|DemiBold|Bold|ExtraBold|Heavy|Black)$/i,
+    /[-_](Thin|ExtraLight|Light|Normal|Regular|Book|Roman|Upright|Medium|SemiBold|DemiBold|Bold|ExtraBold|Heavy|Black)$/i,
     /[-_](Italic|Oblique)$/i,
-    /[-_](Web|Desktop|Print|Display|Text)$/i,
+    // Web-host variant suffixes — foundries publish "Inter-Web" / "TT_Norms_Pro_Mono_Regular-webfont".
+    // The leading anchor [-_] matches either dash or underscore; the alternation
+    // covers both single-word and "webfont" composite forms.
+    /[-_](Web|Webfont|Desktop|Print|Display|Text)$/i,
     /[-_](100|200|300|400|500|600|700|800|900)$/i,
     /[-_]?VF$/i,
     /[-_]?Variable$/i,
@@ -935,7 +956,26 @@ function discoverLocalFonts(researchAssetsDir) {
   return found;
 }
 const researchAssetsDir = path.resolve(outDir, "..", "research", "assets");
-const localFonts = discoverLocalFonts(researchAssetsDir);
+// Two discovery roots, merged:
+//   1. research/assets/ — designlang's auto-captured web assets (preferred,
+//      may carry an index.json with CSSOM-sourced @font-face family info)
+//   2. <outDir>/fonts/ — user-supplied / hand-placed font files, e.g. when
+//      designlang misses a site's hashed bundler font (Next.js's `flecha_<hex>`
+//      bundles ABCSolarDisplay-Bold but designlang only sees `flecha`).
+//      Treated as filename-discovery only (no index.json expected).
+// Merge order: research/assets/ entries win on key collision; <outDir>/fonts/
+// fills in gaps. This matches the intuition "designlang's structured capture
+// is most trustworthy; user-hand-drops are a manual fallback".
+const userFontsDir = path.join(outDir, "fonts");
+const localFonts = (() => {
+  const primary = discoverLocalFonts(researchAssetsDir);
+  if (!fs.existsSync(userFontsDir)) return primary;
+  const userDrops = discoverLocalFonts(userFontsDir);
+  for (const [key, entry] of userDrops) {
+    if (!primary.has(key)) primary.set(key, entry);
+  }
+  return primary;
+})();
 
 // Pick the first Google-Fonts-available name from a preset's §D bullet for one
 // role. Bullet format (per README §D): `- **<role>**: \`'Name1'\` · \`'Name2'\` · ...`
@@ -978,30 +1018,41 @@ function resolveFont(siteName, role, presetFontFallback) {
       localFiles: localHit.files,
     };
   }
-  // 3. Site didn't name a family for this role, but research/assets/ has
-  //    a locally-downloaded font whose family hints at the role (a "Mono"
-  //    family for the mono role, a serif-named family for display). This
-  //    catches sites that ship a mono face via @font-face but never use
-  //    it in a body-style font-family declaration designlang scans —
-  //    e.g. Brex's "Space Mono" used only in small UI labels.
-  if (!siteName) {
-    const ROLE_HINTS = {
-      mono: /\b(mono|code)\b/i,
-      display: /\b(serif|display|headline)\b/i,
-      body: null, // body has no reliable name hint
-      script: /\b(caveat|brush|script|cursive|kalam|pacifico|sacramento)\b/i,
-    };
-    const hint = ROLE_HINTS[role];
-    if (hint) {
-      for (const entry of new Set(localFonts.values())) {
-        if (hint.test(entry.family)) {
-          return {
-            name: entry.family,
-            source: "site-local",
-            localFiles: entry.files,
-            roleHintMatch: true,
-          };
-        }
+  // 3. Role-hint fallback against the discovered local-font pool.
+  //
+  //    Triggers when steps 1+2 fail. Two common cases this rescues:
+  //    (a) site didn't name a family for this role at all (empty siteName) —
+  //        e.g. Brex's "Space Mono" used only in tiny labels designlang
+  //        didn't surface as the mono family; the local @font-face capture
+  //        still has the file, role-hint matches it by name "Space Mono".
+  //    (b) site DID name a family but it's an unresolvable bundler-hashed
+  //        identifier (Next.js `flecha_<hex>`, Webpack content-hash names) —
+  //        designlang reports siteName="flecha" which doesn't match any
+  //        Google Font and doesn't match a local file by normalized key,
+  //        but the underlying file (e.g. "ABCSolarDisplay-Bold.woff2")
+  //        has a role-suggesting family name. Role-hint matches it.
+  //
+  //    Previously this block was gated by `if (!siteName)` — only case (a)
+  //    was covered, so HeyGen's `flecha` → display role kept falling
+  //    through to preset fallback even when the real font was sitting in
+  //    the fonts/ dir. The gate is removed.
+  const ROLE_HINTS = {
+    mono: /\b(mono|code)\b/i,
+    display: /\b(serif|display|headline)\b/i,
+    body: null, // body has no reliable name hint
+    script: /\b(caveat|brush|script|cursive|kalam|pacifico|sacramento)\b/i,
+  };
+  const hint = ROLE_HINTS[role];
+  if (hint) {
+    for (const entry of new Set(localFonts.values())) {
+      if (hint.test(entry.family)) {
+        return {
+          name: entry.family,
+          source: "site-local",
+          localFiles: entry.files,
+          roleHintMatch: true,
+          originalName: siteName || null,
+        };
       }
     }
   }
