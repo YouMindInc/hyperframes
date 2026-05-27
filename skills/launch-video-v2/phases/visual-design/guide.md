@@ -23,14 +23,40 @@
 
 **路径固定**：`./design-system/chunks/index.json`（cwd 相对）。这是 Phase 1b 的 `emit-chunks.mjs` 切出来的 manifest，包含 preset 名、source URL、组件清单。
 
-**Plan 对 chunks 只做 4 件事，不读 design.html、不读组件 HTML 本体**：
+**Plan 对 chunks 做 5 件事，不读 design.html、不读组件 HTML 本体**：
 
-1. Read `chunks/index.json`（必读，~1 KB）→ 拿到 `preset`（neo-brutalism / editorial / saas / …）和 `components[]` 清单（每个 `{id, file}`）—— 决定调色纪律 + 哪些组件可被场景引用
-2. （可选）Read `chunks/tokens.css`（~1 KB）→ 看 `:root` 里实际定义了哪些角色 token（特别是有没有 `--surface` / `--paper-warm` / `--ink` / decoration colors）—— 决定 30% 中间层 / 痛点场景的写法
-3. （可选）Read `chunks/easings.js`（~0.5 KB）→ 看 `EASE.entry / emphasis / exit / drift` 这套 ease 角色键名是否齐全 —— 决定散文用哪些 ease 意图角色
-4. （可选）Read `chunks/voice.md`（~0.5 KB）→ 看本 preset 的 DOM 文字 register —— 散文里可以承诺"本场 headline 走 UPPERCASE 三段式 / 句号断行"等。具体改写是 Phase 4b worker 的事，plan **不抄**改写后的英文文案
+1. Read `chunks/index.json`（必读，~1-2 KB）→ 拿到 `preset` + `components[]` 清单。每个 component entry 形如：
 
-**不读**：组件 HTML 本体（`chunks/components/<id>.html`）—— 那是 Phase 4b worker 的事；plan 只看 component **id** 列表来挑场景需要哪些。**不读** legacy `design.html`（已被 chunks 取代）。
+   ```jsonc
+   {
+     "id": "framed-stamp",
+     "file": "chunks/components/framed-stamp.html",
+     // 以下字段仅当 preset 的 component .md 文件带 frontmatter 时存在
+     "surface": "blue", // 必须摆在哪种 surface 上
+     "role": "authority", // 在 scene 里承担的语义角色
+     "composes": ["cream-frame", "triple-stamp"], // 视觉签名是由哪些 material 组合
+     "slots": ["pill", "headline", "sub"], // 可填的内容槽位
+     "avoids_same_scene": ["stamp-statement"], // 不能与谁同 scene
+   }
+   ```
+
+   老 preset（22 个）和 designhtml-class 新 preset（peoples-platform 等）混在同一份 manifest 里：老 entry 只有 `{id, file}` 两键；新 entry 多 5 个可选字段。**只对带字段的 entry 启用下面的两级过滤；老 entry 退回纯按 id 选**。
+
+2. **挑 component 算法（component entry 带 `surface` 时强制走这套）**：
+   - 第 1 级 surface 过滤：决定这个 scene 走哪种 surface（看 narrative beat / 节奏），从 `components[]` 里 `filter(c => c.surface === sceneSurface || !c.surface)`
+   - 第 2 级 role 过滤：在剩下的里按 `role` 与 scene 意图匹配（statement / authority / stat / quote / list / timeline / closer / aside）
+   - 第 3 级互斥校验：选出的多个 component 之间，**任一对**若有 `a.id ∈ b.avoids_same_scene` 或 `b.id ∈ a.avoids_same_scene` → 拒绝组合，重选
+   - **同 scene 内不要混不同 surface 的 component**（即使 surface 字段未声明，也不要把"明显 paper 风格"和"明显 blue 风格"的混在一起 —— 视觉破坏）
+
+3. Read `chunks/composition-hints.md`（必读 if `index.json.hints_file != null`，~1-3 KB）→ preset 自己宣告的硬规则（surface contract / material 互斥 / 60-30-10 colour 配比 / sound-design hooks）。**这是 preset 视觉契约的真理源 —— 违反 = scene 渲染失败**。`hints_file` 为 null（老 preset）时跳过。
+
+4. （可选）Read `chunks/tokens.css`（~1-2 KB）→ 看 `:root` 里实际定义了哪些角色 token（`--canvas` / `--ink` / `--brand-*` / preset-internal 别名如 `--paper` / `--blue` / `--cream` / `--shadow-triple-*`）—— 决定 30% 中间层 / 痛点场景的调色描述
+
+5. （可选）Read `chunks/easings.js`（~0.5 KB）→ 看 `EASE.entry / emphasis / exit / drift` 角色键名齐全度，决定散文引用哪些 ease 意图
+
+6. （可选）Read `chunks/voice.md`（~0.5 KB）→ 本 preset 的 DOM 文字 register；散文承诺 "本场 headline 走 UPPERCASE 三段式" 等，具体英文改写是 Phase 4b worker 的事，**plan 不抄改写后的文案**
+
+**不读**：组件 HTML 本体（`chunks/components/<id>.html`）—— 那是 Phase 4b worker 的事；plan 只引 component **id**。**不读** legacy `design.html`（已被 chunks 取代）。
 
 **Plan 的工作是按角色 / 用途 / 意图引用，不是按字面值复述。** 见下方 §3 的指导原则：
 

@@ -17,8 +17,9 @@
  *   <dir>/chunks/tokens.css                     — :root { ... } from §ROOT block
  *   <dir>/chunks/easings.js                     — EASE / DUR const from §MOTION block
  *   <dir>/chunks/voice.md                       — DOM-copy register from §VOICE block
+ *   <dir>/chunks/composition-hints.md           — §H rules (surface/material/colour) — plan agent reads this
  *   <dir>/chunks/components/<id>.html           — one file per §COMPONENT block
- *   <dir>/chunks/index.json                     — manifest (preset, paths, component list)
+ *   <dir>/chunks/index.json                     — manifest (preset, paths, component list + frontmatter)
  *
  * Exit 0 on success; 1 if design.html or required ROOT/MOTION/VOICE markers are missing.
  */
@@ -109,6 +110,23 @@ if (!voiceMatch) {
 const voiceMd = htmlDecode(voiceMatch[1]).trim();
 fs.writeFileSync(path.join(chunksDir, "voice.md"), voiceMd + "\n");
 
+// ─── 3.5 composition-hints.md ─────────────────────────────────────
+// §H ships scene-composition rules (surface contract, material avoidance, 60/30/10
+// color placement, sound-design cues). The plan agent reads this when picking
+// components for a scene — without it, peoples-style hard rules (single
+// triple-stamp per plate, cream-frame only on dark surfaces, …) wouldn't reach
+// anyone. Presets without a §H emit a stub block so the file always exists and
+// plan agent's must-read path is uniform across presets.
+const hintsMatch = html.match(
+  new RegExp(`${PRE_OPEN}<!--\\s*HINTS-START\\s*-->([\\s\\S]*?)<!--\\s*HINTS-END\\s*-->`),
+);
+let hintsFile = null;
+if (hintsMatch) {
+  const hintsMd = htmlDecode(hintsMatch[1]).trim();
+  fs.writeFileSync(path.join(chunksDir, "composition-hints.md"), hintsMd + "\n");
+  hintsFile = "chunks/composition-hints.md";
+}
+
 // ─── 4. components ────────────────────────────────────────────────
 // Component blocks live inside <pre class="ds-code">...</pre> with HTML-entity-
 // escaped markers (so design.html renders the markers as visible text for human
@@ -118,14 +136,39 @@ const compRe = new RegExp(
   `${PRE_OPEN}&lt;!--\\s*COMPONENT:\\s*([a-z0-9-]+)\\s*--&gt;([\\s\\S]*?)&lt;!--\\s*\\/COMPONENT\\s*--&gt;`,
   "g",
 );
+// designhtml-class presets (peoples-platform, …) emit a COMPONENT-META line right
+// after the COMPONENT marker, carrying frontmatter fields (surface / composes /
+// role / avoids_same_scene / slots, …). Pluck it out before the body is treated
+// as raw HTML, then spread the parsed JSON into the index.json entry so the plan
+// agent can filter components by surface/role without opening each .html file.
+// Legacy presets without frontmatter skip emission → meta stays null → entry
+// stays {id, file} as before.
+const componentMetaRe = /^\s*<!--\s*COMPONENT-META:\s*(\{[\s\S]*?\})\s*-->\s*\r?\n?/;
 const components = [];
 let cm;
 while ((cm = compRe.exec(html)) !== null) {
   const id = cm[1];
   let body = htmlDecode(cm[2]);
+  let meta = null;
+  const metaMatch = body.match(componentMetaRe);
+  if (metaMatch) {
+    try {
+      meta = JSON.parse(metaMatch[1]);
+    } catch (e) {
+      console.error(
+        `! emit-chunks: component '${id}' has COMPONENT-META but JSON is invalid (${e.message}); ignoring`,
+      );
+    }
+    body = body.slice(metaMatch[0].length);
+  }
   body = stripCodeFence(body).trim();
   fs.writeFileSync(path.join(componentsDir, `${id}.html`), body + "\n");
-  components.push({ id, file: `chunks/components/${id}.html`, size: Buffer.byteLength(body) });
+  components.push({
+    id,
+    file: `chunks/components/${id}.html`,
+    size: Buffer.byteLength(body),
+    meta,
+  });
 }
 
 if (components.length === 0) {
@@ -154,7 +197,14 @@ const index = {
   tokens_file: "chunks/tokens.css",
   easings_file: "chunks/easings.js",
   voice_file: "chunks/voice.md",
-  components: components.map(({ id, file }) => ({ id, file })),
+  // hints_file is null when the preset doesn't declare §H. Plan agent treats null
+  // as "no preset-level composition contract — pick by component id only".
+  hints_file: hintsFile,
+  components: components.map(({ id, file, meta }) =>
+    // Spread frontmatter (surface / composes / role / avoids_same_scene / slots)
+    // alongside id+file. Plan agent reads these without opening component .html.
+    meta ? { id, file, ...meta } : { id, file },
+  ),
 };
 fs.writeFileSync(path.join(chunksDir, "index.json"), JSON.stringify(index, null, 2) + "\n");
 
@@ -163,14 +213,16 @@ const fmt = (b) => (b / 1024).toFixed(1);
 const tokenBytes = Buffer.byteLength(tokensCss);
 const easingBytes = Buffer.byteLength(easingsJs);
 const voiceBytes = Buffer.byteLength(voiceMd);
+const hintsBytes = hintsFile ? Buffer.byteLength(htmlDecode(hintsMatch[1]).trim()) : 0;
 const compBytes = components.reduce((sum, c) => sum + c.size, 0);
 const designBytes = Buffer.byteLength(html);
-const chunksBytes = tokenBytes + easingBytes + voiceBytes + compBytes;
+const chunksBytes = tokenBytes + easingBytes + voiceBytes + hintsBytes + compBytes;
 
 console.log(`✓ ${path.relative(process.cwd(), chunksDir)}/`);
 console.log(`  tokens.css         ${fmt(tokenBytes)} KB`);
 console.log(`  easings.js         ${fmt(easingBytes)} KB`);
 console.log(`  voice.md           ${fmt(voiceBytes)} KB`);
+if (hintsFile) console.log(`  composition-hints.md  ${fmt(hintsBytes)} KB`);
 console.log(`  components/        ${components.length} files`);
 for (const c of components) {
   console.log(`    ${c.id}.html  (${fmt(c.size)} KB)`);

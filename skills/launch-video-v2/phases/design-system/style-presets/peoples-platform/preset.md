@@ -3,200 +3,265 @@
   "name": "peoples-platform",
   "label": "People's Platform",
   "fingerprint": {
-    "depth": "stacked-offset-shadow",
-    "border": "6px-ink-block",
-    "type": "slab-uppercase-plus-brush-interrupt",
-    "atmosphere": "paper-grain-overlay",
-    "voice": "protest-poster"
+    "shadow": "triple-stamp",
+    "border": "cream-inset-frame",
+    "motion": "stamp-slam",
+    "density": "medium",
+    "voice": "manifesto"
   },
   "match_signals": [
-    { "kind": "shadow_zero_blur", "weight": 0.3 },
-    { "kind": "thick_solid_border", "weight": 0.25 },
-    { "kind": "high_sat_accent", "weight": 0.2 },
-    { "kind": "condensed_display", "weight": 0.1 }
+    { "kind": "shadow_zero_blur", "weight": 0.30 },
+    { "kind": "high_sat_accent",  "weight": 0.20 },
+    { "kind": "medium_solid_border", "weight": 0.15 },
+    { "kind": "bouncy_easing",    "weight": 0.10 },
+    { "kind": "minimal_decoration", "weight": 0.05 }
   ],
-  "best_for": ["manifestos", "founder visions", "mission statements", "civic / campaign decks", "design talks"],
-  "avoid_for": ["institutional restraint", "finance", "healthcare", "corporate compliance", "regulated disclosures"]
+  "best_for": [
+    "manifesto launches",
+    "indie SaaS poster",
+    "editorial-stamp brands",
+    "people-first storytelling",
+    "campaign-style narratives"
+  ],
+  "avoid_for": [
+    "minimalist enterprise",
+    "quiet authority",
+    "fintech compliance pages",
+    "data-heavy dashboards",
+    "luxury / glass aesthetics"
+  ]
 }
 ```
 
 ## §A Director's intent
 
-Activist-poster energy: WPA placard meets political campaign, screen-printed onto warm paper. Every display word is a heavy slab in strict uppercase, anchored by a stacked offset shadow that gives type a quasi-3D letterpress thickness. Heavy 6px ink borders carve the canvas into block-sized regions; cream inset frames sit inside blue surfaces like a poster-within-a-poster. A grain overlay (CSS pseudo-element) sits on every scene so flat digital surfaces read as physically printed, not rendered. Motion is hit-and-stick: stamps slam in with a small over-rotation, headlines crack into place with their shadows trailing one frame behind, and a single Caveat Brush "human interrupt" word breaks the geometry every few scenes. Best for: manifestos, founder visions, mission statements, civic / campaign decks, design talks — anything that should feel honest, loud, and graphic. Avoid for: institutional restraint, finance, healthcare — the saturated political-poster palette commits hard to expressive energy. Class prefix is `pp-`.
+Stamped-poster atlas. Every focal headline carries the same **triple-offset shadow**: accent word in front, a mid-warm drop at 6-10px, a deep-warm drop at 12-20px — always lower-right. The shadow IS the system; nothing else needs to shout.
 
-## §B Decoration tokens
+One **Caveat-script handwritten accent** threads through each plate, rotated −3°, in the deep-warm drop colour. Two voices alternate — Alfa Slab for declarations, Caveat Brush for the human aside — never a third. Cream frames isolate authority surfaces. Pill chrome marks volume.
+
+**Stance** (write into every scene; this is the brand's identity, not optional decoration):
+
+- _character_ — triple-stamped poster system. Every focal word casts the same drop.
+- _signal_ — single triple-stamp per plate. Reserve it for one phrase; never split focus.
+- _cadence_ — stamp · script · stamp. Two voices alternate; nothing else.
+
+## §B Decoration tokens (merge into design.html `:root`)
+
+This preset depends on the **5-slot brand alias system** (`--brand-primary` / `--brand-secondary` / `--brand-tertiary` / `--brand-accent` / `--brand-costume`) plus the **script font role** (`--font-script`). build-design.mjs emits these automatically. The aliases below give peoples-native names to those slots so component CSS can use the original peoples vocabulary (`var(--paper)`, `var(--blue)`, `var(--orange)`).
+
+**Drop colours** (red / red-deep) are visual signatures — they MUST contrast with the brand accent regardless of brand DNA, so they live as warm-complement literals. If a future brand's accent is red itself, override these in §B with HSL-rotated drops.
 
 ```css
-/* ── Stacked offset shadows (preset signature) ───────────────────── */
-/* Three tiers; scale shadow distance with font size. Red is shadow-only. */
---shadow-stamp-sm: 3px 3px 0 var(--brand-secondary);
---shadow-stamp-md: 6px 6px 0 var(--brand-secondary);
---shadow-stamp-lg: 10px 10px 0 var(--brand-secondary), 20px 20px 0 var(--brand-accent);
---shadow-stamp-jumbo: 12px 12px 0 var(--brand-secondary), 24px 24px 0 var(--brand-accent);
+/* Surface aliases — bind brand DNA + system neutrals into peoples vocabulary.
+ *
+ * IMPORTANT MAPPING NOTE: peoples uses "primary/secondary/..." as SURFACE roles
+ * (paper = primary surface) but brand DNA uses them as IDENTITY-HUE roles
+ * (brand-primary = the most identifying hue, often the signal). Don't confuse:
+ *
+ *   peoples --paper  = system canvas (light surface)           → var(--canvas)
+ *   peoples --orange = signal hue (the brand's loudest color)  → var(--brand-primary)
+ *   peoples --blue   = second authority surface (dark plate)   → var(--brand-tertiary)
+ *
+ * For brands without a second hue (brand-tertiary falls back to accent), the
+ * blue plate degrades to a light-tinted surface — known limitation; document
+ * via Stage 1 remix-from-golden audit before committing to a video.
+ */
+--paper: var(--canvas); /* system light canvas — NOT brand-primary */
+--ink-line: var(--ink); /* system dark line — NOT brand-secondary */
+--blue: var(--brand-tertiary); /* authority dark plate (second hue) */
+--orange: var(--brand-primary); /* THE signal — brand's loudest hue */
+--cream: var(--brand-costume); /* second light surface — often equals --canvas */
 
-/* Box-shadow versions (stamps, buttons, KPI tiles) */
---shadow-block-md: 6px 6px 0 var(--brand-secondary);
---shadow-block-lg: 8px 8px 0 var(--brand-secondary);
+/* Triple-stamp drop palette — warm-complement of accent (literal by design) */
+--red: #e83a2a;
+--red-deep: #b7281c;
 
-/* ── Border weights (printed-matter aesthetic) ───────────────────── */
-/* 6px is the load-bearing structural weight; 3-4px are fine dividers. */
---border-structural: 6px solid var(--ink);
---border-structural-inverse: 6px solid var(--canvas);
---border-stamp: 5px solid var(--canvas);
---border-divider: 4px solid var(--ink);
---border-hairline: 3px solid var(--ink);
+/* Brand-aware derived shades via color-mix (browsers compute at render time) */
+--blue-deep: color-mix(in srgb, var(--blue) 65%, var(--ink));
+--orange-deep: color-mix(in srgb, var(--orange) 88%, var(--ink));
+--ink-dim: color-mix(in srgb, var(--ink) 65%, var(--paper));
 
-/* ── Geometry ───────────────────────────────────────────────────── */
---radius-square: 0px; /* default for cards, frames, ribbons */
---radius-pill: 999px; /* meta-pills only */
---radius-disc: 50%; /* avatars, stamps, dots */
---radius-diamond: 4px; /* on a 45deg rotated square — diamond bullet */
+/* Triple-stamp shadow stack — THE signature move */
+--shadow-triple-sm: 3px 3px 0 var(--red), 6px 6px 0 var(--red-deep);
+--shadow-triple-md: 6px 6px 0 var(--red), 12px 12px 0 var(--red-deep);
+--shadow-triple-lg: 10px 10px 0 var(--red), 20px 20px 0 var(--red-deep);
 
-/* ── Tilt vocabulary ────────────────────────────────────────────── */
-/* Rotations are deliberate, never accidental. Stamps tilt; type does not. */
---tilt-stamp-rect: -3deg;
---tilt-stamp-circle: -9deg;
---tilt-script: -3deg;
---tilt-diamond: 45deg;
+/* Frame + bullet primitives */
+--frame-cream: 6px solid var(--cream);
+--frame-inset: 48px; /* cream frame sits this far from plate edge */
+--bullet-diamond: 28px; /* red square rotated 45°, list-only */
 
-/* ── Spacing ────────────────────────────────────────────────────── */
---gap-slide: 90px; /* edge padding */
---gap-content: 120px; /* inner content padding on framed scenes */
---frame-inset: 48px; /* inset-frame offset from edge */
---topbar-height: 90px; /* blue topbar band */
---ribbon-height: 60px; /* orange marquee strip */
-
-/* ── Grain overlay (atmospheric texture) ─────────────────────────── */
-/* Applied via ::before on the scene root. Always present. */
+/* Grain tooth (two radial layers multiplied @50%) */
 --grain-image:
   radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px),
   radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 --grain-size: 3px 3px, 5px 5px;
 --grain-offset: 0 0, 1px 2px;
 --grain-opacity: 0.5;
+
+/* Rotation primitives */
+--tilt-script: -3deg; /* caveat-brush accent word */
+--tilt-stamp: -9deg; /* round end-stamp */
 ```
 
 ## §D Font pairing fallback
 
-- **display**: `'Alfa Slab One'` · `'Ultra'` · `'Archivo Black'` wght 400
-- **body**: `'Archivo Narrow'` · `'Barlow Condensed'` · `'Oswald'` wght 500
-- **mono**: `'DM Mono'` · `'Space Mono'` · `'JetBrains Mono'` wght 400
+- **display**: `'Alfa Slab One'` · `'Archivo Black'` · `'Anton'` wght 400
+- **body**: `'Archivo Narrow'` · `'Inter'` · `'IBM Plex Sans'` wght 500
+- **mono**: `'DM Mono'` · `'Space Mono'` · `'JetBrains Mono'` wght 500
+- **script**: `'Caveat Brush'` · `'Pacifico'` · `'Kalam'` wght 400
 
-The preset additionally wants `'Caveat Brush'` for the script-interrupt component, but it is consumed by the `pp-script-*` class directly (not via the body/display/mono role resolver). If `Caveat Brush` is not on Google Fonts in the target environment, fall back to `'Caveat'` then `'Permanent Marker'`.
+The script role is unique to this preset — `var(--font-script)` resolves at render time when the host preset declares §D's script bullet OR the site ships a script face. If absent the role degrades to system-cursive.
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
 ```js
 const EASE = {
-  // RULE: hit-and-stick — stamps land with a small overshoot, then lock.
-  entry: "back.out(1.6)",
-  // RULE: emphasis is a hard "snap into focus" — power3.out, never ease-in-out.
-  emphasis: "power3.out",
-  // RULE: exit is fast and clean. Never crossfade — cut or whip.
-  exit: "power2.in",
-  // RULE: drift = grain shimmer + ribbon scroll only. Never on display type.
-  drift: "sine.inOut",
+  entry: "back.out(2.4)", // poster slam — bounce overshoot, then stick
+  emphasis: "expo.out", // triple-shadow snaps to final position
+  exit: "power4.in", // dive off-screen, never fade
+  drift: "sine.inOut", // ambient only (grain breath, frame width)
 };
-
 const DUR = {
-  // RULE: snap = stamp lock, shadow catch-up, diamond bullet pop.
-  snap: 0.16,
-  // RULE: med = headline crack-in, column reveal, list-item stagger.
-  med: 0.5,
-  // RULE: slow = full-scene establish, ribbon marquee loop.
+  snap: 0.18,
+  med: 0.45,
   slow: 0.9,
 };
-
-// RULE: never tween line-height or letter-spacing on Alfa Slab — glyph collision at large sizes.
-// RULE: the stacked text-shadow can be animated by tweening each shadow's offset independently
-//       to a 1-frame lag — creates the "type lands first, shadow catches up" beat.
-// RULE: rotation is part of the stamp's identity. Tween scale + opacity on entry; leave the
-//       --tilt-stamp-* value as the final resting rotation.
-// RULE: grain overlay opacity is static (0.5). Do not pulse it.
+// RULE: never ease-in-out on primary motion — stamps land, they don't glide
+// RULE: each triple-stamp entry pairs with a percussive cue (kick + snare double-hit)
+// RULE: caveat-script accent stagger-pops 100-150ms after its host headline
+// RULE: cream frame draws once with EASE.entry; never re-animates
+// RULE: hard cut between scenes — never crossfade; the stamp IS the cut
 ```
 
 ### §E.5 Motion choreography
 
-- **Allowed primitives:** stamp-land (scale 0.6→1 + opacity + tilt held), headline-crack (y -20→0 + opacity), shadow-lag (text-shadow offset tweened with 1-frame delay behind the type), bullet-pop (scale 0→1 on `back.out(2)`), ribbon-scroll (translateX linear loop on the orange ribbon), grain-static (no animation — texture is always-on).
-- **Forbidden gestures:** crossfade between scenes (cut or whip-pan only); blur on shadows (they are hard offset only); easing on `transform: rotate()` for stamps (the tilt is a final state, not a tween); animating mix-blend-mode or grain opacity; sentence-case display text (uppercase is invariant).
-- **Transition defaults:** scenes cut at full opacity. If transition is required, whip horizontally across the 6px ink border (the border carries the eye between scenes).
-- **Type-in-motion:** Alfa Slab cracks in word-by-word at `DUR.med` with `EASE.emphasis`. Caveat Brush enters with a hand-written feel — y-offset + opacity, `EASE.entry`, `DUR.snap`, never staggered (it lands as one gesture, not character-by-character). DM Mono labels fade up linearly, no stagger.
+- **Allowed primitives**: stamp-slam (translateY −16→0 + scale .92→1), script-pop (rotate −3° + opacity 0→1), frame-draw (scaleX 0→1 or path stroke), grain-breath (filter brightness 1↔1.04), dot-tick (scale 0→1 staggered on track-dots).
+- **Forbidden**: cross-fade between plates, slide transitions with momentum, blur in/out, any ease-in-out on primary motion.
+- **Stagger budget**: 100-150ms between elements within a single plate. Tight, not languid.
+- **Scene transitions**: hard cut only. No surface fade (paper-to-blue cut is part of the brand register).
 
 ## §G Voice transform recipe
 
-1. Strip articles + connectives (the / a / of / and / with / to / for) from headlines and chip text.
-2. UPPERCASE all on-screen Alfa Slab content. Caveat Brush stays lowercase. DM Mono stays uppercase but with em-dash decorators (`— LABEL —`).
-3. Cut prose into short declarative fragments. End fragments on nouns, not adjectives.
-4. Add one Caveat Brush "human interrupt" word per scene-cluster — informal, lowercase, connective ("yes", "really", "a", "more", "now"). It is the voice that whispers between the shouts.
-5. Wrap metadata in em-dashes (`— FOCUS —`, `— V. 01 —`, `— SOURCE NPS Q1 —`).
-6. End decks / scene-clusters with a brand-name punchline in Alfa Slab, no period.
+Take the brand's value-prop sentence. Transform with:
+
+1. Strip articles + connectives (the / a / of / and / with / to)
+2. Break into 2-3 word noun-stamp fragments
+3. UPPERCASE all
+4. End each fragment with `.`
+5. Drop one Caveat-script accent word inline (wrap in `<em>`) for emphasis
 
 **Example:**
 
-- IN: `Figma helps teams design products collaboratively in real time`
-- OUT: `TEAMS DESIGN PRODUCTS. real-time. — FIGMA —`
+- IN: `Brex helps teams move money faster across global accounts`
+- OUT: `TEAMS. MOVE MONEY. <em>faster</em>. — GLOBAL. — BREX.`
 
-(`real-time.` is the Caveat Brush interrupt; everything else is Alfa Slab uppercase except the bracketed mono tag.)
+Apply ONLY to DOM-visible text (headlines, chips, button labels, stat captions). Do NOT touch narrator scripts — TTS will mispronounce uppercase and break sentence prosody.
 
 ## §H Scene composition hints
 
-- **Surface alternation.** Alternate scene backgrounds: `var(--canvas)` (paper) for content-first scenes, `var(--brand-primary)` (blue) for high-emphasis / conclusive scenes. Two paper scenes in a row read fine; two blue scenes in a row need a visual break (a stamp, a script interrupt, or a 6px cream inset frame).
-- **Inset frame rule.** Every blue-background scene MUST carry a `pp-inset-frame` (6px `var(--canvas)` border at `inset: 48px`). This is the "framed-not-merely-filled" signal that distinguishes a blue scene from background-flood.
-- **Grain overlay.** Every scene carries `pp-grain-overlay` as a structural pseudo-element. It is not decorative — it is the surface that the scene is printed on. Workers must not omit it.
-- **Hero focal sizing.** The largest type on a scene gets the jumbo shadow stack (`var(--shadow-stamp-jumbo)`); secondary display gets `--shadow-stamp-lg`; chip / label sized type gets `--shadow-stamp-sm` or no shadow at all (DM Mono is flat by rule).
-- **Brand-color role contract.** `var(--brand-primary)` (blue) = primary structural fills + headline color on paper. `var(--brand-secondary)` (red, the shadow color) = box-shadow / text-shadow ONLY — NEVER a surface or text fill. `var(--brand-accent)` (orange) = stat numerals, accent text inside blue surfaces, button fill, ribbon background. `var(--ink)` = body text + structural borders. `var(--canvas)` = paper background + text on blue surfaces.
-- **Caveat Brush is an interrupt.** Use the `pp-script-interrupt` component at most once per scene. Never use it for body text. It always carries a tilt between -2deg and -5deg.
-- **Diamond bullets.** List items use the `pp-pillar-card` bullet style (24px rotated square `var(--brand-secondary)` on paper / `var(--brand-accent)` on blue surfaces). Upright squares are forbidden — the diamond rotation is signal, not decoration.
-- **Stagger budgets.** Three columns / nodes / stats stagger at 0.08-0.12s. Eight-item dense lists stagger at 0.05s. Do not stagger more than 12 elements — beyond that, fade the whole block in as one gesture.
-- **Sound-design hooks.** Stamp-lands invite a paper-thud or rubber-stamp SFX. Headline-cracks invite a single bass-thwack. Ribbon-scroll wants a low loop hum. Grain-overlay carries no sound — it is texture.
-- **Forbidden shapes.** Rounded card corners (except meta-pills); soft-blur shadows; thin borders below 3px; sentence-case Alfa Slab; red as a fill color.
+**Surface contract** — every scene picks ONE surface from the start; never mix within a scene. Components are surface-tagged (see `chunks/index.json.components[].surface`):
 
-## §I Page-level CSS
+| surface  | components that work                                                | typical narrative role                              |
+| -------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `paper`  | stamp-statement, script-em, diamond-list, track-dots, rotated-stamp | manifestos, ledes, lists, timelines, closing stamps |
+| `blue`   | framed-stamp, mega-stat, end-stamp                                  | authority moments, hero stats, closers              |
+| `orange` | orange-quote                                                        | customer voice / testimonial                        |
+
+Scene transitions go through hard cut, not surface fade.
+
+**Material composition rules** (peoples invariants — encoded in component frontmatter `avoids_same_scene`):
+
+- Single triple-stamp per plate. `stamp-statement` + `framed-stamp` in same scene → visual collision; pick one.
+- Single script-accent per stamp. Two `script-em` instances in one scene → register breaks.
+- Cream frame goes only on blue or orange surfaces, never paper. (Cream-on-paper has no contrast.)
+- Round stamps (`rotated-stamp`, `end-stamp`) belong to **closer beats** only — never opening/intro scenes.
+
+**Focal sizing per 1920×1080** (rendered px, driven by component CSS `clamp()`):
+
+- Hero headline (display): 120-200px
+- Stat numeral (display, tightest tracking): 140-260px
+- Body lead: 36-60px
+- Caveat-script accent: 80-140px
+
+**Brand colour placement (60 / 30 / 10)**:
+
+- 60% — `var(--paper)` (paper scenes) or `var(--blue)` (framed scenes) — full-bleed background
+- 30% — `var(--cream)` for frame chrome, `var(--ink)` for type
+- 10% — `var(--orange)` for the stamp head — exactly one focal element per plate
+
+**Sound design hooks** (Phase 4b worker; not encoded in §E):
+
+- Each triple-stamp entry → kick + snare double-hit
+- Script-pop → soft pluck or pen-stroke
+- Cream frame draw → low whoosh, short
+
+**Materials lexicon** (informational — these are the composition atoms behind the patterns):
+
+- triple-stamp · cream-frame · script-em · star-ribbon · diamond-bullet · round-stamp · pill-chip · track-dot · grain-tooth
+
+## §I Page-level CSS (makes design.html itself read as peoples)
 
 ```css
-/* Make design.html itself read as a People's Platform poster. */
 body {
-  background: var(--canvas);
-  position: relative;
+  background: var(--paper);
+  color: var(--ink);
 }
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px),
-    radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size:
-    3px 3px,
-    5px 5px;
-  background-position:
-    0 0,
-    1px 2px;
-  mix-blend-mode: multiply;
-  opacity: 0.5;
-  z-index: 0;
+.title-card {
+  background: var(--paper);
+  border-bottom: 8px solid var(--orange);
+  padding: 96px 0 80px;
 }
-.wrap {
-  position: relative;
-  z-index: 1;
-}
-.ds-section {
-  border-top: 6px solid var(--ink, #0e0e14);
-}
-.ds-section:first-of-type {
-  border-top: none;
-}
-h1,
-h2 {
+.title-display {
   text-transform: uppercase;
-  letter-spacing: 0.005em;
-  color: var(--brand-primary, #2c2cdc);
-  text-shadow: 5px 5px 0 var(--brand-secondary, #e83a2a);
+  letter-spacing: -0.005em;
+  color: var(--orange);
+  text-shadow: var(--shadow-triple-md);
+}
+.brand-name {
+  color: var(--blue);
+  font-weight: 700;
+}
+.style-name {
+  color: var(--orange);
+  text-shadow: 3px 3px 0 var(--red);
+  font-weight: 700;
+}
+
+.ds-section {
+  border-top: 4px solid var(--ink);
 }
 .eyebrow {
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  color: var(--brand-secondary, #e83a2a);
+  color: var(--blue);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+h2 {
+  text-transform: uppercase;
+  letter-spacing: -0.005em;
+}
+
+/* Cards take the peoples treatment: thick ink border, cream chrome on dark, no rounding bigger than 14px */
+.dna-swatch,
+.type-card,
+.voice-pair,
+.comp-card {
+  border: 4px solid var(--ink) !important;
+  border-radius: 14px !important;
+}
+.comp-head {
+  background: var(--blue) !important;
+  color: var(--cream);
+  border-bottom: 4px solid var(--ink) !important;
+}
+.comp-head .comp-name,
+.comp-head .comp-marker {
+  color: var(--cream);
+}
+.comp-preview {
+  background-image: var(--grain-image);
+  background-size: var(--grain-size);
+  background-position: var(--grain-offset);
+  background-blend-mode: multiply;
 }
 ```

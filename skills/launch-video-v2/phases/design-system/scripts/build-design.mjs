@@ -165,8 +165,12 @@ function brandFromBrandHtml(html) {
   const primary = get("primary");
   const secondary = get("secondary");
   const accent = get("accent");
-  if (!primary && !secondary && !accent) return null;
-  return { primary, secondary, accent };
+  // tertiary + costume support designhtml-class presets (5-slot alias system).
+  // Brands rarely declare them in brand.html — when absent, fallbacks below kick in.
+  const tertiary = get("tertiary");
+  const costume = get("costume");
+  if (!primary && !secondary && !accent && !tertiary && !costume) return null;
+  return { primary, secondary, accent, tertiary, costume };
 }
 const brandFromHtml = brandFromBrandHtml(brandHtml);
 
@@ -196,6 +200,36 @@ const bgList = gatherColors(primColors.background || {});
 const txList = gatherColors(primColors.text || {});
 const canvasHex = bgList[0] || (isLight(primaryHex) ? "#ffffff" : "#0f0f0f");
 const inkHex = txList[0] || (isLight(canvasHex) ? "#111111" : "#ffffff");
+
+// ─── 5-slot alias system (tertiary + costume) ────────────────────
+// designhtml-class presets (peoples-platform, etc.) reference 5 brand alias
+// slots in their §B: primary / secondary / tertiary / accent / costume.
+// 3-slot presets (the existing 22) don't reference tertiary/costume — they
+// inherit the defaults below as no-ops.
+//
+// tertiary: second authority surface / bridge stratum hue.
+//   1. brand.html declares brand-color-tertiary  → take it
+//   2. saturation-pick from full palette          → highest-sat non-overlap
+//   3. fallback to accentHex                      → degrades to accent-as-surface
+const tertiaryHex =
+  brandFromHtml?.tertiary ||
+  (() => {
+    const taken = new Set(
+      [primaryHex, secondaryHex, accentHex, canvasHex, inkHex].map((c) => c.toLowerCase()),
+    );
+    const candidates = allColors
+      .filter((c) => !taken.has(c.toLowerCase()))
+      .map((c) => ({ c, s: saturation(c) }))
+      .filter((o) => o.s > 0.3)
+      .sort((a, b) => b.s - a.s);
+    return candidates[0]?.c || accentHex;
+  })();
+
+// costume: second light surface (cream frames, raised window faces, soft chrome).
+//   1. brand.html declares brand-color-costume    → take it
+//   2. canvasHex                                  → degrades to canvas-equals-costume
+//      (preset §B can still synthesize a warm tint via color-mix in CSS)
+const costumeHex = brandFromHtml?.costume || canvasHex;
 
 // ─── Decoration colors (used by brutalism + maximalist presets) ──────
 // Auto-pick 4 vibrant colors from the site's full palette, with hue diversity.
@@ -285,6 +319,47 @@ if (presets.length === 0) {
   process.exit(1);
 }
 
+// ═══════════════════ Component frontmatter parser ════════
+// Minimal YAML subset: top-level `key: value` lines only. Supports:
+//   - bare strings:           surface: paper
+//   - comma-separated lists:  composes: triple-stamp, grain-tooth
+//   - bracketed lists:        slots: [headline, sub]
+//   - integers:               weight: 700
+//   - null / ~ / empty:       optional_field: ~
+// Quoted strings have surrounding quotes stripped. Nesting / multiline / refs
+// are not supported — keep frontmatter flat.
+function parseComponentFrontmatter(text) {
+  const out = {};
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    const m = line.match(/^\s*([a-z_][a-z0-9_]*)\s*:\s*(.*)$/i);
+    if (!m) continue;
+    const [, key, rawVal] = m;
+    const val = rawVal.trim();
+    if (val === "" || val === "~" || val === "null") {
+      out[key] = null;
+    } else if (/^\[.*\]$/.test(val)) {
+      out[key] = val
+        .slice(1, -1)
+        .split(",")
+        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+        .filter(Boolean);
+    } else if (val.includes(",")) {
+      out[key] = val
+        .split(",")
+        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+        .filter(Boolean);
+    } else if (/^-?\d+$/.test(val)) {
+      out[key] = parseInt(val, 10);
+    } else if (val === "true" || val === "false") {
+      out[key] = val === "true";
+    } else {
+      out[key] = val.replace(/^["']|["']$/g, "");
+    }
+  }
+  return out;
+}
+
 // ═══════════════════ Preset parser ═══════════════════════
 function parsePreset(presetDir) {
   const presetMd = path.join(presetDir, "preset.md");
@@ -344,12 +419,32 @@ function parsePreset(presetDir) {
         console.error(`✗ ${componentsDir}/${f}: component id must match [a-z0-9-]+`);
         process.exit(1);
       }
-      const block = fs.readFileSync(path.join(componentsDir, f), "utf8").trim();
+      const raw = fs.readFileSync(path.join(componentsDir, f), "utf8");
+      // Optional YAML-subset frontmatter at top of file:
+      //   ---
+      //   surface: paper
+      //   composes: triple-stamp, grain-tooth
+      //   role: statement
+      //   avoids_same_scene: framed-stamp, end-stamp
+      //   slots: [headline, sub]
+      //   ---
+      // designhtml-class presets (peoples-platform, …) use this to surface
+      // surface / composition / pairing metadata to the plan agent via
+      // chunks/index.json. Existing components without frontmatter still work —
+      // the meta field is null and downstream omits it.
+      let compMeta = null;
+      let bodyText = raw;
+      const fmMatch = raw.match(/^---\r?\n([\s\S]+?)\r?\n---\r?\n([\s\S]*)$/);
+      if (fmMatch) {
+        compMeta = parseComponentFrontmatter(fmMatch[1]);
+        bodyText = fmMatch[2];
+      }
+      const block = bodyText.trim();
       if (!block) {
         console.error(`✗ ${componentsDir}/${f}: empty component file`);
         process.exit(1);
       }
-      components.push({ name: id, block });
+      components.push({ name: id, block, meta: compMeta });
     }
   }
   if (components.length === 0) {
@@ -357,11 +452,20 @@ function parsePreset(presetDir) {
     process.exit(1);
   }
   // Synthesize §F so downstream rendering code (renderComponents, emit-chunks anchor scan)
-  // sees the same shape as the legacy single-file format.
+  // sees the same shape as the legacy single-file format. When a component has
+  // frontmatter, we emit one extra HTML comment line right after the COMPONENT
+  // marker — emit-chunks.mjs greps that line out and writes the fields into
+  // chunks/index.json.components[]. Comments without frontmatter skip the line
+  // (zero impact on existing 22 presets).
   sections.F = {
     title: "Components (paste-ready, use brand vars from §B)",
     content: components
-      .map((c) => `<!-- COMPONENT: ${c.name} -->\n\n${c.block}\n\n<!-- /COMPONENT -->`)
+      .map((c) => {
+        const metaLine = c.meta
+          ? `<!-- COMPONENT-META: ${JSON.stringify(c.meta)} -->\n\n`
+          : "";
+        return `<!-- COMPONENT: ${c.name} -->\n\n${metaLine}${c.block}\n\n<!-- /COMPONENT -->`;
+      })
       .join("\n\n"),
   };
 
@@ -626,6 +730,19 @@ const GFONTS = new Set(
     "Anton",
     "Archivo Black",
     "Bebas Neue",
+    "Alfa Slab One",
+    "Archivo Narrow",
+    "DM Mono",
+    "Caveat Brush",
+    "Caveat",
+    "Pacifico",
+    "Kalam",
+    "Sacramento",
+    "Permanent Marker",
+    "Allura",
+    "Cookie",
+    "Satisfy",
+    "Marck Script",
   ].map((s) => s.toLowerCase().replace(/[^a-z0-9]/g, "")),
 );
 
@@ -824,7 +941,9 @@ const localFonts = discoverLocalFonts(researchAssetsDir);
 // role. Bullet format (per README §D): `- **<role>**: \`'Name1'\` · \`'Name2'\` · ...`
 function parsePresetFontFallback(presetSections) {
   const dContent = presetSections.D?.content || "";
-  const roles = { display: null, body: null, mono: null };
+  // script is the 4th role (peoples-platform's Caveat Brush, etc.) — optional;
+  // a §D without a script bullet leaves it null and downstream skips emission.
+  const roles = { display: null, body: null, mono: null, script: null };
   for (const role of Object.keys(roles)) {
     // Match the bullet line for this role; capture everything after the colon.
     const lineRe = new RegExp(`^\\s*-\\s*\\*\\*${role}\\*\\*\\s*:\\s*(.+)$`, "mi");
@@ -870,6 +989,7 @@ function resolveFont(siteName, role, presetFontFallback) {
       mono: /\b(mono|code)\b/i,
       display: /\b(serif|display|headline)\b/i,
       body: null, // body has no reliable name hint
+      script: /\b(caveat|brush|script|cursive|kalam|pacifico|sacramento)\b/i,
     };
     const hint = ROLE_HINTS[role];
     if (hint) {
@@ -904,20 +1024,37 @@ function siteCanonicalName(s) {
 // to the preset fallback path (which honestly reports "preset fallback" in the
 // type-roles card) instead of pretending "JetBrains Mono" came from the site.
 const monoFromList = fontFamilies.find((f) => /mono|code/i.test(f));
-const nonMono = fontFamilies.filter((f) => !/mono|code/i.test(f));
+// Script families are rarely emitted by designlang as the primary site family;
+// usually only show up when a brand uses a brush face for accent words. Match
+// loosely against known display-script names so site-supplied "Caveat Brush"
+// gets routed to the script role instead of stealing display.
+const SCRIPT_FAMILY_RE = /\b(caveat|brush|script|cursive|kalam|pacifico|sacramento|allura|cookie|satisfy|marck|permanent\s*marker)\b/i;
+const scriptFromList = fontFamilies.find((f) => SCRIPT_FAMILY_RE.test(f));
+const nonMono = fontFamilies.filter(
+  (f) => !/mono|code/i.test(f) && !SCRIPT_FAMILY_RE.test(f),
+);
 const rawDisplay = nonMono[1] || nonMono[0] || "";
 const rawBody = nonMono[0] || "";
 const rawMono = monoFromList || "";
+const rawScript = scriptFromList || "";
 
 const presetFontFallback = parsePresetFontFallback(preset.sections);
 const display = resolveFont(rawDisplay, "display", presetFontFallback);
 const body = resolveFont(rawBody, "body", presetFontFallback);
 const mono = resolveFont(rawMono, "mono", presetFontFallback);
+// Script is only resolved when either the site shipped one OR the preset
+// declared §D bullet. resolveFont returns a "preset" role when the bullet
+// resolves; we treat a null-name result (no site name AND no preset bullet)
+// as "this preset doesn't use a script role" and skip @font-face / :root emission.
+const script = (rawScript || presetFontFallback.script)
+  ? resolveFont(rawScript, "script", presetFontFallback)
+  : null;
 
 function gfontsUrl() {
   // Only Google-Fonts and preset-fallback families go through fonts.googleapis.
   // site-local families are loaded via the @font-face block built below.
-  const remoteRoles = [display, body, mono].filter((r) => r.source !== "site-local");
+  const allRoles = script ? [display, body, mono, script] : [display, body, mono];
+  const remoteRoles = allRoles.filter((r) => r.source !== "site-local");
   if (remoteRoles.length === 0) return null;
   const fams = [];
   const seen = new Set();
@@ -926,7 +1063,13 @@ function gfontsUrl() {
     if (seen.has(f)) continue;
     seen.add(f);
     const wts =
-      f === mono.name ? "400;500" : f === display.name ? "400;700;800" : "400;500;600;700";
+      f === mono.name
+        ? "400;500"
+        : f === display.name
+          ? "400;700;800"
+          : script && f === script.name
+            ? "400" // script faces typically ship a single weight
+            : "400;500;600;700";
     fams.push(`family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@${wts}`);
   }
   return `https://fonts.googleapis.com/css2?${fams.join("&")}&display=swap`;
@@ -939,7 +1082,8 @@ function gfontsUrl() {
 // exact comment anchors prep.mjs Step 2c greps for, so the path-rewrite +
 // inject-into-index.html flow lights up without any changes downstream.
 function buildLocalFontFaceBlock() {
-  const localRoles = [display, body, mono].filter((r) => r.source === "site-local");
+  const allRoles = script ? [display, body, mono, script] : [display, body, mono];
+  const localRoles = allRoles.filter((r) => r.source === "site-local");
   if (localRoles.length === 0) return { block: "", copiedFiles: [] };
   const fontsDestDir = path.join(outDir, "fonts");
   fs.mkdirSync(fontsDestDir, { recursive: true });
@@ -1110,10 +1254,19 @@ function renderColorAndTokens() {
   const fontDisplayStack = `'${display.name}', ${preset.name === "neo-brutalism" || /Mono/i.test(display.name) ? "ui-monospace, monospace" : /Serif|Playfair|Lora|Garamond|Fraunces|Newsreader|Spectral|Times/i.test(display.name) ? "Georgia, serif" : "system-ui, sans-serif"}`;
   const fontBodyStack = `'${body.name}', -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
   const fontMonoStack = `'${mono.name}', ui-monospace, SFMono-Regular, Menlo, monospace`;
+  // Script stack only built when script role resolved (else fontScriptLine below skips emission).
+  const fontScriptStack = script ? `'${script.name}', cursive` : "";
+  // Script font role is optional — only emitted when preset declares a §D script bullet
+  // OR when site exposes a script family. 3-role presets get a no-op blank line.
+  const fontScriptLine = script?.name
+    ? `  --font-script:     ${fontScriptStack};\n`
+    : "";
   const rootBody = `
   --brand-primary:   ${primaryHex};
   --brand-secondary: ${secondaryHex};
+  --brand-tertiary:  ${tertiaryHex};
   --brand-accent:    ${accentHex};
+  --brand-costume:   ${costumeHex};
   --ink:             ${inkHex};
   --canvas:          ${canvasHex};
   --brand-gradient:  ${signatureGradient};
@@ -1124,7 +1277,7 @@ function renderColorAndTokens() {
   --font-display:    ${fontDisplayStack};
   --font-body:       ${fontBodyStack};
   --font-mono:       ${fontMonoStack};
-${tokenLines.map((l) => "  " + l).join("\n")}`;
+${fontScriptLine}${tokenLines.map((l) => "  " + l).join("\n")}`;
   return `
 <section id="color-tokens" class="ds-section">
   <div class="eyebrow">§2 · Color × Style overlay</div>
@@ -1149,7 +1302,8 @@ function renderTypography() {
   <div class="type-grid">
     ${[["Display", display, "serif", `font-size: 72px; font-weight: ${preset.name === "neo-brutalism" ? 800 : 400}; letter-spacing: ${preset.name === "neo-brutalism" ? "-0.04em" : "-0.02em"}; line-height: 1;`, brandName],
        ["Body", body, "sans-serif", "font-size: 22px; line-height: 1.5;", "The quick brown fox jumps over the lazy dog."],
-       ["Mono", mono, "ui-monospace, monospace", "font-size: 18px;", `font: ${mono.name}`]].map(([roleLabel, role, fallbackChain, specimenStyle, specimenText]) => {
+       ["Mono", mono, "ui-monospace, monospace", "font-size: 18px;", `font: ${mono.name}`],
+       ...(script ? [["Script", script, "cursive", "font-size: 56px; font-weight: 400; line-height: 1; transform: rotate(-3deg); display: inline-block;", "gets simpler —"]] : [])].map(([roleLabel, role, fallbackChain, specimenStyle, specimenText]) => {
       let note;
       if (role.source === "site") {
         note = `<div class="type-note">✓ from site (Google Fonts CDN)</div>`;
@@ -1287,8 +1441,12 @@ ${esc(voiceMd)}
 // "serif" must not be preceded by "sans-" (the generic family "sans-serif" is
 // a sans, not a serif). We test for "serif" only when no "sans-" appears just
 // before it. Other serif family names match by literal word.
-const SERIF_NAME_RE = /(?<!sans-)\bserif\b|\b(Bodoni|Playfair|Garamond|Fraunces|Newsreader|Spectral|Times|Lora|Source Serif|Crimson|Merriweather|PT Serif|DM Serif)\b/i;
-const MONO_NAME_RE = /\b(monospace|JetBrains Mono|Fira Code|IBM Plex Mono|Roboto Mono|Source Code|Space Mono|Geist Mono|DM Mono|Inconsolata|SFMono|Menlo|Consolas|ui-monospace)\b/i;
+const SERIF_NAME_RE = /(?<!sans-)\bserif\b|\b(Bodoni|Playfair|Garamond|Fraunces|Newsreader|Spectral|Times|Lora|Source Serif|Crimson|Merriweather|PT Serif|DM Serif|Alfa Slab|Archivo Black|Anton|Big Shoulders|Stardos Stencil|Bowlby)\b/i;
+const MONO_NAME_RE = /\b(monospace|JetBrains Mono|Fira Code|IBM Plex Mono|Roboto Mono|Source Code|Space Mono|Geist Mono|DM Mono|Inconsolata|SFMono|Menlo|Consolas|ui-monospace|Barlow Condensed|VT323|Press Start 2P)\b/i;
+// Script faces (caveat-brush etc.) get routed to var(--font-script). Order
+// matters: script check runs BEFORE serif because some script names share
+// generic keywords. The 4th role lives next to mono/display/serif.
+const SCRIPT_NAME_RE = /\b(Caveat|Caveat Brush|Pacifico|Kalam|Allura|Sacramento|Cookie|Satisfy|Marck Script|Permanent Marker)\b/i;
 function rewriteComponentFontFamilies(block) {
   // Replace each `font-family: <chain>;` with the right token. Skip values
   // that already reference var(--font-*) so re-running is a no-op.
@@ -1296,10 +1454,43 @@ function rewriteComponentFontFamilies(block) {
     if (/var\(--font-/.test(chain)) return full;
     let token;
     if (MONO_NAME_RE.test(chain)) token = "var(--font-mono)";
+    else if (SCRIPT_NAME_RE.test(chain)) token = "var(--font-script)";
     else if (SERIF_NAME_RE.test(chain)) token = "var(--font-display)";
     else token = "var(--font-body)";
     return `font-family: ${token};`;
   });
+}
+
+// ═══════════════════ Render: §H composition hints ════════
+// Two artifacts:
+//   1. Human-readable preset rules — for design.html browsers.
+//   2. <pre class="ds-code"><!-- HINTS-START --> ... <!-- HINTS-END --></pre>
+//      — paste-ready block that emit-chunks.mjs extracts to chunks/composition-hints.md.
+//      Phase 3 plan agent consumes this when picking components per scene:
+//        - surface contract (which components go on which surface)
+//        - material composition rules (single triple-stamp per plate, etc.)
+//        - 60/30/10 brand color placement
+//        - sound-design hooks
+//      Presets without §H emit an empty block (anchor still present so emit-chunks
+//      can produce a stub composition-hints.md the plan agent can read uniformly).
+function renderHints() {
+  const hintsContent = (preset.sections.H?.content || "").trim();
+  // Build the paste-ready md block. Keep the preset's §H content verbatim —
+  // it's authored prose, not a structured schema. Plan agent reads it as
+  // free-form guidance and applies the constraints when choosing components.
+  const hintsMd = hintsContent
+    ? `# Composition hints — ${preset.label}\n\n${hintsContent}`
+    : `# Composition hints — ${preset.label}\n\n_(preset declared no §H — plan agent picks components by id alone)_`;
+  return `
+<section id="hints" class="ds-section">
+  <div class="eyebrow">§H · Scene composition hints (plan agent reads these)</div>
+  <h2>${esc(preset.label)} composition rules</h2>
+  <p class="ds-prose">Surface contracts, material composition rules, brand-color placement, sound-design hooks — anything that constrains <strong>which</strong> components a Phase 3 plan can mix in a single scene. Pasted verbatim into <code>chunks/composition-hints.md</code> for the plan agent.</p>
+  <div class="ds-prose">${mdInlineToHtml(hintsContent || "_no §H declared_").replace(/\n\n/g, "</p><p class='ds-prose'>").replace(/\n/g, "<br>")}</div>
+  <pre class="ds-code"><!-- HINTS-START -->
+${esc(hintsMd)}
+<!-- HINTS-END --></pre>
+</section>`;
 }
 
 function renderComponents() {
@@ -1333,7 +1524,7 @@ function renderComponents() {
     <details>
       <summary class="ds-summary">Source</summary>
       <pre class="ds-code">&lt;!-- COMPONENT: ${esc(c.name)} --&gt;
-${esc(c.block)}
+${c.meta ? `&lt;!-- COMPONENT-META: ${esc(JSON.stringify(c.meta))} --&gt;\n` : ""}${esc(c.block)}
 &lt;!-- /COMPONENT --&gt;</pre>
     </details>
   </div>`;
@@ -1366,6 +1557,32 @@ function placeholderFor(key) {
     DONT_2: "Don't use body text under 24px in video",
     DONT_3: "Don't blur shadows — offset only",
     FOREGROUND_CONTENT: `<div style="font-family: '${display.name}', serif; font-size: clamp(40px, 5vw, 88px); line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 16px;">${brandName}</div><div style="font-family: '${body.name}', sans-serif; font-size: clamp(16px, 1.4vw, 20px); opacity: 0.85; max-width: 38ch;">${esc(tagline || description.slice(0, 80) || "A canvas for teams")}</div>`,
+
+    // —— peoples-platform / designhtml-class additions ——
+    // Inline script-em pattern (e.g. "The work gets simpler as the team gets braver.")
+    SCRIPT_BEFORE: "The work ",
+    SCRIPT_WORD: "gets simpler",
+    SCRIPT_AFTER: " as the team gets braver.",
+    // Stat-block trio (numeral + unit + caption with em + supporting source line)
+    STAT_UNIT: "%",
+    STAT_SOURCE: `— Internal source, Q1 ${new Date().getFullYear()} —`,
+    // Quote attribution sub-roles
+    AUTHOR_ROLE: "— Head of Ops, Acme Inc. —",
+    // Diamond list (3 priority sentences)
+    ITEM_1: "Ship the core flow. Cut three legacy paths.",
+    ITEM_2: "Talk to ten teams. Brief findings every Friday.",
+    ITEM_3: "One launch, not five. Shared positioning across drops.",
+    // Track-dots timeline (4 sequential beats)
+    LABEL_1: "May · Kickoff",
+    LABEL_2: "June · Beta",
+    LABEL_3: "August · Launch",
+    LABEL_4: "October · Scale",
+    // Round-stamp content (big mark / small mark / closer caption)
+    MARK_BIG: "END",
+    MARK_SMALL: "— V. 01 —",
+    CAPTION: "Stamped, signed, closed.",
+    // End-plate credit line
+    CREDIT: `★ ${brandName} · Vol. 01 ★`,
   };
   const value = map[key] ?? key;
   return RAW_HTML_KEYS.has(key) ? value : esc(value);
@@ -1479,6 +1696,7 @@ const html = `<!DOCTYPE html>
     - §2: grep <!-- ROOT-START --> .. <!-- ROOT-END --> → paste into scene <style>
     - §4: grep <!-- MOTION-START --> .. <!-- MOTION-END --> → paste into <script>
     - §5: grep <!-- VOICE-START --> .. <!-- VOICE-END --> → register for DOM text copy
+    - §H: grep <!-- HINTS-START --> .. <!-- HINTS-END --> → composition rules for plan agent
     - §6: grep <!-- COMPONENT: <name> --> .. <!-- /COMPONENT --> → paste by name
 -->
 ${(() => {
@@ -1504,6 +1722,7 @@ ${renderColorAndTokens()}
 ${renderTypography()}
 ${renderMotion()}
 ${renderVoice()}
+${renderHints()}
 ${renderComponents()}
 </main>
 
@@ -1614,10 +1833,12 @@ console.log(`✓ ${path.relative(process.cwd(), outFile)} (${sizeKb}KB)`);
 console.log(`✓ ${path.relative(process.cwd(), outScoresFile)} (inference report)`);
 console.log(`  source:   ${sourceUrl || "(no source)"}`);
 console.log(`  brand:    ${brandName} · ${materialLabel} material · ${intentLabel} intent`);
-console.log(`  palette:  ${primaryHex} primary · ${secondaryHex} secondary · ${accentHex} accent`);
+console.log(`  palette:  ${primaryHex} primary · ${secondaryHex} secondary · ${tertiaryHex} tertiary · ${accentHex} accent · ${costumeHex} costume`);
 console.log(`  deco:     ${decoColors.join(" · ")}`);
-console.log(`  fonts:    ${display.name} display · ${body.name} body · ${mono.name} mono`);
-for (const [roleName, role] of [["display", display], ["body", body], ["mono", mono]]) {
+console.log(`  fonts:    ${display.name} display · ${body.name} body · ${mono.name} mono${script ? ` · ${script.name} script` : ""}`);
+const fontRolesToReport = [["display", display], ["body", body], ["mono", mono]];
+if (script) fontRolesToReport.push(["script", script]);
+for (const [roleName, role] of fontRolesToReport) {
   if (role.source === "preset") {
     if (role.originalName) {
       console.log(`    ! ${roleName.padEnd(7)}: '${role.originalName}' not resolvable → ${role.name}`);
