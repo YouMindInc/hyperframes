@@ -21,7 +21,7 @@
 // Exit 1 = at least one violation. Print per-scene per-rule failures on stderr.
 //          Orchestrator should re-dispatch the affected workers, not patch in finalize.
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const argv = process.argv.slice(2);
