@@ -155,7 +155,15 @@ failed 时的标准动作：
 
 ## Step 4：Snapshot smoke test
 
-每 scene midpoint = 累计 start + `estimatedDuration_s / 2`。
+每 scene 先截 midpoint：`start_s + estimatedDuration_s * 0.5`。
+
+高风险 scene 再截 `75%` 和 `90%`：
+
+- duration >= 8s
+- multi-act / dense multi-subject / action-payoff / proof-heavy
+- effects 或 HTML 含 `multi-phase-camera` / `data-layout-role="primary"`
+
+去重后按升序传给 CLI：
 
 ```bash
 (cd hyperframes && npx hyperframes snapshot --at <m1>,<m2>,...)
@@ -166,6 +174,8 @@ failed 时的标准动作：
 - 空白 → asset 路径错或 `<template>` 没找到
 - 闪一下 / 跳帧 → host `data-composition-id` ≠ 内层 id ≠ timeline key
 - 显错 scene → `index.html` 播放顺序错
+- Dense frame：是否只有一个 primary？supporting 是否更小、更低对比、更少运动，并避开 primary bbox？
+- 多个 subject 同时抢 center safe zone → STOP，回 worker；不要靠 `inspect` 放行（inspect 不查 semantic overlap）
 
 ## Step 5：Render
 

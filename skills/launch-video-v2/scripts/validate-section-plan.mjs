@@ -60,6 +60,51 @@ const heads = [...plan.matchAll(sceneHeadRe)];
 const ANCHORS = ["Effects", "Duration", "Continuity"];
 const OPTIONAL_ANCHORS = ["Blueprint", "Components"];
 
+const hasAnchor = (body, name) => {
+  const re = new RegExp(`^\\*\\*${name}:\\*\\*`, "mi");
+  return re.test(body);
+};
+
+const hasAny = (text, patterns) => patterns.some((pattern) => pattern.test(text));
+
+const hierarchyActionRe =
+  /\b(exit|hide|hidden|compact|demote|supporting|rail|background|outside|safe zone|safe-zone)\b/i;
+const supportingRe =
+  /\b(supporting|demote|rail|side rail|bottom rail|background texture|low-contrast|lower contrast|smaller|outside)\b/i;
+
+function hierarchyRisk(body) {
+  const text = body.toLowerCase();
+  const multiAct = /\b(multi[- ]?act|three[- ]?act|act\s+[abc]|\bfocal points?)\b/i.test(text);
+  const hasAction =
+    /\b(cta|get started|call[- ]?to[- ]?action|button|sign up|book demo|start trial|download|subscribe|contact sales|action headline|payoff frame|payoff close|closing action)\b/i.test(
+      text,
+    );
+  const hasSocialProof =
+    /\b(logos?|logo strip|customer logos?|social[- ]proof|trusted by|testimonial|customers?|partners?)\b/i.test(
+      text,
+    );
+  const hasDataProof = hasAny(text, [
+    /\bstats?\b/i,
+    /\bstat[- ]?counter\b/i,
+    /\bmetrics?\b/i,
+    /\bkpis?\b/i,
+    /\bproof cluster\b/i,
+    /\bproof rail\b/i,
+    /\bchart\b/i,
+    /\bcount[- ]?up\b/i,
+    /\bpolicy compliance\b/i,
+    /\bhours saved\b/i,
+    /\byield\b/i,
+  ]);
+  return {
+    multiAct,
+    hasAction,
+    hasSocialProof,
+    hasDataProof,
+    risky: multiAct || (hasAction && (hasSocialProof || hasDataProof)),
+  };
+}
+
 if (heads.length === 0) {
   errors.push(
     "No '## Scene N: <name>' headings found — section_plan must have at least one scene block.",
@@ -100,6 +145,34 @@ for (let i = 0; i < heads.length; i++) {
     const dm = found.Duration.match(/[\d.]+/);
     if (!dm || !(parseFloat(dm[0]) > 0)) {
       errors.push(`${sceneId}: **Duration:** must be a positive float (got "${found.Duration}")`);
+    }
+  }
+
+  const risk = hierarchyRisk(body);
+  if (risk.risky) {
+    const needs = risk.multiAct ? "multi-act scene" : "action/payoff + proof scene";
+    if (!hasAnchor(body, "PrimarySubjectTimeline")) {
+      errors.push(
+        `${sceneId}: ${needs} must include **PrimarySubjectTimeline:** with exactly one primary subject per time range`,
+      );
+    } else if (!/\bprimary\b/i.test(body)) {
+      errors.push(`${sceneId}: **PrimarySubjectTimeline:** must name the primary subject(s)`);
+    }
+
+    if (!hasAnchor(body, "Handoff")) {
+      errors.push(
+        `${sceneId}: ${needs} must include **Handoff:** explaining how previous primary exits, hides, compacts, or demotes`,
+      );
+    } else if (!hierarchyActionRe.test(body)) {
+      errors.push(
+        `${sceneId}: **Handoff:** must include an explicit action: exit, hide, compact, demote, supporting, rail, or outside safe zone`,
+      );
+    }
+
+    if (risk.hasAction && (risk.hasSocialProof || risk.hasDataProof) && !supportingRe.test(body)) {
+      errors.push(
+        `${sceneId}: action/payoff + proof can coexist only if proof is explicitly supporting/demoted/rail/background/outside the primary bbox`,
+      );
     }
   }
 
