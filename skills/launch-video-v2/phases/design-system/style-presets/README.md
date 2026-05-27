@@ -89,7 +89,7 @@ Component file rules:
 
 1. `build-design.mjs` extracts the block, merges with site-derived brand tokens (`--brand-primary`, `--canvas`, etc.), and writes the merged `:root { ... }` between `<!-- ROOT-START -->` / `<!-- ROOT-END -->` in design.html.
 2. `emit-chunks.mjs` extracts that merged block → `chunks/tokens.css`.
-3. Phase 4b scene workers paste it verbatim into each scene's `[data-composition-id="<scene-id>"] { ... }`.
+3. Phase 4b scene workers paste it into each scene's `#root { ... }` block.
 
 **Hard rules:**
 

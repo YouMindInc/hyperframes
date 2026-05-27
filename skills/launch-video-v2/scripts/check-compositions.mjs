@@ -11,9 +11,11 @@
 //      但 `hyperframes render` 走的 producer 管线会**剥掉** wrapper，selector
 //      全部失配 → scene 渲成黑屏或裸 DOM。正确写法：裸的 `.s<N>-foo` / `#s<N>-foo`，
 //      runtime scoper 自动加 host scope。
-//   2. CSS scope mismatch —— `#root` / `#<scene-id>-root` id selector。多 sub-comp
-//      共享 `id="root"` 时全局 id selector 会串扰。
-//   3. JS selector `#root` / `#scene_N-root` —— 同 #2 根因，断 GSAP / DOM lookup。
+//   2. Self data-composition-id selector —— CSS 写成
+//      `[data-composition-id="<scene-id>"] { ... }` 会触发新版 CLI
+//      `composition_self_attribute_selector` warning。root 样式应写 `#root`。
+//   3. Scene-root id selector —— `#<scene-id>-root` 不是 runtime contract。
+//      root 只能用 `#root`；scene 内部元素用 `#s<N>-foo`。
 //   4. Root contract 缺 —— 没 `id="root"`、没 `class="<scene-id>-root"`、没
 //      `data-composition-id`、没 `data-duration`、没 `window.__timelines[...]`。
 //   5. Asset 引用了 hyperframes/public/ 里不存在的文件 —— worker 编造或拼写错
@@ -40,18 +42,20 @@ const flag = (name, def) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
 };
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
 const groupSpecPath = resolve(flag("group-spec", "./group_spec.json"));
 const compositionsDir = join(hyperframesDir, "compositions");
-const publicDir = join(hyperframesDir, "public");
 
 // blueprints 目录可显式指定；否则按 skill 默认布局推断（launch-video-v2/scripts/
 // 旁边的 ../../hyperframes-animation/blueprints/）。推断失败也无所谓，blueprint
 // 校验是 soft，路径不存在直接跳过该检查。
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const defaultBlueprintsDir = resolve(scriptDir, "..", "..", "hyperframes-animation", "blueprints");
-const blueprintsDir = flag("blueprints-dir") ? resolve(flag("blueprints-dir")) : defaultBlueprintsDir;
+const blueprintsDir = flag("blueprints-dir")
+  ? resolve(flag("blueprints-dir"))
+  : defaultBlueprintsDir;
 
 if (!existsSync(groupSpecPath)) {
   console.error(`✗ group_spec.json not found at ${groupSpecPath}`);
@@ -155,42 +159,56 @@ for (const sceneId of sceneIds) {
   // 走 producer 路径，会**剥掉** wrapper，selector 全部失配 → scene 渲成黑屏。
   // 历史 bug：launch-video-v2 第一版 worker prompt 教 agent 这么写。
   //
-  // 例外：`[data-composition-id="<scene-id>"] { ... }` 形态允许（CSS scoper
-  // 见到匹配的 host selector 不会重复加 scope）。
+  // root 样式写 `#root { ... }`。compiler 会把 authored root id 改写成
+  // instance-safe selector；不要写 `[data-composition-id="<scene-id>"]`，
+  // 否则 `npx hyperframes lint` 会报 composition_self_attribute_selector。
   //
-  // 同时禁 id selector `#root` / `#<scene-id>-root`：多 sub-comp 共享 `id="root"`
-  // 时全局 id selector 会串扰。
+  // 同时禁 id selector `#<scene-id>-root`：这不是 runtime contract；内部元素
+  // 用 `#s<N>-foo`。
   const styleBlocks = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)];
   for (const sb of styleBlocks) {
     const css = sb[1];
     const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
 
     // 2a: wrapper-ancestor selector（`.<scene-id>-root` 后跟空白/`>`/`+`/`~`/`,`/`.`/`#`）
-    const wrapperRe = new RegExp(`\\.${sceneId}-root(?=[\\s>+~,.#:\\[])`, "g");
+    const escapedSceneId = escapeRegExp(sceneId);
+    const wrapperRe = new RegExp(`\\.${escapedSceneId}-root(?=[\\s>+~,.#:\\[])`, "g");
     const wrapperHits = [...stripped.matchAll(wrapperRe)];
     if (wrapperHits.length > 0) {
       errors.push({
         sceneId,
         rule: "css-wrapper-ancestor",
-        detail: `<style> 用 ${wrapperAncestor} 作祖先选择器（${wrapperHits.length} 处）— producer 渲染时这层 wrapper 会被剥掉，selector 全部失配。改成${fixHint}；root 元素自身的 token / 背景 / 字体写到 [data-composition-id="${sceneId}"] { ... }`,
+        detail: `<style> 用 ${wrapperAncestor} 作祖先选择器（${wrapperHits.length} 处）— producer 渲染时这层 wrapper 会被剥掉，selector 全部失配。改成${fixHint}；root 元素自身的 token / 背景 / 字体写到 #root { ... }`,
       });
     }
 
-    // 2b: id selector 开头是 `#root` 或 `#<scene-id>-root`
+    // 2b: self data-composition-id selector 会触发 CLI warning；root 样式用 #root。
+    const selfAttrRe = new RegExp(
+      `\\[\\s*data-composition-id\\s*=\\s*["']${escapedSceneId}["']\\s*\\]`,
+      "g",
+    );
+    const selfAttrHits = [...stripped.matchAll(selfAttrRe)];
+    if (selfAttrHits.length > 0) {
+      errors.push({
+        sceneId,
+        rule: "css-self-composition-selector",
+        detail: `<style> 用了 [data-composition-id="${sceneId}"] selector（${selfAttrHits.length} 处）— 会触发 npx hyperframes lint 的 composition_self_attribute_selector warning。root 样式改 #root { ... }；内部元素写 .${sN}foo / #${sN}foo`,
+      });
+    }
+
+    // 2c: 禁 `#<scene-id>-root`，允许 `#root`。
     const idSelectors = [...stripped.matchAll(/(^|[\s,>+~])#([a-zA-Z][\w-]*)/gm)];
-    const banned = idSelectors
-      .map((sm) => sm[2])
-      .filter((id) => id === "root" || id === `${sceneId}-root`);
+    const banned = idSelectors.map((sm) => sm[2]).filter((id) => id === `${sceneId}-root`);
     if (banned.length > 0) {
       errors.push({
         sceneId,
-        rule: "css-id-selector",
-        detail: `<style> 用了禁用的 id selector：${[...new Set(banned)].map((b) => `#${b}`).join(", ")} — 多 sub-comp 时全局 #id 会串扰。改成${fixHint}`,
+        rule: "css-scene-root-id-selector",
+        detail: `<style> 用了禁用的 id selector：${[...new Set(banned)].map((b) => `#${b}`).join(", ")} — root 只能写 #root；内部元素改成${fixHint}`,
       });
     }
   }
 
-  // Rule 3: JS —— <script> 里不能有 wrapper-ancestor selector / #root id selector / getElementById("root")
+  // Rule 3: JS —— <script> 里不能有 wrapper-ancestor selector / #<scene-id>-root
   const scriptBlocks = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
   for (const sb of scriptBlocks) {
     const js = sb[1];
@@ -198,7 +216,7 @@ for (const sceneId of sceneIds) {
 
     // 3a: 字符串字面值里含 `.<scene-id>-root` 当祖先
     const wrapperJsRe = new RegExp(
-      `["'\`][^"'\`]*\\.${sceneId}-root[\\s>+~,.#:\\[][^"'\`]*["'\`]`,
+      `["'\`][^"'\`]*\\.${escapeRegExp(sceneId)}-root[\\s>+~,.#:\\[][^"'\`]*["'\`]`,
       "g",
     );
     const wrapperJsHits = [...stripped.matchAll(wrapperJsRe)];
@@ -209,35 +227,42 @@ for (const sceneId of sceneIds) {
         detail: `<script> 字符串含 ${wrapperAncestor} 祖先 selector：${wrapperJsHits
           .slice(0, 3)
           .map((mm) => mm[0])
-          .join(", ")}${wrapperJsHits.length > 3 ? ` (+${wrapperJsHits.length - 3} more)` : ""} — producer 渲染时 wrapper 会被剥掉。改成${fixHint}`,
+          .join(
+            ", ",
+          )}${wrapperJsHits.length > 3 ? ` (+${wrapperJsHits.length - 3} more)` : ""} — producer 渲染时 wrapper 会被剥掉。改成${fixHint}`,
       });
     }
 
-    // 3b: 字符串字面值里含 `#root` / `#<scene-id>-root`
-    const bannedJsRe = new RegExp(`["'\`][^"'\`]*#(?:root|${sceneId}-root)\\b[^"'\`]*["'\`]`, "g");
+    // 3b: 字符串字面值里含 `#<scene-id>-root`
+    const bannedJsRe = new RegExp(
+      `["'\`][^"'\`]*#${escapeRegExp(sceneId)}-root\\b[^"'\`]*["'\`]`,
+      "g",
+    );
     const matches = [...stripped.matchAll(bannedJsRe)];
     if (matches.length > 0) {
       errors.push({
         sceneId,
-        rule: "js-id-selector",
+        rule: "js-scene-root-id-selector",
         detail: `<script> 含禁用 selector：${matches
           .slice(0, 3)
           .map((mm) => mm[0])
-          .join(", ")}${matches.length > 3 ? ` (+${matches.length - 3} more)` : ""} — 改成${fixHint}`,
+          .join(
+            ", ",
+          )}${matches.length > 3 ? ` (+${matches.length - 3} more)` : ""} — 改成${fixHint}`,
       });
     }
 
-    // 3c: getElementById("root") / getElementById("<scene-id>-root")
+    // 3c: getElementById("<scene-id>-root")
     const banGEI = new RegExp(
-      `getElementById\\(\\s*["'\`](?:root|${sceneId}-root)["'\`]\\s*\\)`,
+      `getElementById\\(\\s*["'\`]${escapeRegExp(sceneId)}-root["'\`]\\s*\\)`,
       "g",
     );
     const geiMatches = [...stripped.matchAll(banGEI)];
     if (geiMatches.length > 0) {
       errors.push({
         sceneId,
-        rule: "js-id-selector",
-        detail: `<script> 用了 ${geiMatches[0][0]} — 运行时可能有多个 #root，改用 document.querySelector("#${sN}foo")`,
+        rule: "js-scene-root-id-selector",
+        detail: `<script> 用了 ${geiMatches[0][0]} — 改用 document.querySelector("#root") 或 document.querySelector("#${sN}foo")`,
       });
     }
   }
@@ -261,7 +286,11 @@ for (const sceneId of sceneIds) {
   const forbidden = [
     { re: /\btransition\s*:/i, name: "CSS transition:", scope: "style" },
     { re: /\banimation\s*:/i, name: "CSS animation:", scope: "style" },
-    { re: /@font-face\b/i, name: "@font-face（在 index.html 声明，不在 scene 里）", scope: "style" },
+    {
+      re: /@font-face\b/i,
+      name: "@font-face（在 index.html 声明，不在 scene 里）",
+      scope: "style",
+    },
     { re: /\bDate\.now\b/, name: "Date.now()", scope: "script" },
     { re: /\bMath\.random\b/, name: "Math.random()", scope: "script" },
     { re: /\bperformance\.now\b/, name: "performance.now()", scope: "script" },
@@ -374,7 +403,5 @@ if (anomalies.length > 0) {
     for (const a of list) console.error(`    [${a.rule}] ${a.detail}`);
   }
 }
-console.error(
-  `\n  修对应 scene HTML（或让编排器重派 worker）后再跑 finalize。`,
-);
+console.error(`\n  修对应 scene HTML（或让编排器重派 worker）后再跑 finalize。`);
 process.exit(1);
