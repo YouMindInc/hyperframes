@@ -33,7 +33,6 @@ const flag = (name, def) => {
 const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
 const groupSpecPath = resolve(flag("group-spec", "./group_spec.json"));
 const compositionsDir = join(hyperframesDir, "compositions");
-const publicDir = join(hyperframesDir, "public");
 
 if (!existsSync(groupSpecPath)) {
   console.error(`✗ group_spec.json not found at ${groupSpecPath}`);

@@ -28,7 +28,7 @@
 // Exit 1: fatal (network failed AND fonts are clearly self-hosted).
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { join, resolve, basename } from "node:path";
+import { join, resolve } from "node:path";
 
 // ---------- argv ----------
 const dir = resolve(process.argv[2] || "./design-system");
@@ -48,14 +48,10 @@ const designHtml = readFileSync(designHtmlPath, "utf8");
 
 // ---------- Step 1: resolve source URL ----------
 // design.html's AGENT NOTE has "Re-extract: npx designlang <URL> --out ./design-system"
-const reUrl = designHtml.match(
-  /Re-extract:\s*npx designlang\s+(\S+)\s+--out/,
-);
+const reUrl = designHtml.match(/Re-extract:\s*npx designlang\s+(\S+)\s+--out/);
 const sourceUrl = reUrl ? reUrl[1] : null;
 if (!sourceUrl) {
-  console.error(
-    `✗ download-fonts.mjs: could not find source URL in ${designHtmlPath} AGENT NOTE`,
-  );
+  console.error(`✗ download-fonts.mjs: could not find source URL in ${designHtmlPath} AGENT NOTE`);
   process.exit(1);
 }
 console.log(`source URL: ${sourceUrl}`);
@@ -71,8 +67,16 @@ for (const m of familyDecls) {
   // Each declaration is a comma-separated stack: 'TT Norms Pro', 'ABC Solar Display', system-ui, ...
   // Take the FIRST name only — that's the brand font; the rest are fallbacks.
   const stack = m[1].trim();
-  const first = stack.split(",")[0].trim().replace(/^['"]|['"]$/g, "");
-  if (first && !/^(system-ui|ui-monospace|ui-sans-serif|ui-serif|sans-serif|serif|monospace|-apple-system|BlinkMacSystemFont|inherit|initial|unset)$/i.test(first)) {
+  const first = stack
+    .split(",")[0]
+    .trim()
+    .replace(/^['"]|['"]$/g, "");
+  if (
+    first &&
+    !/^(system-ui|ui-monospace|ui-sans-serif|ui-serif|sans-serif|serif|monospace|-apple-system|BlinkMacSystemFont|inherit|initial|unset)$/i.test(
+      first,
+    )
+  ) {
     declaredFamilies.add(first);
   }
 }
@@ -109,8 +113,7 @@ async function fetchBuffer(url) {
   try {
     const r = await fetch(url, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
       },
       signal: ctrl.signal,
     });
@@ -132,12 +135,8 @@ console.log(`fetched page (${(pageHtml.length / 1024).toFixed(1)} KB)`);
 
 // ---------- Step 4: also fetch external stylesheets (the @font-face may live there) ----------
 const stylesheetUrls = [
-  ...pageHtml.matchAll(
-    /<link[^>]+rel=["']?stylesheet["']?[^>]+href=["']([^"']+)["']/gi,
-  ),
-  ...pageHtml.matchAll(
-    /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']?stylesheet["']?/gi,
-  ),
+  ...pageHtml.matchAll(/<link[^>]+rel=["']?stylesheet["']?[^>]+href=["']([^"']+)["']/gi),
+  ...pageHtml.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']?stylesheet["']?/gi),
 ].map((m) => new URL(m[1], sourceUrl).href);
 const uniqueSheets = [...new Set(stylesheetUrls)].slice(0, 10); // cap at 10
 console.log(`fetching ${uniqueSheets.length} external stylesheet(s)…`);
@@ -167,14 +166,10 @@ for (const fb of faceBlocks) {
   if (!declaredFamilies.has(family)) continue;
 
   // Capture all url(...) refs in this block, prefer .woff2 over .woff over .ttf/.otf.
-  const urls = [...body.matchAll(/url\(["']?([^"')\s]+)["']?\)/g)].map(
-    (m) => m[1],
-  );
+  const urls = [...body.matchAll(/url\(["']?([^"')\s]+)["']?\)/g)].map((m) => m[1]);
   const pick = (re) => urls.find((u) => re.test(u));
-  const url = pick(/\.woff2(\?|$)/i) ||
-    pick(/\.woff(\?|$)/i) ||
-    pick(/\.ttf(\?|$)/i) ||
-    pick(/\.otf(\?|$)/i);
+  const url =
+    pick(/\.woff2(\?|$)/i) || pick(/\.woff(\?|$)/i) || pick(/\.ttf(\?|$)/i) || pick(/\.otf(\?|$)/i);
   if (!url) continue;
 
   const weight = (body.match(/font-weight\s*:\s*([^;]+)/) || [])[1]?.trim() || "400";
@@ -206,7 +201,10 @@ const fontsDir = join(dir, "fonts");
 mkdirSync(fontsDir, { recursive: true });
 
 function safeBasename(family, weight, style, url) {
-  const ext = (url.match(/\.(woff2|woff|ttf|otf)(?:\?|$)/i) || [, "woff2"])[1].toLowerCase();
+  const ext = (url.match(/\.(woff2|woff|ttf|otf)(?:\?|$)/i) || [
+    undefined,
+    "woff2",
+  ])[1].toLowerCase();
   const fam = family.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   const wt = String(weight).replace(/[^0-9]/g, "") || "400";
   const st = style === "italic" ? "i" : "";
@@ -242,17 +240,13 @@ for (const f of facesDeduped) {
   });
 }
 
-writeFileSync(
-  join(fontsDir, "manifest.json"),
-  JSON.stringify(manifest, null, 2),
-);
+writeFileSync(join(fontsDir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
 // ---------- Step 7: rewrite design.html to include @font-face ----------
 // Build a CSS block declaring each downloaded face, then inject into the
 // first <style>...</style> in design.html immediately after the opening <style>.
 const formatFor = (ext) =>
-  ({ woff2: "woff2", woff: "woff", ttf: "truetype", otf: "opentype" })[ext] ||
-  "woff2";
+  ({ woff2: "woff2", woff: "woff", ttf: "truetype", otf: "opentype" })[ext] || "woff2";
 
 const faceCss = Object.entries(manifest)
   .flatMap(([family, files]) =>
