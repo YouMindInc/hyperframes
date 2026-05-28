@@ -14,9 +14,18 @@
     { "kind": "medium_solid_border", "weight": 0.15 }
   ],
   "best_for": ["lifestyle brands", "creator portfolios", "DTC product launches", "beauty", "wellness", "playful tech demos"],
-  "avoid_for": ["institutional gravitas", "enterprise security", "edge-and-weight registers", "industrial / hardware"]
+  "avoid_for": ["institutional gravitas", "enterprise security", "edge-and-weight registers", "industrial / hardware"],
+  "chromeFonts": {
+    "googleFontsHref": "https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Space+Grotesk:wght@300..700&family=Space+Mono:wght@400;500;700&display=swap",
+    "display": "Bodoni Moda",
+    "body": "Space Grotesk",
+    "script": "Bodoni Moda",
+    "mono": "Space Mono"
+  }
 }
 ```
+
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Bodoni Moda + Space Grotesk + Space Mono — instead of the brand DNA fonts. Capsule is a two-face system: Bodoni does every display moment, Space Grotesk does every body / pill / label moment. The `script` slot points back at Bodoni Moda because Capsule refuses a third face — italic emphasis lives inside `<em>` on the Bodoni axis, not on a separate script family. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -71,6 +80,117 @@ The class prefix is `cap-` across all components.
 - **display**: `'Bodoni Moda'` · `'Playfair Display'` · `'Fraunces'` wght 700
 - **body**: `'Space Grotesk'` · `'Inter'` · `'DM Sans'` wght 400
 - **mono**: `'Space Mono'` · `'JetBrains Mono'` wght 500
+
+## §T Type-role atlas (Phase 4b reads this to size text correctly)
+
+Each entry is a **named type role** with concrete render parameters at 1920×1080 — family token, px range, weight, leading, tracking, case. Phase 4b scene workers may cite roles by `id` ("use a `stat-number` here"); the brand DNA fonts plug in automatically via `var(--font-*)` tokens. This is the same atlas Capsule ships in its Typography section, ported as machine-readable JSON.
+
+The atlas is the **sole authoring source** for non-component text. If a scene needs a `stat-number` numeral that isn't covered by §6 components, the worker reads role `stat-number` here and writes inline CSS from these values. Do NOT invent ad-hoc sizes — Capsule's identity collapses if Bodoni drops below weight 700 at display scale or if small Space Grotesk text loses its uppercase + tracked treatment.
+
+```type-roles
+[
+  {
+    "id": "display",
+    "family": "display",
+    "purpose": "cover / opening display headline — Bodoni 800, ink on cream (never candy color)",
+    "px_min": 48, "px_max": 112, "weight": 800, "leading": "0.9", "tracking": "-0.02em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-display\">Where vision meets execution</div>"
+  },
+  {
+    "id": "closing-display",
+    "family": "display",
+    "purpose": "conclusive declarative headline — slightly smaller than cover display",
+    "px_min": 40, "px_max": 80, "weight": 800, "leading": "0.95", "tracking": "-0.03em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-closing-display\">Begin the next chapter</div>"
+  },
+  {
+    "id": "headline",
+    "family": "display",
+    "purpose": "primary slide headline on split or two-column layouts (Bodoni 700)",
+    "px_min": 32, "px_max": 56, "weight": 700, "leading": "1.05", "tracking": "-0.02em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-headline\">A pill for every story</div>"
+  },
+  {
+    "id": "section-headline",
+    "family": "display",
+    "purpose": "section-opening or centered headline above cards / charts",
+    "px_min": 29, "px_max": 48, "weight": 700, "leading": "1.05", "tracking": "-0.01em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-section-headline\">What we ship this season</div>"
+  },
+  {
+    "id": "quote-display",
+    "family": "display",
+    "purpose": "pull-quote body (Bodoni 600; inline emphasis via quote-highlight pill, not bold)",
+    "px_min": 26, "px_max": 48, "weight": 600, "leading": "1.35", "tracking": "-0.01em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-quote-display\">The pill is the page. The serif is the voice.</div>"
+  },
+  {
+    "id": "card-headline",
+    "family": "display",
+    "purpose": "card or pillar-block title (Bodoni 700 fixed at 1.5rem)",
+    "px_min": 22, "px_max": 24, "weight": 700, "leading": "1.1", "tracking": "0", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-card-headline\">Studio essentials</div>"
+  },
+  {
+    "id": "stat-number",
+    "family": "display",
+    "purpose": "large numerical stat figure — colored in a brand role, never ink",
+    "px_min": 32, "px_max": 48, "weight": 800, "leading": "1", "tracking": "-0.03em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-stat-number\">340%</div>"
+  },
+  {
+    "id": "body",
+    "family": "body",
+    "purpose": "paragraph body (Space Grotesk 400, ink at 0.6–0.7 opacity)",
+    "px_min": 15, "px_max": 18, "weight": 400, "leading": "1.6", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body\">Body sits in Space Grotesk at editorial scale. Two or three sentences max per pill-card; longer bodies belong in dedicated text scenes.</p>"
+  },
+  {
+    "id": "body-sm",
+    "family": "body",
+    "purpose": "compact body inside a card or stat tile",
+    "px_min": 14, "px_max": 15, "weight": 400, "leading": "1.55", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body-sm\">Card body holds at 14px. Slightly tighter leading than primary body — fits inside a 2rem-radius pill-card.</p>"
+  },
+  {
+    "id": "subtitle",
+    "family": "body",
+    "purpose": "uppercase tracked subtitle below a display headline (Space Grotesk 400, 0.15em tracking)",
+    "px_min": 13, "px_max": 18, "weight": 400, "leading": "1.4", "tracking": "0.15em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-subtitle\">Volume 01 · Spring collection</div>"
+  },
+  {
+    "id": "pill-text-md",
+    "family": "body",
+    "purpose": "text inside title / closing pills — uppercase Space Grotesk 600, 0.12em tracking",
+    "px_min": 14, "px_max": 14, "weight": 600, "leading": "1", "tracking": "0.12em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-pill-text-md\">Now available</span></div>"
+  },
+  {
+    "id": "pill-text-sm",
+    "family": "body",
+    "purpose": "text inside small floating decorative pills (atmospheric wallpaper)",
+    "px_min": 11, "px_max": 12, "weight": 600, "leading": "1", "tracking": "0.1em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-pill-text-sm\">Vision</span></div>"
+  },
+  {
+    "id": "label",
+    "family": "body",
+    "purpose": "header tag pills, attribution lines (Space Grotesk 500)",
+    "px_min": 12, "px_max": 12, "weight": 500, "leading": "1", "tracking": "0.1em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-label\">Section · 03</div>"
+  },
+  {
+    "id": "mini-label",
+    "family": "body",
+    "purpose": "mini-pill chips in a tag cluster (smallest Space Grotesk)",
+    "px_min": 10, "px_max": 10, "weight": 500, "leading": "1", "tracking": "0.08em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-mini-label\">New</span></div>"
+  }
+]
+```
+
+The atlas omits the floating decorative pill positions (a §M motif, not a text role) and the orbit-numeral (covered by the card-headline / stat-number scale at component level).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -130,16 +250,128 @@ const DUR = {
 - **Forbidden shapes**: sharp-cornered text containers, blurred drop shadows, colored borders (only `var(--ink)` strokes), Bodoni headlines in candy colors, sentence-case Space Grotesk subtitles, two same-family accents adjacent (two purples, two greens, two warms).
 - **Atmospheric baseline**: every scene includes the grain overlay (4% opacity, multiply blend, z-index 9999) and at least one radial accent glow. Bare cream canvas without atmosphere reads as broken.
 
+## §M Atomic motifs (gestures the plan agent can reference)
+
+Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:pill-stamp on the title card" without specifying which pattern the card sits in.
+
+```motifs
+[
+  {
+    "id": "pill-card",
+    "label": "Pill card",
+    "role": "content-container",
+    "surface_safe": ["cream", "white"],
+    "description": "White 2rem-radius pill-card with 2px ink outline and 8px hard-offset shadow. The universal content container — every card, panel, and tile in Capsule resolves to this shape. Shadow is solid offset, never blurred.",
+    "wide": true,
+    "demo": "<div class=\"cap-motif-card\"><div class=\"cap-motif-card-title\">Card title</div><div class=\"cap-motif-card-body\">Pill-card body sits in Space Grotesk. Outline + offset shadow are the depth move.</div></div>",
+    "css": ".cap-motif-card{display:inline-block;background:#fff;border:2px solid var(--ink);border-radius:2rem;padding:1.5rem 1.75rem;box-shadow:8px 8px 0 color-mix(in srgb,var(--ink) 8%,transparent);max-width:320px}.cap-motif-card-title{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(20px,1.6vw,24px);line-height:1.1;color:var(--ink);margin-bottom:8px}.cap-motif-card-body{font-family:var(--f-body-native);font-weight:400;font-size:14px;line-height:1.55;color:color-mix(in srgb,var(--ink) 70%,transparent)}"
+  },
+  {
+    "id": "floating-pill",
+    "label": "Floating decorative pill",
+    "role": "atmospheric-wallpaper",
+    "surface_safe": ["cream"],
+    "description": "Candy-fill pill tilted -20° to +25°, 2px ink outline, single uppercase Space Grotesk word. Typographic confetti — 5-8 per declarative scene, never on data scenes. Carries no shadow (atmosphere, not content).",
+    "demo": "<div class=\"cap-motif-float-grp\"><span class=\"cap-motif-float a\">Vision</span><span class=\"cap-motif-float b\">Create</span><span class=\"cap-motif-float c\">Begin</span></div>",
+    "css": ".cap-motif-float-grp{display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:center}.cap-motif-float{display:inline-block;border:2px solid var(--ink);border-radius:9999px;padding:.4rem 1.2rem;font-family:var(--f-body-native);font-weight:600;font-size:12px;line-height:1;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}.cap-motif-float.a{background:var(--brand-primary);transform:rotate(-8deg)}.cap-motif-float.b{background:var(--brand-secondary,var(--brand-primary));transform:rotate(6deg)}.cap-motif-float.c{background:var(--brand-accent,var(--brand-primary));transform:rotate(-15deg)}"
+  },
+  {
+    "id": "pill-stamp",
+    "label": "Title pill stamp",
+    "role": "featured-mark",
+    "surface_safe": ["cream", "white"],
+    "description": "Medium pill (1.5rem 3.5rem padding) in brand-primary or yellow, uppercase Space Grotesk 600 inside, 2px ink outline, 6px offset shadow. Placed above the largest display headline on cover and closing scenes — the system's 'featured' callout.",
+    "demo": "<div><span class=\"cap-motif-stamp\">Now available</span></div>",
+    "css": ".cap-motif-stamp{display:inline-block;background:var(--brand-primary);border:2px solid var(--ink);border-radius:9999px;padding:1rem 2.5rem;font-family:var(--f-body-native);font-weight:600;font-size:14px;line-height:1;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);box-shadow:6px 6px 0 color-mix(in srgb,var(--ink) 8%,transparent)}"
+  },
+  {
+    "id": "stat-pill",
+    "label": "Stat pill",
+    "role": "data-tile",
+    "surface_safe": ["cream", "white"],
+    "description": "White 2rem-radius pill containing a colored Bodoni stat numeral, small uppercase Space Grotesk label below, and a 40×4 accent bar pinned to bottom. The system's data atom — never use raw text for a stat figure.",
+    "demo": "<div class=\"cap-motif-stat\"><div class=\"cap-motif-stat-num\">340%</div><div class=\"cap-motif-stat-label\">Year over year</div><div class=\"cap-motif-stat-bar\"></div></div>",
+    "css": ".cap-motif-stat{display:inline-flex;flex-direction:column;align-items:flex-start;gap:6px;background:#fff;border:2px solid var(--ink);border-radius:2rem;padding:2rem 1.75rem;box-shadow:6px 6px 0 color-mix(in srgb,var(--ink) 8%,transparent);min-width:180px}.cap-motif-stat-num{font-family:var(--f-disp-native);font-weight:800;font-size:clamp(36px,3.5vw,52px);line-height:1;letter-spacing:-.03em;color:var(--brand-primary)}.cap-motif-stat-label{font-family:var(--f-body-native);font-weight:500;font-size:11px;line-height:1;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent);margin-top:4px}.cap-motif-stat-bar{width:40px;height:4px;border-radius:9999px;background:var(--brand-primary);margin-top:10px}"
+  },
+  {
+    "id": "quote-highlight",
+    "label": "Quote highlight pill",
+    "role": "inline-emphasis",
+    "surface_safe": ["cream", "white"],
+    "description": "Inline candy-filled pill (lime or sky default) with 2px ink outline wrapping a single phrase inside a Bodoni quote body. The system's primary inline emphasis mechanism — replaces bold and (most) italic.",
+    "demo": "<p class=\"cap-motif-quote\">A pill-card holds a serif statement, and <span class=\"cap-motif-quote-hl\">candy pills lift the phrase</span> that matters most.</p>",
+    "css": ".cap-motif-quote{margin:0;font-family:var(--f-disp-native);font-weight:600;font-size:clamp(20px,1.8vw,28px);line-height:1.35;letter-spacing:-.01em;color:var(--ink);max-width:32ch}.cap-motif-quote-hl{display:inline-block;background:var(--brand-accent,var(--brand-primary));border:2px solid var(--ink);border-radius:9999px;padding:.1em .55em;font-family:var(--f-body-native);font-weight:600;font-size:.7em;line-height:1;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);transform:translateY(-.05em)}"
+  },
+  {
+    "id": "accent-line",
+    "label": "Accent line",
+    "role": "sub-headline-rule",
+    "surface_safe": ["cream", "white"],
+    "description": "60×4 (or 80×4 on closing scenes) horizontal pill in brand-primary used as a sub-headline accent rule under section headlines. Pill-radius 9999px on both ends — never a sharp-cornered rule.",
+    "demo": "<div class=\"cap-motif-accent-wrap\"><div class=\"cap-motif-accent-label\">Section · 03</div><div class=\"cap-motif-accent\"></div></div>",
+    "css": ".cap-motif-accent-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:12px}.cap-motif-accent-label{font-family:var(--f-body-native);font-weight:500;font-size:12px;line-height:1;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}.cap-motif-accent{width:60px;height:4px;border-radius:9999px;background:var(--brand-primary)}"
+  },
+  {
+    "id": "orbit-anchor",
+    "label": "Orbit anchor",
+    "role": "gravitational-center",
+    "surface_safe": ["cream"],
+    "description": "160px circular pill in lime / brand-secondary carrying a Bodoni ordinal numeral, 2px ink outline, surrounded by 4-6 small satellite pills tilted -20° to +25°. The system's signature diagram composition.",
+    "wide": true,
+    "demo": "<div class=\"cap-motif-orbit\"><div class=\"cap-motif-orbit-center\">III</div><span class=\"cap-motif-orbit-sat a\">Plan</span><span class=\"cap-motif-orbit-sat b\">Ship</span><span class=\"cap-motif-orbit-sat c\">Iterate</span></div>",
+    "css": ".cap-motif-orbit{position:relative;width:280px;height:200px;margin:0 auto}.cap-motif-orbit-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:120px;height:120px;border-radius:50%;background:var(--brand-secondary,var(--brand-primary));border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:var(--f-disp-native);font-weight:700;font-size:32px;color:var(--ink)}.cap-motif-orbit-sat{position:absolute;background:#fff;border:2px solid var(--ink);border-radius:9999px;padding:.35rem 1rem;font-family:var(--f-body-native);font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);box-shadow:4px 4px 0 color-mix(in srgb,var(--ink) 8%,transparent)}.cap-motif-orbit-sat.a{left:0;top:10%;transform:rotate(-12deg);background:var(--brand-primary)}.cap-motif-orbit-sat.b{right:0;top:30%;transform:rotate(8deg);background:var(--brand-accent,var(--brand-primary))}.cap-motif-orbit-sat.c{left:18%;bottom:0;transform:rotate(-6deg);background:#fff}"
+  }
+]
+```
+
+The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
+
+**Materials lexicon** (informational — these are the composition atoms behind the patterns):
+
+- pill-card · floating-pill · pill-stamp · stat-pill · quote-highlight · accent-line · orbit-anchor · bar-pill · diagram-node · grain-overlay · radial-glow
+
 ## §I Page-level CSS
 
 ```css
+/* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
+ * These let the doc chrome render in Bodoni Moda / Space Grotesk / Space Mono
+ * regardless of which brand DNA the preset is applied to. The §6 component preview,
+ * §M motifs grid, and §T type-role atlas also read these via .preset-native-scope.
+ *
+ * Capsule has no script face — the script slot points at Bodoni Moda because
+ * italic emphasis rides the Bodoni opsz/italic axis inside <em>, not a third
+ * family. Fallback chains end in a serif / sans / mono that still carries the
+ * editorial-pill register. Falling all the way to generic should never happen
+ * in practice. */
+:root {
+  --f-disp-native: "Bodoni Moda", "Playfair Display", "Fraunces", "Didot", "Georgia", serif;
+  --f-body-native:
+    "Space Grotesk", "Inter", "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --f-script-native: "Bodoni Moda", "Playfair Display", "Fraunces", "Didot", "Georgia", serif;
+  --f-mono-native:
+    "Space Mono", "JetBrains Mono", "IBM Plex Mono", "Menlo", ui-monospace, monospace;
+}
+
+/* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
+ * Wraps §6 component previews, §M motif demos, and §T type-role atlas so
+ * var(--font-*) resolves to Bodoni Moda / Space Grotesk / Space Mono
+ * regardless of the brand DNA tokens emitted in :root. The paste-ready
+ * component source is untouched — Phase 4b still grep + paste original
+ * `var(--font-display)` tokens, which resolve to brand DNA at scene-render time. */
+.preset-native-scope {
+  --font-display: var(--f-disp-native);
+  --font-body: var(--f-body-native);
+  --font-script: var(--f-script-native);
+  --font-mono: var(--f-mono-native);
+}
+
 /* design.html preview — make the doc itself read as Capsule */
 body {
   background: var(--canvas);
 }
 .ds-section h2,
 .ds-section h3 {
-  font-family: "Bodoni Moda", "Playfair Display", serif;
+  font-family: var(--f-disp-native);
   letter-spacing: -0.01em;
 }
 .ds-section h2::before {
@@ -159,5 +391,265 @@ pre.ds-code {
   border: 2px solid var(--ink, #1a1a1a);
   box-shadow: 6px 6px 0 color-mix(in srgb, var(--ink) 8%, transparent);
   background: var(--canvas);
+}
+
+/* ── §M Motifs grid: atomic gestures.
+ * 12-col grid of small cards each teaching ONE reusable gesture. Cards inherit
+ * Capsule's pill-card geometry — 2rem radius, 2px ink outline, 8px offset shadow
+ * — so the grid itself reads as a row of pill-cards on the cream canvas. Cards
+ * may declare a surface (cream / white) to demonstrate the gesture against its
+ * native bg. */
+.ds-motif-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 20px;
+}
+.ds-motif {
+  grid-column: span 4;
+  min-height: 280px;
+  padding: 28px;
+  border: 2px solid var(--ink);
+  border-radius: 2rem;
+  background: #fff;
+  box-shadow: 8px 8px 0 color-mix(in srgb, var(--ink) 8%, transparent);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.ds-motif.ds-motif-wide {
+  grid-column: span 8;
+}
+.ds-motif.ds-motif-surface-cream {
+  background: var(--canvas);
+}
+.ds-motif.ds-motif-surface-white {
+  background: #fff;
+}
+.ds-motif-h {
+  margin: 0;
+  font-family: var(--f-disp-native);
+  font-weight: 700;
+  font-size: clamp(22px, 2.2vw, 32px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.ds-motif-desc {
+  margin: 0;
+  font-family: var(--f-body-native);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  max-width: 32ch;
+}
+.ds-motif-demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+}
+.ds-motif-id {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  font-family: var(--f-mono-native);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+@media (max-width: 880px) {
+  .ds-motif-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ds-motif,
+  .ds-motif.ds-motif-wide {
+    grid-column: auto;
+  }
+}
+
+/* ── §T Type-role atlas. Container = a single 2rem-radius pill-card with 2px
+ * ink outline and 8px offset shadow; rows separated by 2px ink hairlines
+ * (Capsule has no thinner stroke). Each .t-trole-* class encodes the role's
+ * family / size / weight / leading / tracking / case. Family selectors use
+ * var(--font-*) tokens so the atlas renders in BRAND DNA fonts; only the
+ * recipe is preset-declared. Color decisions follow Capsule's contract —
+ * ink on Bodoni headlines, brand-primary on stat numerals, ink at 0.65-0.7
+ * opacity on body. */
+.ds-trole-box {
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--ink);
+  border-radius: 2rem;
+  background: #fff;
+  box-shadow: 8px 8px 0 color-mix(in srgb, var(--ink) 8%, transparent);
+  overflow: hidden;
+  margin-top: 24px;
+}
+.ds-trole-row {
+  padding: 28px 32px;
+  border-bottom: 2px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.ds-trole-row:last-child {
+  border-bottom: 0;
+}
+.ds-trole-sample {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .ds-trole-row {
+    padding: 24px;
+  }
+}
+
+/* ── Type-role samples. Each .t-trole-* class mirrors a Capsule type-scale
+ * entry but uses var(--font-display/body/mono/script) so the actual typeface
+ * comes from brand DNA. Decoration (color, tracking, case) is preset-native
+ * and stays declared with Capsule's contract — Bodoni ink on display roles,
+ * brand-primary on stat numerals, uppercase + tracked on small Space Grotesk. */
+.t-trole-display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(48px, 8vw, 112px);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  max-width: 22ch;
+}
+.t-trole-closing-display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(40px, 6vw, 80px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  max-width: 22ch;
+}
+.t-trole-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(32px, 4vw, 56px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  max-width: 24ch;
+}
+.t-trole-section-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(29px, 3.5vw, 48px);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  max-width: 26ch;
+}
+.t-trole-quote-display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(26px, 3.5vw, 48px);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  max-width: 28ch;
+}
+.t-trole-card-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.t-trole-stat-number {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(32px, 3.5vw, 48px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--brand-primary);
+}
+.t-trole-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(15px, 1.2vw, 18px);
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  max-width: 60ch;
+  margin: 0;
+}
+.t-trole-body-sm {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  max-width: 50ch;
+  margin: 0;
+}
+.t-trole-subtitle {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(13px, 1.5vw, 18px);
+  line-height: 1.4;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+}
+.t-trole-pill-text-md {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--brand-primary);
+  border: 2px solid var(--ink);
+  border-radius: 9999px;
+  padding: 1rem 2.5rem;
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.t-trole-pill-text-sm {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--brand-accent, var(--brand-primary));
+  border: 2px solid var(--ink);
+  border-radius: 9999px;
+  padding: 0.4rem 1.2rem;
+  transform: rotate(-6deg);
+}
+.t-trole-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-mini-label {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--brand-secondary, var(--brand-primary));
+  border: 2px solid var(--ink);
+  border-radius: 9999px;
+  padding: 0.35rem 1rem;
 }
 ```

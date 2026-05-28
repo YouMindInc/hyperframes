@@ -17,9 +17,18 @@
     { "kind": "high_sat_accent", "weight": 0.15 }
   ],
   "best_for": ["indie hardware", "music labels", "creative studios", "kawaii-tech", "magazine / zine launches", "analog product catalogues"],
-  "avoid_for": ["restrained corporate", "quiet monochrome palettes", "institutional finance", "regulated industries"]
+  "avoid_for": ["restrained corporate", "quiet monochrome palettes", "institutional finance", "regulated industries"],
+  "chromeFonts": {
+    "googleFontsHref": "https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Albert+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@500;700&display=swap",
+    "display": "Big Shoulders Display",
+    "body": "Albert Sans",
+    "script": "Noto Sans JP",
+    "mono": "JetBrains Mono"
+  }
 }
 ```
+
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Big Shoulders Display + Albert Sans + JetBrains Mono + Noto Sans JP — instead of the brand DNA fonts. Sakura Chroma is a four-face system; the `script` slot points at Noto Sans JP because the cassette-package register uses Japanese characters (限定版) as the only "script" voice — there is no handwritten face in the system. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -150,6 +159,131 @@ Sakura Chroma's typographic identity depends on a four-face stack — condensed 
 - **body**: `'Albert Sans'` · `'Inter'` · `'IBM Plex Sans'` wght 400
 - **mono**: `'JetBrains Mono'` · `'IBM Plex Mono'` · `'Space Mono'` wght 400
 
+## §T Type-role atlas (Phase 4b reads this to size text correctly)
+
+Each entry is a **named type role** with concrete render parameters at 1920×1080 — family token, px range, weight, leading, tracking, case, and any color/shadow/rotation decoration. Phase 4b scene workers may cite roles by `id` ("use a `num-hero` here"); the brand DNA fonts plug in automatically via `var(--font-*)` tokens. This is the source design.md typography table ported as machine-readable JSON.
+
+The atlas is the **sole authoring source** for non-component text. If a scene needs a `num-hero` numeral that isn't covered by §6 components, the worker reads role `num-hero` here and writes inline CSS from these values. Do NOT invent ad-hoc sizes — Sakura Chroma's identity collapses if weights drift below 900 at display scale or if negative tracking is dropped.
+
+```type-roles
+[
+  {
+    "id": "disp-hero",
+    "family": "display",
+    "purpose": "cover-spread hero numeral / oversized title — Big Shoulders 900 at max scale, ink",
+    "px_min": 120, "px_max": 280, "weight": 900, "leading": "0.84", "tracking": "-0.025em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-disp-hero\">Sakura</div>"
+  },
+  {
+    "id": "disp-statement",
+    "family": "display",
+    "purpose": "manifesto / single-statement spread — ink with optional <em> red color shift",
+    "px_min": 70, "px_max": 168, "weight": 900, "leading": "0.86", "tracking": "-0.022em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-disp-statement\">Teams design <em>together</em></div>"
+  },
+  {
+    "id": "disp-section",
+    "family": "display",
+    "purpose": "section topbar title (left of topbar-rule)",
+    "px_min": 52, "px_max": 100, "weight": 900, "leading": "0.9", "tracking": "-0.018em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-disp-section\">Catalogue</div>"
+  },
+  {
+    "id": "disp-quote",
+    "family": "display",
+    "purpose": "pulled quote inside a qbody-box (ink, paper-on-ribbons callout)",
+    "px_min": 48, "px_max": 110, "weight": 900, "leading": "0.92", "tracking": "-0.018em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-disp-quote\">Print is the message.</div>"
+  },
+  {
+    "id": "disp-card-name",
+    "family": "display",
+    "purpose": "product-card name (inside catalogue card body, above mono spec rows)",
+    "px_min": 28, "px_max": 48, "weight": 900, "leading": "0.94", "tracking": "-0.012em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-disp-card-name\">Model 26</div>"
+  },
+  {
+    "id": "num-hero",
+    "family": "display",
+    "purpose": "primary hero statistic numeral — Big Shoulders 900 in sk-red",
+    "px_min": 110, "px_max": 240, "weight": 900, "leading": "0.86", "tracking": "-0.025em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-num-hero\">26K<sub>+</sub></div>"
+  },
+  {
+    "id": "ttl-row",
+    "family": "display",
+    "purpose": "ledger row title (only sub-display use of Big Shoulders 700)",
+    "px_min": 22, "px_max": 30, "weight": 700, "leading": "1.1", "tracking": "-0.005em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-ttl-row\">Cassette · Vol. 26</div>"
+  },
+  {
+    "id": "body",
+    "family": "body",
+    "purpose": "standard paragraph body — Albert Sans 400, warm-brown ink",
+    "px_min": 14, "px_max": 17, "weight": 400, "leading": "1.5", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body\">Body holds at 14-17px Albert Sans. Generous leading, never uppercased — the neutral counterpoint to Big Shoulders' density.</p>"
+  },
+  {
+    "id": "body-emphasis",
+    "family": "body",
+    "purpose": "lead paragraph / emphasized body (Albert Sans 600)",
+    "px_min": 15, "px_max": 20, "weight": 600, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body-emphasis\">A lead paragraph carries the spread's argument — 15-20px Albert Sans 600.</p>"
+  },
+  {
+    "id": "micro",
+    "family": "body",
+    "purpose": "tracked-caps micro-label (eyebrow / chip / meta) — Albert Sans 700, 0.16em",
+    "px_min": 12, "px_max": 14, "weight": 700, "leading": "1.2", "tracking": "0.16em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-micro\">Catalogue · Vol. 26</div>"
+  },
+  {
+    "id": "micro-xl",
+    "family": "body",
+    "purpose": "loosest tracked-caps manifesto kicker (0.32em)",
+    "px_min": 12, "px_max": 14, "weight": 700, "leading": "1.2", "tracking": "0.32em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-micro-xl\">Limited edition</div>"
+  },
+  {
+    "id": "mono",
+    "family": "mono",
+    "purpose": "spec row / page number / eq-tick — JetBrains Mono 400, 11-12px",
+    "px_min": 11, "px_max": 12, "weight": 400, "leading": "1.3", "tracking": "0.02em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-mono\">MODE → MULTIPLAYER</div>"
+  },
+  {
+    "id": "mono-tag",
+    "family": "mono",
+    "purpose": "chip / tag text inside a ledger row (cream on rainbow chip)",
+    "px_min": 12, "px_max": 14, "weight": 400, "leading": "1", "tracking": "0.04em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-mono-tag\">Manifesto</span></div>"
+  },
+  {
+    "id": "stamp-text",
+    "family": "display",
+    "purpose": "red rectangular stamp body — Big Shoulders 900 cream on red, rotated -3deg",
+    "px_min": 20, "px_max": 28, "weight": 900, "leading": "1", "tracking": "0.02em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-stamp-text\">Limited · Vol 26</span></div>"
+  },
+  {
+    "id": "seal-text",
+    "family": "display",
+    "purpose": "32-point starburst seal glyph — Big Shoulders 900 cream on ink starburst",
+    "px_min": 22, "px_max": 38, "weight": 900, "leading": "0.9", "tracking": "-0.01em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-seal-text\">26</span></div>"
+  },
+  {
+    "id": "jp-accent",
+    "family": "script",
+    "purpose": "Japanese cultural accent (限定版) inline inside a Latin label",
+    "px_min": 14, "px_max": 20, "weight": 500, "leading": "1.2", "tracking": "0", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-micro\"><span class=\"t-trole-jp-accent\">限定版</span> · Limited edition</div>"
+  }
+]
+```
+
+The atlas omits `paper-grain` (a texture, declared in §B decoration tokens), `petal-cluster` / `ribbon-band` / `rosette-seal` (decorative motifs, declared in §M), and the `qbody-box` shadow (a §B structural token).
+
 ## §E Motion (GSAP consts — REPLACES site ease)
 
 Sakura Chroma's source template ships **zero content @keyframes** — only a 280ms ease opacity slide-fade for navigation chrome. EASE/DUR are therefore derived from the design.md voice register: "warm but disciplined", "playful but tightly typeset", "hand-curated industrial". That register is calm-considered, not bouncy — power2.out / power3.out for primary motion, no back-overshoot. The single 280ms ease cross-blend the template inherits maps to the scene-transition default.
@@ -267,16 +401,126 @@ Take the brand's product description / value prop. Transform with:
 - Catalogue register depends on visual richness — pair hero with petal anchor + spec checklist + footer micro-label, OR hero with ribbon atmosphere + stamp + page number. A scene with only a centered headline reads as manifesto (deliberate sparsity); every other scene should feel like a packed catalogue page.
 - One manifesto / sparsity scene per 6-scene video. The rest carry concurrent hero + atmosphere + tabular/data + decorative marks.
 
-**Sound design (audio phase note)**
+## §M Atomic motifs (gestures the plan agent can reference)
 
-- Soft paper-flip / shutter click on scene cross-blend.
-- Small "snap" on stamp drop-in (rotated -3° lands with a tactile beat).
-- Soft analog click on chip/spec reveal.
-- Hero numeral count-up paired with a slow swell, not a kick.
+Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:petal-cluster on the cover corner" without specifying which pattern the corner sits in.
+
+```motifs
+[
+  {
+    "id": "petal-cluster",
+    "label": "Petal cluster",
+    "role": "decorative-anchor",
+    "surface_safe": ["paper", "paper-dk"],
+    "description": "4-5 overlapping perfect-circle petals in mixed rainbow colors (red / pink / orange / yellow / green / blue). Never all the same color; never elliptical. The signature decorative anchor — slide corners, brand-lockup anchor, quote-spread ornament.",
+    "wide": true,
+    "demo": "<div class=\"sk-motif-petals\"><span class=\"p p1\"></span><span class=\"p p2\"></span><span class=\"p p3\"></span><span class=\"p p4\"></span><span class=\"p p5\"></span></div>",
+    "css": ".sk-motif-petals{position:relative;width:180px;height:140px}.sk-motif-petals .p{position:absolute;aspect-ratio:1/1;border-radius:50%;width:64px}.sk-motif-petals .p1{background:var(--sk-red);left:8px;top:32px}.sk-motif-petals .p2{background:var(--sk-pink);left:52px;top:8px;width:56px}.sk-motif-petals .p3{background:var(--sk-orange);left:88px;top:48px;width:60px}.sk-motif-petals .p4{background:var(--sk-green);left:36px;top:64px;width:52px}.sk-motif-petals .p5{background:var(--sk-blue);left:104px;top:80px;width:44px}"
+  },
+  {
+    "id": "ribbon-band",
+    "label": "Diagonal ribbon band",
+    "role": "atmospheric-layer",
+    "surface_safe": ["paper", "paper-dk"],
+    "description": "Stack of 5 solid-color horizontal bars (pink / orange / yellow / green / blue) rotated ±22° to sweep diagonally across a region. Oversized (160% width) so it bleeds off the slide edges. Atmospheric layer behind hero content on cover and closing spreads.",
+    "wide": true,
+    "demo": "<div class=\"sk-motif-ribbon\"><span class=\"r r1\"></span><span class=\"r r2\"></span><span class=\"r r3\"></span><span class=\"r r4\"></span><span class=\"r r5\"></span></div>",
+    "css": ".sk-motif-ribbon{position:relative;width:100%;height:120px;overflow:hidden}.sk-motif-ribbon .r{position:absolute;left:-30%;width:160%;height:14px;transform:rotate(-22deg);transform-origin:center}.sk-motif-ribbon .r1{background:var(--sk-pink);top:14px}.sk-motif-ribbon .r2{background:var(--sk-orange);top:38px}.sk-motif-ribbon .r3{background:var(--sk-yellow);top:62px}.sk-motif-ribbon .r4{background:var(--sk-green);top:86px}.sk-motif-ribbon .r5{background:var(--sk-blue);top:110px}"
+  },
+  {
+    "id": "rosette-seal",
+    "label": "Rosette seal (32-point starburst)",
+    "role": "authority-mark",
+    "surface_safe": ["paper", "paper-dk"],
+    "description": "32-point starburst clip-path filled ink with cream glyph (1-4 chars in Big Shoulders 900). Authority mark on covers and closing colophons. Polygon point count is fixed — variations break the seal-recognition signal.",
+    "demo": "<div class=\"sk-motif-seal\"><span>26</span></div>",
+    "css": ".sk-motif-seal{display:flex;align-items:center;justify-content:center;width:clamp(72px,8vw,120px);aspect-ratio:1/1;background:var(--anchor-ink);clip-path:var(--starburst-clip)}.sk-motif-seal span{font-family:var(--f-disp-native);font-weight:900;font-size:clamp(22px,2vw,38px);line-height:.9;letter-spacing:-.01em;text-transform:uppercase;color:var(--anchor-paper)}"
+  },
+  {
+    "id": "red-stamp",
+    "label": "Red rectangular stamp",
+    "role": "status-badge",
+    "surface_safe": ["paper", "paper-dk"],
+    "description": "Red rectangle with cream text in Big Shoulders 900, rotated -3°. Reserved for status / approval / product-callout moments (COMPLETE, AS SEEN ON, LIMITED). Overuse degrades the signal — one per spread maximum.",
+    "demo": "<div class=\"sk-motif-stamp\">Limited · Vol 26</div>",
+    "css": ".sk-motif-stamp{display:inline-block;background:var(--sk-red);color:var(--anchor-paper);padding:10px 22px;font-family:var(--f-disp-native);font-weight:900;font-size:clamp(20px,1.6vw,28px);line-height:1;letter-spacing:.02em;text-transform:uppercase;transform:rotate(-3deg)}"
+  },
+  {
+    "id": "card-topstrip",
+    "label": "Card topstrip",
+    "role": "pantone-tab",
+    "surface_safe": ["paper"],
+    "description": "Colored horizontal band (red / pink / orange / blue) running the full width of a product card's top — reads as a Pantone color tab identifying the card variant. Paired with a 1.5px ink border on the rest of the card.",
+    "wide": true,
+    "demo": "<div class=\"sk-motif-card\"><div class=\"sk-motif-card-strip\"></div><div class=\"sk-motif-card-body\"><div class=\"sk-motif-card-name\">Model 26</div><div class=\"sk-motif-card-spec\">MODE → STEREO</div></div></div>",
+    "css": ".sk-motif-card{display:inline-block;width:200px;background:var(--anchor-paper);border:var(--border-ink);overflow:hidden}.sk-motif-card-strip{height:22px;background:var(--sk-pink)}.sk-motif-card-body{padding:12px 16px}.sk-motif-card-name{font-family:var(--f-disp-native);font-weight:900;font-size:clamp(22px,2vw,32px);line-height:.94;letter-spacing:-.012em;text-transform:uppercase;color:var(--anchor-ink)}.sk-motif-card-spec{margin-top:8px;font-family:var(--f-mono-native);font-weight:400;font-size:11px;line-height:1.3;letter-spacing:.02em;text-transform:uppercase;color:var(--anchor-ink);opacity:.7}"
+  },
+  {
+    "id": "bar-eq",
+    "label": "Equalizer bar chart",
+    "role": "data-vu-meter",
+    "surface_safe": ["paper", "paper-dk"],
+    "description": "Multi-column equalizer where each column stacks 6 segments column-reverse (bottom-up like a VU meter). 'On' segments fill with one rainbow color per column; 'off' segments fill with a translucent ink tint. The cassette-package's data-as-decoration moment.",
+    "wide": true,
+    "demo": "<div class=\"sk-motif-eq\"><div class=\"col c1\"><i></i><i></i><i></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i></div><div class=\"col c2\"><i></i><i></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i></div><div class=\"col c3\"><i></i><i></i><i></i><i></i><i class=\"on\"></i><i class=\"on\"></i></div><div class=\"col c4\"><i></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i></div><div class=\"col c5\"><i></i><i></i><i></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i></div></div>",
+    "css": ".sk-motif-eq{display:flex;gap:8px;width:200px;height:120px}.sk-motif-eq .col{flex:1;display:flex;flex-direction:column-reverse;gap:2px}.sk-motif-eq .col i{flex:1;background:rgba(58,37,22,.1);border:1px solid rgba(58,37,22,.22)}.sk-motif-eq .c1 i.on{background:var(--sk-red);border-color:var(--sk-red)}.sk-motif-eq .c2 i.on{background:var(--sk-pink);border-color:var(--sk-pink)}.sk-motif-eq .c3 i.on{background:var(--sk-orange);border-color:var(--sk-orange)}.sk-motif-eq .c4 i.on{background:var(--sk-green);border-color:var(--sk-green)}.sk-motif-eq .c5 i.on{background:var(--sk-blue);border-color:var(--sk-blue)}"
+  },
+  {
+    "id": "qbody-shadow",
+    "label": "Qbody hard-offset shadow",
+    "role": "elevated-callout",
+    "surface_safe": ["paper", "paper-dk"],
+    "description": "Paper callout with 1.5px ink border and the signature 8px hard ink-offset shadow (zero blur). Reserved for quote callouts sitting on top of diagonal ribbons — the moment that earns elevation. Overuse degrades the print register.",
+    "demo": "<div class=\"sk-motif-qbody\">Print is the message.</div>",
+    "css": ".sk-motif-qbody{display:inline-block;background:var(--anchor-paper);border:var(--border-ink);box-shadow:var(--shadow-ink-hard);padding:20px 28px;font-family:var(--f-disp-native);font-weight:900;font-size:clamp(24px,2.4vw,40px);line-height:.92;letter-spacing:-.018em;text-transform:uppercase;color:var(--anchor-ink)}"
+  }
+]
+```
+
+The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
+
+**Materials lexicon** (informational — these are the composition atoms behind the patterns):
+
+- petal-cluster · ribbon-band · rosette-seal · red-stamp · card-topstrip · bar-eq · qbody-shadow · spec-checklist · ledger-row · chip · paper-grain · topbar-rule
 
 ## §I Page-level CSS (overrides design.html's neutral chrome — makes the doc itself read as sakura-chroma)
 
 ```css
+/* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
+ * These let the doc chrome render in Big Shoulders Display / Albert Sans /
+ * JetBrains Mono / Noto Sans JP regardless of which brand DNA the preset is
+ * applied to. The §6 component preview, §M motifs grid, and §T type-role atlas
+ * read these via .preset-native-scope.
+ *
+ * The script slot points at Noto Sans JP because Sakura Chroma's only "script"
+ * voice is the Japanese cultural-accent character (限定版) — there is no
+ * handwritten face in the system. Fallback chains end in faces that still
+ * carry the preset's vibe (Archivo Black / Oswald for the condensed display;
+ * Inter / IBM Plex Sans for body). */
+:root {
+  --f-disp-native:
+    "Big Shoulders Display", "Archivo Black", "Oswald", "Impact", "Helvetica Neue", sans-serif;
+  --f-body-native:
+    "Albert Sans", "Inter", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --f-script-native: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --f-mono-native:
+    "JetBrains Mono", "IBM Plex Mono", "Space Mono", "Menlo", ui-monospace, monospace;
+}
+
+/* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
+ * Wraps §6 component previews, §M motif demos, and §T type-role atlas so
+ * var(--font-*) resolves to Big Shoulders / Albert Sans / Noto Sans JP /
+ * JetBrains Mono regardless of brand DNA. The paste-ready component source is
+ * untouched — Phase 4b still grep + paste original `var(--font-display)`
+ * tokens, which resolve to brand DNA at scene-render time. */
+.preset-native-scope {
+  --font-display: var(--f-disp-native);
+  --font-body: var(--f-body-native);
+  --font-script: var(--f-script-native);
+  --font-mono: var(--f-mono-native);
+}
+
 body {
   background: var(--anchor-paper);
   position: relative;
@@ -352,5 +596,285 @@ h2 {
   border: var(--border-ink);
   border-radius: 0 !important;
   color: var(--anchor-ink) !important;
+}
+
+/* ── §M Motifs grid: atomic gestures.
+ * 12-col grid of small cards each teaching ONE reusable gesture. Cards may
+ * declare a surface (paper / paper-dk) to demonstrate the gesture against its
+ * native bg. Sakura Chroma's paper anchors carry the print register on every
+ * demo. */
+.ds-motif-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+.ds-motif {
+  grid-column: span 4;
+  min-height: 280px;
+  padding: 28px;
+  border: var(--border-ink);
+  border-radius: 0;
+  background: var(--anchor-paper);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.ds-motif.ds-motif-wide {
+  grid-column: span 8;
+}
+.ds-motif.ds-motif-surface-paper {
+  background: var(--anchor-paper);
+}
+.ds-motif.ds-motif-surface-paper-dk {
+  background: var(--anchor-paper-dk);
+}
+.ds-motif-h {
+  margin: 0;
+  font-family: var(--f-disp-native);
+  font-weight: 900;
+  font-size: clamp(24px, 2.6vw, 36px);
+  line-height: 1;
+  letter-spacing: -0.018em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.ds-motif-desc {
+  margin: 0;
+  font-family: var(--f-body-native);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--anchor-ink) 75%, transparent);
+  max-width: 30ch;
+}
+.ds-motif-demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+}
+.ds-motif-id {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-family: var(--f-mono-native);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+  opacity: 0.45;
+}
+@media (max-width: 880px) {
+  .ds-motif-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ds-motif,
+  .ds-motif.ds-motif-wide {
+    grid-column: auto;
+  }
+}
+
+/* ── §T Type-role atlas. Container = paper-on-paper card with 1.5px ink border.
+ * Each .t-trole-* class encodes the role's family / size / weight / leading /
+ * tracking / case / decoration. Family selectors use var(--font-*) tokens so
+ * the atlas renders in BRAND DNA fonts; only the recipe is preset-declared.
+ * Decoration (sk-red color, hard ink shadow, stamp/seal/ribbon treatments)
+ * stays declared with sakura-chroma colors. */
+.ds-trole-box {
+  display: flex;
+  flex-direction: column;
+  border: var(--border-ink);
+  border-radius: 0;
+  background: var(--anchor-paper);
+  overflow: hidden;
+  margin-top: 24px;
+}
+.ds-trole-row {
+  padding: 28px 32px;
+  border-bottom: var(--border-ink-hairline);
+}
+.ds-trole-row:last-child {
+  border-bottom: 0;
+}
+.ds-trole-sample {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .ds-trole-row {
+    padding: 24px;
+  }
+}
+
+/* ── Type-role samples. Each .t-trole-* mirrors a sakura-chroma typography
+ * token (disp-hero / disp-statement / num-hero / mono / ...) but uses
+ * var(--font-display/body/mono/script) so the actual typeface comes from
+ * brand DNA. Decoration is preset-native: ink color, sk-red emphasis,
+ * red-stamp rotation, starburst seal, ribbon-bar fill. */
+.t-trole-disp-hero {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(120px, 14vw, 280px);
+  line-height: 0.84;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.t-trole-disp-statement {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(70px, 8.4vw, 168px);
+  line-height: 0.86;
+  letter-spacing: -0.022em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.t-trole-disp-statement em {
+  font-style: normal;
+  color: var(--sk-red);
+}
+.t-trole-disp-section {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(52px, 5.6vw, 100px);
+  line-height: 0.9;
+  letter-spacing: -0.018em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.t-trole-disp-quote {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(48px, 5.4vw, 110px);
+  line-height: 0.92;
+  letter-spacing: -0.018em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.t-trole-disp-card-name {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(28px, 2.6vw, 48px);
+  line-height: 0.94;
+  letter-spacing: -0.012em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.t-trole-num-hero {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(110px, 11vw, 240px);
+  line-height: 0.86;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  color: var(--sk-red);
+}
+.t-trole-num-hero sub {
+  font-size: 34%;
+  vertical-align: baseline;
+  color: var(--anchor-ink);
+}
+.t-trole-ttl-row {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(22px, 1.7vw, 30px);
+  line-height: 1.1;
+  letter-spacing: -0.005em;
+  color: var(--anchor-ink);
+}
+.t-trole-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(14px, 1vw, 17px);
+  line-height: 1.5;
+  color: var(--anchor-ink);
+  max-width: 60ch;
+  margin: 0;
+}
+.t-trole-body-emphasis {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: clamp(15px, 1.1vw, 20px);
+  line-height: 1.4;
+  color: var(--anchor-ink);
+  max-width: 56ch;
+  margin: 0;
+}
+.t-trole-micro {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: clamp(12px, 0.9vw, 14px);
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.t-trole-micro-xl {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: clamp(12px, 0.92vw, 14px);
+  line-height: 1.2;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.t-trole-mono {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: clamp(11px, 0.78vw, 12px);
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--anchor-ink);
+}
+.t-trole-mono-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: clamp(12px, 0.85vw, 14px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--sk-pink);
+  color: var(--anchor-paper);
+  padding: 4px 10px;
+}
+.t-trole-stamp-text {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(20px, 1.6vw, 28px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--sk-red);
+  color: var(--anchor-paper);
+  padding: 10px 22px;
+  transform: rotate(-3deg);
+}
+.t-trole-seal-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(72px, 8vw, 120px);
+  aspect-ratio: 1 / 1;
+  background: var(--anchor-ink);
+  clip-path: var(--starburst-clip);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(22px, 2vw, 38px);
+  line-height: 0.9;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--anchor-paper);
+}
+.t-trole-jp-accent {
+  font-family: var(--font-script);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--anchor-ink);
 }
 ```

@@ -112,7 +112,7 @@ fs.writeFileSync(path.join(chunksDir, "voice.md"), voiceMd + "\n");
 
 // ─── 3.5 composition-hints.md ─────────────────────────────────────
 // §H ships scene-composition rules (surface contract, material avoidance, 60/30/10
-// color placement, sound-design cues). The plan agent reads this when picking
+// color placement). The plan agent reads this when picking
 // components for a scene — without it, peoples-style hard rules (single
 // triple-stamp per plate, cream-frame only on dark surfaces, …) wouldn't reach
 // anyone. Presets without a §H emit a stub block so the file always exists and
@@ -159,23 +159,6 @@ if (motifsMatch) {
   fs.writeFileSync(path.join(chunksDir, "motifs.md"), motifsMd + "\n");
   motifsFile = "chunks/motifs.md";
   motifsBytes = Buffer.byteLength(motifsMd);
-}
-
-// ─── 3.8 captions.md ──────────────────────────────────────────────
-// §C caption preset (optional). Phase 6.5 captions.mjs reads this to assemble
-// compositions/captions.html (a sub-comp on track 12 the finalize agent hoists
-// when present). Presets without §C → no file written, index.json's
-// captions_file = null, captions.mjs falls back to a registry caption block.
-const captionsMatch = html.match(
-  new RegExp(`${PRE_OPEN}<!--\\s*CAPTIONS-START\\s*-->([\\s\\S]*?)<!--\\s*CAPTIONS-END\\s*-->`),
-);
-let captionsFile = null;
-let captionsBytes = 0;
-if (captionsMatch) {
-  const captionsMd = htmlDecode(captionsMatch[1]).trim();
-  fs.writeFileSync(path.join(chunksDir, "captions.md"), captionsMd + "\n");
-  captionsFile = "chunks/captions.md";
-  captionsBytes = Buffer.byteLength(captionsMd);
 }
 
 // ─── 4. components ────────────────────────────────────────────────
@@ -256,10 +239,6 @@ const index = {
   // also reads motifs.md when validating the Motifs anchor.
   type_roles_file: typeRolesFile,
   motifs_file: motifsFile,
-  // captions_file is null when preset declares no §C. captions.mjs (Phase 6.5)
-  // branches on this: present → assemble from preset chunk; null → fall back to
-  // registry caption block (caption-highlight, etc.).
-  captions_file: captionsFile,
   components: components.map(({ id, file, meta }) =>
     // Spread frontmatter (surface / composes / role / avoids_same_scene / slots)
     // alongside id+file. Plan agent reads these without opening component .html.
@@ -283,7 +262,6 @@ const chunksBytes =
   hintsBytes +
   typeRolesBytes +
   motifsBytes +
-  captionsBytes +
   compBytes;
 
 console.log(`✓ ${path.relative(process.cwd(), chunksDir)}/`);
@@ -293,7 +271,6 @@ console.log(`  voice.md           ${fmt(voiceBytes)} KB`);
 if (hintsFile) console.log(`  composition-hints.md  ${fmt(hintsBytes)} KB`);
 if (typeRolesFile) console.log(`  type-roles.md      ${fmt(typeRolesBytes)} KB`);
 if (motifsFile) console.log(`  motifs.md          ${fmt(motifsBytes)} KB`);
-if (captionsFile) console.log(`  captions.md        ${fmt(captionsBytes)} KB`);
 console.log(`  components/        ${components.length} files`);
 for (const c of components) {
   console.log(`    ${c.id}.html  (${fmt(c.size)} KB)`);

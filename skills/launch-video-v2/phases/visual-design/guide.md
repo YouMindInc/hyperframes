@@ -48,7 +48,7 @@
    - 第 3 级互斥校验：选出的多个 component 之间，**任一对**若有 `a.id ∈ b.avoids_same_scene` 或 `b.id ∈ a.avoids_same_scene` → 拒绝组合，重选
    - **同 scene 内不要混不同 surface 的 component**（即使 surface 字段未声明，也不要把"明显 paper 风格"和"明显 blue 风格"的混在一起 —— 视觉破坏）
 
-3. Read `chunks/composition-hints.md`（必读 if `index.json.hints_file != null`，~1-3 KB）→ preset 自己宣告的硬规则（surface contract / material 互斥 / 60-30-10 colour 配比 / sound-design hooks）。**这是 preset 视觉契约的真理源 —— 违反 = scene 渲染失败**。`hints_file` 为 null（老 preset）时跳过。
+3. Read `chunks/composition-hints.md`（必读 if `index.json.hints_file != null`，~1-3 KB）→ preset 自己宣告的硬规则（surface contract / material 互斥 / 60-30-10 colour 配比）。**这是 preset 视觉契约的真理源 —— 违反 = scene 渲染失败**。`hints_file` 为 null（老 preset）时跳过。
 
 4. （可选）Read `chunks/tokens.css`（~1-2 KB）→ 看 `:root` 里实际定义了哪些角色 token（`--canvas` / `--ink` / `--brand-*` / preset-internal 别名如 `--paper` / `--blue` / `--cream` / `--shadow-triple-*`）—— 决定 30% 中间层 / 痛点场景的调色描述
 
@@ -74,7 +74,7 @@
 
 ### 不读
 
-- `research/`（Phase 2 领地；素材通过 `assetCandidates` 传递）
+- `capture/`（Phase 2 领地；素材通过 `assetCandidates` 传递）
 - `effects-catalog.md`（已嵌入 Dispatch 上下文）
 - `blueprints-index.md`（已嵌入 Dispatch 上下文）
 - blueprint 全文（`blueprints/<id>.md`，是 build agent 的事）

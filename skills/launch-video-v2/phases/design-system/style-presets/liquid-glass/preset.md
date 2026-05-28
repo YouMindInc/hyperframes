@@ -31,9 +31,18 @@
     }
   ],
   "best_for": ["premium SaaS", "AI products", "hardware launches", "futuristic tech", "consumer apps with depth"],
-  "avoid_for": ["print-feel brands", "low-power render targets", "warm hand-crafted registers"]
+  "avoid_for": ["print-feel brands", "low-power render targets", "warm hand-crafted registers"],
+  "chromeFonts": {
+    "googleFontsHref": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap",
+    "display": "Inter",
+    "body": "Inter",
+    "script": "Inter",
+    "mono": "JetBrains Mono"
+  }
 }
 ```
+
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Inter + JetBrains Mono — instead of the brand DNA fonts. Liquid-glass is a single-face system: Inter does display + body + script (the preset refuses a hand-script voice — refraction smears thin strokes), with JetBrains Mono reserved for chrome / numeric metadata. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid uses `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
 
 > Liquid-glass auto-infers normally now (its `match_signals` light up on
 > hairline-border + minimal-decoration sites), **but** `requires_capabilities`
@@ -147,6 +156,103 @@ on `--brand-*` and resolved once, consumed by every component.
 Liquid glass is **type-on-glass, not type-as-hero**. Body weight runs heavier
 than usual (550-700) because anti-aliasing fights with refraction — thin
 weights smear. Letterspacing 0 to -0.01em; never tight.
+
+## §T Type-role atlas (Phase 4b reads this to size text correctly)
+
+Each entry is a **named type role** with concrete render parameters at 1920×1080 — family token, px range, weight, leading, tracking, case, and any color/shadow decoration. Phase 4b scene workers may cite roles by `id` ("use a `stat-value` here"); the brand DNA fonts plug in automatically via `var(--font-*)` tokens. Liquid-glass is type-on-glass: every role assumes the text sits over a refracting panel or the aurora, so `text-shadow: var(--text-shadow-glass)` is the default decoration on every legibility-critical role (display, headline, body, label). Weight floors stay at 550 because thin strokes smear through refraction.
+
+The atlas is the **sole authoring source** for non-component text. If a scene needs a `stat-value` numeral that isn't covered by §6 components, the worker reads role `stat-value` here and writes inline CSS from these values. Do NOT invent ad-hoc sizes — weight under 550 at body scale collapses through the IIFE shader.
+
+```type-roles
+[
+  {
+    "id": "display-cover",
+    "family": "display",
+    "purpose": "cover hero on aurora — type sits on glass card or floats directly on the aurora",
+    "px_min": 96, "px_max": 180, "weight": 800, "leading": "0.95", "tracking": "-0.01em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-display-cover\">{BRAND_NAME}</div>"
+  },
+  {
+    "id": "headline",
+    "family": "display",
+    "purpose": "primary slide headline on glass panel",
+    "px_min": 56, "px_max": 96, "weight": 700, "leading": "1", "tracking": "-0.01em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-headline\">Design together</div>"
+  },
+  {
+    "id": "statement",
+    "family": "display",
+    "purpose": "long-form quoted statement on glass — wraps across panels",
+    "px_min": 40, "px_max": 64, "weight": 650, "leading": "1.1", "tracking": "0", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-statement\">Light passes through. Surfaces stay weightless.</div>"
+  },
+  {
+    "id": "stat-value",
+    "family": "display",
+    "purpose": "hero numeral inside widget glass card — numbers-as-nouns voice",
+    "px_min": 64, "px_max": 120, "weight": 800, "leading": "1", "tracking": "-0.02em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-stat-value\">48ms</div>"
+  },
+  {
+    "id": "h3",
+    "family": "display",
+    "purpose": "sub-headline / panel title",
+    "px_min": 28, "px_max": 44, "weight": 650, "leading": "1.15", "tracking": "0", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-h3\">Panel title</div>"
+  },
+  {
+    "id": "lead",
+    "family": "body",
+    "purpose": "lead paragraph on glass — heavier than usual to survive refraction",
+    "px_min": 20, "px_max": 28, "weight": 600, "leading": "1.45", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-lead\">The lead carries one idea per panel. Heavier weight than usual — refraction softens edges.</p>"
+  },
+  {
+    "id": "body",
+    "family": "body",
+    "purpose": "default body paragraph on glass",
+    "px_min": 16, "px_max": 22, "weight": 550, "leading": "1.55", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body\">Body holds at 16-22px, weight 550 minimum. Thinner reads as smudge through the glass.</p>"
+  },
+  {
+    "id": "caption",
+    "family": "body",
+    "purpose": "small caption on glass — pushes the floor of legibility through refraction",
+    "px_min": 14, "px_max": 16, "weight": 600, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-caption\">Caption sits at 14-16px / 600. Below 14px disappears into the refraction.</p>"
+  },
+  {
+    "id": "label-eyebrow",
+    "family": "body",
+    "purpose": "uppercase tracked label above a headline (panel eyebrow / section label)",
+    "px_min": 12, "px_max": 14, "weight": 600, "leading": "1.2", "tracking": "0.18em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-label-eyebrow\">Featured panel</div>"
+  },
+  {
+    "id": "label-mono",
+    "family": "mono",
+    "purpose": "metadata chrome / slide counter / unit suffix — JetBrains Mono, soft white",
+    "px_min": 11, "px_max": 14, "weight": 500, "leading": "1.3", "tracking": "0.06em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-label-mono\">01 / Surfaces</div>"
+  },
+  {
+    "id": "pill",
+    "family": "body",
+    "purpose": "gradient pill chip on glass — brand-primary→secondary fill, white text",
+    "px_min": 13, "px_max": 15, "weight": 600, "leading": "1", "tracking": "0.04em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-pill\">Live now</span></div>"
+  },
+  {
+    "id": "unit-suffix",
+    "family": "mono",
+    "purpose": "unit appended to a stat-value (ms / GB / %) — sits at 28-40% of the numeral",
+    "px_min": 18, "px_max": 32, "weight": 500, "leading": "1", "tracking": "0", "case": "sentence",
+    "sample_html": "<div><span class=\"t-trole-stat-value\">48</span><span class=\"t-trole-unit-suffix\">ms</span></div>"
+  }
+]
+```
+
+The atlas omits the glass card surface itself (a §M motif, not a text role) and the aurora background (a structural canvas declared in §B).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -309,13 +415,117 @@ blocks. **Do not let an LLM rewrite it.** When authoring a scene:
 - **Transitions between scenes**: hold the aurora across scenes (single
   composition-wide `uTime` driver). Panels slide off the bottom on scene N,
   rise from the bottom on scene N+1. The aurora doesn't blink.
-- **Sound design**: low pad, occasional hi-hat, soft whoosh on panel entries
-  (~80-200Hz lift). No drums. No risers.
 - **Stagger**: 100-140ms between sibling panels, 30-60ms between menu items.
+
+## §M Atomic motifs (gestures the plan agent can reference)
+
+Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:glass-card with a motif:edge-light rim on the stat panel" without specifying which pattern the card sits in.
+
+> Static-preview caveat. The signature `glass-card` and `aurora-field` motifs depend on the `liquid-glass.iife.js` shader pass at scene-render time. The CSS demos below fake the look with `backdrop-filter: blur()` + inset highlight + radial-gradient aurora — close enough for §M preview, NOT a substitute for the IIFE in actual scenes (see §H "Aurora shader — copy verbatim from registry").
+
+```motifs
+[
+  {
+    "id": "glass-card",
+    "label": "Glass card",
+    "role": "weightless-surface",
+    "surface_safe": ["aurora"],
+    "description": "The signature panel — frosted backdrop-filter blur, hairline-translucent border, inset highlight on the top edge, soft cast shadow. In scenes the IIFE shader replaces the backdrop-filter with true refraction; this CSS demo approximates the static look for the §M grid.",
+    "wide": true,
+    "demo": "<div class=\"lg-motif-card\"><div class=\"lg-motif-card-label\">Surface</div><div class=\"lg-motif-card-value\">Glass</div></div>",
+    "css": ".lg-motif-card{display:inline-flex;flex-direction:column;gap:8px;padding:24px 32px;border-radius:28px;background:rgba(255,255,255,.08);backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);border:1px solid rgba(255,255,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 18px 48px rgba(0,0,0,.42);color:rgba(255,255,255,.96)}.lg-motif-card-label{font-family:var(--f-body-native);font-weight:600;font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.74}.lg-motif-card-value{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(28px,3vw,44px);line-height:1;letter-spacing:-.01em;text-shadow:0 2px 12px rgba(0,0,0,.42)}"
+  },
+  {
+    "id": "edge-light",
+    "label": "Edge light",
+    "role": "rim-highlight",
+    "surface_safe": ["aurora"],
+    "description": "1px inset highlight running along the top edge of a glass panel — fakes the lit rim of a wet surface. Always pairs with a glass-card; never appears solo. Equivalent to `--lg-edge-highlight` in the IIFE shader.",
+    "demo": "<div class=\"lg-motif-edge\"></div>",
+    "css": ".lg-motif-edge{display:inline-block;width:240px;height:88px;border-radius:24px;background:rgba(255,255,255,.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.42),inset 0 -1px 0 rgba(255,255,255,.08)}"
+  },
+  {
+    "id": "chromatic-fringe",
+    "label": "Chromatic fringe",
+    "role": "refraction-rim",
+    "surface_safe": ["aurora"],
+    "description": "Subtle RGB split at the panel rim — cyan on one edge, magenta on the opposite. The 'wet lens' tell. In scenes this is `--lg-chrom-aberration` on the shader; the CSS demo uses a layered gradient border.",
+    "demo": "<div class=\"lg-motif-fringe\"></div>",
+    "css": ".lg-motif-fringe{display:inline-block;width:240px;height:88px;border-radius:24px;background:rgba(255,255,255,.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid transparent;background-image:linear-gradient(rgba(255,255,255,.06),rgba(255,255,255,.06)),linear-gradient(120deg,rgba(120,220,255,.5),rgba(255,255,255,.18) 50%,rgba(255,120,200,.5));background-origin:border-box;background-clip:padding-box,border-box;box-shadow:inset 0 1px 0 rgba(255,255,255,.28)}"
+  },
+  {
+    "id": "aurora-field",
+    "label": "Aurora field",
+    "role": "living-canvas",
+    "surface_safe": ["aurora"],
+    "description": "The animated color field underneath every glass panel — desaturated brand stops blended over the mandatory dark base. The aurora is the brand's voice; glass is the type's lectern. Never replace with a flat fill.",
+    "wide": true,
+    "demo": "<div class=\"lg-motif-aurora\"></div>",
+    "css": ".lg-motif-aurora{display:block;width:100%;min-height:120px;border-radius:24px;background:radial-gradient(ellipse 70% 60% at 22% 30%,color-mix(in oklab,var(--brand-primary) 60%,transparent),transparent 60%),radial-gradient(ellipse 70% 60% at 80% 78%,color-mix(in oklab,var(--brand-secondary) 55%,transparent),transparent 60%),linear-gradient(160deg,#0a0218 0%,#15082a 60%,#062035 100%);border:1px solid rgba(255,255,255,.08)}"
+  },
+  {
+    "id": "gradient-pill",
+    "label": "Gradient pill",
+    "role": "brand-accent-chip",
+    "surface_safe": ["aurora", "glass"],
+    "description": "Small capsule chip with brand-primary→secondary gradient fill and uppercase tracked label. Carries brand color forward onto glass — the one place brand hue touches a glass surface (the panel itself stays neutral).",
+    "demo": "<span class=\"lg-motif-pill\">Live now</span>",
+    "css": ".lg-motif-pill{display:inline-block;padding:8px 18px;border-radius:999px;background:linear-gradient(120deg,var(--brand-primary),var(--brand-secondary));color:rgba(255,255,255,.96);font-family:var(--f-body-native);font-weight:600;font-size:clamp(13px,1.1vw,15px);line-height:1;letter-spacing:.06em;text-transform:uppercase;box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 8px 22px rgba(0,0,0,.3)}"
+  },
+  {
+    "id": "rise-and-settle",
+    "label": "Rise and settle",
+    "role": "panel-entry",
+    "surface_safe": ["aurora"],
+    "description": "Signature motion — panel translates up from off-frame paired with scale 0.86 → 1.0 on `back.out(1.04)`. The tiny overshoot is the 'settle' tell. Never opacity-only, never rotation. Static demo shows the resting state.",
+    "demo": "<div class=\"lg-motif-rise\"><div class=\"lg-motif-rise-card\">Settled</div></div>",
+    "css": ".lg-motif-rise{display:inline-block;padding:0;perspective:600px}.lg-motif-rise-card{display:inline-block;padding:18px 28px;border-radius:24px;background:rgba(255,255,255,.08);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 14px 38px rgba(0,0,0,.4);color:rgba(255,255,255,.96);font-family:var(--f-disp-native);font-weight:700;font-size:clamp(18px,1.8vw,24px);letter-spacing:-.01em;text-shadow:0 2px 12px rgba(0,0,0,.42)}"
+  }
+]
+```
+
+The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
+
+**Materials lexicon** (informational — these are the composition atoms behind the patterns):
+
+- glass-card · edge-light · chromatic-fringe · aurora-field · gradient-pill · rise-and-settle · specular-highlight · idle-drift
 
 ## §I Page-level CSS (makes design.html itself read as liquid glass)
 
 ```css
+/* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
+ * These let the doc chrome render in Inter + JetBrains Mono regardless of
+ * brand DNA. The §6 component preview, §M motifs grid, and §T type-role atlas
+ * also read these via .preset-native-scope.
+ *
+ * Liquid-glass is a single-face system: Inter does display, body, AND script
+ * because refraction smears thin-stroke script faces. JetBrains Mono carries
+ * metadata + unit suffixes. The fallback chain ends in SF Pro / Geist / Public
+ * Sans / system-ui — all neutral grotesques that survive backdrop-blur. */
+:root {
+  --f-disp-native:
+    "Inter", "SF Pro Display", "Geist", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --f-body-native:
+    "Inter", "Public Sans", "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --f-script-native:
+    "Inter", "Public Sans", "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --f-mono-native:
+    "JetBrains Mono", "Geist Mono", "IBM Plex Mono", "Menlo", ui-monospace, monospace;
+}
+
+/* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
+ * Wraps §6 component previews, §M motif demos, and §T type-role atlas so
+ * var(--font-*) resolves to Inter / JetBrains Mono regardless of brand DNA.
+ * Paste-ready component source is untouched — Phase 4b still grep + paste the
+ * original `var(--font-display)` tokens, which resolve to brand DNA at
+ * scene-render time. */
+.preset-native-scope {
+  --font-display: var(--f-disp-native);
+  --font-body: var(--f-body-native);
+  --font-script: var(--f-script-native);
+  --font-mono: var(--f-mono-native);
+}
+
 body {
   background:
     radial-gradient(
@@ -403,5 +613,245 @@ body {
 h2 {
   color: rgba(255, 255, 255, 0.98);
   text-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* ── §M Motifs grid: atomic gestures.
+ * Cards live on the deep-aurora canvas with frosted glass treatment. Wide
+ * motifs span 8/12; standard motifs span 4. The .preset-native-scope wrapper
+ * (applied by build-design.mjs) makes inner var(--font-*) refs resolve to
+ * Inter / JetBrains Mono. */
+.ds-motif-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+.ds-motif {
+  grid-column: span 4;
+  min-height: 280px;
+  padding: 28px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 18px 48px rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.96);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.ds-motif.ds-motif-wide {
+  grid-column: span 8;
+}
+.ds-motif-h {
+  margin: 0;
+  font-family: var(--f-disp-native);
+  font-weight: 700;
+  font-size: clamp(22px, 2.2vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.98);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+.ds-motif-desc {
+  margin: 0;
+  font-family: var(--f-body-native);
+  font-weight: 550;
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 30ch;
+}
+.ds-motif-demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+}
+.ds-motif-id {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-family: var(--f-mono-native);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+@media (max-width: 880px) {
+  .ds-motif-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ds-motif,
+  .ds-motif.ds-motif-wide {
+    grid-column: auto;
+  }
+}
+
+/* ── §T Type-role atlas. Container = frosted glass card stacking each role on
+ * its own row. Single column — padding only, no row dividers beyond a hairline
+ * (the aurora carries the visual rhythm; lines would compete). Family selectors
+ * use var(--font-*) tokens so the atlas renders in BRAND DNA fonts; only the
+ * recipe + the text-shadow-glass legibility decoration are preset-declared. */
+.ds-trole-box {
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 18px 48px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  margin-top: 24px;
+}
+.ds-trole-row {
+  padding: 28px 32px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ds-trole-row:last-child {
+  border-bottom: 0;
+}
+.ds-trole-sample {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .ds-trole-row {
+    padding: 24px;
+  }
+}
+
+/* ── Type-role samples. var(--font-*) resolves to brand DNA; text-shadow uses
+ * --text-shadow-glass for legibility through refraction. Color floor stays at
+ * white-on-glass; brand color appears only in pill / unit-suffix accents. */
+.t-trole-display-cover {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(96px, 12vw, 180px);
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.98);
+  text-shadow: 0 4px 32px rgba(0, 0, 0, 0.5);
+}
+.t-trole-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(56px, 6vw, 96px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.98);
+  text-shadow: var(--text-shadow-glass);
+}
+.t-trole-statement {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 650;
+  font-size: clamp(40px, 4vw, 64px);
+  line-height: 1.1;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow: var(--text-shadow-glass);
+  max-width: 26ch;
+}
+.t-trole-stat-value {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(64px, 8vw, 120px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.98);
+  text-shadow: var(--text-shadow-glass);
+}
+.t-trole-h3 {
+  font-family: var(--font-display);
+  font-weight: 650;
+  font-size: clamp(28px, 2.8vw, 44px);
+  line-height: 1.15;
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow: var(--text-shadow-glass);
+}
+.t-trole-lead {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: var(--text-shadow-glass);
+  max-width: 44ch;
+  margin: 0;
+}
+.t-trole-body {
+  font-family: var(--font-body);
+  font-weight: 550;
+  font-size: clamp(16px, 1.4vw, 22px);
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: var(--text-shadow-glass);
+  max-width: 60ch;
+  margin: 0;
+}
+.t-trole-caption {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: clamp(14px, 1vw, 16px);
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.74);
+  text-shadow: var(--text-shadow-glass);
+  max-width: 60ch;
+  margin: 0;
+}
+.t-trole-label-eyebrow {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: clamp(12px, 1vw, 14px);
+  line-height: 1.2;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  text-shadow: var(--text-shadow-glass);
+}
+.t-trole-label-mono {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(11px, 0.9vw, 14px);
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.74);
+}
+.t-trole-pill {
+  display: inline-block;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, var(--brand-primary), var(--brand-secondary));
+  color: rgba(255, 255, 255, 0.98);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: clamp(13px, 1.1vw, 15px);
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 8px 22px rgba(0, 0, 0, 0.3);
+}
+.t-trole-unit-suffix {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(18px, 2.4vw, 32px);
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.72);
+  margin-left: 0.18em;
 }
 ```

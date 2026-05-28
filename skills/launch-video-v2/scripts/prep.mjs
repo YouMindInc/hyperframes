@@ -3,9 +3,9 @@
 // launch-video-v2 port of skills/product-launch-video/scripts/prep.mjs.
 //
 // Reads:  section_plan.md (Phase 3), narrator_scripts.json (Phase 2),
-//         audio_meta.json (Phase 2.5, optional), research/ assets (Phase 1),
-//         design-system/fonts/ (Phase 1b, optional — silently skipped if
-//         download-fonts.mjs hasn't been ported to v2 yet),
+//         audio_meta.json (Phase 2.5, optional), capture/assets/ (Phase 1 —
+//         hyperframes capture), design-system/fonts/ (Phase 1b, populated by
+//         build-design.mjs from capture's font binaries),
 //         hyperframes-animation/rules/*.md (existence only).
 // Writes: public/<assets>, public/fonts/<woff2>, ./group_spec.json inside the
 //         HyperFrames project root passed via --hyperframes. The launch-video-v2
@@ -29,7 +29,7 @@
 //
 // Usage:
 //   node prep.mjs --section-plan <path> --narrator-scripts <path> \
-//                 --rules-dir <abs> --research <path> --hyperframes <path> \
+//                 --rules-dir <abs> --capture <path> --hyperframes <path> \
 //                 --out <path> [--audio-meta <path>] [--design-system <path>] \
 //                 [--scenes-per-group <int>]
 //
@@ -66,7 +66,11 @@ const audioMetaPath = flag("audio-meta") ? resolve(flag("audio-meta")) : null;
 const rulesDirArg = flag("rules-dir");
 if (!rulesDirArg) die("Missing required --rules-dir");
 const rulesDir = resolve(rulesDirArg);
-const researchDir = resolve(flag("research", "./research"));
+// `--capture` is the v3 flag (hyperframes capture). `--research` kept as a
+// deprecated alias to make in-flight projects upgrade cleanly. Either one
+// resolves to the same on-disk root that holds the page-load artifacts that
+// downstream phases reference.
+const captureDir = resolve(flag("capture", flag("research", "./capture")));
 const designSystemDir = resolve(flag("design-system", "./design-system"));
 const hyperframesDir = resolve(flag("hyperframes", "."));
 const outPath = resolve(flag("out", "./group_spec.json"));
@@ -100,13 +104,13 @@ if (!existsSync(hyperframesDir)) {
   rmSync(join(hyperframesDir, "CLAUDE.md"), { force: true });
 }
 
-// ---------- Step 2: copy research assets → public/ ----------
+// ---------- Step 2: copy capture assets → public/ ----------
 const publicDir = join(hyperframesDir, "public");
 mkdirSync(publicDir, { recursive: true });
 
-// `.bin` 是 web-research 阶段对未识别 MIME 的图片的兜底命名（典型为 image/* 但 Content-Type
+// `.bin` 是抓取阶段对未识别 MIME 的图片的兜底命名（典型为 image/* 但 Content-Type
 // 缺失或被 CDN 改写）。下游 Phase 4b worker 把它们当 <img src> 引用 —— 浏览器会按 magic bytes
-// 渲染，绝大多数能正常显示。把它纳入白名单避免文件被孤立在 research/ 里。
+// 渲染，绝大多数能正常显示。把它纳入白名单避免文件被孤立。
 const ASSET_EXTS = new Set([
   ".png",
   ".jpg",
@@ -114,10 +118,10 @@ const ASSET_EXTS = new Set([
   ".webp",
   ".svg",
   ".bin",
-  // Video extensions — Phase 3 frequently quotes hero/demo .mp4 from research/.
-  // Forgetting these forces Phase 4b workers to substitute poster .webp, losing
-  // motion fidelity. Keep in sync with the playable formats hyperframes-core
-  // accepts in <video>/clip sub-comps.
+  // Video extensions — Phase 3 frequently quotes hero/demo .mp4 from the
+  // capture. Forgetting these forces Phase 4b workers to substitute poster
+  // .webp, losing motion fidelity. Keep in sync with the playable formats
+  // hyperframes-core accepts in <video>/clip sub-comps.
   ".mp4",
   ".mov",
   ".webm",
@@ -141,7 +145,11 @@ function walk(dir) {
     }
   }
 }
-walk(researchDir);
+// hyperframes capture writes assets/ + screenshots/ + extracted/ under
+// captureDir. We want only image/video media (assets/ + screenshots/), not
+// the JSON manifests under extracted/.
+walk(join(captureDir, "assets"));
+walk(join(captureDir, "screenshots"));
 
 // ---------- Step 2b: copy design-system/fonts → public/fonts/ ----------
 // Phase 1b's download-fonts.mjs writes self-hosted brand fonts into
@@ -718,15 +726,50 @@ const spec = {
 writeFileSync(outPath, JSON.stringify(spec, null, 2));
 
 // ---------- Step 7.5: invoke captions builder ----------
-// Captions are OPT-IN: orchestrator passes --captions-builder when audio is
-// available. The builder reads audio_meta + group_spec + chunks/captions.md
-// and writes compositions/captions.html. finalize-agent checks file existence
-// before emitting the track 12 clip.
+// Captions source: design-system agent picks a `caption-*` registry component
+// (writes design-system/caption-style.json), then this step:
+//   1. reads the chosen style
+//   2. runs `npx hyperframes add caption-<style>` to install the component
+//      into `compositions/components/<name>.html` (idempotent — skipped if
+//      already present)
+//   3. invokes captions.mjs which patches the component (word-grid + brand
+//      tokens) and writes `compositions/captions.html`.
+// finalize-agent checks file existence before emitting the track-12 clip.
 let captionsBuilt = false;
+let captionStyle = null;
 if (captionsBuilder && audioMetaPath && existsSync(audioMetaPath)) {
-  const chunksCaptionsPath = join(designSystemDir, "chunks", "captions.md");
-  if (existsSync(chunksCaptionsPath)) {
+  const captionStylePath = join(designSystemDir, "caption-style.json");
+  if (existsSync(captionStylePath)) {
+    try {
+      const cs = JSON.parse(readFileSync(captionStylePath, "utf8"));
+      if (cs?.name && typeof cs.name === "string") captionStyle = cs.name;
+    } catch (e) {
+      anomalies.push(`caption-style.json parse failed (${e.message}) — captions skipped`);
+    }
+  }
+}
+if (captionStyle) {
+  const componentPath = join(
+    hyperframesDir,
+    "compositions",
+    "components",
+    `${captionStyle}.html`,
+  );
+  if (!existsSync(componentPath)) {
+    const add = spawnSync(
+      "npx",
+      ["hyperframes", "add", captionStyle, "--dir", hyperframesDir, "--no-clipboard"],
+      { stdio: "inherit" },
+    );
+    if (add.status !== 0) {
+      anomalies.push(
+        `hyperframes add ${captionStyle} exited ${add.status} — finalize will skip captions clip`,
+      );
+    }
+  }
+  if (existsSync(componentPath)) {
     const captionsOut = join(hyperframesDir, "compositions", "captions.html");
+    const tokensCssPath = join(designSystemDir, "chunks", "tokens.css");
     const r = spawnSync(
       "node",
       [
@@ -734,7 +777,9 @@ if (captionsBuilder && audioMetaPath && existsSync(audioMetaPath)) {
         "--audio-meta", audioMetaPath,
         "--group-spec", outPath,
         "--narrator-scripts", narratorScriptsPath,
-        "--chunks-captions", chunksCaptionsPath,
+        "--caption-style", captionStyle,
+        "--component-path", componentPath,
+        ...(existsSync(tokensCssPath) ? ["--tokens-css", tokensCssPath] : []),
         "--hyperframes", hyperframesDir,
         "--out", captionsOut,
       ],
@@ -747,8 +792,6 @@ if (captionsBuilder && audioMetaPath && existsSync(audioMetaPath)) {
         `captions builder exited ${r.status} — finalize will skip captions clip`,
       );
     }
-  } else {
-    // Preset doesn't ship §C — silent skip (not every preset has captions).
   }
 }
 
@@ -759,7 +802,9 @@ console.log(
 );
 console.log(`  bgm: ${bgm_path || "(none)"}`);
 console.log(`  sfx cues:      ${sfx.length}${sfxLibDir ? "" : " (--sfx-lib not passed; cues dropped)"}`);
-console.log(`  captions:      ${captionsBuilt ? "compositions/captions.html built" : "(skipped)"}`);
+console.log(
+  `  captions:      ${captionsBuilt ? `compositions/captions.html built (style=${captionStyle})` : "(skipped)"}`,
+);
 console.log(`  assets copied: ${copied} (collisions skipped: ${collisions.length})`);
 console.log(`  fonts copied:  ${fontsCopied}`);
 console.log(

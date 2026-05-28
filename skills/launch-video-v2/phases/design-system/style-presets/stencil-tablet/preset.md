@@ -18,9 +18,18 @@
     { "kind": "hairline_border", "weight": 0.1 }
   ],
   "best_for": ["museum / cultural-institution decks", "art / architecture brands", "longform research", "heritage and craft brands", "manifestos"],
-  "avoid_for": ["digital-native polished", "playful pop", "soft consumer SaaS", "fintech / enterprise"]
+  "avoid_for": ["digital-native polished", "playful pop", "soft consumer SaaS", "fintech / enterprise"],
+  "chromeFonts": {
+    "googleFontsHref": "https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Bowlby+One&family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600&display=swap",
+    "display": "Stardos Stencil",
+    "body": "Inter",
+    "script": "Bowlby One",
+    "mono": "Barlow Condensed"
+  }
 }
 ```
+
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Stardos Stencil + Inter + Barlow Condensed + Bowlby One — instead of the brand DNA fonts. The `mono` slot binds Barlow Condensed because Stencil & Tablet uses it as the chrome / pill / legend voice (a condensed extra-heavy uppercase grotesque playing the role mono plays elsewhere); the `script` slot binds Bowlby One because the preset reserves that face for the 320px quote-mark glyph and refuses any other handwritten register. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/mono/script) re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -100,6 +109,131 @@ Stencil & Tablet forces stencil display + condensed chrome regardless of site DN
 - **mono**: `'Barlow Condensed'` · `'Oswald'` · `'Archivo Narrow'` wght 800
 
 **Note:** `mono` slot is **deliberately not monospaced** — Stencil & Tablet has no mono role. Barlow Condensed sits in the mono slot because the preset uses it as the chrome / pill / legend voice (a condensed extra-heavy uppercase grotesque), playing the role mono plays in other presets (small labels, technical metadata). Build pipeline reads the third bullet for "small chrome labels"; we hand it Barlow.
+
+## §T Type-role atlas (Phase 4b reads this to size text correctly)
+
+Each entry is a **named type role** with concrete render parameters at 1920×1080 — family token, px range, weight, leading, tracking, case, and any color/border/rotation/suffix decoration. Phase 4b scene workers may cite roles by `id` ("use a `numeral-tablet` here"); the brand DNA fonts plug in automatically via `var(--font-*)` tokens. This is the same atlas Stencil & Tablet ships in its Typography section, ported as machine-readable JSON.
+
+The atlas is the **sole authoring source** for non-component text. If a scene needs a 220px tablet numeral that isn't covered by §6 components, the worker reads role `numeral-tablet` here and writes inline CSS from these values. Do NOT invent ad-hoc sizes — Stencil & Tablet's identity collapses if numerals drop below 160px or if Barlow Condensed runs without ≥0.04em tracking.
+
+```type-roles
+[
+  {
+    "id": "cover-hero",
+    "family": "display",
+    "purpose": "cover headline at maximum stencil scale — ink-break glyphs carry the system",
+    "px_min": 140, "px_max": 220, "weight": 700, "leading": "0.82", "tracking": "-0.015em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-cover-hero\">{BRAND_NAME}</div>"
+  },
+  {
+    "id": "numeral-mega",
+    "family": "display",
+    "purpose": "section-divider numeral — fills half the canvas on dark fields only",
+    "px_min": 360, "px_max": 540, "weight": 700, "leading": "0.8", "tracking": "-0.02em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-numeral-mega\">01</div>"
+  },
+  {
+    "id": "numeral-tablet",
+    "family": "display",
+    "purpose": "primary numeral inside a tablet card — defining feature of the tablet form",
+    "px_min": 160, "px_max": 240, "weight": 700, "leading": "0.85", "tracking": "-0.02em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-numeral-tablet\">04</div>"
+  },
+  {
+    "id": "numeral-stat",
+    "family": "display",
+    "purpose": "statistical numeral with optional Barlow superscript suffix (%, ×, K, M)",
+    "px_min": 120, "px_max": 160, "weight": 700, "leading": "0.85", "tracking": "-0.02em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-numeral-stat\">99<sup>%</sup></div>"
+  },
+  {
+    "id": "section-headline",
+    "family": "display",
+    "purpose": "headline on a section-divider slide (pairs with the 540px numeral)",
+    "px_min": 92, "px_max": 120, "weight": 700, "leading": "0.92", "tracking": "-0.005em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-section-headline\">Manifesto</div>"
+  },
+  {
+    "id": "page-headline",
+    "family": "display",
+    "purpose": "standard slide headline (Stardos uppercase, ink-break glyphs)",
+    "px_min": 64, "px_max": 92, "weight": 700, "leading": "0.92", "tracking": "-0.01em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-page-headline\">Section title</div>"
+  },
+  {
+    "id": "quote-text",
+    "family": "display",
+    "purpose": "pull-quote body inside a quote panel — paired with the Bowlby quote-mark",
+    "px_min": 44, "px_max": 60, "weight": 400, "leading": "1.05", "tracking": "-0.005em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-quote-text\">Stamped, signed, framed. The poster is the message.</div>"
+  },
+  {
+    "id": "quote-mark",
+    "family": "script",
+    "purpose": "single 320px Bowlby One quote glyph beside the quote-text — the only Bowlby use",
+    "px_min": 200, "px_max": 320, "weight": 700, "leading": "0.8", "tracking": "0", "case": "upper",
+    "sample_html": "<div class=\"t-trole-quote-mark\">“</div>"
+  },
+  {
+    "id": "card-headline",
+    "family": "display",
+    "purpose": "headline inside an action bar or tablet sub-headline (Stardos uppercase)",
+    "px_min": 28, "px_max": 34, "weight": 700, "leading": "1.15", "tracking": "-0.005em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-card-headline\">Action bar headline</div>"
+  },
+  {
+    "id": "matrix-row",
+    "family": "display",
+    "purpose": "matrix row-label cell (small Stardos uppercase, positive tracking for legibility)",
+    "px_min": 22, "px_max": 26, "weight": 700, "leading": "1.1", "tracking": "0.01em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-matrix-row\">Row label</div>"
+  },
+  {
+    "id": "topbar",
+    "family": "mono",
+    "purpose": "top chrome label — uppercase Barlow Condensed 800 with generous tracking",
+    "px_min": 24, "px_max": 32, "weight": 800, "leading": "1", "tracking": "0.04em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-topbar\">Section name · Issue 04</div>"
+  },
+  {
+    "id": "section-eyebrow",
+    "family": "mono",
+    "purpose": "eyebrow on a section-divider slide (Barlow Condensed 800, tracked 0.14em)",
+    "px_min": 18, "px_max": 24, "weight": 800, "leading": "1.2", "tracking": "0.14em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-section-eyebrow\">Chapter II — Field manual</div>"
+  },
+  {
+    "id": "footer",
+    "family": "mono",
+    "purpose": "bottom chrome footer + small meta labels (Barlow Condensed 600, 0.08em)",
+    "px_min": 18, "px_max": 22, "weight": 600, "leading": "1", "tracking": "0.08em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-footer\">May 2026 · Stencil &amp; Tablet</div>"
+  },
+  {
+    "id": "pill",
+    "family": "mono",
+    "purpose": "matrix status pill (teal=yes, mustard=partial, magenta=no, paper-bordered=note)",
+    "px_min": 16, "px_max": 18, "weight": 700, "leading": "1", "tracking": "0.08em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-pill\">Partial</span></div>"
+  },
+  {
+    "id": "body-lg",
+    "family": "body",
+    "purpose": "stand-alone body paragraph (Inter 400 — the only sentence-case voice)",
+    "px_min": 20, "px_max": 24, "weight": 400, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body-lg\">A shared canvas for product teams. Edit together, ship together — no more handoff drift.</p>"
+  },
+  {
+    "id": "body",
+    "family": "body",
+    "purpose": "default body inside tablets and cards (Inter 400, 22px)",
+    "px_min": 18, "px_max": 22, "weight": 400, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body\">Inter is the quiet voice — sentence case, never uppercase, captioning the loud stencil above.</p>"
+  }
+]
+```
+
+The atlas omits chrome positions (declared in §B / §H as fixed absolute offsets) and the tablet card pad / radius (a §M motif, not a text role).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -209,15 +343,116 @@ Take the brand's product description / value prop. Transform with:
 - Filled and confident. A typical scene covers most of the canvas in color blocks. A scene that feels broken in this system is one that's mostly empty bone — the design needs the blocks to hold its identity.
 - Exception: section-divider scene, where a single 540px numeral against `var(--ink)` IS the design and emptiness is intentional.
 
-**Sound design (passed to audio phase, not Phase 4b — noted here for completeness)**
+## §M Atomic motifs (gestures the plan agent can reference)
 
-- Stamp hit on headline / numeral entry (paper-on-wood thump).
-- Soft pen scratch on stencil ink-break — optional, only on key beats.
-- Hard cut between scenes = single percussive hit on the cut frame (matches the paper-wipe alternative).
+Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. Stencil & Tablet's gestures are non-negotiable signatures — the tablet's numeral above headline, the 540px section numeral on dark, the action-bar's vertical ink rule, the mustard callout, the matrix pill convention, the cover lockup mark.
+
+```motifs
+[
+  {
+    "id": "tablet-numeral",
+    "label": "Tablet numeral",
+    "role": "tablet-anchor",
+    "surface_safe": ["bone", "paper", "brand"],
+    "description": "A rounded 22-26px tablet card carrying a 220px Stardos Stencil numeral above an uppercase stencil headline and Inter body. The numeral fills the upper half and IS the tablet's defining feature — a tablet without a numeral is a generic card. Background takes any accent fill; text follows surface rules.",
+    "wide": true,
+    "demo": "<div class=\"stn-motif-tablet\"><div class=\"stn-motif-tablet-num\">04</div><div class=\"stn-motif-tablet-h\">Stamp the run</div><p class=\"stn-motif-tablet-body\">Inter body sits at the bottom, captioning the loud stencil above.</p></div>",
+    "css": ".stn-motif-tablet{background:var(--brand-primary);border-radius:var(--radius-tablet);padding:var(--pad-card-tablet);color:var(--ink);display:flex;flex-direction:column;min-height:280px;overflow:hidden}.stn-motif-tablet-num{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(120px,18vw,220px);line-height:.9;letter-spacing:-0.02em;text-transform:uppercase;color:var(--ink)}.stn-motif-tablet-h{margin-top:auto;font-family:var(--f-disp-native);font-weight:700;font-size:clamp(24px,2.4vw,34px);line-height:1.15;letter-spacing:-0.005em;text-transform:uppercase;color:var(--ink)}.stn-motif-tablet-body{margin:8px 0 0;font-family:var(--f-body-native);font-weight:400;font-size:clamp(16px,1.4vw,22px);line-height:1.4;color:var(--ink);max-width:30ch}"
+  },
+  {
+    "id": "mega-numeral-divider",
+    "label": "Mega numeral divider",
+    "role": "section-anchor",
+    "surface_safe": ["ink"],
+    "description": "540px Stardos Stencil numeral filling the left side of a black-field section divider, paired with a Barlow Condensed eyebrow top-right and a 120px stencil headline bottom-right. The numeral IS the layout. Lives ONLY on dark fields — a 540px numeral on bone breaks the section register.",
+    "wide": true,
+    "demo": "<div class=\"stn-motif-mega\"><div class=\"stn-motif-mega-num\">02</div><div class=\"stn-motif-mega-side\"><div class=\"stn-motif-mega-eye\">Chapter II</div><div class=\"stn-motif-mega-h\">Field manual</div></div></div>",
+    "css": ".stn-motif-mega{position:relative;display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:24px;background:var(--ink);color:var(--anchor-bone);padding:48px 32px;border-radius:var(--radius-card);overflow:hidden;min-height:280px}.stn-motif-mega-num{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(160px,28vw,420px);line-height:.8;letter-spacing:-0.02em;text-transform:uppercase;color:var(--brand-primary)}.stn-motif-mega-side{display:flex;flex-direction:column;gap:12px;text-align:right}.stn-motif-mega-eye{font-family:var(--f-mono-native);font-weight:800;font-size:clamp(14px,1.2vw,24px);letter-spacing:.14em;text-transform:uppercase;color:var(--anchor-bone)}.stn-motif-mega-h{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(48px,7vw,120px);line-height:.92;letter-spacing:-0.005em;text-transform:uppercase;color:var(--anchor-bone)}"
+  },
+  {
+    "id": "action-bar",
+    "label": "Action bar",
+    "role": "callout-strip",
+    "surface_safe": ["bone", "paper"],
+    "description": "Mustard-filled 22px-rounded callout bar with a left-aligned Barlow Condensed tag, a 2px ink vertical rule separator, and a 34px Stardos stencil headline. Used for important section-opening callouts — overuse degrades the signal.",
+    "wide": true,
+    "demo": "<div class=\"stn-motif-action\"><span class=\"stn-motif-action-tag\">Issue 04</span><span class=\"stn-motif-action-rule\"></span><span class=\"stn-motif-action-h\">Build the field manual</span></div>",
+    "css": ".stn-motif-action{display:inline-flex;align-items:center;gap:24px;background:var(--brand-primary);color:var(--ink);border-radius:var(--radius-card);padding:24px 32px}.stn-motif-action-tag{font-family:var(--f-mono-native);font-weight:800;font-size:clamp(18px,1.6vw,26px);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}.stn-motif-action-rule{display:inline-block;width:2px;align-self:stretch;background:var(--ink)}.stn-motif-action-h{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(24px,2.6vw,34px);line-height:1.15;letter-spacing:-0.005em;text-transform:uppercase;color:var(--ink)}"
+  },
+  {
+    "id": "status-pill",
+    "label": "Status pill",
+    "role": "matrix-signal",
+    "surface_safe": ["bone", "paper"],
+    "description": "Fully rounded (999px) uppercase Barlow Condensed pill with fixed matrix convention: teal=yes (bone text), mustard=partial (ink text), magenta=no (bone text), paper-bordered=note (ink text + 1.5px ink border). The convention earns weight by repeating.",
+    "demo": "<div class=\"stn-motif-pills\"><span class=\"stn-motif-pill stn-pill-yes\">Yes</span><span class=\"stn-motif-pill stn-pill-partial\">Partial</span><span class=\"stn-motif-pill stn-pill-no\">No</span><span class=\"stn-motif-pill stn-pill-note\">Note</span></div>",
+    "css": ".stn-motif-pills{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.stn-motif-pill{display:inline-block;font-family:var(--f-mono-native);font-weight:700;font-size:clamp(14px,1.1vw,18px);line-height:1;letter-spacing:.08em;text-transform:uppercase;padding:6px 16px;border-radius:var(--radius-pill)}.stn-motif-pill.stn-pill-yes{background:var(--brand-accent,#2D7E73);color:var(--anchor-bone)}.stn-motif-pill.stn-pill-partial{background:var(--brand-primary);color:var(--ink)}.stn-motif-pill.stn-pill-no{background:var(--brand-secondary,#C73B7A);color:var(--anchor-bone)}.stn-motif-pill.stn-pill-note{background:var(--surface-paper);color:var(--ink);border:1.5px solid var(--ink)}"
+  },
+  {
+    "id": "cover-mark",
+    "label": "Cover mark",
+    "role": "lockup-tile",
+    "surface_safe": ["bone", "paper"],
+    "description": "Small 56px rounded-square (14px radius) accent tile sitting in the cover lockup beside an uppercase Barlow name + subtitle stack and a Stardos date. Defines the cover-bottom convention — never a logo glyph, always a solid color block.",
+    "demo": "<div class=\"stn-motif-lockup\"><span class=\"stn-motif-mark\"></span><div class=\"stn-motif-lockup-stack\"><span class=\"stn-motif-lockup-name\">Stencil Studio</span><span class=\"stn-motif-lockup-sub\">Field manual · No. 04</span></div><span class=\"stn-motif-lockup-date\">MAY 2026</span></div>",
+    "css": ".stn-motif-lockup{display:inline-flex;align-items:center;gap:20px}.stn-motif-mark{display:inline-block;width:56px;height:56px;border-radius:var(--radius-mark);background:var(--brand-primary)}.stn-motif-lockup-stack{display:flex;flex-direction:column;gap:2px}.stn-motif-lockup-name{font-family:var(--f-mono-native);font-weight:700;font-size:clamp(20px,1.8vw,30px);letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}.stn-motif-lockup-sub{font-family:var(--f-mono-native);font-weight:600;font-size:clamp(14px,1.1vw,22px);letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent)}.stn-motif-lockup-date{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(24px,2.4vw,36px);letter-spacing:0;text-transform:uppercase;color:var(--ink)}"
+  },
+  {
+    "id": "stat-with-suffix",
+    "label": "Stat with suffix",
+    "role": "numeric-callout",
+    "surface_safe": ["bone", "paper", "brand"],
+    "description": "160px Stardos Stencil numeral with a 40px Barlow Condensed superscript suffix (% × K M) at vertical-align top. Never spell the unit. The defining stat callout — pairs with a Barlow Condensed legend label below.",
+    "demo": "<div class=\"stn-motif-stat\"><div class=\"stn-motif-stat-val\">99<sup>%</sup></div><div class=\"stn-motif-stat-lbl\">Uptime · last 12 months</div></div>",
+    "css": ".stn-motif-stat{display:flex;flex-direction:column;gap:12px}.stn-motif-stat-val{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(96px,12vw,160px);line-height:.85;letter-spacing:-0.02em;text-transform:uppercase;color:var(--ink)}.stn-motif-stat-val sup{font-family:var(--f-mono-native);font-weight:800;font-size:.25em;vertical-align:top;letter-spacing:.04em;margin-left:.08em}.stn-motif-stat-lbl{font-family:var(--f-mono-native);font-weight:700;font-size:clamp(16px,1.3vw,22px);letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 70%,transparent)}"
+  }
+]
+```
+
+The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
+
+**Materials lexicon** (informational — these are the composition atoms behind the patterns):
+
+- tablet-numeral · mega-numeral-divider · action-bar · status-pill · cover-mark · stat-with-suffix · quote-panel · process-node · timeline-bar · matrix-cell
 
 ## §I Page-level CSS (overrides design.html's neutral chrome — makes the doc itself read as Stencil & Tablet)
 
 ```css
+/* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
+ * These let the doc chrome render in Stardos Stencil + Inter + Barlow Condensed +
+ * Bowlby One regardless of which brand DNA the preset is applied to. The §6
+ * component preview, §M motifs grid, and §T type-role atlas also read these via
+ * .preset-native-scope.
+ *
+ * The script slot is bound to Bowlby One because Stencil & Tablet reserves it
+ * for the 320px quote-mark glyph (and refuses any other handwritten register).
+ * The mono slot is bound to Barlow Condensed because the preset uses it as the
+ * chrome / pill / legend voice — the role mono plays in other presets. */
+:root {
+  --f-disp-native:
+    "Stardos Stencil", "Allerta Stencil", "Black Ops One", "Impact", "Arial Black", serif;
+  --f-body-native:
+    "Inter", "IBM Plex Sans", "Source Sans 3", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --f-script-native:
+    "Bowlby One", "Stardos Stencil", "Black Ops One", "Impact", "Arial Black", serif;
+  --f-mono-native:
+    "Barlow Condensed", "Oswald", "Archivo Narrow", "Helvetica Neue", Arial, sans-serif;
+}
+
+/* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
+ * Wraps §6 component previews, §M motif demos, and §T type-role atlas so
+ * var(--font-*) resolves to Stardos Stencil / Inter / Barlow Condensed / Bowlby
+ * regardless of the brand DNA tokens emitted in :root. The paste-ready
+ * component source is untouched — Phase 4b still grep + paste original
+ * `var(--font-display)` tokens, which resolve to brand DNA at scene-render time. */
+.preset-native-scope {
+  --font-display: var(--f-disp-native);
+  --font-body: var(--f-body-native);
+  --font-script: var(--f-script-native);
+  --font-mono: var(--f-mono-native);
+}
+
 body {
   background: var(--surface-bone);
 }
@@ -280,5 +515,303 @@ h2 {
   border: var(--rule-hairline);
   border-radius: var(--radius-card) !important;
   color: var(--ink) !important;
+}
+
+/* ── §M Motifs grid: atomic gestures.
+ * 12-col grid of small cards each teaching ONE reusable gesture. Cards may
+ * declare a surface (bone / paper / brand / ink) to demonstrate the gesture
+ * against its native background. Stencil & Tablet is flat — no shadows, only
+ * hairline borders + saturated fills + rounded chrome. */
+.ds-motif-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--gap-card);
+}
+.ds-motif {
+  grid-column: span 4;
+  min-height: 300px;
+  padding: var(--pad-card);
+  border: none;
+  border-radius: var(--radius-card);
+  background: var(--surface-paper);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.ds-motif.ds-motif-wide {
+  grid-column: span 8;
+}
+.ds-motif.ds-motif-surface-bone {
+  background: var(--surface-bone);
+}
+.ds-motif.ds-motif-surface-paper {
+  background: var(--surface-paper);
+}
+.ds-motif.ds-motif-surface-brand {
+  background: var(--brand-primary);
+  color: var(--ink);
+}
+.ds-motif.ds-motif-surface-ink {
+  background: var(--ink);
+  color: var(--anchor-bone);
+}
+.ds-motif-h {
+  margin: 0;
+  font-family: var(--f-disp-native);
+  font-weight: 700;
+  font-size: clamp(22px, 2.2vw, 34px);
+  line-height: 1.1;
+  letter-spacing: var(--track-stencil-headline);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.ds-motif.ds-motif-surface-ink .ds-motif-h {
+  color: var(--anchor-bone);
+}
+.ds-motif-desc {
+  margin: 0;
+  font-family: var(--f-body-native);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  max-width: 30ch;
+}
+.ds-motif.ds-motif-surface-ink .ds-motif-desc {
+  color: color-mix(in srgb, var(--anchor-bone) 80%, transparent);
+}
+.ds-motif-demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+}
+.ds-motif-id {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-family: var(--f-mono-native);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+.ds-motif.ds-motif-surface-ink .ds-motif-id {
+  color: color-mix(in srgb, var(--anchor-bone) 60%, transparent);
+}
+@media (max-width: 880px) {
+  .ds-motif-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ds-motif,
+  .ds-motif.ds-motif-wide {
+    grid-column: auto;
+  }
+}
+
+/* ── §T Type-role atlas. Container = flat paper card with hairline border.
+ * Each .t-trole-* class encodes the role's family / size / weight / leading /
+ * tracking / case / decoration. Family selectors use var(--font-*) tokens so
+ * the atlas renders in BRAND DNA fonts; only the recipe is preset-declared.
+ * Decoration (color, suffix, pill bg, rotation) stays declared with hard-coded
+ * Stencil & Tablet tokens (var(--brand-primary), var(--ink), etc). */
+.ds-trole-box {
+  display: flex;
+  flex-direction: column;
+  border: var(--rule-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-paper);
+  overflow: hidden;
+  margin-top: 24px;
+}
+.ds-trole-row {
+  padding: 28px 32px;
+}
+.ds-trole-row:last-child {
+  border-bottom: 0;
+}
+.ds-trole-sample {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .ds-trole-row {
+    padding: 24px;
+  }
+}
+
+/* ── Type-role samples. var(--font-display/body/mono/script) resolves to brand
+ * DNA. Color uses Stencil & Tablet's contract: ink on light, brand-primary as
+ * accent, bone on dark fills. Numerals always weight 700 with negative
+ * tracking; Barlow chrome always tracked ≥0.04em. */
+.t-trole-cover-hero {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(140px, 14vw, 220px);
+  line-height: 0.82;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-numeral-mega {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(240px, 30vw, 540px);
+  line-height: 0.8;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+  background: var(--ink);
+  padding: 32px 48px;
+  border-radius: var(--radius-card);
+}
+.t-trole-numeral-tablet {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(160px, 18vw, 240px);
+  line-height: 0.85;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-numeral-stat {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(120px, 14vw, 160px);
+  line-height: 0.85;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-numeral-stat sup {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 0.25em;
+  vertical-align: top;
+  letter-spacing: 0.04em;
+  margin-left: 0.08em;
+  text-transform: uppercase;
+}
+.t-trole-section-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(92px, 10vw, 120px);
+  line-height: 0.92;
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-page-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(64px, 7vw, 92px);
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-quote-text {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(44px, 5vw, 60px);
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+  color: var(--anchor-bone);
+  background: var(--brand-secondary, var(--brand-primary));
+  padding: 24px 32px;
+  border-radius: var(--radius-tablet);
+  max-width: 28ch;
+}
+.t-trole-quote-mark {
+  display: inline-block;
+  font-family: var(--font-script);
+  font-weight: 700;
+  font-size: clamp(200px, 22vw, 320px);
+  line-height: 0.8;
+  letter-spacing: 0;
+  color: var(--brand-secondary, var(--brand-primary));
+}
+.t-trole-card-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(28px, 2.6vw, 34px);
+  line-height: 1.15;
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-matrix-row {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(22px, 2vw, 26px);
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-topbar {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: clamp(24px, 2vw, 32px);
+  line-height: 1;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-section-eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: clamp(18px, 1.6vw, 24px);
+  line-height: 1.2;
+  letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-footer {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: clamp(18px, 1.4vw, 22px);
+  line-height: 1;
+  letter-spacing: var(--track-chrome-loose);
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 75%, transparent);
+}
+.t-trole-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(16px, 1.2vw, 18px);
+  line-height: 1;
+  letter-spacing: var(--track-chrome-loose);
+  text-transform: uppercase;
+  background: var(--brand-primary);
+  color: var(--ink);
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+}
+.t-trole-body-lg {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(20px, 1.6vw, 24px);
+  line-height: 1.4;
+  color: var(--ink);
+  max-width: 50ch;
+  margin: 0;
+}
+.t-trole-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(18px, 1.4vw, 22px);
+  line-height: 1.4;
+  color: var(--ink);
+  max-width: 60ch;
+  margin: 0;
 }
 ```

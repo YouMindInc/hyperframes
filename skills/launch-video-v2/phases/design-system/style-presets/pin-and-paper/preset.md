@@ -16,9 +16,18 @@
     { "kind": "low_saturation", "weight": 0.1 }
   ],
   "best_for": ["qualitative research", "founder reflections", "longform brand stories", "hand-crafted decks", "literary brands"],
-  "avoid_for": ["digital-native polished", "rigorously data-driven", "corporate fintech", "high-energy launches"]
+  "avoid_for": ["digital-native polished", "rigorously data-driven", "corporate fintech", "high-energy launches"],
+  "chromeFonts": {
+    "googleFontsHref": "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Caveat:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap",
+    "display": "Space Grotesk",
+    "body": "Space Grotesk",
+    "script": "Caveat",
+    "mono": "DM Mono"
+  }
 }
 ```
+
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Space Grotesk + Caveat + DM Mono — instead of the brand DNA fonts. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §T type-role atlas and §M motifs grid use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -112,6 +121,131 @@ Pin & Paper depends on the three-voice editorial pairing (printed display / hand
 - **mono**: `'DM Mono'` · `'JetBrains Mono'` · `'IBM Plex Mono'` wght 500
 
 The handwritten layer (Caveat) is non-substitutable — if Caveat fails to load it falls through to `cursive`, which varies by OS. Component CSS forces Caveat directly; brand DNA does not override it.
+
+## §T Type-role atlas (Phase 4b reads this to size text correctly)
+
+Each entry is a **named type role** with concrete render parameters at 1920×1080 — family token, px range, weight, leading, tracking, case, and any color/border/shadow/rotation decoration. Phase 4b scene workers may cite roles by `id` ("use a `display-cover` here"); the brand DNA fonts plug in automatically via `var(--font-*)` tokens. This is the same atlas pin-and-paper's source `design.md` ships in its type-scale section, ported as machine-readable JSON.
+
+The atlas is the **sole authoring source** for non-component text. If a scene needs a `number-hero` numeral that isn't covered by §6 components, the worker reads role `number-hero` here and writes inline CSS from these values. Do NOT invent ad-hoc sizes — the three-voice editorial rhythm (print headline / handwritten scribble / mono archival tag) collapses if sizes drift.
+
+```type-roles
+[
+  {
+    "id": "display-cover",
+    "family": "display",
+    "purpose": "cover hero — Space Grotesk 700 mixed case, ink-blue on yellow paper",
+    "px_min": 96, "px_max": 196, "weight": 700, "leading": "1.08", "tracking": "-0.04em", "case": "mixed",
+    "sample_html": "<div class=\"t-trole-display-cover\">{BRAND_NAME}</div>"
+  },
+  {
+    "id": "display-section",
+    "family": "display",
+    "purpose": "section-divider headline on ink-blue surface (paper-yellow text)",
+    "px_min": 96, "px_max": 168, "weight": 700, "leading": "1.05", "tracking": "-0.04em", "case": "mixed",
+    "sample_html": "<div class=\"t-trole-display-section\">Section title.</div>"
+  },
+  {
+    "id": "number-hero",
+    "family": "display",
+    "purpose": "hero stat numeral — Space Grotesk 700, ink-blue, paired with Caveat unit suffix",
+    "px_min": 96, "px_max": 168, "weight": 700, "leading": "0.85", "tracking": "-0.04em", "case": "mixed",
+    "sample_html": "<div class=\"t-trole-number-hero\">63<small>%</small></div>"
+  },
+  {
+    "id": "h1",
+    "family": "display",
+    "purpose": "closing CTA headline / chart-slide headline",
+    "px_min": 84, "px_max": 130, "weight": 700, "leading": "1.05", "tracking": "-0.035em", "case": "mixed",
+    "sample_html": "<div class=\"t-trole-h1\">One canvas. Everyone home.</div>"
+  },
+  {
+    "id": "h2",
+    "family": "display",
+    "purpose": "standard slide headline — Space Grotesk 700 mixed case",
+    "px_min": 64, "px_max": 96, "weight": 700, "leading": "1.05", "tracking": "-0.03em", "case": "mixed",
+    "sample_html": "<div class=\"t-trole-h2\">Designed together.</div>"
+  },
+  {
+    "id": "card-h3",
+    "family": "display",
+    "purpose": "pinned-card title — Space Grotesk 700, ink-blue on cream",
+    "px_min": 28, "px_max": 38, "weight": 700, "leading": "1.02", "tracking": "-0.02em", "case": "mixed",
+    "sample_html": "<div class=\"t-trole-card-h3\">Field report</div>"
+  },
+  {
+    "id": "quote-text",
+    "family": "display",
+    "purpose": "pull-quote body — Space Grotesk 500 mixed case",
+    "px_min": 36, "px_max": 50, "weight": 500, "leading": "1.1", "tracking": "-0.02em", "case": "mixed",
+    "sample_html": "<div class=\"t-trole-quote-text\">The work gets simpler as the team gets braver.</div>"
+  },
+  {
+    "id": "body",
+    "family": "body",
+    "purpose": "standard body paragraph — Space Grotesk 400, ink-blue",
+    "px_min": 18, "px_max": 22, "weight": 400, "leading": "1.45", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body\">Body sits at 22px. Terse, full sentences. The handwritten scribble does the personal voice — body never carries marginalia tone.</p>"
+  },
+  {
+    "id": "body-sm",
+    "family": "body",
+    "purpose": "compact body inside dense cards (Space Grotesk 400)",
+    "px_min": 17, "px_max": 19, "weight": 400, "leading": "1.45", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body-sm\">Compact body for multi-card slides. Same voice, smaller measure.</p>"
+  },
+  {
+    "id": "scribble-lg",
+    "family": "script",
+    "purpose": "process step numeral / large hand-script accent — Caveat 700, ink-blue",
+    "px_min": 60, "px_max": 70, "weight": 700, "leading": "0.9", "tracking": "0", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-scribble-lg\">3</div>"
+  },
+  {
+    "id": "scribble-sm",
+    "family": "script",
+    "purpose": "marginal note / 'me' voice annotation — Caveat 600, slight rotation",
+    "px_min": 32, "px_max": 38, "weight": 600, "leading": "1.05", "tracking": "0", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-scribble-sm\">finally — <span class=\"pp-underline\">one canvas</span>, everyone home</div>"
+  },
+  {
+    "id": "label-top",
+    "family": "mono",
+    "purpose": "top-chrome brand lockup / archival tag — DM Mono 500 uppercase",
+    "px_min": 16, "px_max": 18, "weight": 500, "leading": "1.2", "tracking": "0.12em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-label-top\">Field report · Vol. 01</div>"
+  },
+  {
+    "id": "label-footer",
+    "family": "mono",
+    "purpose": "footer chrome — DM Mono 500 uppercase, 65% opacity",
+    "px_min": 14, "px_max": 15, "weight": 500, "leading": "1.2", "tracking": "0.14em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-label-footer\">Source · Internal study, 2026</div>"
+  },
+  {
+    "id": "stamp-mark",
+    "family": "mono",
+    "purpose": "cinnabar-red rubber stamp — 3px solid red border, red mono uppercase, rotated -4deg",
+    "px_min": 14, "px_max": 16, "weight": 500, "leading": "1", "tracking": "0.18em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-stamp-mark\">Received</span></div>"
+  },
+  {
+    "id": "pill-yes",
+    "family": "script",
+    "purpose": "affirmative pill — solid ink fill with Caveat paper-yellow text inside a 999px pill",
+    "px_min": 24, "px_max": 28, "weight": 600, "leading": "1", "tracking": "0", "case": "sentence",
+    "sample_html": "<div><span class=\"t-trole-pill-yes\">Yes</span></div>"
+  },
+  {
+    "id": "pill-no",
+    "family": "mono",
+    "purpose": "negative pill — red mono uppercase inside a red-bordered transparent 999px pill",
+    "px_min": 14, "px_max": 16, "weight": 500, "leading": "1", "tracking": "0.14em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-pill-no\">No</span></div>"
+  }
+]
+```
+
+The atlas omits the paper-grain overlay (a texture, declared in §B) and the pin-illustration / hard-offset-shadow gestures (composition motifs, declared in §M).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -228,16 +362,116 @@ Take the brand's product description / value prop. Transform with:
 - Short cross-dissolve at DUR.med (0.5s) with EASE.entry. Optional: a single pin-drop or stamp-slam beat on the inbound scene.
 - NEVER slide / wipe / zoom / page-flip — those read as digital chrome.
 
-**Sound design (passed to audio phase, not 4b worker — note here for completeness)**
+## §M Atomic motifs (gestures the plan agent can reference)
 
-- Pencil-scratch on scribble write-ons.
-- Soft thud on pin-drop entries.
-- Single rubber-stamp slam on stamp reveal beats.
-- Page-turn susurrus on scene cross-dissolves (low-volume bed).
+Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:offset-shadow on the notecard" without specifying which pattern the card sits in.
+
+```motifs
+[
+  {
+    "id": "offset-shadow",
+    "label": "Offset shadow",
+    "role": "pinned-card-depth",
+    "surface_safe": ["paper", "cream"],
+    "description": "Cream card with 1.5px ink border, 4px micro-radius, and a hard ink-blue offset shadow (5-6px down-right, zero blur). The system's universal card pattern — without all three layers (border, radius, shadow) the card stops reading as a pinned page.",
+    "wide": true,
+    "demo": "<div class=\"pp-motif-offset\"><h4>Field report 04</h4><p>Stamped, signed, pinned to the page.</p></div>",
+    "css": ".pp-motif-offset{display:inline-block;background:var(--surface-cream);border:1.5px solid var(--brand-primary);border-radius:4px;box-shadow:5px 6px 0 0 var(--brand-primary);padding:24px 28px;max-width:38ch;font-family:var(--f-body-native);color:var(--brand-primary)}.pp-motif-offset h4{margin:0 0 8px;font-family:var(--f-disp-native);font-weight:700;font-size:clamp(20px,2vw,28px);line-height:1.05;letter-spacing:-0.02em}.pp-motif-offset p{margin:0;font-size:clamp(14px,1.2vw,18px);line-height:1.45}"
+  },
+  {
+    "id": "pin-illustration",
+    "label": "Pin illustration",
+    "role": "pinned-signal",
+    "surface_safe": ["paper", "cream", "ink"],
+    "description": "Hand-drawn safety-pin SVG (closed or open variant) rendered in currentColor (ink-blue on yellow / cream, paper-yellow on ink) and rotated -14° to +20°. Sits at the top edge of a card so the card reads as physically pinned to the page. A pin at 0° rotation breaks the hand-pinned aesthetic.",
+    "demo": "<div class=\"pp-motif-pin\"><svg viewBox=\"0 0 360 110\" aria-hidden=\"true\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M312 38 C 296 32, 290 50, 304 58 C 320 66, 340 60, 342 44 C 344 28, 322 18, 300 24\"/><path d=\"M300 24 C 240 14, 140 14, 70 30\"/><path d=\"M312 56 C 250 78, 150 82, 80 70\"/><ellipse cx=\"58\" cy=\"50\" rx=\"24\" ry=\"14\"/></g></svg></div>",
+    "css": ".pp-motif-pin{display:inline-block;color:var(--brand-primary);transform:rotate(-10deg);width:160px}.pp-motif-pin svg{width:100%;height:auto;display:block}"
+  },
+  {
+    "id": "rubber-stamp",
+    "label": "Rubber stamp",
+    "role": "status-mark",
+    "surface_safe": ["paper", "cream"],
+    "description": "Cinnabar-red rotated rubber stamp — 3px solid red border, red DM Mono uppercase tracked 0.18em, rotated -4°. Reserve for status callouts (RECEIVED, CONFIDENTIAL, DRAFT 04). Red appears in exactly two roles in this system; this is one of them.",
+    "demo": "<div><span class=\"pp-motif-stamp\">Received</span></div>",
+    "css": ".pp-motif-stamp{display:inline-block;border:3px solid var(--brand-accent);color:var(--brand-accent);background:transparent;padding:6px 16px;font-family:var(--f-mono-native);font-weight:500;font-size:clamp(13px,1.2vw,16px);line-height:1;letter-spacing:0.18em;text-transform:uppercase;transform:rotate(-4deg)}"
+  },
+  {
+    "id": "scribble-margin",
+    "label": "Scribble margin",
+    "role": "human-voice",
+    "surface_safe": ["paper", "cream"],
+    "description": "Caveat hand-script marginal note rotated -3° to -1.5° with an optional `.pp-underline` span carrying a 2px solid ink underline for handwritten emphasis. The system's 'me' voice — sentence case, 4-10 words, conversational.",
+    "wide": true,
+    "demo": "<div class=\"pp-motif-scribble\">finally — <span class=\"pp-underline\">one canvas</span>, everyone home</div>",
+    "css": ".pp-motif-scribble{display:inline-block;font-family:var(--f-script-native);font-weight:600;font-size:clamp(28px,3vw,38px);line-height:1.05;color:var(--brand-primary);transform:rotate(-2deg)}.pp-motif-scribble .pp-underline{border-bottom:2px solid var(--brand-primary);padding-bottom:1px}"
+  },
+  {
+    "id": "script-numeral",
+    "label": "Script numeral",
+    "role": "ordering-voice",
+    "surface_safe": ["paper", "cream"],
+    "description": "Caveat hand-script ordinal at 60-70px used as the step number in process diagrams and ordered CTA lists. The script numeral is the system's only ordering mechanism — never substitute a Space Grotesk numeral, never use a numeric bullet.",
+    "demo": "<div class=\"pp-motif-numeral\">3</div>",
+    "css": ".pp-motif-numeral{display:inline-block;font-family:var(--f-script-native);font-weight:700;font-size:clamp(48px,6vw,70px);line-height:0.9;color:var(--brand-primary)}"
+  },
+  {
+    "id": "dashed-divider",
+    "label": "Dashed divider",
+    "role": "row-separator",
+    "surface_safe": ["paper", "cream"],
+    "description": "1.5px dashed ink at 45% opacity — the graph-paper line break. Used to separate agenda rows, CTA steps, in-card source notes. Never above 1.5px and never solid; solid dividers belong to card borders.",
+    "wide": true,
+    "demo": "<div class=\"pp-motif-dashed\"><span>Row one — top item</span><span>Row two — middle item</span><span>Row three — last item</span></div>",
+    "css": ".pp-motif-dashed{display:flex;flex-direction:column;gap:0;font-family:var(--f-body-native);font-weight:400;font-size:clamp(15px,1.3vw,19px);line-height:1.4;color:var(--brand-primary);min-width:280px}.pp-motif-dashed span{padding:10px 0;border-bottom:1.5px dashed color-mix(in srgb,var(--brand-primary) 45%,transparent)}.pp-motif-dashed span:last-child{border-bottom:0}"
+  }
+]
+```
+
+The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
+
+**Materials lexicon** (informational — these are the composition atoms behind the patterns):
+
+- offset-shadow · pin-illustration · rubber-stamp · scribble-margin · script-numeral · dashed-divider · paper-grain · askew-tilt
 
 ## §I Page-level CSS (overrides design.html's neutral chrome — makes the doc itself read as pin-and-paper)
 
 ```css
+/* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
+ * These let the doc chrome render in Space Grotesk + Caveat + DM Mono regardless
+ * of which brand DNA the preset is applied to. The §6 component preview, §M
+ * motifs grid, and §T type-role atlas also read these via .preset-native-scope.
+ *
+ * Fallback chains end in a face that still carries the preset's vibe (Inter /
+ * Manrope for the printed display + body; system cursives for the script;
+ * IBM Plex Mono / Menlo for the archival mono). Caveat in particular is
+ * non-substitutable — its absence falls through to `cursive` which varies
+ * widely by OS, so the chain stays short and intentional. */
+:root {
+  --f-disp-native:
+    "Space Grotesk", "Inter Tight", "Manrope", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --f-body-native:
+    "Space Grotesk", "Inter", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --f-script-native: "Caveat", "Kalam", "Shadows Into Light", "Brush Script MT", cursive;
+  --f-mono-native:
+    "DM Mono", "JetBrains Mono", "IBM Plex Mono", "Space Mono", "Menlo", ui-monospace, monospace;
+}
+
+/* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
+ * Wraps §6 component previews, §M motif demos, and §T type-role samples so
+ * var(--font-*) resolves to Space Grotesk / Caveat / DM Mono regardless of the
+ * brand DNA tokens emitted in :root. The paste-ready component source is
+ * untouched — Phase 4b still grep + paste original `var(--font-display)`
+ * tokens, which resolve to brand DNA at scene-render time. */
+.preset-native-scope {
+  --font-display: var(--f-disp-native);
+  --font-body: var(--f-body-native);
+  --font-script: var(--f-script-native);
+  --font-mono: var(--f-mono-native);
+}
+
 body {
   background: var(--surface-paper);
   position: relative;
@@ -323,5 +557,308 @@ h2 {
   border-radius: var(--radius-card) !important;
   color: var(--brand-primary) !important;
   font-family: "DM Mono", monospace !important;
+}
+
+/* ── §M Motifs grid: atomic gestures.
+ * Mirrors the pin-and-paper signature-moves grid — a 12-col grid of small cream
+ * cards each teaching ONE reusable gesture. Cards may declare a surface
+ * (paper / cream / ink) to demonstrate the gesture against its native bg.
+ * Each card carries the universal pin-and-paper card pattern: 1.5px ink
+ * border, 4px micro-radius, hard ink offset shadow. */
+.ds-motif-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 18px;
+}
+.ds-motif {
+  grid-column: span 4;
+  min-height: 280px;
+  padding: 28px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-cream);
+  box-shadow: var(--shadow-pin-standard);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+  color: var(--brand-primary);
+}
+.ds-motif.ds-motif-wide {
+  grid-column: span 8;
+}
+.ds-motif.ds-motif-surface-paper {
+  background: var(--surface-paper);
+}
+.ds-motif.ds-motif-surface-cream {
+  background: var(--surface-cream);
+}
+.ds-motif.ds-motif-surface-ink {
+  background: var(--brand-primary);
+  color: var(--surface-paper);
+  border-color: var(--surface-paper);
+  box-shadow: 5px 6px 0 0 color-mix(in srgb, var(--brand-primary) 60%, black 25%);
+}
+.ds-motif-h {
+  margin: 0;
+  font-family: var(--f-disp-native);
+  font-weight: 700;
+  font-size: clamp(22px, 2.2vw, 32px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--brand-primary);
+}
+.ds-motif.ds-motif-surface-ink .ds-motif-h {
+  color: var(--surface-paper);
+}
+.ds-motif-desc {
+  margin: 0;
+  font-family: var(--f-body-native);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--brand-primary) 75%, transparent);
+  max-width: 30ch;
+}
+.ds-motif.ds-motif-surface-ink .ds-motif-desc {
+  color: color-mix(in srgb, var(--surface-paper) 85%, transparent);
+}
+.ds-motif-demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+}
+.ds-motif-id {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-family: var(--f-mono-native);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+  opacity: 0.5;
+}
+.ds-motif.ds-motif-surface-ink .ds-motif-id {
+  color: var(--surface-paper);
+  opacity: 0.7;
+}
+@media (max-width: 880px) {
+  .ds-motif-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ds-motif,
+  .ds-motif.ds-motif-wide {
+    grid-column: auto;
+  }
+}
+
+/* ── §T Type-role atlas. Container = a single cream pinned-card with the
+ * universal hard ink offset shadow. Each row is a single-column entry padded
+ * only — no inner grid, no eyebrow column. Each .t-trole-* class encodes the
+ * role's family / size / weight / leading / tracking / case / decoration.
+ * Family selectors use var(--font-*) tokens so the atlas renders in BRAND DNA
+ * fonts; only the recipe is preset-declared. Decoration (color, border,
+ * shadow, rotation, stamp, pill) stays hard-coded to pin-and-paper tokens
+ * (var(--brand-primary), var(--brand-accent), var(--surface-paper) etc.). */
+.ds-trole-box {
+  display: flex;
+  flex-direction: column;
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-cream);
+  box-shadow: var(--shadow-pin-standard);
+  overflow: hidden;
+  margin-top: 24px;
+}
+.ds-trole-row {
+  padding: 28px 32px;
+  border-bottom: var(--border-dashed);
+}
+.ds-trole-row:last-child {
+  border-bottom: 0;
+}
+.ds-trole-sample {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .ds-trole-row {
+    padding: 24px;
+  }
+}
+
+/* ── Type-role samples. Each .t-trole-* class mirrors a pin-and-paper type-scale
+ * entry but uses var(--font-display/body/script/mono) so the actual typeface
+ * comes from brand DNA. Decoration (color, border, shadow, rotation, stamp,
+ * pill) is preset-native. */
+.t-trole-display-cover {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(64px, 10vw, 196px);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  color: var(--brand-primary);
+}
+.t-trole-display-section {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(64px, 9vw, 168px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  background: var(--brand-primary);
+  color: var(--surface-paper);
+  padding: 24px 32px;
+  max-width: 16ch;
+}
+.t-trole-number-hero {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(80px, 9vw, 168px);
+  line-height: 0.85;
+  letter-spacing: -0.04em;
+  color: var(--brand-primary);
+}
+.t-trole-number-hero small {
+  font-family: var(--font-script);
+  font-weight: 700;
+  font-size: 0.36em;
+  line-height: 1;
+  letter-spacing: 0;
+  margin-left: 0.12em;
+}
+.t-trole-h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(64px, 7vw, 130px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  color: var(--brand-primary);
+}
+.t-trole-h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(48px, 5vw, 96px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--brand-primary);
+}
+.t-trole-card-h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(24px, 2.4vw, 38px);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  color: var(--brand-primary);
+}
+.t-trole-quote-text {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(28px, 3.5vw, 50px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--brand-primary);
+  max-width: 22ch;
+}
+.t-trole-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(16px, 1.4vw, 22px);
+  line-height: 1.45;
+  color: var(--brand-primary);
+  max-width: 60ch;
+  margin: 0;
+}
+.t-trole-body-sm {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(15px, 1.25vw, 19px);
+  line-height: 1.45;
+  color: var(--brand-primary);
+  max-width: 60ch;
+  margin: 0;
+}
+.t-trole-scribble-lg {
+  font-family: var(--font-script);
+  font-weight: 700;
+  font-size: clamp(48px, 5.5vw, 70px);
+  line-height: 0.9;
+  color: var(--brand-primary);
+}
+.t-trole-scribble-sm {
+  display: inline-block;
+  font-family: var(--font-script);
+  font-weight: 600;
+  font-size: clamp(26px, 2.6vw, 38px);
+  line-height: 1.05;
+  color: var(--brand-primary);
+  transform: rotate(-2deg);
+}
+.t-trole-scribble-sm .pp-underline {
+  border-bottom: 2px solid var(--brand-primary);
+  padding-bottom: 1px;
+}
+.t-trole-label-top {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(14px, 1.2vw, 18px);
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+}
+.t-trole-label-footer {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(13px, 1vw, 15px);
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+  opacity: 0.65;
+}
+.t-trole-stamp-mark {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(13px, 1.2vw, 16px);
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-accent);
+  background: transparent;
+  border: 3px solid var(--brand-accent);
+  padding: 6px 16px;
+  transform: rotate(-4deg);
+}
+.t-trole-pill-yes {
+  display: inline-block;
+  font-family: var(--font-script);
+  font-weight: 600;
+  font-size: clamp(22px, 2vw, 28px);
+  line-height: 1;
+  color: var(--surface-paper);
+  background: var(--brand-primary);
+  border: 1.5px solid var(--brand-primary);
+  border-radius: 999px;
+  padding: 4px 14px;
+}
+.t-trole-pill-no {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(13px, 1.2vw, 16px);
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-accent);
+  background: transparent;
+  border: 1.5px solid var(--brand-accent);
+  border-radius: 999px;
+  padding: 4px 14px;
 }
 ```

@@ -16,8 +16,8 @@
 //
 // BGM prompt inference: the script reads concatenated `script` + `keyMessage`
 // fields from narrator_scripts.json (no tokens.json side file — Phase 1
-// web-research writes asset/section data into research/extraction.json which
-// this script doesn't need). Override with --bgm-prompt "..." if the
+// hyperframes capture writes asset/section data into capture/extracted/
+// which this script doesn't need). Override with --bgm-prompt "..." if the
 // auto-inferred mood is wrong.
 //
 // Usage:
@@ -27,7 +27,7 @@
 //     --out ./audio_meta.json \
 //     [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
 //     [--voice <id>] [--lang en] \
-//     [--provider kokoro|elevenlabs] \
+//     [--provider heygen|elevenlabs|kokoro] \
 //     [--no-bgm] [--bgm-prompt "<custom prompt>"]
 
 import { spawn, spawnSync } from "node:child_process";
@@ -68,6 +68,40 @@ const userBgmPrompt = typeof flag("bgm-prompt") === "string" ? flag("bgm-prompt"
 const noBgm = flag("no-bgm") === true;
 const userProvider = typeof flag("provider") === "string" ? flag("provider") : null;
 const lang = typeof flag("lang") === "string" ? flag("lang") : "en";
+
+// ---------- load .env ----------
+// Mirrors the CLI's loadEnvFile (packages/cli/src/capture/scaffolding.ts):
+// walk up from hyperframesDir ≤ 5 dirs, first .env wins, shell env always
+// takes priority (we never override an already-set key).
+function loadEnvFromDir(startDir) {
+  let dir = resolve(startDir);
+  for (let i = 0; i < 5; i++) {
+    const envPath = join(dir, ".env");
+    if (existsSync(envPath)) {
+      const txt = readFileSync(envPath, "utf8");
+      for (const raw of txt.split("\n")) {
+        const line = raw.trim();
+        if (!line || line.startsWith("#")) continue;
+        const eq = line.indexOf("=");
+        if (eq < 0) continue;
+        const key = line.slice(0, eq).trim();
+        let val = line.slice(eq + 1).trim();
+        if (
+          (val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))
+        ) {
+          val = val.slice(1, -1);
+        }
+        if (key && !(key in process.env)) process.env[key] = val;
+      }
+      return;
+    }
+    const parent = resolve(dir, "..");
+    if (parent === dir) return;
+    dir = parent;
+  }
+}
+loadEnvFromDir(hyperframesDir);
 
 // ---------- Step 1: bootstrap HyperFrames project root ----------
 if (!existsSync(hyperframesDir)) {
@@ -142,6 +176,13 @@ const bgmInferenceBlob = (() => {
 })();
 
 // ---------- Step 3: provider detection ----------
+// Chain mirrors the CLI's `hyperframes tts` selectProvider() (cli/src/tts/providers/index.ts):
+//   heygen     ← $HEYGEN_API_KEY        (cloud, returns word timestamps)
+//   elevenlabs ← $ELEVENLABS_API_KEY + `pip install elevenlabs`
+//   kokoro     ← always (local, no key)
+function heygenAvailable() {
+  return !!process.env.HEYGEN_API_KEY;
+}
 function elevenlabsAvailable() {
   if (!process.env.ELEVENLABS_API_KEY) return false;
   const r = spawnSync("python3", ["-c", "import elevenlabs"], {
@@ -149,23 +190,34 @@ function elevenlabsAvailable() {
   });
   return r.status === 0;
 }
+// Lyria accepts either GEMINI_API_KEY or GOOGLE_API_KEY (CLI parity:
+// packages/cli/src/bgm/lyria.ts uses the same OR-fallback).
+function lyriaKey() {
+  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+}
 
 let provider = userProvider;
-if (!provider) provider = elevenlabsAvailable() ? "elevenlabs" : "kokoro";
-if (provider !== "kokoro" && provider !== "elevenlabs")
-  die(`invalid --provider "${provider}" (must be kokoro or elevenlabs)`);
+if (!provider) {
+  provider = heygenAvailable() ? "heygen" : elevenlabsAvailable() ? "elevenlabs" : "kokoro";
+}
+if (!["heygen", "elevenlabs", "kokoro"].includes(provider))
+  die(`invalid --provider "${provider}" (must be heygen | elevenlabs | kokoro)`);
+if (provider === "heygen" && !process.env.HEYGEN_API_KEY)
+  die("provider=heygen but $HEYGEN_API_KEY is not set");
 if (provider === "elevenlabs" && !process.env.ELEVENLABS_API_KEY)
   die("provider=elevenlabs but $ELEVENLABS_API_KEY is not set");
 
 const voiceId =
   userVoice ||
-  (provider === "elevenlabs"
-    ? "21m00Tcm4TlvDq8ikWAM" // Rachel (ElevenLabs default)
-    : lang === "en"
-      ? "am_michael"
-      : die(
-          "Kokoro non-English path requires explicit --voice (see /hyperframes-media references/tts.md)",
-        ));
+  (provider === "heygen"
+    ? "1bd001e7e50f421d891986aad5158bc8" // HeyGen default (mirrors CLI heygen.ts DEFAULT_VOICE)
+    : provider === "elevenlabs"
+      ? "21m00Tcm4TlvDq8ikWAM" // Rachel (ElevenLabs default)
+      : lang === "en"
+        ? "am_michael"
+        : die(
+            "Kokoro non-English path requires explicit --voice (see /hyperframes-media references/tts.md)",
+          ));
 
 // ---------- Step 4: write narration → /tmp/scene_<N>.txt ----------
 for (const s of scenes) {
@@ -181,7 +233,7 @@ const BGM_PY_DEPS = ["transformers", "torch", "soundfile"];
 const BGM_PY_PROBE =
   "import transformers, soundfile, torch; from transformers import MusicgenForConditionalGeneration";
 let bgmDepsInstallPromise = null;
-if (!noBgm && !(process.env.GOOGLE_API_KEY && lyriaRecipe && existsSync(lyriaRecipe))) {
+if (!noBgm && !(lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe))) {
   const probe = spawnSync("python3", ["-c", BGM_PY_PROBE], { stdio: "ignore" });
   if (probe.status !== 0) {
     console.log(
@@ -296,14 +348,29 @@ save(audio, sys.argv[3])
 async function ttsScene(s) {
   const txt = `/tmp/${s.sceneId}.txt`;
   const wavRel = `assets/voice/${s.sceneId}.wav`;
-  if (provider === "kokoro") {
-    const args = ["hyperframes", "tts", txt, "--voice", voiceId, "--output", wavRel];
-    if (lang !== "en") args.push("--lang", lang);
-    return spawnP("npx", args, { cwd: hyperframesDir });
-  } else {
+
+  // ElevenLabs: direct python SDK (no CLI dependency — keeps Kokoro/HeyGen and ElevenLabs paths isolated).
+  if (provider === "elevenlabs") {
     const wavAbs = join(hyperframesDir, wavRel);
     return spawnP("python3", ["-c", ELEVENLABS_PY, txt, voiceId, wavAbs], {});
   }
+
+  // heygen + kokoro: delegate to CLI. Pass --provider explicitly so CLI's
+  // selectProvider() doesn't disagree with this script's choice when multiple
+  // API keys are present (e.g. HEYGEN_API_KEY set but user forced --provider kokoro).
+  const args = [
+    "hyperframes",
+    "tts",
+    txt,
+    "--provider",
+    provider,
+    "--voice",
+    voiceId,
+    "--output",
+    wavRel,
+  ];
+  if (lang !== "en") args.push("--lang", lang);
+  return spawnP("npx", args, { cwd: hyperframesDir });
 }
 
 async function transcribeScene(s) {
@@ -376,7 +443,7 @@ if (bgmDepsInstallPromise) {
 
 if (noBgm) {
   bgmReason = "disabled by --no-bgm";
-} else if (process.env.GOOGLE_API_KEY && lyriaRecipe && existsSync(lyriaRecipe)) {
+} else if (lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe)) {
   // Path A: Lyria (cloud)
   const totalS = scenes.reduce((sum, s) => sum + s.estimatedDuration, 0);
   const prompt = inferBgmPrompt();
@@ -433,8 +500,8 @@ if (noBgm) {
   bgmPid = bgm.pid;
 } else {
   const depsHint = `pip install ${BGM_PY_DEPS.join(" ")}`;
-  bgmReason = !process.env.GOOGLE_API_KEY
-    ? `$GOOGLE_API_KEY not set; BGM deps not installed (${depsHint})`
+  bgmReason = !lyriaKey()
+    ? `$GEMINI_API_KEY/$GOOGLE_API_KEY not set; BGM deps not installed (${depsHint})`
     : `--lyria-recipe not provided; BGM deps not installed (${depsHint})`;
 }
 
@@ -498,7 +565,7 @@ console.log(`  scenes transcribed: ${transcribed}/${Object.keys(scenesMap).lengt
 console.log(`  total voice duration: ${audioMeta.total_duration_s}s`);
 if (bgmEnabled) {
   const bgmBackend =
-    process.env.GOOGLE_API_KEY && lyriaRecipe && existsSync(lyriaRecipe)
+    lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe)
       ? "Lyria"
       : "MusicGen via transformers (local)";
   console.log(`  bgm: launched via ${bgmBackend} pid=${bgmPid} (detached, → ${bgmRelPath})`);

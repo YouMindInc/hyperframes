@@ -1,42 +1,52 @@
 #!/usr/bin/env node
 // Phase 4a.5 — captions builder (deterministic; no subagent).
 //
-// Reads:  narrator_scripts.json  (per-scene captions[] — agent-authored groups
-//                                  with inline tags <em>/<brand>/<emph>/<cta>),
-//         audio_meta.json        (per-scene wordsPath — TTS+whisper word grid
-//                                  with start/end timestamps),
-//         group_spec.json        (per-scene start_s + surface),
-//         design-system/chunks/captions.md  (preset §C: CSS, animation pattern,
-//                                  config including fit_font_family).
-// Writes: <PROJECT_DIR>/compositions/captions.html — single full-bleed sub-
-//         comp overlaying every scene on track 12 (finalize wires it).
+// Architecture:
+//   1. design-system agent picks a caption-* registry component and writes
+//      `design-system/caption-style.json` { name, rationale }.
+//   2. prep.mjs runs `npx hyperframes add caption-<name>` to install the
+//      component HTML into `compositions/components/<name>.html`, then
+//      invokes this script.
+//   3. This script reads the installed component HTML, aligns agent
+//      `narrator_scripts.scenes[i].captions[]` against the whisper word grid
+//      (audio_meta.scenes[].wordsPath), injects the aligned data into the
+//      component's word-array (shape-detected), patches the composition id
+//      and timeline registration to "captions", applies a best-effort
+//      brand-DNA CSS patcher, prepends `chunks/tokens.css` so brand
+//      var(--*) resolve, and writes `compositions/captions.html`.
 //
-// Authoring model:
-//   story-design agent decides BOTH which words to highlight (via inline tag)
-//   AND how to group words into caption lines (via captions[] array).
-//   captions.mjs is the translator — it aligns agent groups to the whisper
-//   word grid (so the karaoke timing comes from TTS truth), applies per-word
-//   styling classes (from tags + auto-detect ALL CAPS / numerics), wraps <em>
-//   words in <em class="cap-word"> for script-flick, and emits a deterministic
-//   GSAP timeline. fitTextFontSize is called per group so long words can't clip.
+// Shape adapters:
+//   P1: var TRANSCRIPT = [...]                   — component derives WORDS/GROUPS
+//                                                  via makeGroups() / buildGroups().
+//                                                  AGENT GROUPING IS OVERRIDDEN by
+//                                                  component's auto-grouper (logged).
+//   P2: var WORDS = [...] + var RAW_GROUPS = [...] — explicit groups; agent
+//                                                  grouping preserved.
+//   Unsupported: components with custom block/layout arrays (BLOCKS) that
+//   index into hardcoded word positions. captions.mjs exits non-zero with
+//   a clear message; design-system agent should not pick these.
 //
 // Fallback ladder (per scene):
-//   1. narrator_scripts.scenes[i].captions[]   present + alignable → use them
-//   2. else                                    → auto-group whisper words by
-//                                                  §C config (sentence boundary
-//                                                  / silence_150ms / max_words).
-//   This means scenes that lack a captions[] still get reasonable captions, and
-//   scenes whose agent groups don't line up with whisper output (mis-count,
-//   whisper drop / re-order) degrade silently instead of breaking the render.
+//   1. narrator_scripts.scenes[i].captions[] present + alignable → use them
+//   2. else                                    → auto-group on whisper words
+//                                                 (sentence-end / silence-gap /
+//                                                 max-words). For P1 components,
+//                                                 this is equivalent to whatever
+//                                                 the component would do itself,
+//                                                 so we simply hand TRANSCRIPT
+//                                                 over and let the component group.
 //
-// If audio_meta or any wordsPath is missing/empty → captions.html is NOT written
-// and the script exits 0 (no-op). finalize agent checks file existence before
-// emitting the clip ref, so captions are silently optional.
+// If audio_meta / caption-style / installed component missing → captions.html
+// is NOT written and the script exits 0 (no-op). finalize-agent checks file
+// existence before emitting the track-12 clip.
 //
 // Usage:
 //   node captions.mjs --audio-meta <path> --group-spec <path> \
 //                     --narrator-scripts <path> \
-//                     --chunks-captions <path> --hyperframes <project-root> \
+//                     --caption-style <name> \
+//                     [--component-path <path>] \
+//                     [--tokens-css <path>] \
+//                     --hyperframes <project-root> \
 //                     --out <compositions/captions.html>
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -54,114 +64,94 @@ function flag(name) {
 const audioMetaPath = flag("audio-meta");
 const groupSpecPath = flag("group-spec");
 const narratorScriptsPath = flag("narrator-scripts");
-const chunksCaptionsPath = flag("chunks-captions");
+const captionStyle = flag("caption-style");
+const componentPathArg = flag("component-path");
+const tokensCssPath = flag("tokens-css");
 const hyperframesDir = flag("hyperframes");
 const outPath = flag("out") || "./compositions/captions.html";
 
 if (!groupSpecPath) die("missing --group-spec");
-if (!chunksCaptionsPath) die("missing --chunks-captions");
 if (!hyperframesDir) die("missing --hyperframes");
 
-// audio_meta is optional — no audio_meta → no captions (no-op exit 0)
+// audio_meta optional — no audio_meta → no captions (no-op exit 0)
 if (!audioMetaPath || !existsSync(audioMetaPath)) {
   console.log("ℹ captions.mjs: no audio_meta.json — skipping (captions optional)");
   process.exit(0);
 }
-if (!existsSync(chunksCaptionsPath)) {
-  console.log(`ℹ captions.mjs: no chunks/captions.md at ${chunksCaptionsPath} — skipping (preset doesn't declare §C)`);
+// caption-style optional — design-system agent may decline to pick one
+if (!captionStyle) {
+  console.log("ℹ captions.mjs: no --caption-style — skipping (no style chosen)");
   process.exit(0);
+}
+
+const componentPath = componentPathArg
+  ? resolve(componentPathArg)
+  : resolve(hyperframesDir, "compositions/components", `${captionStyle}.html`);
+
+if (!existsSync(componentPath)) {
+  die(
+    `caption component not installed at ${componentPath}. Run \`npx hyperframes add ${captionStyle}\` from PROJECT_DIR first.`,
+  );
 }
 if (!existsSync(groupSpecPath)) die(`group_spec.json not found at ${groupSpecPath}`);
 
 const audioMeta = JSON.parse(readFileSync(audioMetaPath, "utf8"));
 const groupSpec = JSON.parse(readFileSync(groupSpecPath, "utf8"));
-const chunksMd = readFileSync(chunksCaptionsPath, "utf8");
+const componentHtml = readFileSync(componentPath, "utf8");
 
-// narrator_scripts is optional — without it, every scene falls back to auto-grouping.
+let tokensCss = "";
+if (tokensCssPath && existsSync(tokensCssPath)) {
+  tokensCss = readFileSync(tokensCssPath, "utf8");
+}
+
 let narrator = null;
 if (narratorScriptsPath && existsSync(narratorScriptsPath)) {
   try {
     narrator = JSON.parse(readFileSync(narratorScriptsPath, "utf8"));
   } catch (e) {
-    console.error(`! captions.mjs: narrator_scripts.json parse failed (${e.message}) — falling back to auto-grouping`);
+    console.error(
+      `! captions.mjs: narrator_scripts.json parse failed (${e.message}) — falling back to auto-grouping`,
+    );
   }
 }
 
-// ---------- Extract §C config + CSS from chunks/captions.md ----------
-const configMatch = chunksMd.match(/```json\n([\s\S]+?)\n```/);
-if (!configMatch) die("chunks/captions.md missing ```json config block");
-let config;
-try {
-  config = JSON.parse(configMatch[1]);
-} catch (e) {
-  die(`chunks/captions.md config JSON parse: ${e.message}`);
-}
+// ===========================================================================
+// Phase A: parse agent caption tags + align against whisper word grid
+// ===========================================================================
 
-const cssMatch = chunksMd.match(/```css\n([\s\S]+?)\n```/);
-if (!cssMatch) die("chunks/captions.md missing ```css block");
-const captionCss = cssMatch[1].trim();
-
-const GROUP_WORDS_MAX = config.group_words_max ?? 3;
-const SILENCE_GAP_S = 0.15;
-const DUR_LINE_ENTER = config.dur_line_enter ?? 0.45;
-const DUR_LINE_EXIT = config.dur_line_exit ?? 0.35;
-const DUR_WORD_STAMP = config.dur_word_stamp ?? 0.18;
-const EASE_LINE_ENTER = config.ease_line_enter ?? "back.out(2.4)";
-const EASE_LINE_EXIT = config.ease_line_exit ?? "power4.in";
-const EASE_WORD_STAMP = config.ease_word_stamp ?? "back.out(2.4)";
-
-// fitTextFontSize config (preset-decided per scheme (a)). All optional with
-// sensible defaults so preset can omit them when not using fit.
-const FIT_FONT_FAMILY = config.fit_font_family || null; // null → skip fit calls
-const FIT_MAX_WIDTH_LANDSCAPE = config.fit_max_width_landscape ?? 1600;
-const FIT_MAX_WIDTH_PORTRAIT = config.fit_max_width_portrait ?? 900;
-const FIT_BASE_FONT_SIZE = config.fit_base_font_size ?? 96;
-const FIT_MIN_FONT_SIZE = config.fit_min_font_size ?? 56;
-
-// ---------- Parse narrator captions per scene (agent-authored groups) ----------
-// Returns { sceneId → [{ words: [{ text, tag }], rawGroupIdx }] } or null when
-// scene has no captions[]. Tag-strip preserves the original word casing
-// because peoples §C uppercases everything via CSS text-transform — alignment
-// (against whisper, which is lowercase + punctuation) is done on a normalized
-// alpha-only form regardless of original case.
 const TAG_RE = /<(em|brand|emph|cta)\b[^>]*>([\s\S]*?)<\/\1>/gi;
-const CLOSE_TAG_RE = /<\/?(em|brand|emph|cta)\b[^>]*>/gi;
 
 function parseCaptionGroup(groupStr) {
-  // Yield { text, tag } per word. The string may have inline tags wrapping
-  // single words. Strategy: scan tag occurrences, slot un-tagged tokens between
-  // them, then split each segment by whitespace. Keep tag on the matched word.
+  // Yield { text, tag } per word. Strips inline tags but keeps tag id on the
+  // matched word. Pure-punctuation tokens get merged into the previous word
+  // so "Brex." reads as one token (matching whisper output).
   const tokens = [];
   let cursor = 0;
   const matches = [];
   let m;
   TAG_RE.lastIndex = 0;
   while ((m = TAG_RE.exec(groupStr)) !== null) {
-    matches.push({ start: m.index, end: m.index + m[0].length, tag: m[1].toLowerCase(), inner: m[2] });
+    matches.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      tag: m[1].toLowerCase(),
+      inner: m[2],
+    });
   }
   for (const match of matches) {
-    // Emit un-tagged words from cursor up to match.start.
     const before = groupStr.slice(cursor, match.start);
     for (const w of before.split(/\s+/).filter(Boolean)) {
       tokens.push({ text: w, tag: null });
     }
-    // Emit tagged words. Tag applies to the whole inner content's words
-    // (multi-word inner is unusual but tolerated).
     for (const w of match.inner.split(/\s+/).filter(Boolean)) {
       tokens.push({ text: w, tag: match.tag });
     }
     cursor = match.end;
   }
-  // Emit trailing un-tagged words.
   const after = groupStr.slice(cursor);
   for (const w of after.split(/\s+/).filter(Boolean)) {
     tokens.push({ text: w, tag: null });
   }
-  // Whitespace split can leave standalone punctuation tokens when the agent
-  // writes e.g. `<brand>Brex</brand>.` — the `.` after </brand> would otherwise
-  // count as its own word, breaking alignment vs whisper output which emits
-  // "Brex." as one token. Merge any pure-punctuation token into the preceding
-  // word's text (preserving the preceding token's tag).
   const merged = [];
   for (const t of tokens) {
     if (/^[^\w]+$/.test(t.text) && merged.length > 0) {
@@ -186,51 +176,28 @@ function parseSceneCaptions(captionsArr) {
   return groups.length > 0 ? groups : null;
 }
 
-// ---------- Per-word style classification ----------
-// Auto-detect classes are ALL CAPS (≥2 letters, all uppercase) and numerics
-// (starts with a digit). Explicit tags win over auto-detect; cap-num beats
-// cap-allcaps when both could fire ("100M" is num, not allcaps).
-const NUM_RE = /^\d/;
-const ALLCAPS_RE = /^[A-Z]{2,}/;
-function classifyWord(text, tag) {
-  if (tag === "em") return { className: null, wrapInEm: true };   // script-flick → <em class="cap-word">
-  if (tag === "brand") return { className: "cap-brand", wrapInEm: false };
-  if (tag === "emph") return { className: "cap-emph", wrapInEm: false };
-  if (tag === "cta") return { className: "cap-cta", wrapInEm: false };
-  // Auto-detect on un-tagged words. Strip surrounding punctuation before test
-  // so "Brex." reads as "Brex" (still capitalized, not all-caps; not classified).
-  const core = text.replace(/^[^\w]+|[^\w]+$/g, "");
-  if (NUM_RE.test(core)) return { className: "cap-num", wrapInEm: false };
-  if (ALLCAPS_RE.test(core)) return { className: "cap-allcaps", wrapInEm: false };
-  return { className: null, wrapInEm: false };
-}
-
-// ---------- Alignment: agent words ↔ whisper words ----------
-// Whisper emits words with timestamps; agent emits ordered word list with tags.
-// We need to attach (start, end) from whisper to each agent word.
-//
-// Strategy: walk both lists in lockstep with a normalize(s) = [a-z0-9]+ join.
-// Strict 1:1 succeeds only when token counts match. On count mismatch we DON'T
-// try to recover at the scene level — captions.mjs falls back to auto-grouping
-// (whisper-side). Logged as anomaly + use whisper auto-groups for this scene.
 function normalizeWord(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function alignToWhisper(agentGroups, whisperWords, sceneStartS) {
-  // Flatten agent words for 1:1 alignment.
   const flat = [];
   for (let gi = 0; gi < agentGroups.length; gi++) {
     for (let wi = 0; wi < agentGroups[gi].words.length; wi++) {
-      flat.push({ gi, wi, text: agentGroups[gi].words[wi].text, tag: agentGroups[gi].words[wi].tag });
+      flat.push({
+        gi,
+        wi,
+        text: agentGroups[gi].words[wi].text,
+        tag: agentGroups[gi].words[wi].tag,
+      });
     }
   }
   if (flat.length !== whisperWords.length) {
-    return { ok: false, reason: `word-count mismatch (agent=${flat.length}, whisper=${whisperWords.length})` };
+    return {
+      ok: false,
+      reason: `word-count mismatch (agent=${flat.length}, whisper=${whisperWords.length})`,
+    };
   }
-  // Soft-match: normalized strings must agree. One-off mismatches are allowed
-  // (whisper may say "AI's" when agent says "AI'S"; both normalize to "ais").
-  // Mismatches > 25% of words → bail to auto-group.
   let mismatches = 0;
   for (let i = 0; i < flat.length; i++) {
     if (normalizeWord(flat[i].text) !== normalizeWord(whisperWords[i].text)) mismatches++;
@@ -238,10 +205,9 @@ function alignToWhisper(agentGroups, whisperWords, sceneStartS) {
   if (mismatches / flat.length > 0.25) {
     return { ok: false, reason: `${mismatches}/${flat.length} word mismatches (>25%)` };
   }
-  // Apply whisper timestamps + scene offset.
   const result = agentGroups.map(() => ({ words: [], rawGroupIdx: null }));
   for (let i = 0; i < flat.length; i++) {
-    const { gi, wi, text, tag } = flat[i];
+    const { gi, text, tag } = flat[i];
     const w = whisperWords[i];
     result[gi].words.push({
       text,
@@ -254,19 +220,19 @@ function alignToWhisper(agentGroups, whisperWords, sceneStartS) {
   return { ok: true, groups: result, mismatches };
 }
 
-// ---------- Auto-group fallback (whisper-side, when no agent captions) ----------
-// Split when EITHER: hit group_words_max | gap > SILENCE_GAP_S | sentence end |
-// surface change. Same rules as the previous v1 of captions.mjs.
-function autoGroup(whisperWords, sceneStartS, surface) {
+// Auto-group fallback (whisper-side, when no agent captions or alignment failed).
+const AUTO_GROUP_WORDS_MAX = 3;
+const AUTO_SILENCE_GAP_S = 0.15;
+function autoGroup(whisperWords, sceneStartS) {
   const groups = [];
   let cur = null;
   for (let i = 0; i < whisperWords.length; i++) {
     const w = whisperWords[i];
     if (!w.text) continue;
     const prev = i > 0 ? whisperWords[i - 1] : null;
-    let split = !cur || cur.words.length >= GROUP_WORDS_MAX;
+    let split = !cur || cur.words.length >= AUTO_GROUP_WORDS_MAX;
     if (!split && prev) {
-      if (w.start - prev.end > SILENCE_GAP_S) split = true;
+      if (w.start - prev.end > AUTO_SILENCE_GAP_S) split = true;
       if (/[.,?!]$/.test(prev.text)) split = true;
     }
     if (split) {
@@ -281,11 +247,13 @@ function autoGroup(whisperWords, sceneStartS, surface) {
     });
   }
   if (cur) groups.push(cur);
-  // Attach surface uniformly to each group.
-  return groups.map((g) => ({ ...g, surface }));
+  return groups;
 }
 
-// ---------- Build per-scene groups ----------
+// ===========================================================================
+// Phase B: build per-scene groups (ordered by scene start)
+// ===========================================================================
+
 const orderedScenes = [];
 for (const g of groupSpec.groups || []) {
   for (const sid of g.scene_ids) orderedScenes.push({ scene_id: sid, ...g.scenes[sid] });
@@ -299,7 +267,7 @@ if (narrator?.scenes) {
 }
 
 const anomalies = [];
-const allGroups = []; // global flat list of groups with full timing
+const allGroups = [];
 
 let scenesWithCaptions = 0;
 let scenesUsingAgent = 0;
@@ -310,7 +278,9 @@ for (const s of orderedScenes) {
   if (!audioScene?.wordsPath) continue;
   const wordsAbs = join(hyperframesDir, audioScene.wordsPath);
   if (!existsSync(wordsAbs)) {
-    anomalies.push(`${s.scene_id}: wordsPath ${audioScene.wordsPath} not on disk — captions skipped for this scene`);
+    anomalies.push(
+      `${s.scene_id}: wordsPath ${audioScene.wordsPath} not on disk — captions skipped for this scene`,
+    );
     continue;
   }
   let whisperWords;
@@ -323,27 +293,28 @@ for (const s of orderedScenes) {
   if (!Array.isArray(whisperWords) || whisperWords.length === 0) continue;
   scenesWithCaptions++;
 
-  const surface = s.surface || "paper";
-
-  // Try agent-authored groups first.
   const ns = narratorByScene.get(s.scene_id);
   const agentGroups = ns ? parseSceneCaptions(ns.captions) : null;
   let sceneGroups;
   if (agentGroups) {
     const aligned = alignToWhisper(agentGroups, whisperWords, s.start_s);
     if (aligned.ok) {
-      sceneGroups = aligned.groups.map((g) => ({ ...g, surface }));
+      sceneGroups = aligned.groups;
       scenesUsingAgent++;
       if (aligned.mismatches > 0) {
-        anomalies.push(`${s.scene_id}: aligned agent captions with ${aligned.mismatches} soft mismatches (acceptable)`);
+        anomalies.push(
+          `${s.scene_id}: aligned agent captions with ${aligned.mismatches} soft mismatches (acceptable)`,
+        );
       }
     } else {
-      anomalies.push(`${s.scene_id}: agent captions ${aligned.reason} — falling back to auto-group`);
-      sceneGroups = autoGroup(whisperWords, s.start_s, surface);
+      anomalies.push(
+        `${s.scene_id}: agent captions ${aligned.reason} — falling back to auto-group`,
+      );
+      sceneGroups = autoGroup(whisperWords, s.start_s);
       scenesUsingAuto++;
     }
   } else {
-    sceneGroups = autoGroup(whisperWords, s.start_s, surface);
+    sceneGroups = autoGroup(whisperWords, s.start_s);
     scenesUsingAuto++;
   }
   allGroups.push(...sceneGroups);
@@ -355,197 +326,237 @@ if (allGroups.length === 0) {
   process.exit(0);
 }
 
-// ---------- Compute group timing (line in / out) ----------
 for (const g of allGroups) {
   g.start = g.words[0].start;
   g.end = g.words[g.words.length - 1].end + 0.1;
 }
 
-// ---------- Emit HTML ----------
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+// ===========================================================================
+// Phase C: detect component data shape + inject aligned data
+// ===========================================================================
+
+// Robust replacer for a top-level array literal `(var|let|const) <name> = [ ... ]`.
+// Scans bracket depth so nested objects/arrays don't trip up the close match.
+function replaceArrayLiteral(html, varName, replacementBody) {
+  const re = new RegExp(`((?:var|let|const)\\s+${varName}\\s*=\\s*)\\[`);
+  const m = re.exec(html);
+  if (!m) return null;
+  const headEnd = m.index + m[0].length; // position AFTER '['
+  let depth = 1;
+  let i = headEnd;
+  let inStr = null; // '"' | "'" | "`" | null
+  while (i < html.length) {
+    const c = html[i];
+    if (inStr) {
+      if (c === "\\") {
+        i += 2;
+        continue;
+      }
+      if (c === inStr) inStr = null;
+      i++;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      inStr = c;
+      i++;
+      continue;
+    }
+    if (c === "[") depth++;
+    else if (c === "]") {
+      depth--;
+      if (depth === 0) break;
+    }
+    i++;
+  }
+  if (depth !== 0) return null;
+  // i now points at the matching ']'
+  return html.slice(0, m.index) + m[1] + replacementBody + html.slice(i + 1);
 }
 
-const groupHtml = allGroups
-  .map((g, i) => {
-    const lineCls = g.surface === "blue" ? "cap-line surface-blue" : "cap-line";
-    const wordSpans = g.words
-      .map((w, j) => {
-        const cls = classifyWord(w.text, w.tag);
-        const wid = `cap-g-${i}-w-${j}`;
-        const klass = ["cap-word", cls.className].filter(Boolean).join(" ");
-        if (cls.wrapInEm) {
-          return `        <em class="${klass}" id="${wid}">${escHtml(w.text)}</em>`;
-        }
-        return `        <span class="${klass}" id="${wid}">${escHtml(w.text)}</span>`;
-      })
-      .join("\n");
-    return `      <div class="${lineCls}" id="cap-g-${i}">
-${wordSpans}
-      </div>`;
-  })
-  .join("\n");
+function hasArrayVar(html, varName) {
+  return new RegExp(`(?:var|let|const)\\s+${varName}\\s*=\\s*\\[`).test(html);
+}
 
-// Build timeline data
-const groupsData = allGroups.map((g, i) => ({
-  i,
-  start: Number(g.start.toFixed(3)),
-  end: Number(g.end.toFixed(3)),
-  text: g.words.map((w) => w.text).join(" "),
-  words: g.words.map((w) => ({
-    start: Number(w.start.toFixed(3)),
-    end: Number(w.end.toFixed(3)),
-  })),
-}));
+const isP1 = hasArrayVar(componentHtml, "TRANSCRIPT");
+const hasWordsVar = hasArrayVar(componentHtml, "WORDS");
+const hasRawGroupsVar = hasArrayVar(componentHtml, "RAW_GROUPS");
+const hasWVar = hasArrayVar(componentHtml, "W");
+const hasBlocksVar = hasArrayVar(componentHtml, "BLOCKS");
 
-// Scope the §C CSS under `#root` so it can't leak.
-const scopedCaptionCss = captionCss
-  .replace(/^\.cap-/gm, "#root .cap-")
-  .replace(/^\.cap-line\.surface-blue/gm, "#root .cap-line.surface-blue")
-  .replace(/(\n\s*)\.cap-line\s+em\.cap-word/g, "$1#root .cap-line em.cap-word")
-  .replace(/^\.cap-word\./gm, "#root .cap-word.");
+let shape;
+if (isP1) shape = "P1";
+else if (hasWordsVar && hasRawGroupsVar) shape = "P2";
+else if (hasWordsVar && !hasRawGroupsVar) shape = "P2-no-rg"; // explicit GROUPS literal
+else if (hasWVar && hasBlocksVar) shape = "P3-blocks";
+else shape = "unknown";
 
-const totalDuration = groupSpec.total_duration_s;
+if (shape === "P3-blocks" || shape === "unknown") {
+  die(
+    `caption component '${captionStyle}' uses an unsupported data shape (${shape}). Supported: P1 (var TRANSCRIPT) or P2 (var WORDS + var RAW_GROUPS). Pick a different caption-style.`,
+  );
+}
 
-// Generate fitTextFontSize call block. If preset declared fit_font_family,
-// every group calls __hyperframes.fitTextFontSize before the timeline runs.
-const fitBlock = FIT_FONT_FAMILY
-  ? `        // fitTextFontSize per group — preset-decided font family. Aspect-ratio
-        // sniff picks landscape vs portrait maxWidth at runtime (no build-time
-        // canvas knowledge). Falls back silently if runtime API absent.
-        (function fitAllGroups() {
-          if (!window.__hyperframes || !window.__hyperframes.fitTextFontSize) return;
-          var portrait = window.matchMedia && window.matchMedia("(max-aspect-ratio: 9/16)").matches;
-          var maxWidth = portrait ? ${FIT_MAX_WIDTH_PORTRAIT} : ${FIT_MAX_WIDTH_LANDSCAPE};
-          for (var gi = 0; gi < GROUPS.length; gi++) {
-            var groupEl = document.getElementById("cap-g-" + gi);
-            if (!groupEl) continue;
-            try {
-              var result = window.__hyperframes.fitTextFontSize(GROUPS[gi].text.toUpperCase(), {
-                fontFamily: ${JSON.stringify(FIT_FONT_FAMILY)},
-                fontWeight: 400,
-                maxWidth: maxWidth,
-                baseFontSize: ${FIT_BASE_FONT_SIZE},
-                minFontSize: ${FIT_MIN_FONT_SIZE},
-              });
-              if (result && result.fontSize) {
-                groupEl.style.fontSize = result.fontSize + "px";
-              }
-            } catch (_) { /* skip; CSS clamp keeps the line readable */ }
-          }
-        })();
+// Flat WORDS list across all groups, deterministic key order (text, start, end).
+function buildFlatWords() {
+  const out = [];
+  for (const g of allGroups) {
+    for (const w of g.words) {
+      out.push({
+        text: w.text,
+        start: Number(w.start.toFixed(3)),
+        end: Number(w.end.toFixed(3)),
+      });
+    }
+  }
+  return out;
+}
 
-`
-  : "";
+// RAW_GROUPS as [[startIdx, endIdx], ...] aligned to the flat WORDS list.
+function buildRawGroups() {
+  const out = [];
+  let cursor = 0;
+  for (const g of allGroups) {
+    const start = cursor;
+    cursor += g.words.length;
+    out.push([start, cursor - 1]);
+  }
+  return out;
+}
 
-const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <!-- Captions sub-composition (track 12 overlay). Built by scripts/captions.mjs.
-         Per-word classes (cap-brand/cap-allcaps/cap-num/cap-emph/cap-cta) come
-         from story-design inline tags + auto-detect (ALL CAPS / numerics).
-         <em class="cap-word"> = script-flick (peoples 招牌). -->
-  </head>
-  <body>
-    <template>
-      <style>
-        #root {
-          position: absolute;
-          inset: 0;
-          width: 1920px;
-          height: 1080px;
-          pointer-events: none;
-          overflow: hidden;
-        }
-${scopedCaptionCss
-  .split("\n")
-  .map((l) => (l.length ? "        " + l : l))
-  .join("\n")}
-      </style>
+const flatWords = buildFlatWords();
 
-      <div id="root" data-composition-id="captions">
-${groupHtml}
-      </div>
+function literalWords(arr) {
+  // Pretty-print as JS array of {text,start,end} objects, one per line.
+  const lines = arr.map(
+    (w) => `        { text: ${JSON.stringify(w.text)}, start: ${w.start}, end: ${w.end} }`,
+  );
+  return `[\n${lines.join(",\n")}\n      ]`;
+}
 
-      <script>
-        // Captions GSAP recipe (per-group): line enter → per-word stamp-slam →
-        // hard kill at group.end. Source: design-system §C "Animation pattern".
-        const GROUPS = ${JSON.stringify(groupsData)};
+function literalRawGroups(arr) {
+  const lines = arr.map((p) => `        [${p[0]}, ${p[1]}]`);
+  return `[\n${lines.join(",\n")}\n      ]`;
+}
 
-${fitBlock}        const tl = gsap.timeline({ paused: true });
+let patched = componentHtml;
+const totalDuration = Number(groupSpec.total_duration_s.toFixed(3));
 
-        for (const g of GROUPS) {
-          const lineSel = "#cap-g-" + g.i;
-          tl.fromTo(lineSel,
-            { opacity: 0, y: 16, visibility: "visible" },
-            { opacity: 1, y: 0, duration: ${DUR_LINE_ENTER}, ease: "${EASE_LINE_ENTER}" },
-            g.start
-          );
+if (shape === "P1") {
+  // Replace TRANSCRIPT only; component re-groups via its own makeGroups().
+  const newTranscript = literalWords(flatWords);
+  const next = replaceArrayLiteral(patched, "TRANSCRIPT", newTranscript);
+  if (!next) die("failed to locate var TRANSCRIPT = [...] for replacement");
+  patched = next;
+  anomalies.push(
+    `shape=P1: component will re-group ${flatWords.length} words via its own makeGroups() — agent captions[] grouping is hint-only for this style`,
+  );
+} else if (shape === "P2") {
+  const newWords = literalWords(flatWords);
+  const newRawGroups = literalRawGroups(buildRawGroups());
+  let next = replaceArrayLiteral(patched, "WORDS", newWords);
+  if (!next) die("failed to locate var WORDS = [...] for replacement");
+  patched = next;
+  next = replaceArrayLiteral(patched, "RAW_GROUPS", newRawGroups);
+  if (!next) die("failed to locate var RAW_GROUPS = [...] for replacement");
+  patched = next;
+} else if (shape === "P2-no-rg") {
+  // Some P2-ish components write GROUPS as an object-literal array directly.
+  // Replace WORDS only; the GROUPS literal in the file remains tied to the
+  // old word indices, so this shape is effectively unsupported for variable
+  // word counts. Bail with a clear message.
+  die(
+    `caption component '${captionStyle}' uses var WORDS = [...] but no var RAW_GROUPS = [...] — its GROUPS object literal references old word indices and cannot be safely retargeted. Pick a different caption-style.`,
+  );
+}
 
-          g.words.forEach((w, i) => {
-            const wSel = "#cap-g-" + g.i + "-w-" + i;
-            tl.call(() => {
-              const cur = document.querySelector(wSel);
-              if (cur) cur.classList.add("active");
-              if (i > 0) {
-                const prev = document.querySelector("#cap-g-" + g.i + "-w-" + (i - 1));
-                if (prev) {
-                  prev.classList.remove("active");
-                  prev.classList.add("passed");
-                }
-              }
-            }, null, w.start);
+// Replace `var DURATION = N;` if present so end-of-track math matches our total.
+patched = patched.replace(/((?:var|let|const)\s+DURATION\s*=\s*)[\d.]+(\s*;)/, `$1${totalDuration}$2`);
 
-            const wDur = Math.max(0.05, w.end - w.start);
-            tl.fromTo(wSel,
-              { y: -16, scale: 0.92 },
-              { y: 0, scale: 1.0,
-                duration: Math.min(${DUR_WORD_STAMP}, wDur * 0.9),
-                ease: "${EASE_WORD_STAMP}" },
-              w.start
-            );
-          });
+// ===========================================================================
+// Phase D: patch composition id + timeline registration to "captions"
+// ===========================================================================
 
-          const last = g.words[g.words.length - 1];
-          tl.call(() => {
-            const lastSel = "#cap-g-" + g.i + "-w-" + (g.words.length - 1);
-            const el = document.querySelector(lastSel);
-            if (el) {
-              el.classList.remove("active");
-              el.classList.add("passed");
-            }
-          }, null, last.end + 0.1);
+const compIdMatch = patched.match(/data-composition-id="([^"]+)"/);
+const originalCompId = compIdMatch ? compIdMatch[1] : null;
+if (originalCompId && originalCompId !== "captions") {
+  patched = patched.replace(/data-composition-id="[^"]+"/, 'data-composition-id="captions"');
+  const escId = originalCompId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tlRe = new RegExp(`window\\.__timelines\\[\\s*["']${escId}["']\\s*\\]`, "g");
+  patched = patched.replace(tlRe, 'window.__timelines["captions"]');
+}
 
-          tl.to(lineSel,
-            { opacity: 0, y: -12, duration: ${DUR_LINE_EXIT}, ease: "${EASE_LINE_EXIT}" },
-            g.end - ${DUR_LINE_EXIT}
-          );
+// ===========================================================================
+// Phase E: brand-DNA injection — font-family patcher + tokens.css prepend
+// ===========================================================================
 
-          tl.set(lineSel, { opacity: 0, visibility: "hidden" }, g.end);
-        }
+// Best-effort font-family substitution. Each rule replaces a known hardcoded
+// face with a brand var, keeping the original face as a fallback so the
+// component still renders when brand DNA doesn't declare the var.
+const FONT_FAMILY_PATCHES = [
+  {
+    re: /font-family:\s*"Inter"[^;]*;/g,
+    repl: 'font-family: var(--font-body, "Inter", sans-serif);',
+  },
+  {
+    re: /font-family:\s*"Montserrat"[^;]*;/g,
+    repl: 'font-family: var(--font-display, "Montserrat", sans-serif);',
+  },
+  {
+    re: /font-family:\s*"Playfair Display"[^;]*;/g,
+    repl: 'font-family: var(--font-display, "Playfair Display", serif);',
+  },
+  {
+    re: /font-family:\s*"Bebas Neue"[^;]*;/g,
+    repl: 'font-family: var(--font-display, "Bebas Neue", sans-serif);',
+  },
+  {
+    re: /font-family:\s*"Caveat Brush"[^;]*;/g,
+    repl: 'font-family: var(--font-script, "Caveat Brush", cursive);',
+  },
+  {
+    re: /font-family:\s*"Anton"[^;]*;/g,
+    repl: 'font-family: var(--font-display, "Anton", sans-serif);',
+  },
+  {
+    re: /font-family:\s*"Space Mono"[^;]*;/g,
+    repl: 'font-family: var(--font-mono, "Space Mono", monospace);',
+  },
+];
 
-        window.__timelines = window.__timelines || {};
-        window.__timelines["captions"] = tl;
-      </script>
-    </template>
-  </body>
-</html>
-`;
+let fontPatchCount = 0;
+for (const p of FONT_FAMILY_PATCHES) {
+  patched = patched.replace(p.re, () => {
+    fontPatchCount++;
+    return p.repl;
+  });
+}
+
+// Prepend tokens.css inside <head> so var(--font-*) / var(--brand-*) resolve.
+if (tokensCss) {
+  const tokensStyle = `    <style data-brand-tokens>\n${tokensCss}\n    </style>`;
+  if (/<\/head>/i.test(patched)) {
+    patched = patched.replace(/<\/head>/i, `${tokensStyle}\n  </head>`);
+  } else {
+    // No <head> (defensive); inject before first <style> or before <body>
+    patched = patched.replace(/<style/i, `${tokensStyle}\n    <style`);
+  }
+}
+
+// ===========================================================================
+// Phase F: write
+// ===========================================================================
 
 mkdirSync(dirname(resolve(outPath)), { recursive: true });
-writeFileSync(outPath, html);
+writeFileSync(outPath, patched);
 
 console.log(`✓ wrote ${outPath}`);
+console.log(`  style: ${captionStyle} (shape=${shape})`);
 console.log(`  scenes captioned: ${scenesWithCaptions}/${orderedScenes.length}`);
 console.log(`    via agent groups: ${scenesUsingAgent}`);
 console.log(`    via auto-group:   ${scenesUsingAuto}`);
-console.log(`  groups: ${allGroups.length}, fit: ${FIT_FONT_FAMILY ? `enabled (${FIT_FONT_FAMILY})` : "disabled"}`);
+console.log(`  groups: ${allGroups.length}, words: ${flatWords.length}`);
 console.log(`  total duration: ${totalDuration}s`);
+console.log(`  font-family patches: ${fontPatchCount}, tokens.css: ${tokensCss ? "injected" : "(none)"}`);
 if (anomalies.length) {
   console.log(`  anomalies (non-fatal):`);
   for (const a of anomalies) console.log(`    - ${a}`);

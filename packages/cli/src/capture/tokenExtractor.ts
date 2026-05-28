@@ -376,7 +376,44 @@ const EXTRACT_SCRIPT = `(() => {
       }
     }
     sectionBg = rgbToHex(sectionBg) || sectionBg;
-    var sectionEntry = { selector: selector, type: type, y: Math.round(y), height: Math.round(rect.height), heading: headingText, backgroundColor: sectionBg };
+
+    // Enrichment: per-section CTAs + asset URLs (in DOM order, deduped).
+    // The launch-video-v2 visual-design / story-design agents need to know
+    // which CTAs and images belong to which section to plan beats — without
+    // this they have to fall back to rect intersection against the
+    // top-level ctas[] / svgs[] / <img> arrays.
+    var sectionCtas = [];
+    var ctaSeen = {};
+    var ctaInSection = el.querySelectorAll('a[class*="btn"], a[class*="button"], a[class*="cta"], button, [role="button"]');
+    for (var ci = 0; ci < ctaInSection.length && sectionCtas.length < 6; ci++) {
+      var ctaEl = ctaInSection[ci];
+      if (!isVisible(ctaEl)) continue;
+      var ctaText = (ctaEl.textContent || "").trim().replace(/\\s+/g, " ").slice(0, 60);
+      if (!ctaText || ctaText.length < 2 || ctaSeen[ctaText]) continue;
+      ctaSeen[ctaText] = true;
+      sectionCtas.push(ctaText);
+    }
+
+    var sectionAssets = [];
+    var assetSeen = {};
+    var assetInSection = el.querySelectorAll('img[src], picture img, video[src], video source[src], [style*="background-image"]');
+    for (var ai = 0; ai < assetInSection.length && sectionAssets.length < 8; ai++) {
+      var assetEl = assetInSection[ai];
+      var src = assetEl.getAttribute('src') || '';
+      if (!src) {
+        // Background-image inline style
+        var inlineStyle = assetEl.getAttribute('style') || '';
+        var bgMatch = inlineStyle.match(/background-image\\s*:\\s*url\\(["']?([^"')]+)/);
+        if (bgMatch) src = bgMatch[1];
+      }
+      if (!src || src.startsWith('data:') || assetSeen[src]) continue;
+      // Resolve relative to location
+      try { src = new URL(src, location.href).href; } catch (e) {}
+      assetSeen[src] = true;
+      sectionAssets.push(src);
+    }
+
+    var sectionEntry = { selector: selector, type: type, y: Math.round(y), height: Math.round(rect.height), heading: headingText, backgroundColor: sectionBg, callsToAction: sectionCtas, assetUrls: sectionAssets };
     if (sectionBgImage) sectionEntry.backgroundImage = sectionBgImage;
     sectionResults.push(sectionEntry);
   }

@@ -54,7 +54,7 @@ const audioTagRe = /<audio\b[^>]*>/g;
 let m;
 while ((m = audioTagRe.exec(indexHtml)) !== null) {
   const tag = m[0];
-  const srcMatch = tag.match(/\bsrc=["'](?:\.?\/)?(?:assets\/)?sfx\/([\w.\-]+\.mp3)["']/);
+  const srcMatch = tag.match(/\bsrc=["'](?:\.?\/)?(?:assets\/)?sfx\/([\w.-]+\.mp3)["']/);
   if (!srcMatch) continue;
   const tMatch = tag.match(/\bdata-start=["']([0-9.]+)["']/);
   const dMatch = tag.match(/\bdata-duration=["']([0-9.]+)["']/);

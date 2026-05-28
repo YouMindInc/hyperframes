@@ -1,31 +1,31 @@
 # Design System (Phase 1b)
 
-合成 `design.html` + 切碎为 `chunks/`。三步确定性脚本，preset 选择是 agent 唯一的决策点。
+合成 `design.html` + 切碎为 `chunks/`。两步确定性脚本（站点 DNA 直接吃 Phase 1 的 `capture/`），preset 选择是 agent 唯一的决策点。
 
 ## 1. 命令模板
 
 ```bash
 mkdir -p design-system
 
-# Step 1 — 抓站点 DNA
-npx designlang <url> --out ./design-system --header "Accept-Language:en-US,en;q=0.9,*;q=0.5"
-
-# Step 2a — baseline 推断，写 inference.json，不落 design.html
+# Step 1 — baseline 推断，写 inference.json，不落 design.html
+# build-design.mjs 默认读 <design-system-dir>/../capture/，与 Phase 1 hyperframes capture 的输出对齐。
 node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system --no-emit
 
-# Step 2b — 见 §3 决策规则
+# Step 2 — 见 §3 决策规则
 
-# Step 2c — 用 chosen preset 落 design.html
+# Step 3 — 用 chosen preset 落 design.html
 node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system --style <chosen>
 
-# Step 3 — 切碎为 chunks/
+# Step 4 — 切碎为 chunks/
 node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
+
+# Step 5 — caption style 选择（见 §5）
+# agent 读 brand DNA 后挑一个 caption-* registry component 写入 caption-style.json
 ```
 
 可选 flag：
 
-- `designlang --wait 2000` — JS-heavy 站点 hero 未注入时
-- `build-design --prefix <name>` — auto-detection 失败时
+- `build-design --capture <dir>` — 覆盖默认 `<design-system-dir>/../capture/` 路径
 - `build-design --out-scores <file>` — 改 inference.json 落盘路径（默认 `<dir>/inference.json`）
 
 ## 2. inference.json 字段（agent 读这些）
@@ -74,15 +74,15 @@ node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
 }
 ```
 
-## 3. 决策规则（Step 2b）
+## 3. 决策规则（Step 2）
 
 按 `confidence` 决定：
 
-| confidence       | 动作                                 |
-| ---------------- | ------------------------------------ |
-| `high`           | 用 `baseline_winner.name` 跑 Step 2c |
-| `medium` / `low` | 进入下面的 override 判据             |
-| `forced`         | 已传 `--style`，跳过 review          |
+| confidence       | 动作                                |
+| ---------------- | ----------------------------------- |
+| `high`           | 用 `baseline_winner.name` 跑 Step 3 |
+| `medium` / `low` | 进入下面的 override 判据            |
+| `forced`         | 已传 `--style`，跳过 review         |
 
 **override 判据**（按优先级）：
 
@@ -108,18 +108,61 @@ preset review:
 
 外加 build-design 和 emit-chunks 两段 stdout 原样贴。
 
-## 5. 硬契约
+## 5. Caption style 选择（Step 5）
 
-- **`chunks/` 与 `design.html` 同源** — Step 2c 重跑后必须重跑 Step 3，否则下游读旧 chunk
-- **Read 范围**：`./design-system/inference.json` + `./design-system/<prefix>-{intent,visual-dna,voice}.json` + 验合成结果时 `./design-system/design.html`。其他 designlang 中间产物（`brand.html` / `palette.json` / `gradients.json` 等）不读
+emit-chunks 退 0 后，从 `hyperframes-registry` 的 caption-\* component 中挑一个最配 brand DNA 的，写到 `design-system/caption-style.json`：
+
+```bash
+cat > ./design-system/caption-style.json <<EOF
+{
+  "name": "<one of the supported list>",
+  "rationale": "<一句话，引用 site_dna / palette mood / 招式契合度>"
+}
+EOF
+```
+
+### 支持清单（共 12 个，按招式分组）
+
+prep.mjs 的 captions builder 支持 P1（TRANSCRIPT 派生）和 P2（WORDS + RAW_GROUPS）两种数据形态。**只从下面 12 个里选**——其它 caption-\* 用 BLOCKS 自定义布局无法注入 word grid，会被 captions.mjs 拒绝。
+
+| name                     | shape | 招式                                         | best_for                        |
+| ------------------------ | ----- | -------------------------------------------- | ------------------------------- |
+| `caption-pill-karaoke`   | P1    | 椭圆 pill 包裹两行 karaoke                   | playful / friendly / 高对比     |
+| `caption-weight-shift`   | P1    | active 词 font-weight 跳变                   | editorial / minimal / 排印克制  |
+| `caption-glitch-rgb`     | P1    | RGB 分离 + chromatic shift                   | tech / dark / cyber             |
+| `caption-emoji-pop`      | P1    | 词配 emoji icon 弹出                         | playful / consumer / social     |
+| `caption-neon-accent`    | P1    | 霓虹下划线 + 颜色波纹                        | nightlife / saturated dark      |
+| `caption-highlight`      | P2    | 红色背景 sweep 高亮 active word（TikTok 风） | social / high-energy / 大众消费 |
+| `caption-kinetic-slam`   | P2    | 巨字号 stamp slam 入场                       | bold / kinetic / 招式感强       |
+| `caption-neon-glow`      | P2    | 发光 outline 呼吸                            | dark / neon palette             |
+| `caption-gradient-fill`  | P2    | 渐变填充 active word                         | warm / saturated                |
+| `caption-particle-burst` | P2    | 词激活时粒子爆发                             | celebratory / 高能场景          |
+| `caption-matrix-decode`  | P2    | 字符 decode reveal                           | tech / data / cyber             |
+| `caption-clip-wipe`      | P2    | clip-path wipe reveal                        | minimal / 极简                  |
+
+**禁止**：`caption-editorial-emphasis` / `caption-parallax-layers` / `caption-blend-difference` / `caption-texture` —— 形态不兼容或非 word-grid 用途。
+
+### 选法
+
+1. 看 baseline preset + site_dna：material / voice_tone / palette mood 大方向（例：`peoples-platform` + site_dna 偏 playful → `caption-pill-karaoke` 或 `caption-highlight`；`liquid-glass` + dark palette → `caption-neon-glow`）
+2. 看 brand DNA palette 主色：palette 已经发光/霓虹的 → 走 glow / neon-accent；克制 editorial → weight-shift；招式型品牌（gaming / DTC consumer）→ slam / highlight
+3. 选**一个**写入 caption-style.json，不要写多个
+
+prep.mjs 后续会跑 `npx hyperframes add <name>` 把 component 装到 `compositions/components/<name>.html`，再喂给 `scripts/captions.mjs` 注入 word grid + brand tokens。
+
+## 6. 硬契约
+
+- **`chunks/` 与 `design.html` 同源** — Step 3 重跑后必须重跑 Step 4，否则下游读旧 chunk
+- **Read 范围**：`./design-system/inference.json` + 验合成结果时 `./design-system/design.html`。**不读 capture 的 extracted/ 原始 JSON** —— inference.json 已经按 site_dna 摘要了关键信号
 - **不要自己设计 palette / typography / 字体 / decoration** — 全部由 build-design 写定
 - `--style` 是 deliberate override，agent 必须在跑它之前满足 capability；build-design 在 forced mode 下不再 gate
 
-## 6. 排查
+## 7. 排查
 
-| 现象                                  | 修法                                                                                                           |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 抓回非英语 hero                       | 自查 `--header` 拼写（默认已带 Accept-Language）                                                               |
-| 抓回空 hero / 占位文字                | 加 `designlang --wait 2000`                                                                                    |
-| Step 3 报缺锚点                       | 重跑 Step 2c，确认 design.html 含 ROOT-START / MOTION-START / VOICE-START / COMPONENT 注释；不要修 emit-chunks |
-| `chunks/index.json` 缺 `components[]` | 看 build-design stdout `components: N paste-ready`；N=0 可接受（下游退化为 tokens + easings）                  |
+| 现象                                  | 修法                                                                                                                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 抓回非英语 hero                       | 已默认 `Accept-Language: en-US,en;q=0.9`；若仍是本地语言，重跑 Phase 1 capture                                                                 |
+| 抓回空 hero / 占位文字                | 给 capture 加 `--timeout 60000` 重跑；或确认 capture/BLOCKED.md 是否提示反爬                                                                   |
+| Step 4 报缺锚点                       | 重跑 Step 3，确认 design.html 含 ROOT-START / MOTION-START / VOICE-START / COMPONENT 注释；不要修 emit-chunks                                  |
+| `chunks/index.json` 缺 `components[]` | 看 build-design stdout `components: N paste-ready`；N=0 可接受（下游退化为 tokens + easings）                                                  |
+| 推断的 brand primary 颜色不对         | build-design 默认用第一个非中性 button 背景；如果 CTA 颜色不显眼，capture 跑完后手改 `inference.json` 的 site_dna 字段并 `--style` 强制 preset |

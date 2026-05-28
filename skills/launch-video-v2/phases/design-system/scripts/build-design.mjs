@@ -2,22 +2,27 @@
 /**
  * build-design.mjs
  *
- * Merges site brand DNA (from designlang output) with a style preset into
- * a single design.html. design.html is the only artifact downstream phases
- * read.
+ * Merges site brand DNA (from `hyperframes capture` output) with a style
+ * preset into a single design.html. design.html is the only artifact
+ * downstream phases read.
+ *
+ * v3: replaces designlang dependency — reads hyperframes capture's native
+ * schema directly (capture/extracted/{tokens,design-styles,animations,
+ * fonts-manifest}.json + visible-text.txt). Material/imagery/voice/intent
+ * labels are derived in-process by deriveSiteDna() and friends.
  *
  * Usage:
- *   node build-design.mjs <design-system-dir> [--style <preset-name>] [--prefix <site-prefix>]
+ *   node build-design.mjs <design-system-dir> [--capture <dir>] [--style <preset-name>]
  *                                              [--out <file>] [--out-scores <file>] [--no-emit]
  *
+ * --capture:    path to hyperframes capture dir (default: <design-system-dir>/../capture).
  * --style:      force a preset (e.g. neo-brutalism, editorial). If omitted, auto-infers.
- * --prefix:     override site prefix (auto-detects <prefix>-design-tokens.json otherwise).
  * --out:        override design.html output path (default: <dir>/design.html).
  * --out-scores: where to write inference.json (default: <dir>/inference.json). Always written.
  * --no-emit:    run inference + write inference.json, but skip design.html / component rendering.
  *               Used by the design-system subagent for the "review before commit" pass:
- *               first run with --no-emit, read inference.json + designlang JSON, decide
- *               whether to override the baseline winner, then re-run with --style <X> to emit.
+ *               first run with --no-emit, read inference.json, decide whether to override
+ *               the baseline winner, then re-run with --style <X> to emit.
  */
 
 import fs from "node:fs";
@@ -30,67 +35,475 @@ const PRESETS_DIR = path.resolve(__dirname, "..", "style-presets");
 // ═══════════════════ CLI ═════════════════════════════════
 const argv = process.argv.slice(2);
 const outDir = path.resolve(argv[0] || ".");
-let cliPrefix = null,
+let cliCaptureDir = null,
   cliOut = null,
   cliStyle = null,
   cliOutScores = null,
   cliNoEmit = false;
 for (let i = 1; i < argv.length; i++) {
-  if (argv[i] === "--prefix" && argv[i + 1]) cliPrefix = argv[++i];
+  if (argv[i] === "--capture" && argv[i + 1]) cliCaptureDir = argv[++i];
   else if (argv[i] === "--out" && argv[i + 1]) cliOut = argv[++i];
   else if (argv[i] === "--style" && argv[i + 1]) cliStyle = argv[++i];
   else if (argv[i] === "--out-scores" && argv[i + 1]) cliOutScores = argv[++i];
   else if (argv[i] === "--no-emit") cliNoEmit = true;
 }
-if (!fs.existsSync(outDir) || !fs.statSync(outDir).isDirectory()) {
+if (!fs.existsSync(outDir)) {
+  fs.mkdirSync(outDir, { recursive: true });
+}
+if (!fs.statSync(outDir).isDirectory()) {
   console.error(`✗ ${outDir} is not a directory`);
   process.exit(1);
 }
 
-// ═══════════════════ Discover site prefix ════════════════
-let prefix = cliPrefix;
-if (!prefix) {
-  const match = fs.readdirSync(outDir).find((f) => /-design-tokens\.json$/.test(f));
-  if (!match) {
-    console.error(`✗ No <prefix>-design-tokens.json in ${outDir}.`);
-    process.exit(1);
-  }
-  prefix = match.replace(/-design-tokens\.json$/, "");
-}
-const outFile = cliOut ? path.resolve(cliOut) : path.join(outDir, "design.html");
-const outScoresFile = cliOutScores ? path.resolve(cliOutScores) : path.join(outDir, "inference.json");
+// Default capture dir: sibling to design-system/ — matches the v2 PROJECT_DIR
+// layout: PROJECT_DIR/capture/ (input) + PROJECT_DIR/design-system/ (output).
+const captureDir = cliCaptureDir
+  ? path.resolve(cliCaptureDir)
+  : path.resolve(outDir, "..", "capture");
 
-// ═══════════════════ Load designlang artifacts ═════════
-function readJSON(file, fallback) {
+const outFile = cliOut ? path.resolve(cliOut) : path.join(outDir, "design.html");
+const outScoresFile = cliOutScores
+  ? path.resolve(cliOutScores)
+  : path.join(outDir, "inference.json");
+
+function readJSONAbs(absPath, fallback) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(outDir, file), "utf8"));
+    return JSON.parse(fs.readFileSync(absPath, "utf8"));
   } catch {
     return fallback;
   }
 }
-function readText(file) {
+function readTextAbs(absPath) {
   try {
-    return fs.readFileSync(path.join(outDir, file), "utf8");
+    return fs.readFileSync(absPath, "utf8");
   } catch {
     return "";
   }
 }
-const tokens = readJSON(`${prefix}-design-tokens.json`, null);
-const motion = readJSON(`${prefix}-motion-tokens.json`, { duration: {}, easing: {} });
-const dna = readJSON(`${prefix}-visual-dna.json`, null);
-const voice = readJSON(`${prefix}-voice.json`, null);
-// intent.json holds pageIntent.type + sectionRoles.counts. Read separately —
-// the old dna?.pageIntent?.type lookup silently fell back to "unknown" because
-// pageIntent lives in intent.json, not visual-dna.json.
-const intent = readJSON(`${prefix}-intent.json`, null);
-// brand.html: designlang's canonical brand guidelines (already-classified
-// primary/secondary/accent). Authoritative when present.
-const brandHtml = readText(`${prefix}.brand.html`);
 
-if (!tokens) {
-  console.error(`✗ ${prefix}-design-tokens.json is required.`);
+// ═══════════════════ Read hyperframes capture ═════════════
+const hfTokens = readJSONAbs(path.join(captureDir, "extracted", "tokens.json"), null);
+if (!hfTokens) {
+  console.error(
+    `✗ ${path.join(captureDir, "extracted", "tokens.json")} not found. ` +
+      `Run 'npx hyperframes capture <url> -o ${captureDir}' first.`,
+  );
   process.exit(1);
 }
+const hfDesignStyles = readJSONAbs(path.join(captureDir, "extracted", "design-styles.json"), {
+  typography: [],
+  spacing: { observed: [], baseUnit: 8 },
+  radius: [],
+  shadows: [],
+  buttons: [],
+  cards: [],
+  nav: null,
+});
+const hfAnimations = readJSONAbs(path.join(captureDir, "extracted", "animations.json"), null);
+const hfVisibleText = readTextAbs(path.join(captureDir, "extracted", "visible-text.txt"));
+const hfMeta = readJSONAbs(path.join(captureDir, "meta.json"), null);
+
+// Source URL discovery — capture writes the URL into the CLAUDE.md / AGENTS.md
+// scaffolding files. We grep those for the first URL. Fallback: reconstruct
+// from meta.id (which is a host slug like "heygen.com-video").
+const sourceUrl = (() => {
+  for (const f of ["CLAUDE.md", "AGENTS.md", ".cursorrules"]) {
+    const txt = readTextAbs(path.join(captureDir, f));
+    const m = txt.match(/https?:\/\/[\w.-]+(?:\/[^\s)"'`]*)?/);
+    if (m) return m[0];
+  }
+  if (hfMeta?.id) {
+    const host = String(hfMeta.id).replace(/-[a-z]+$/, "");
+    return `https://${host}/`;
+  }
+  return "";
+})();
+
+// ═══════════════════ Color helpers ════════════════════════
+function _normalizeHex(c) {
+  if (!c) return "";
+  const s = String(c).trim();
+  if (s.startsWith("#")) {
+    if (s.length === 4) {
+      return ("#" + s[1] + s[1] + s[2] + s[2] + s[3] + s[3]).toUpperCase();
+    }
+    if (s.length === 7) return s.toUpperCase();
+    return "";
+  }
+  const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (!m) return "";
+  return (
+    "#" +
+    [m[1], m[2], m[3]].map((n) => parseInt(n).toString(16).padStart(2, "0")).join("")
+  ).toUpperCase();
+}
+function _sat(hex) {
+  const m = String(hex).match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return 0;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  if (max === 0) return 0;
+  return (max - min) / max;
+}
+function _lightness(hex) {
+  const m = String(hex).match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return 0.5;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+function _isGrayish(hex) {
+  const m = String(hex).match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return true;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  return max - min < 18;
+}
+
+// ═══════════════════ Brand color derivation ═══════════════
+// Brand primary = first non-grayish button background. CTAs are the most
+// reliable brand signal — the site owner picked the color deliberately, and
+// it stands distinct from typography / surface colors. Falls back to
+// highest-saturation color from the palette when no CTA stands out.
+function deriveBrandColors() {
+  const buttons = hfDesignStyles.buttons || [];
+  const palette = (hfTokens.colors || [])
+    .map(_normalizeHex)
+    .filter((c) => /^#[0-9A-F]{6}$/.test(c));
+
+  let primary = null;
+  for (const b of buttons) {
+    const bg = _normalizeHex(b.background || "");
+    if (!bg) continue;
+    if (_isGrayish(bg)) continue;
+    if (bg === "#FFFFFF" || bg === "#000000") continue;
+    primary = bg;
+    break;
+  }
+  if (!primary) {
+    const sorted = palette.filter((c) => !_isGrayish(c)).sort((a, b) => _sat(b) - _sat(a));
+    primary = sorted[0] || palette[0] || "#000000";
+  }
+
+  let secondary = null;
+  for (const c of palette) {
+    if (c === primary) continue;
+    if (_isGrayish(c)) continue;
+    if (c === "#FFFFFF" || c === "#000000") continue;
+    secondary = c;
+    break;
+  }
+  if (!secondary) secondary = primary;
+
+  const taken = new Set([primary, secondary]);
+  const accentCands = palette
+    .filter((c) => !taken.has(c) && !_isGrayish(c))
+    .sort((a, b) => _sat(b) - _sat(a));
+  const accent = accentCands[0] || secondary;
+
+  return { primary, secondary, accent };
+}
+
+function deriveCanvasAndInk() {
+  const cssVars = hfTokens.cssVariables || {};
+  const canvasVarKeys = ["--background", "--bg", "--canvas", "--surface"];
+  const inkVarKeys = ["--foreground", "--text", "--ink", "--color-text"];
+  let canvas = null,
+    ink = null;
+  for (const k of canvasVarKeys) {
+    const h = _normalizeHex(cssVars[k]);
+    if (h) {
+      canvas = h;
+      break;
+    }
+  }
+  for (const k of inkVarKeys) {
+    const h = _normalizeHex(cssVars[k]);
+    if (h) {
+      ink = h;
+      break;
+    }
+  }
+  const palette = (hfTokens.colors || [])
+    .map(_normalizeHex)
+    .filter((c) => /^#[0-9A-F]{6}$/.test(c))
+    .map((c) => ({ c, L: _lightness(c) }))
+    .sort((a, b) => b.L - a.L);
+  if (!canvas) canvas = palette[0]?.c || "#FFFFFF";
+  if (!ink) ink = palette[palette.length - 1]?.c || "#000000";
+  return { canvas, ink };
+}
+
+function deriveMaterial() {
+  const shadows = hfDesignStyles.shadows || [];
+  const radius = hfDesignStyles.radius || [];
+  const hasPill = radius.some((r) => /^(50%|9999px|99\d{2,}px)$/i.test(String(r)));
+  const blurs = [];
+  let zeroBlurCount = 0;
+  let totalSegs = 0;
+  for (const s of shadows) {
+    const segs = String(s.value || "").split(/,(?![^()]*\))/);
+    for (const seg of segs) {
+      if (/inset/.test(seg)) continue;
+      const lens = [...seg.matchAll(/(-?\d+(?:\.\d+)?)px/g)].map((m) => parseFloat(m[1]));
+      if (lens.length < 3) continue;
+      totalSegs++;
+      const blur = lens[2];
+      blurs.push(blur);
+      if (blur === 0 && (Math.abs(lens[0]) >= 3 || Math.abs(lens[1]) >= 3)) zeroBlurCount++;
+    }
+  }
+  const maxBlur = blurs.length ? Math.max(...blurs) : 0;
+  const palette = (hfTokens.colors || []).slice(0, 6).map(_normalizeHex).filter(Boolean);
+  const avgSat = palette.length
+    ? palette.map(_sat).reduce((a, b) => a + b, 0) / palette.length
+    : 0;
+  if (zeroBlurCount > 0 && totalSegs > 0 && zeroBlurCount / totalSegs >= 0.3) return "brutalist";
+  if (hasPill && avgSat > 0.45) return "playful";
+  if (maxBlur > 24) return "soft";
+  if (maxBlur >= 4) return "elevated";
+  return "flat";
+}
+
+function deriveImagery() {
+  const svgs = hfTokens.svgs || [];
+  const sectionAssetUrls = new Set();
+  for (const s of hfTokens.sections || []) {
+    for (const u of s.assetUrls || []) sectionAssetUrls.add(u);
+  }
+  const urls = [...sectionAssetUrls];
+  const photo = urls.filter((u) => /\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(u)).length;
+  const svg = svgs.length + urls.filter((u) => /\.svg(\?|$)/i.test(u)).length;
+  const video = urls.filter((u) => /\.(mp4|webm|mov)(\?|$)/i.test(u)).length;
+  if (video >= 3) return "screen-recording";
+  if (photo > svg * 1.5 && photo > 5) return "photography";
+  if (svg > photo) return "flat-illustration";
+  return "mixed";
+}
+
+function deriveVoice() {
+  const headings = (hfTokens.headings || []).filter((h) => (h.text || "").trim());
+  const ctas = hfTokens.ctas || [];
+  const text = hfVisibleText.slice(0, 5000).toLowerCase();
+  let upper = 0,
+    title = 0,
+    sentence = 0;
+  for (const h of headings) {
+    const t = (h.text || "").trim();
+    if (!t) continue;
+    if (t.length > 3 && t === t.toUpperCase() && /[A-Z]/.test(t)) upper++;
+    else if (
+      t.split(/\s+/).slice(0, 6).filter((w) => /^[A-Z]/.test(w)).length >= 3
+    )
+      title++;
+    else sentence++;
+  }
+  let headingStyle = "Sentence case";
+  if (upper >= Math.max(title, sentence) && upper > 0) headingStyle = "UPPERCASE";
+  else if (title > sentence) headingStyle = "Title Case";
+  const avgWords = headings.length
+    ? headings.reduce(
+        (s, h) => s + (h.text || "").split(/\s+/).filter(Boolean).length,
+        0,
+      ) / headings.length
+    : 0;
+  const headingLengthClass = avgWords <= 5 ? "tight" : avgWords >= 9 ? "loose" : "medium";
+  const counts = {};
+  for (const c of ctas) {
+    const first = (c.text || "").trim().split(/\s+/)[0] || "";
+    const verb = first.toLowerCase().replace(/[^a-z]/g, "");
+    if (verb && verb.length >= 3) counts[verb] = (counts[verb] || 0) + 1;
+  }
+  const ctaVerbs = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([value, count]) => ({ value, count }));
+  const youCount = (text.match(/\byou(r)?\b/g) || []).length;
+  const weCount = (text.match(/\bwe\b/g) || []).length;
+  let tone = "neutral";
+  if (youCount > weCount * 2.5) tone = "direct";
+  else if (weCount > youCount * 1.5) tone = "warm";
+  return {
+    tone,
+    headingStyle,
+    headingLengthClass,
+    ctaVerbs,
+    sampleHeadings: headings.slice(0, 6).map((h) => h.text || ""),
+  };
+}
+
+function derivePageIntent() {
+  const url = sourceUrl || "";
+  const urlPath = url.replace(/^https?:\/\/[^/]+/, "").replace(/[?#].*$/, "");
+  if (/\/pricing\b/i.test(urlPath)) return "pricing";
+  if (/\/blog\b|\/article\b|\/news\b/i.test(urlPath)) return "blog-post";
+  if (/\/docs?\b|\/guide\b|\/reference\b/i.test(urlPath)) return "docs";
+  if (/\/about\b/i.test(urlPath)) return "about";
+  if (/\/contact\b/i.test(urlPath)) return "contact";
+  if (urlPath === "" || urlPath === "/") return "landing";
+  const title = (hfTokens.title || "").toLowerCase();
+  if (/pricing|plans?/.test(title)) return "pricing";
+  if (/blog|article|news/.test(title)) return "blog-post";
+  return "landing";
+}
+
+function deriveEasingMap() {
+  if (!hfAnimations) return {};
+  const out = {};
+  const seen = new Set();
+  let idx = 0;
+  const reps = hfAnimations.representativeAnimations || [];
+  for (const anim of reps) {
+    const t = anim.effectTiming || {};
+    if (t.easing && t.easing !== "linear" && !seen.has(t.easing)) {
+      seen.add(t.easing);
+      out[`e${idx++}`] = t.easing;
+    }
+    for (const kf of anim.keyframes || []) {
+      if (kf.easing && kf.easing !== "linear" && !seen.has(kf.easing)) {
+        seen.add(kf.easing);
+        out[`e${idx++}`] = kf.easing;
+      }
+    }
+  }
+  return out;
+}
+
+// ═══════════════════ Synthesize designlang shape ══════════
+// The rest of build-design.mjs (~2200 lines of rendering, scoring, inference
+// emission) is unchanged — it reads tokens / motion / dna / voice / intent /
+// brandHtml in designlang shape. We populate those vars from hyperframes
+// capture data here so the downstream code stays put.
+
+const _brand = deriveBrandColors();
+const _surfaces = deriveCanvasAndInk();
+const _voiceDerived = deriveVoice();
+const _materialLabel = deriveMaterial();
+const _imageryLabel = deriveImagery();
+const _pageIntent = derivePageIntent();
+const _easings = deriveEasingMap();
+
+// Border strings synthesized from buttons / cards / nav. computeFeatures()
+// regex-tests these for `[3-9]px solid` / `2px solid` / `1px solid` signals.
+const _borderStrings = (() => {
+  const seen = new Set();
+  const out = [];
+  const push = (s) => {
+    const norm = String(s || "").trim();
+    if (!norm || norm === "none" || seen.has(norm)) return;
+    if (/^\s*0px/.test(norm)) return;
+    seen.add(norm);
+    out.push(norm);
+  };
+  for (const b of hfDesignStyles.buttons || []) push(b.border);
+  for (const c of hfDesignStyles.cards || []) push(c.border);
+  if (hfDesignStyles.nav?.border) push(hfDesignStyles.nav.border);
+  return out;
+})();
+
+// Prefix kept for error messages / log lines. v3 has no real prefix (single
+// capture/ dir) so we derive a hostname-style label.
+const prefix = (() => {
+  if (sourceUrl) {
+    const m = sourceUrl.match(/^https?:\/\/(?:www\.)?([^/]+)/);
+    if (m) return m[1].replace(/\./g, "-");
+  }
+  return hfMeta?.id || "capture";
+})();
+
+const tokens = {
+  $metadata: {
+    source: sourceUrl,
+    title: hfTokens.title || "",
+    description: hfTokens.description || "",
+    generator: "hyperframes-capture",
+  },
+  primitive: {
+    color: {
+      brand: {
+        primary: { $value: _brand.primary, $type: "color" },
+        secondary: { $value: _brand.secondary, $type: "color" },
+      },
+      background: { bg0: { $value: _surfaces.canvas, $type: "color" } },
+      text: { t0: { $value: _surfaces.ink, $type: "color" } },
+      neutral: Object.fromEntries(
+        (hfTokens.colors || [])
+          .slice(0, 8)
+          .map(_normalizeHex)
+          .filter(Boolean)
+          .map((c, i) => [`n${i}`, { $value: c, $type: "color" }]),
+      ),
+    },
+    fontFamily: Object.fromEntries(
+      (hfTokens.fonts || []).map((f, i) => [`f${i}`, { $value: f.family, $type: "fontFamily" }]),
+    ),
+    shadow: Object.fromEntries(
+      (hfDesignStyles.shadows || [])
+        .filter((s) => s.value && s.value !== "none")
+        .map((s, i) => [`sh${i}`, { $value: s.value, $type: "shadow" }]),
+    ),
+    radius: Object.fromEntries(
+      (hfDesignStyles.radius || []).map((r, i) => [`r${i}`, { $value: r, $type: "dimension" }]),
+    ),
+    border: Object.fromEntries(
+      _borderStrings.map((s, i) => [`b${i}`, { $value: s, $type: "border" }]),
+    ),
+  },
+};
+
+const motion = {
+  duration: {},
+  easing: Object.fromEntries(
+    Object.entries(_easings).map(([k, v]) => [k, { $value: v, $type: "easing" }]),
+  ),
+};
+
+const dna = {
+  materialLanguage: {
+    label: _materialLabel,
+    confidence: 0.5,
+    signals: [],
+    metrics: {
+      saturation:
+        (hfTokens.colors || [])
+          .slice(0, 5)
+          .map(_normalizeHex)
+          .filter(Boolean)
+          .map(_sat)
+          .reduce((a, b) => a + b, 0) /
+        Math.max(1, Math.min(5, (hfTokens.colors || []).length)),
+      shadowProfile: (hfDesignStyles.shadows || []).length === 0 ? "none" : "soft",
+      hasPill: (hfDesignStyles.radius || []).some((r) => /^(50%|9999px)$/.test(String(r))),
+      gradientCount: Object.values(hfTokens.cssVariables || {}).filter((v) =>
+        /gradient/i.test(String(v)),
+      ).length,
+    },
+  },
+  imageryStyle: { label: _imageryLabel, confidence: 0.5 },
+  backgroundPatterns: { labels: [], counts: {} },
+  tagline: hfTokens.description || "",
+  description: hfTokens.description || "",
+};
+
+const voice = _voiceDerived;
+
+const intent = {
+  pageIntent: { type: _pageIntent, confidence: 0.5 },
+  sectionRoles: {
+    counts: (() => {
+      const counts = {};
+      for (const s of hfTokens.sections || []) {
+        counts[s.type] = (counts[s.type] || 0) + 1;
+      }
+      return counts;
+    })(),
+  },
+};
+
+// brand.html → empty. The 5-slot regex-scan finds no matches; tertiary /
+// costume fall through to the algorithmic saturation pick — same degradation
+// path designlang relies on when sites don't ship a brand book.
+const brandHtml = "";
 
 // ═══════════════════ Extract brand DNA ═══════════════════
 // designlang token schema (verified against figma.com output):
@@ -109,7 +522,7 @@ function valueOf(node) {
   return null;
 }
 const meta = tokens.$metadata || {};
-const sourceUrl = meta.source || "";
+// sourceUrl already declared by the hyperframes-capture translator block above.
 
 const prim = tokens.primitive || {};
 const primColors = prim.color || {};
@@ -277,10 +690,12 @@ const brandName = (() => {
     .replace(/^www\./, "");
   return host ? host.split(".")[0].replace(/\b\w/g, (c) => c.toUpperCase()) : prefix;
 })();
-const tagline = dna?.tagline || meta.title || "";
 const description = dna?.description || meta.description || "";
 const materialLabel = dna?.materialLanguage?.label || "unknown";
-const intentLabel = dna?.pageIntent?.type || "unknown";
+// pageIntent lives on `intent.pageIntent.type` (intent.json shape), not on
+// `dna` — the original designlang split kept them in separate files. Our
+// translator mirrors that split.
+const intentLabel = intent?.pageIntent?.type || dna?.pageIntent?.type || "unknown";
 
 // Signature gradient: synthesize a 3-color linear gradient from the brand
 // triplet. Conic / radial site gradients are too busy for video bg, so we
@@ -878,26 +1293,20 @@ function unwrapBundlerFamily(name) {
     .replace(/_[a-f0-9]{4,}$/i, "")
     .trim();
 }
-function discoverLocalFonts(researchAssetsDir) {
+function discoverLocalFonts(fontsRootDir) {
   // Returns Map<normalized-family, { family: <display-cased>, files: [abs-path...] }>.
   // Each font is indexed under BOTH its strict normalized key and its loose
   // key (axis suffixes stripped), so lookups by either form hit the same entry.
   //
   // Two discovery passes:
-  //   1. PRIMARY — read research/assets/index.json. Records tagged
-  //      `kind: "font-face"` carry the authoritative `family` field captured
-  //      from the page's CSSOM @font-face rules. This handles hashed
-  //      bundler-emitted filenames (e.g. Next.js) where filename guessing
-  //      would only see hex.
-  //   2. FALLBACK — file-name based discovery for files that arrived without
-  //      family metadata (older captures, <link rel="preload"> files that
-  //      weren't part of a @font-face rule, etc).
+  //   1. PRIMARY — read fonts-manifest.json (hyperframes capture's OpenType
+  //      `name`-table extraction). Each record carries the authoritative
+  //      `family` field read straight from the binary font file, which
+  //      handles hashed bundler-emitted filenames (Next.js `_<hex>`).
+  //   2. FALLBACK — file-name based discovery for any font files that the
+  //      manifest didn't cover.
   const found = new Map();
-  if (!fs.existsSync(researchAssetsDir)) return found;
-  // local_path in research/assets/index.json is relative to the capture
-  // out_dir (i.e. the `research/` directory itself), not the project root.
-  // Resolve against research/ so e.g. "assets/001-…woff2" → <research>/assets/001-…woff2.
-  const researchDir = path.resolve(researchAssetsDir, "..");
+  if (!fs.existsSync(fontsRootDir)) return found;
 
   function addEntry(familyDisplay, abs) {
     const norm = normalizeFamily(familyDisplay);
@@ -914,66 +1323,70 @@ function discoverLocalFonts(researchAssetsDir) {
     return true;
   }
 
-  // 1. PRIMARY — index.json with CSSOM-sourced family info.
+  // 1. PRIMARY — fonts-manifest.json from hyperframes capture. The manifest
+  //    sits alongside the capture's `extracted/` dir; if we received the
+  //    direct fonts dir (e.g. <outDir>/fonts/) we look for a manifest next
+  //    to it via ../extracted/fonts-manifest.json, otherwise we look in the
+  //    fontsRootDir itself.
   const claimed = new Set();
-  const indexPath = path.join(researchAssetsDir, "index.json");
-  if (fs.existsSync(indexPath)) {
+  const manifestCands = [
+    path.join(fontsRootDir, "fonts-manifest.json"),
+    path.resolve(fontsRootDir, "..", "extracted", "fonts-manifest.json"),
+  ];
+  for (const manifestPath of manifestCands) {
+    if (!fs.existsSync(manifestPath)) continue;
     try {
-      const records = JSON.parse(fs.readFileSync(indexPath, "utf8"));
-      for (const rec of Array.isArray(records) ? records : []) {
-        if (!rec || !rec.success || !rec.family || !rec.local_path) continue;
-        const ext = path.extname(rec.local_path).toLowerCase();
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      const files = Array.isArray(manifest.files) ? manifest.files : [];
+      for (const rec of files) {
+        if (!rec || !rec.identified || !rec.family || !rec.file) continue;
+        const ext = path.extname(rec.file).toLowerCase();
         if (!FONT_FILE_EXTS.has(ext)) continue;
-        const abs = path.resolve(researchDir, rec.local_path);
+        // Resolve against fontsRootDir (where the actual woff files live).
+        const abs = path.resolve(fontsRootDir, rec.file);
         if (!fs.existsSync(abs)) continue;
         const unwrapped = unwrapBundlerFamily(rec.family);
         if (!unwrapped || looksLikeContentHash(unwrapped)) continue;
-        // Preserve the original casing reported by the page; light cleanup
-        // ("inter" → "Inter") for downstream readability is left to the
-        // emit-side which already does title-casing.
-        const familyDisplay = unwrapped.length <= 4
-          ? unwrapped.toUpperCase()
-          : unwrapped.replace(/\b([a-z])/g, (_, c) => c.toUpperCase());
+        const familyDisplay =
+          unwrapped.length <= 4
+            ? unwrapped.toUpperCase()
+            : unwrapped.replace(/\b([a-z])/g, (_, c) => c.toUpperCase());
         if (addEntry(familyDisplay, abs)) claimed.add(path.basename(abs));
       }
+      break; // first manifest wins
     } catch {
       // Silently fall through to file-name discovery on parse errors.
     }
   }
 
   // 2. FALLBACK — file-name based discovery for files we didn't already
-  //    bind via index.json. Reject hash-dominated names so Next.js-style
+  //    bind via the manifest. Reject hash-dominated names so Next.js-style
   //    files like "1eff5a6cf292d683-s.p" don't pollute the map.
-  for (const ent of fs.readdirSync(researchAssetsDir, { withFileTypes: true })) {
+  for (const ent of fs.readdirSync(fontsRootDir, { withFileTypes: true })) {
     if (!ent.isFile()) continue;
     if (claimed.has(ent.name)) continue;
     const ext = path.extname(ent.name).toLowerCase();
     if (!FONT_FILE_EXTS.has(ext)) continue;
     const familyRaw = fileBaseToFamily(ent.name);
     if (looksLikeContentHash(familyRaw)) continue;
-    // "DMSerifDisplay" → "DM Serif Display" so it survives as a valid CSS
-    // font-family identifier; one-word names ("Poppins") are left alone.
     const familyDisplay = splitCamelToWords(familyRaw);
     if (looksLikeContentHash(familyDisplay)) continue;
-    const abs = path.join(researchAssetsDir, ent.name);
+    const abs = path.join(fontsRootDir, ent.name);
     addEntry(familyDisplay, abs);
   }
   return found;
 }
-const researchAssetsDir = path.resolve(outDir, "..", "research", "assets");
 // Two discovery roots, merged:
-//   1. research/assets/ — designlang's auto-captured web assets (preferred,
-//      may carry an index.json with CSSOM-sourced @font-face family info)
-//   2. <outDir>/fonts/ — user-supplied / hand-placed font files, e.g. when
-//      designlang misses a site's hashed bundler font (Next.js's `flecha_<hex>`
-//      bundles ABCSolarDisplay-Bold but designlang only sees `flecha`).
-//      Treated as filename-discovery only (no index.json expected).
-// Merge order: research/assets/ entries win on key collision; <outDir>/fonts/
-// fills in gaps. This matches the intuition "designlang's structured capture
-// is most trustworthy; user-hand-drops are a manual fallback".
+//   1. <captureDir>/assets/fonts/ — hyperframes capture's downloaded woff/otf
+//      files; the sibling extracted/fonts-manifest.json carries OpenType
+//      `name`-table family attribution.
+//   2. <outDir>/fonts/ — user-supplied / hand-placed font files when capture
+//      misses a site's bundler-hashed font. Filename-discovery only.
+// Merge order: capture wins on key collision; user drops fill in gaps.
+const captureFontsDir = path.join(captureDir, "assets", "fonts");
 const userFontsDir = path.join(outDir, "fonts");
 const localFonts = (() => {
-  const primary = discoverLocalFonts(researchAssetsDir);
+  const primary = discoverLocalFonts(captureFontsDir);
   if (!fs.existsSync(userFontsDir)) return primary;
   const userDrops = discoverLocalFonts(userFontsDir);
   for (const [key, entry] of userDrops) {
@@ -1301,7 +1714,7 @@ function renderTitleCard() {
       <span class="brand-x">×</span>
       <span class="style-name">${esc(preset.label)}</span>
     </div>
-    <h1 class="title-display">${esc(tagline || `${brandName} promo`)}</h1>
+    <h1 class="title-display">${esc(brandName)}</h1>
     <p class="title-meta">
       <strong>Source</strong> ${esc(sourceUrl) || "—"}
       &nbsp;·&nbsp;
@@ -1510,12 +1923,15 @@ function renderTypography() {
   const typeRoles = parseTypeRoles();
   const atlasBlock = typeRoles.length
     ? `
-  <h3 class="ds-h3" style="margin-top: 48px;">Type-role atlas (preset §T)</h3>
-  <p class="ds-prose">Each row is a named role the Phase 4b scene worker may cite by <code>id</code> to size and decorate text correctly. Family tokens (<code>var(--font-display)</code> etc.) resolve to the brand's actual typeface — so a <code>stamp-statement</code> renders here in <strong>${esc(display.name)}</strong>, not Alfa Slab. Use this whenever you need text outside the §6 components.</p>
+  <h3 class="ds-h3" style="margin-top: 48px;">Type-role atlas</h3>
   <div class="ds-trole-box">
     ${typeRoles
       .map((r) => {
         const sample = String(r.sample_html || "").replace(/\{(\w+)\}/g, (_, k) => placeholderFor(k));
+        // Meta (id / family / px / weight / leading / tracking / case / purpose) is
+        // kept in data-* attrs — machine-readable for the plan agent, invisible to
+        // the reviewer. The rendered row is just the sample, so design.html shows
+        // what text actually looks like at scene scale, not a spec sheet.
         const dataAttrs = [
           `data-scale="${esc(r.id || "")}"`,
           `data-family="${esc(r.family || "")}"`,
@@ -1527,15 +1943,8 @@ function renderTypography() {
           `data-case="${esc(r.case || "")}"`,
           `data-purpose="${esc(r.purpose || "")}"`,
         ].join(" ");
-        const pxRange = r.px_min && r.px_max ? `${r.px_min}–${r.px_max}px` : "";
         return `
     <div class="ds-trole-row" ${dataAttrs}>
-      <div class="ds-trole-meta">
-        <span>${esc(pxRange)}</span>
-        <b>${esc(r.family || "")}</b>
-        <span>${esc(r.purpose || "")}</span>
-        <span>wght ${esc(String(r.weight ?? ""))} · lh ${esc(String(r.leading ?? ""))} · ${esc(r.case || "")}</span>
-      </div>
       <div class="ds-trole-sample">${sample}</div>
     </div>`;
       })
@@ -1734,7 +2143,6 @@ function rewriteComponentFontFamilies(block) {
 //        - surface contract (which components go on which surface)
 //        - material composition rules (single triple-stamp per plate, etc.)
 //        - 60/30/10 brand color placement
-//        - sound-design hooks
 //      Presets without §H emit an empty block (anchor still present so emit-chunks
 //      can produce a stub composition-hints.md the plan agent can read uniformly).
 function renderHints() {
@@ -1749,7 +2157,7 @@ function renderHints() {
 <section id="hints" class="ds-section">
   <div class="eyebrow">§H · Scene composition hints (plan agent reads these)</div>
   <h2>${esc(preset.label)} composition rules</h2>
-  <p class="ds-prose">Surface contracts, material composition rules, brand-color placement, sound-design hooks — anything that constrains <strong>which</strong> components a Phase 3 plan can mix in a single scene.</p>
+  <p class="ds-prose">Surface contracts, material composition rules, brand-color placement — anything that constrains <strong>which</strong> components a Phase 3 plan can mix in a single scene.</p>
   <div class="ds-prose-block">${mdBlockToHtml(hintsContent || "_no §H declared_")}</div>
   <details class="ds-paste-ready">
     <summary class="ds-summary">▸ Paste-ready source → <code>chunks/composition-hints.md</code> (plan agent reads this)</summary>
@@ -1842,13 +2250,14 @@ function renderMotifs() {
         parts.length >= 2
           ? `${esc(parts.slice(0, -1).join(" "))} <em>${esc(parts[parts.length - 1])}.</em>`
           : `${esc(label)}.`;
+      // Visual-only card: title + demo. id / description / numbering live in the
+      // <article data-*> attrs and in chunks/motifs.md (paste-ready source for the
+      // plan agent); rendering them on the page produced web-doc noise that
+      // downstream agents would copy into video copy. Keep design.html tight to
+      // the visual register video work should mirror.
       return `
-    <article class="ds-motif${surface}${wide}" data-motif="${esc(m.id || "")}" data-role="${esc(m.role || "")}">
-      <span class="ds-motif-id">${num} / ${totalStr} · ${esc(m.id || "")}</span>
-      <div>
-        <h3 class="ds-motif-h">${labelHtml}</h3>
-        <p class="ds-motif-desc">${esc(m.description || "")}</p>
-      </div>
+    <article class="ds-motif${surface}${wide}" data-motif="${esc(m.id || "")}" data-role="${esc(m.role || "")}" data-num="${num}/${totalStr}" data-desc="${esc(m.description || "")}">
+      <h3 class="ds-motif-h">${labelHtml}</h3>
       <div class="ds-motif-demo">
         <style>${m.css || ""}</style>
         ${m.demo || ""}
@@ -1870,266 +2279,8 @@ ${esc(motifsMd)}
 <section id="motifs" class="ds-section">
   <div class="eyebrow">§M · Atomic motifs (preset-native gestures)</div>
   <h2>Atomic <em>moves.</em></h2>
-  <p class="ds-prose">Each fragment teaches ONE reusable gesture. Patterns (§7) compose motifs; motifs themselves are indivisible. Plan agent and scene worker may cite motifs by <code>id</code> when annotating which gesture a scene relies on.</p>
   <div class="ds-motif-grid">${cards}
   </div>${pasteReady}
-</section>`;
-}
-
-// ═══════════════════ Render: §C captions ════════════════
-// Two artifacts:
-//   1. Live preview — two stages (paper + blue) looping a karaoke demo so the
-//      reviewer SEES both surface variants in motion in design.html.
-//   2. <pre class="ds-code"><!-- CAPTIONS-START --> ... <!-- CAPTIONS-END --></pre>
-//      — paste-ready block emit-chunks.mjs extracts to chunks/captions.md.
-//      Phase 6.5 captions.mjs consumes this when assembling compositions/captions.html.
-//      Presets without §C → renderCaptions returns "", emit-chunks leaves the chunk
-//      absent, index.json's captions_file = null. captions.mjs then falls back to a
-//      registry caption block (caption-highlight, etc.).
-//
-// §C expects four fenced blocks (parseCaptions logs which are missing):
-//   ```caption-config   — JSON: position, timings, surface variants, sound hooks
-//   ```caption-css      — CSS: .cap-line / .cap-word{,.active,.passed,.emphasis}
-//   ```caption-template — HTML: one group's DOM with {N} / {WORD_*} placeholders
-//   ```js               — GSAP recipe (line enter → per-word stamp → exit → hard kill)
-function parseCaptions() {
-  const sect = preset.sections?.C?.content;
-  if (!sect) return null;
-
-  const configFenced = sect.match(/```caption-config\n([\s\S]+?)\n```/);
-  const cssFenced = sect.match(/```caption-css\n([\s\S]+?)\n```/);
-  const templateFenced = sect.match(/```caption-template\n([\s\S]+?)\n```/);
-  const jsFenced = sect.match(/```js\n([\s\S]+?)\n```/);
-
-  if (!configFenced || !cssFenced || !templateFenced || !jsFenced) {
-    if (!configFenced) console.error(`! ${preset.name}: §C missing caption-config fenced block — skipping captions chunk`);
-    if (!cssFenced) console.error(`! ${preset.name}: §C missing caption-css fenced block — skipping captions chunk`);
-    if (!templateFenced) console.error(`! ${preset.name}: §C missing caption-template fenced block — skipping captions chunk`);
-    if (!jsFenced) console.error(`! ${preset.name}: §C missing js (animation pattern) fenced block — skipping captions chunk`);
-    return null;
-  }
-
-  let config = null;
-  try {
-    config = JSON.parse(configFenced[1]);
-  } catch (e) {
-    console.error(`✗ ${preset.name}: §C caption-config JSON failed to parse — ${e.message}`);
-    return null;
-  }
-
-  return {
-    config,
-    css: cssFenced[1].trim(),
-    template: templateFenced[1].trim(),
-    animationJs: jsFenced[1].trim(),
-  };
-}
-
-// Build chunks/captions.md content. captions.mjs (Phase 6.5) consumes this when
-// building compositions/captions.html. Returns "" when preset declares no §C.
-function buildCaptionsMd() {
-  const c = parseCaptions();
-  if (!c) return "";
-  return `# Captions — ${preset.label}
-
-Phase 6.5 \`captions.mjs\` consumes this when assembling \`compositions/captions.html\`. The CSS, template, and animation pattern are paste-ready; the config below is machine-readable defaults.
-
-## Config
-
-\`\`\`json
-${JSON.stringify(c.config, null, 2)}
-\`\`\`
-
-## CSS (paste into compositions/captions.html <style>)
-
-\`\`\`css
-${c.css}
-\`\`\`
-
-## Group template (one per group, captions.mjs emits N groups)
-
-\`\`\`html
-${c.template}
-\`\`\`
-
-## Animation pattern (GSAP recipe per group)
-
-\`\`\`js
-${c.animationJs}
-\`\`\`
-`;
-}
-
-function renderCaptions() {
-  const c = parseCaptions();
-  if (!c) return "";
-
-  const captionsMd = buildCaptionsMd();
-  const pasteReady = `
-  <details class="ds-paste-ready" style="margin-top: 32px;">
-    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/captions.md</code> (captions.mjs reads this)</summary>
-    <pre class="ds-code"><!-- CAPTIONS-START -->
-${esc(captionsMd)}
-<!-- CAPTIONS-END --></pre>
-  </details>`;
-
-  // Live demo — two stages side by side. Documentation-only loop; the real
-  // compositions/captions.html (built by captions.mjs) obeys the hard-kill +
-  // single-group-visible + no-repeat(-1) rules. GSAP CDN loads here once;
-  // browsers cache it for the rest of design.html if any other section uses it.
-  //
-  // Prose (variant table, edge cases, sound hooks) is intentionally NOT rendered
-  // here — captions.mjs (Phase 6.5) reads chunks/captions.md (the paste-ready
-  // block below); humans wanting the full rules read preset.md §C. Duplicating
-  // prose in design.html bloated the page without serving either reader.
-  //
-  // Demo grid is wrapped in .preset-native-scope so var(--font-display) and
-  // var(--font-script) resolve to --f-disp-native / --f-script-native — strong
-  // system fallback chains (Alfa Slab → Archivo Black → Anton → Impact → …)
-  // so the demo never collapses to thin system-ui sans when Google Fonts is
-  // slow or the brand font @font-face hasn't resolved yet. Same convention as
-  // §6 component previews and §M motifs grid. The paste-ready CSS in
-  // chunks/captions.md is untouched — it keeps var(--font-display) so the
-  // production compositions/captions.html renders in the brand DNA face.
-  return `
-<section id="captions" class="ds-section">
-  <div class="eyebrow">§C · Captions (paste-ready overlay)</div>
-  <h2>Word <em>by word.</em></h2>
-
-  <div class="ds-cap-grid preset-native-scope">
-    <div class="ds-cap-stage ds-cap-stage-paper">
-      <span class="ds-cap-label">paper / orange surface · default</span>
-      <div class="cap-line" id="ds-cap-line-a">
-        <span class="cap-word">MAKE</span>
-        <span class="cap-word">BIG</span>
-        <span class="cap-word">VIDEOS.</span>
-      </div>
-    </div>
-    <div class="ds-cap-stage ds-cap-stage-blue">
-      <span class="ds-cap-label">blue surface · surface-blue variant</span>
-      <div class="cap-line surface-blue" id="ds-cap-line-b">
-        <span class="cap-word">AI</span>
-        <em class="cap-word">moves</em>
-        <span class="cap-word">FAST.</span>
-      </div>
-    </div>
-  </div>
-
-  <style>
-    /* §C CSS verbatim — applies to .cap-line / .cap-word inside both stages */
-    ${c.css}
-
-    /* Stage chrome (design.html docs only; not in chunks/captions.md) */
-    .ds-cap-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      margin: 32px 0;
-    }
-    .ds-cap-stage {
-      position: relative;
-      min-height: 360px;
-      border: 4px solid var(--ink);
-      border-radius: 14px;
-      overflow: hidden;
-    }
-    .ds-cap-stage-paper {
-      background: var(--paper);
-      background-image: var(--grain-image);
-      background-size: var(--grain-size);
-      background-position: var(--grain-offset);
-      background-blend-mode: multiply;
-    }
-    .ds-cap-stage-blue {
-      background: var(--blue);
-    }
-    .ds-cap-stage-blue::after {
-      /* Simulated cream-frame on blue surface (peoples §H requires it) */
-      content: "";
-      position: absolute;
-      inset: 18px 24px;
-      border: 4px solid var(--cream);
-      pointer-events: none;
-      z-index: 0;
-    }
-    .ds-cap-label {
-      position: absolute;
-      top: 14px;
-      left: 18px;
-      font-family: var(--f-mono-native);
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--ink);
-      opacity: 0.55;
-      z-index: 2;
-    }
-    .ds-cap-stage-blue .ds-cap-label { color: var(--cream); opacity: 0.85; }
-
-    /* Tighten .cap-line position for the doc stage (360px tall, not 1080) */
-    .ds-cap-stage .cap-line {
-      top: 50%;
-      bottom: auto;
-      transform: translate(-50%, -50%);
-      font-size: clamp(40px, 4.6vw, 72px);
-      z-index: 1;
-    }
-    .ds-cap-stage .cap-line em.cap-word { font-size: 1.1em; }
-  </style>
-
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
-  <script>
-    (function () {
-      if (typeof gsap === 'undefined') return;
-      function playLine(lineId) {
-        const line = document.getElementById(lineId);
-        if (!line) return null;
-        const words = line.querySelectorAll('.cap-word');
-        const tl = gsap.timeline();
-        tl.call(() => {
-          words.forEach(w => { w.classList.remove('active', 'passed'); });
-          gsap.set(words, { y: 0, scale: 1 });
-        }, null, 0);
-        tl.fromTo(line,
-          { opacity: 0, y: 16, visibility: 'visible' },
-          { opacity: 1, y: 0, duration: 0.45, ease: 'back.out(2.4)' },
-          0
-        );
-        const ENTER = 0.45, HOLD = 0.42;
-        words.forEach((w, i) => {
-          const at = ENTER + i * HOLD;
-          tl.call(() => {
-            w.classList.add('active');
-            if (i > 0) {
-              words[i - 1].classList.remove('active');
-              words[i - 1].classList.add('passed');
-              gsap.set(words[i - 1], { y: 0, scale: 1 });
-            }
-          }, null, at);
-          tl.fromTo(w,
-            { y: -16, scale: 0.92 },
-            { y: 0, scale: 1, duration: 0.18, ease: 'back.out(2.4)' },
-            at
-          );
-        });
-        const lineEnd = ENTER + words.length * HOLD + 0.4;
-        tl.call(() => {
-          const last = words[words.length - 1];
-          last.classList.remove('active');
-          last.classList.add('passed');
-        }, null, lineEnd - 0.3);
-        tl.to(line,
-          { opacity: 0, y: -12, duration: 0.35, ease: 'power4.in' },
-          lineEnd
-        );
-        return tl;
-      }
-      // Documentation-only loops. real captions.html does NOT repeat(-1).
-      gsap.timeline({ repeat: -1, repeatDelay: 0.2 }).add(playLine('ds-cap-line-a'));
-      gsap.timeline({ repeat: -1, repeatDelay: 0.2, delay: 1.2 }).add(playLine('ds-cap-line-b'));
-    })();
-  </script>
-${pasteReady}
 </section>`;
 }
 
@@ -2148,7 +2299,6 @@ function renderComponents() {
 <section id="components" class="ds-section">
   <div class="eyebrow">§6 · Components (paste-ready)</div>
   <h2>${esc(preset.label)} component library</h2>
-  <p class="ds-prose">Each component below is wrapped with <code>&lt;!-- COMPONENT: name --&gt;</code> markers. Phase 4b workers can <code>grep</code> by name and paste verbatim. CSS variables (<code>--brand-primary</code>, <code>--canvas</code>, etc.) come from §2.${presetNative ? " The preview renders inside <code>.preset-native-scope</code>, so <code>var(--font-display)</code> etc. resolve to the preset's native typefaces. The paste-ready source under <em>Source</em> still references the brand tokens — those resolve to brand DNA at scene-render time." : " Font families have been rewritten to <code>var(--font-display/body/mono)</code> tokens so they resolve to the brand's actual typefaces."}</p>
 
   ${preset.components
     .map((rawC) => {
@@ -2186,12 +2336,16 @@ ${c.meta ? `&lt;!-- COMPONENT-META: ${esc(JSON.stringify(c.meta))} --&gt;\n` : "
 // Keys whose values are HTML and should NOT be HTML-escaped before injection.
 const RAW_HTML_KEYS = new Set(["FOREGROUND_CONTENT", "HEADLINE_WITH_EM"]);
 function placeholderFor(key) {
+  // Slot fills are seen in design.html previews. Keep them in video register
+  // (3-6 words, fragmented sentences) so downstream scene-worker agents don't
+  // copy webpage-length paragraphs from the brand DNA capture into 6-second
+  // scenes. Long brand text belongs in chunks/voice.md, not in slot previews.
   const map = {
     EYEBROW: "Build faster",
     HEADLINE: brandName,
-    SUBHEAD: tagline || description.slice(0, 80) || "A bold new way to work",
+    SUBHEAD: "Stamped. Signed. Framed.",
     LABEL: "Get started",
-    LEDE: description.slice(0, 120) || `A canvas for ${brandName}.`,
+    LEDE: "Two lines max. One idea.",
     KICKER: "Issue 01",
     NUM: "4M",
     QUOTE: sampleHeadings[0] || "This changes how teams work.",
@@ -2206,7 +2360,7 @@ function placeholderFor(key) {
     DONT_1: "Don't add a second accent color",
     DONT_2: "Don't use body text under 24px in video",
     DONT_3: "Don't blur shadows — offset only",
-    FOREGROUND_CONTENT: `<div style="font-family: '${display.name}', serif; font-size: clamp(40px, 5vw, 88px); line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 16px;">${brandName}</div><div style="font-family: '${body.name}', sans-serif; font-size: clamp(16px, 1.4vw, 20px); opacity: 0.85; max-width: 38ch;">${esc(tagline || description.slice(0, 80) || "A canvas for teams")}</div>`,
+    FOREGROUND_CONTENT: `<div style="font-family: '${display.name}', serif; font-size: clamp(40px, 5vw, 88px); line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 16px;">${brandName}</div><div style="font-family: '${body.name}', sans-serif; font-size: clamp(16px, 1.4vw, 20px); opacity: 0.85; max-width: 38ch;">Stamped. Signed. Framed.</div>`,
 
     // —— peoples-platform / designhtml-class additions ——
     // Inline script-em pattern (e.g. "The work gets simpler as the team gets braver.")
@@ -2416,7 +2570,6 @@ ${renderVoice()}
 ${renderHints()}
 ${renderComponents()}
 ${renderMotifs()}
-${renderCaptions()}
 </main>
 
 </body>

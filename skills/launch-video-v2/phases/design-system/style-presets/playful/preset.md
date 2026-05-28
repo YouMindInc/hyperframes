@@ -16,9 +16,18 @@
     { "kind": "minimal_decoration", "weight": 0.1 }
   ],
   "best_for": ["indie product launches", "creator portfolios", "lifestyle", "community brands", "friendly research / tech"],
-  "avoid_for": ["institutional credibility", "enterprise security", "formal corporate", "high-gravitas brands"]
+  "avoid_for": ["institutional credibility", "enterprise security", "formal corporate", "high-gravitas brands"],
+  "chromeFonts": {
+    "googleFontsHref": "https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;500&display=swap",
+    "display": "Syne",
+    "body": "Space Grotesk",
+    "script": "Syne",
+    "mono": "Space Mono"
+  }
 }
 ```
+
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Syne + Space Grotesk + Space Mono — instead of the brand DNA fonts. Playful is a two-face system: Syne does every display/numeric/headline moment, Space Grotesk does body and labels; the `script` slot also points at Syne because Playful refuses a third face (Syne 700 carries the script-adjacent voice via the vertical-spine label motif). The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -89,6 +98,124 @@ Playful forces Syne display + Space Grotesk body regardless of site DNA — the 
 - **display**: `'Syne'` · `'Fraunces'` · `'Recoleta'` wght 800
 - **body**: `'Space Grotesk'` · `'Inter'` · `'IBM Plex Sans'` wght 400
 - **mono**: `'Space Mono'` · `'JetBrains Mono'` wght 500
+
+## §T Type-role atlas (Phase 4b reads this to size text correctly)
+
+Each entry is a **named type role** with concrete render parameters at 1920×1080 — family token, px range, weight, leading, tracking, case, and any color/rotation decoration. Phase 4b scene workers may cite roles by `id` ("use a `number-hero` here"); the brand DNA fonts plug in automatically via `var(--font-*)` tokens. This is the Playful type scale (Syne 700/800 + Space Grotesk 400/500/600) ported as machine-readable JSON.
+
+The atlas is the **sole authoring source** for non-component text. If a scene needs a `statement` block that isn't covered by §6 components, the worker reads role `statement` here and writes inline CSS from these values. Do NOT invent ad-hoc sizes — Playful's character collapses if Syne drifts below weight 700 at display scale or if negative tracking is dropped.
+
+```type-roles
+[
+  {
+    "id": "display-hero",
+    "family": "display",
+    "purpose": "oversized cover or opening date/title — Syne 800 with maximal negative tracking",
+    "px_min": 64, "px_max": 144, "weight": 800, "leading": "0.9", "tracking": "-0.03em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-display-hero\">02.05.26</div>"
+  },
+  {
+    "id": "display",
+    "family": "display",
+    "purpose": "closing or major declarative headline (Syne 800)",
+    "px_min": 48, "px_max": 112, "weight": 800, "leading": "0.9", "tracking": "-0.02em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-display\">Thank you. Let us talk.</div>"
+  },
+  {
+    "id": "headline",
+    "family": "display",
+    "purpose": "primary section headline (Syne 700)",
+    "px_min": 40, "px_max": 80, "weight": 700, "leading": "1", "tracking": "-0.01em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-headline\">Section title</div>"
+  },
+  {
+    "id": "statement",
+    "family": "display",
+    "purpose": "long-form quoted statement or manifesto line (Syne 700)",
+    "px_min": 40, "px_max": 72, "weight": 700, "leading": "1.1", "tracking": "-0.01em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-statement\">We believe in raw expression over polished perfection.</div>"
+  },
+  {
+    "id": "title",
+    "family": "display",
+    "purpose": "region or section title within a slide (Syne 700)",
+    "px_min": 32, "px_max": 56, "weight": 700, "leading": "1.1", "tracking": "-0.01em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-title\">Region title</div>"
+  },
+  {
+    "id": "title-sm",
+    "family": "display",
+    "purpose": "card title within a small block (Syne 700)",
+    "px_min": 20, "px_max": 21, "weight": 700, "leading": "1.2", "tracking": "0", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-title-sm\">Card title</div>"
+  },
+  {
+    "id": "number-hero",
+    "family": "display",
+    "purpose": "hero statistic numeral (Syne 800) — may carry ±0.5–1deg micro-rotation",
+    "px_min": 64, "px_max": 112, "weight": 800, "leading": "1", "tracking": "-0.02em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-number-hero\">47</div>"
+  },
+  {
+    "id": "number-md",
+    "family": "display",
+    "purpose": "mid-scale ordinal or stat numeral (Syne 800)",
+    "px_min": 36, "px_max": 40, "weight": 800, "leading": "1", "tracking": "-0.01em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-number-md\">12</div>"
+  },
+  {
+    "id": "number-sm",
+    "family": "display",
+    "purpose": "inline ordinal or step numeral (Syne 800)",
+    "px_min": 28, "px_max": 32, "weight": 800, "leading": "1", "tracking": "0", "case": "upper",
+    "sample_html": "<div class=\"t-trole-number-sm\">01</div>"
+  },
+  {
+    "id": "body-md",
+    "family": "body",
+    "purpose": "subtitle or emphasized lead body (Space Grotesk 500)",
+    "px_min": 18, "px_max": 19, "weight": 500, "leading": "1.6", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body-md\">An emphasized lead paragraph — Space Grotesk 500, slightly larger than default body, carries the subtitle voice.</p>"
+  },
+  {
+    "id": "body",
+    "family": "body",
+    "purpose": "default paragraph body (Space Grotesk 400)",
+    "px_min": 16, "px_max": 18, "weight": 400, "leading": "1.7", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body\">Body sits at 16–18px. Generous line-height, no italic — the studio voice carries calm, conversational sentences.</p>"
+  },
+  {
+    "id": "label-eyebrow",
+    "family": "body",
+    "purpose": "eyebrow label above a headline — uppercase, tracked 0.15em (Space Grotesk 600)",
+    "px_min": 13, "px_max": 14, "weight": 600, "leading": "1.2", "tracking": "0.15em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-label-eyebrow\">Overview</div>"
+  },
+  {
+    "id": "caption",
+    "family": "body",
+    "purpose": "subtitle, fine print, footnote (Space Grotesk 500)",
+    "px_min": 13, "px_max": 14, "weight": 500, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-caption\">Founded in 2019. Independent studio.</p>"
+  },
+  {
+    "id": "tag",
+    "family": "body",
+    "purpose": "pill tag text inside a charcoal label — peach on ink (Space Grotesk 600)",
+    "px_min": 11, "px_max": 12, "weight": 600, "leading": "1.2", "tracking": "0.04em", "case": "sentence",
+    "sample_html": "<div><span class=\"t-trole-tag\">Editorial</span></div>"
+  },
+  {
+    "id": "vertical-spine",
+    "family": "display",
+    "purpose": "magazine-spine wayfinder — Syne 700 rotated 90deg, anchored to slide edge",
+    "px_min": 22, "px_max": 24, "weight": 700, "leading": "1.2", "tracking": "0.1em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-vertical-spine\">Scroll down</span></div>"
+  }
+]
+```
+
+The atlas omits `rough-box`, `blob-frame`, `ghost-blob`, `step-node`, `scribble-svg` (those are §M motifs / structural decoration, not text roles) and the double-stroke ghost border (it's a depth motif declared in §M).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -209,15 +336,123 @@ Take the brand's product description / value prop. Transform with:
 - Scribble pen-on (strokeDashoffset over DUR.slow with sine.inOut) on hero scenes.
 - Cards / blocks / stats DO NOT drift after entry — they snap to their rotated rest pose and stay.
 
-**Sound design (passed to audio phase)**
+## §M Atomic motifs (gestures the plan agent can reference)
 
-- Soft mark / pencil-stroke sample on scribble pen-on.
-- Paper-rustle on card entry; gentle thud on filled-block entry.
-- Cross-fade between scenes — no percussive cut.
+Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:double-stroke-offset on the team card" without specifying which pattern the card sits in.
+
+```motifs
+[
+  {
+    "id": "double-stroke-offset",
+    "label": "Double-stroke offset",
+    "role": "card-depth",
+    "surface_safe": ["paper", "cream"],
+    "description": "3px ink card border + a 2px ::before ghost border offset 6–8px down-and-right. Playful's signature elevation — replaces every blurred shadow. Apply to outlined cards, contact blocks, TOC items, team cards.",
+    "wide": true,
+    "demo": "<div class=\"pf-motif-offset\">Card front</div>",
+    "css": ".pf-motif-offset{position:relative;display:inline-block;background:var(--anchor-peach);border:3px solid var(--ink);padding:24px 32px;font-family:var(--f-disp-native);font-weight:700;font-size:clamp(20px,2vw,28px);line-height:1.1;letter-spacing:-.01em;color:var(--ink)}.pf-motif-offset::before{content:\"\";position:absolute;top:6px;left:6px;right:-6px;bottom:-6px;border:2px solid var(--ink);z-index:-1;pointer-events:none}"
+  },
+  {
+    "id": "blob-frame-fill",
+    "label": "Blob frame + fill",
+    "role": "organic-portrait",
+    "surface_safe": ["paper", "cream"],
+    "description": "Outlined organic blob (asymmetric border-radius) wrapping a smaller solid blob-fill. Used as portrait stand-in for hero / contact scenes. Asymmetric radii on both frame and fill — never matched.",
+    "demo": "<div class=\"pf-motif-blob\"><span class=\"pf-motif-blob-inner\"></span></div>",
+    "css": ".pf-motif-blob{display:inline-flex;align-items:center;justify-content:center;width:140px;height:160px;border:3px solid var(--ink);border-radius:40% 60% 70% 30% / 40% 50% 60% 50%;background:transparent}.pf-motif-blob-inner{display:block;width:88px;height:100px;background:var(--ink);border-radius:60% 40% 30% 70% / 60% 30% 70% 40%}"
+  },
+  {
+    "id": "scribble-mark",
+    "label": "Scribble mark",
+    "role": "corner-punctuation",
+    "surface_safe": ["paper", "cream"],
+    "description": "Inline 2px-stroke SVG path with rounded line-caps — squiggle, star, circle, arrow. Anchored to a slide corner as hand-drawn breath. Every scene gets at least one; never more than two.",
+    "wide": true,
+    "demo": "<svg class=\"pf-motif-scribble\" viewBox=\"0 0 200 60\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M5,30 Q25,5 45,30 T85,30 T125,30 T165,30 T195,30\" /><path d=\"M15,45 Q35,25 55,45 T95,45\" /></svg>",
+    "css": ".pf-motif-scribble{display:block;width:200px;height:60px}.pf-motif-scribble path{stroke:var(--ink);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}"
+  },
+  {
+    "id": "step-node-circle",
+    "label": "Step-node circle",
+    "role": "process-marker",
+    "surface_safe": ["paper", "cream"],
+    "description": "64px round outlined node with Syne 800 digit. Alternates outlined (peach fill, ink digit) and filled (ink fill, peach digit) across a sequence. Used for timeline / process markers.",
+    "demo": "<div class=\"pf-motif-step-row\"><span class=\"pf-motif-step pf-motif-step-filled\">1</span><span class=\"pf-motif-step\">2</span><span class=\"pf-motif-step pf-motif-step-filled\">3</span></div>",
+    "css": ".pf-motif-step-row{display:flex;gap:16px;align-items:center}.pf-motif-step{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border:3px solid var(--ink);border-radius:50%;background:var(--anchor-peach);color:var(--ink);font-family:var(--f-disp-native);font-weight:800;font-size:clamp(20px,1.8vw,28px);line-height:1}.pf-motif-step-filled{background:var(--ink);color:var(--anchor-peach)}"
+  },
+  {
+    "id": "filled-block-invert",
+    "label": "Filled block (invert)",
+    "role": "emphasis-anchor",
+    "surface_safe": ["paper", "cream"],
+    "description": "Charcoal-fill card with peach text — the system's only color inversion. Reserve for the one cell that anchors a slide's attention. Carries the same ±0.5–3deg micro-rotation as outlined siblings.",
+    "demo": "<div class=\"pf-motif-fill\"><div class=\"pf-motif-fill-num\">02</div><div class=\"pf-motif-fill-title\">Art direction</div></div>",
+    "css": ".pf-motif-fill{display:inline-flex;flex-direction:column;gap:8px;background:var(--ink);color:var(--anchor-peach);border:3px solid var(--ink);padding:20px 28px;transform:rotate(.8deg)}.pf-motif-fill-num{font-family:var(--f-disp-native);font-weight:800;font-size:clamp(24px,2.2vw,36px);line-height:1;letter-spacing:-.01em}.pf-motif-fill-title{font-family:var(--f-disp-native);font-weight:700;font-size:clamp(18px,1.6vw,24px);line-height:1.1;letter-spacing:-.01em}"
+  },
+  {
+    "id": "tag-pill",
+    "label": "Tag pill",
+    "role": "category-badge",
+    "surface_safe": ["paper", "cream"],
+    "description": "Small ink rectangle with peach text at weight 600. Anchored to bottom-left of an image / gallery frame as a category label. The only inverted text-on-ink element that is not a full card.",
+    "demo": "<div><span class=\"pf-motif-tag\">Editorial</span></div>",
+    "css": ".pf-motif-tag{display:inline-block;background:var(--ink);color:var(--anchor-peach);padding:6px 14px;font-family:var(--f-body-native);font-weight:600;font-size:clamp(11px,1vw,13px);line-height:1.2;letter-spacing:.04em}"
+  },
+  {
+    "id": "ghost-blob",
+    "label": "Ghost blob",
+    "role": "atmospheric-wallpaper",
+    "surface_safe": ["paper", "cream"],
+    "description": "Oversized organic ink blob at 0.08 opacity placed behind content as atmospheric wallpaper. Max one per slide, anchored to a corner the content does not occupy. Drifts on 12–20s sine.inOut loop.",
+    "demo": "<div class=\"pf-motif-ghost\"></div>",
+    "css": ".pf-motif-ghost{display:block;width:160px;height:160px;background:var(--ink);border-radius:40% 60% 70% 30% / 40% 50% 60% 50%;opacity:.08}"
+  }
+]
+```
+
+The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
+
+**Materials lexicon** (informational — these are the composition atoms behind the patterns):
+
+- double-stroke-offset · blob-frame-fill · scribble-mark · step-node-circle · filled-block-invert · tag-pill · ghost-blob · vertical-spine · doodle-circle · doodle-rect
 
 ## §I Page-level CSS (overrides design.html's neutral chrome — makes the doc itself read as playful)
 
 ```css
+/* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
+ * These let the doc chrome render in Syne / Space Grotesk / Space Mono regardless
+ * of which brand DNA the preset is applied to. The §6 component preview, §M motifs
+ * grid, and §T type-role atlas also read these via .preset-native-scope.
+ *
+ * Playful has no dedicated script face — the script slot points at Syne 700 because
+ * the preset refuses a third face (the vertical-spine label motif carries the
+ * script-adjacent voice via rotated Syne). Fallback chains end in faces that still
+ * carry the studio vibe (Fraunces / Recoleta for display; Inter for body). */
+:root {
+  --f-disp-native:
+    "Syne", "Fraunces", "Recoleta", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --f-body-native:
+    "Space Grotesk", "Inter", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --f-script-native:
+    "Syne", "Fraunces", "Recoleta", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --f-mono-native:
+    "Space Mono", "JetBrains Mono", "IBM Plex Mono", "Menlo", ui-monospace, monospace;
+}
+
+/* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
+ * Wraps §6 component previews, §M motif demos, and §T type-role atlas so
+ * var(--font-*) resolves to Syne / Space Grotesk / Space Mono regardless of the
+ * brand DNA tokens emitted in :root. The paste-ready component source is
+ * untouched — Phase 4b still grep + paste original `var(--font-display)` tokens,
+ * which resolve to brand DNA at scene-render time. */
+.preset-native-scope {
+  --font-display: var(--f-disp-native);
+  --font-body: var(--f-body-native);
+  --font-script: var(--f-script-native);
+  --font-mono: var(--f-mono-native);
+}
+
 body {
   background: var(--anchor-peach);
   color: var(--ink);
@@ -307,5 +542,264 @@ h2 {
   border-radius: 0 !important;
   color: var(--ink) !important;
   font-family: "Space Mono", monospace;
+}
+
+/* ── §M Motifs grid: atomic gestures.
+ * Mirrors the studio editorial grid in playful's source template — 12-col grid
+ * of small cards each teaching ONE reusable gesture. Cards may declare a surface
+ * (paper / cream) to demonstrate the gesture against its native bg. Each card
+ * carries the signature double-stroke offset border via ::before. */
+.ds-motif-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 18px;
+}
+.ds-motif {
+  grid-column: span 4;
+  min-height: 280px;
+  padding: 28px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--anchor-peach);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+}
+.ds-motif::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: -6px;
+  bottom: -6px;
+  border: 2px solid var(--ink);
+  z-index: -1;
+  pointer-events: none;
+}
+.ds-motif.ds-motif-wide {
+  grid-column: span 8;
+}
+.ds-motif.ds-motif-surface-paper {
+  background: var(--anchor-peach);
+}
+.ds-motif.ds-motif-surface-cream {
+  background: var(--anchor-cream);
+}
+.ds-motif-h {
+  margin: 0;
+  font-family: var(--f-disp-native);
+  font-weight: 700;
+  font-size: clamp(22px, 2.2vw, 32px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.ds-motif-desc {
+  margin: 0;
+  font-family: var(--f-body-native);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--ink) 75%, transparent);
+  max-width: 32ch;
+}
+.ds-motif-demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+}
+.ds-motif-id {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-family: var(--f-mono-native);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: 0.45;
+}
+@media (max-width: 880px) {
+  .ds-motif-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ds-motif,
+  .ds-motif.ds-motif-wide {
+    grid-column: auto;
+  }
+}
+
+/* ── §T Type-role atlas. Container = single-column outlined card (paper surface).
+ * Single-column padding-only rows so each role gets its own breath. Each .t-trole-*
+ * class encodes the role's family / size / weight / leading / tracking / case /
+ * decoration. Family selectors use var(--font-*) tokens so the atlas renders in
+ * BRAND DNA fonts; only the recipe is preset-declared. Color decisions follow
+ * Playful's monochrome contract — var(--ink) everywhere, no third color. */
+.ds-trole-box {
+  display: flex;
+  flex-direction: column;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--anchor-peach);
+  overflow: hidden;
+  margin-top: 24px;
+}
+.ds-trole-row {
+  padding: 28px 32px;
+  border-bottom: 2px solid var(--ink);
+}
+.ds-trole-row:last-child {
+  border-bottom: 0;
+}
+.ds-trole-sample {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .ds-trole-row {
+    padding: 24px;
+  }
+}
+
+/* ── Type-role samples. var(--font-display/body/script/mono) resolves to brand DNA.
+ * Color uses Playful's monochrome contract — ink-on-paper for everything except
+ * the tag-pill (peach-on-ink inversion) and the cards that carry the filled-block
+ * treatment. No third color. */
+.t-trole-display-hero {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(64px, 10vw, 144px);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.t-trole-display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(48px, 8vw, 112px);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.t-trole-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(40px, 6vw, 80px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.t-trole-statement {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(40px, 5vw, 72px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  max-width: 24ch;
+}
+.t-trole-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(32px, 4vw, 56px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.t-trole-title-sm {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 21px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.t-trole-number-hero {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(64px, 8vw, 112px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  transform: rotate(-0.8deg);
+  display: inline-block;
+}
+.t-trole-number-md {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.t-trole-number-sm {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 1;
+  color: var(--ink);
+}
+.t-trole-body-md {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 19px;
+  line-height: 1.6;
+  color: var(--ink);
+  max-width: 50ch;
+  margin: 0;
+}
+.t-trole-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(16px, 1.2vw, 18px);
+  line-height: 1.7;
+  color: var(--ink);
+  max-width: 60ch;
+  margin: 0;
+}
+.t-trole-label-eyebrow {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.2;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: 0.7;
+}
+.t-trole-caption {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink);
+  opacity: 0.8;
+  margin: 0;
+}
+.t-trole-tag {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  background: var(--ink);
+  color: var(--anchor-peach);
+  padding: 6px 14px;
+}
+.t-trole-vertical-spine {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  transform: rotate(90deg);
+  transform-origin: left center;
+  margin-left: 1em;
 }
 ```

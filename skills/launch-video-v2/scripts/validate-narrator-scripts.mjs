@@ -137,7 +137,7 @@ function validate(filePath) {
       // word grid happens at captions.mjs build time):
       //   - must be an array of strings (when present)
       //   - each entry has ≥1 non-whitespace word
-      //   - per-group max 3 words after tag-strip (peoples §C cap)
+      //   - per-group max 3 words after tag-strip (caption stamp cap)
       //   - tags are not nested
       //   - tag inner content non-empty (no <em></em>)
       // Tags allowed: <em> <brand> <emph> <cta>. Empty captions[] is fine
@@ -162,7 +162,7 @@ function validate(filePath) {
             const wordCount = stripped.split(/\s+/).filter(Boolean).length;
             if (wordCount > 3) {
               errors.push(
-                `${ectx}: ${wordCount} words after tag-strip — peoples §C max 3 words/group ("${stripped}")`,
+                `${ectx}: ${wordCount} words after tag-strip — max 3 words/group ("${stripped}")`,
               );
             }
             // Validate tag balance + no nesting in one quick pass.

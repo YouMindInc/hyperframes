@@ -230,7 +230,7 @@ If your component's visual is too far from the shared role (e.g. 8-Bit Orbit's "
 
 ### §H Scene composition hints (Phase 4b layout guidance)
 
-**What:** bullet rules for how a scene of this preset should be laid out (focal element scale, allowed backgrounds, transition defaults, sound-design hooks, stagger budgets).
+**What:** bullet rules for how a scene of this preset should be laid out (focal element scale, allowed backgrounds, transition defaults, stagger budgets).
 **Currently consumed by:** nobody — §H is a known orphan section. It's preserved because (a) human reviewers read it, (b) it will eventually be sliced into `chunks/layout.md` and fed to Phase 4b workers (same pattern as §G → voice.md).
 **Format:** plain markdown bullets. No code fences required.
 

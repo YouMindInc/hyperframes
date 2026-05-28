@@ -211,6 +211,26 @@ else
   ok "video project target: $VIDEO_ROOT/<agent-chosen-name>"
 fi
 
+# --------- step 4.5: write .env.example at the workspace root ---------
+# Dev convenience: one shared .env above videos/<name>/ — both the CLI's
+# loadEnvFile and audio.mjs walk up ≤ 5 dirs, so this reaches both code paths.
+say "Writing .env.example (cp to .env and fill what you have)..."
+
+cat > .env.example <<'ENV'
+# launch-video-v2 — optional API keys. All blank = local fallbacks (Kokoro
+# TTS + MusicGen BGM + DOM-only captions). `cp .env.example .env` and fill
+# in what you have. videos/<name>/.env (if present) wins over this file.
+
+# Capture image captions + Lyria BGM (one key, two uses). GOOGLE_API_KEY is
+# an alias. Free tier at https://ai.google.dev.
+GEMINI_API_KEY=
+
+# TTS — audio.mjs picks the first available. HeyGen returns word timestamps.
+HEYGEN_API_KEY=
+ELEVENLABS_API_KEY=
+ENV
+ok ".env.example → $TEST_DIR/.env.example"
+
 # --------- step 5: npm install (NOT bun — see header notes) ---------
 say "Running npm install (this is the one place we must use npm, not bun)..."
 
@@ -289,6 +309,7 @@ else
   echo "Video:    agent-chosen under $TEST_DIR/$VIDEO_ROOT/"
 fi
 echo "Target:   $URL"
+echo "Env:      $TEST_DIR/.env.example  (cp .env.example .env and fill in any cloud keys you have; all optional)"
 echo ""
 
 if [[ -n "$VIDEO_NAME" ]]; then

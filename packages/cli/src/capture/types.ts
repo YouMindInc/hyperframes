@@ -120,6 +120,10 @@ export interface DesignTokens {
     heading: string;
     backgroundColor?: string;
     backgroundImage?: string;
+    /** CTAs found within this section's bounds (visible text, deduped, up to 6) */
+    callsToAction: string[];
+    /** Image/video asset URLs referenced within this section (absolute, deduped, up to 8) */
+    assetUrls: string[];
   }>;
 }
 
