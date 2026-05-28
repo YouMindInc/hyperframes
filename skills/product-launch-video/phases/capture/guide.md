@@ -37,7 +37,7 @@ capture/
 │   ├── scroll-*.png             # 滚动位 viewport 截图
 │   └── contact-sheet-*.jpg
 ├── meta.json
-└── CLAUDE.md / AGENTS.md / .cursorrules   # capture 自带的 agent scaffolding（v2 不强读）
+└── CLAUDE.md / AGENTS.md / .cursorrules   # capture 自带的 agent scaffolding（本 skill 不强读）
 ```
 
 ## 验证

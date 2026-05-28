@@ -1,30 +1,26 @@
 # Audio (Phase 2.5) — workflow guide
 
-Phase 2.5 generates narration + (optional) background music for each scene. All capability lives in the **`hyperframes-media`** skill — `npx hyperframes tts` and `npx hyperframes bgm` do provider auto-detection internally. This file only describes how to wire those commands into the launch-video-v2 workflow.
+Phase 2.5 由 **`scripts/audio.mjs`** 一把跑完：narrator_scripts → 每 scene voice + word JSON + audio_meta.json，外加（可选）detached BGM。Step 3 编排器直接 `node audio.mjs`，**没有 subagent**。
 
-For provider chains, voice IDs, mood prompts, env-var detection, and failure modes, read:
+完整 flag 见 SKILL.md Step 3 / `audio.mjs --help`。本文件只描述 schema 和失败模式。
 
-- `hyperframes-media` → `references/tts.md` — HeyGen / ElevenLabs / Kokoro chain, `--words` flag for HeyGen word timestamps
-- `hyperframes-media` → `references/bgm.md` — Lyria / MusicGen chain, `--from-file` mood inference, Lyria knobs
-- `hyperframes-media` → `references/tts-to-captions.md` — when to skip Whisper (HeyGen Path A) vs. chain TTS → transcribe (Path B)
-- `hyperframes-media` → `references/transcribe.md` — Whisper model + Language Rule
-
-## What this phase produces
+## 产物
 
 ```
-./audio_meta.json                                   # index for Phase 4a / 4c
-hyperframes/assets/voice/scene_<N>.wav              # narration audio per scene
-hyperframes/assets/voice/scene_<N>_words.json       # word-level timestamps per scene
-hyperframes/assets/bgm.wav                          # background music (optional)
+./audio_meta.json                               # 给 prep.mjs 的 index
+hyperframes/assets/voice/scene_<N>.wav          # 每 scene narration
+hyperframes/assets/voice/scene_<N>_words.json   # 每 scene word-level timestamp
+hyperframes/assets/bgm.wav                      # BGM（可选；可能 audio.mjs 退出时还没落盘）
 ```
 
-`audio_meta.json` schema (consumed by `prep.mjs`):
+`audio_meta.json` schema（被 `prep.mjs` 消费）：
 
 ```json
 {
   "tts_provider": "heygen" | "elevenlabs" | "kokoro",
   "bgm_provider": "lyria" | "musicgen" | null,
   "bgm_enabled": true | false,
+  "bgm_pending": true | false,        // Lyria detached 时 audio.mjs 退出可能仍在渲染
   "bgm_path": "assets/bgm.wav" | null,
   "total_duration_s": <Σ voiceDuration>,
   "scenes": {
@@ -38,31 +34,14 @@ hyperframes/assets/bgm.wav                          # background music (optional
 }
 ```
 
-## Procedure (orchestrator)
-
-For each scene in `narrator_scripts.json`, in parallel:
-
-1. **TTS** — `npx hyperframes tts <scene_text> -o hyperframes/assets/voice/scene_<N>.wav --words hyperframes/assets/voice/scene_<N>_words.json --json`
-   - If the result's `wordCount > 0` (HeyGen Path A), the words file is already populated — no Whisper pass needed.
-   - If `wordCount == 0` (ElevenLabs / Kokoro), chain `npx hyperframes transcribe scene_<N>.wav --model small.en` to fill in word timing.
-2. **Duration** — read `durationSeconds` from the TTS JSON result (it's the same number `ffprobe` would report).
-
-In parallel with all scenes:
-
-3. **BGM** — `npx hyperframes bgm --duration <total_duration_s> --from-file narrator_scripts.json -o hyperframes/assets/bgm.wav --json &` (run detached / in the background; voice work doesn't block on it).
-
-4. **Meta** — once all per-scene TTS + word-data is settled, write `audio_meta.json` aggregating the results. Set `bgm_pending: true` if BGM is still running; Phase 4c re-checks `bgm.wav` on disk before emitting the `<audio>` element.
-
-## Provider selection — do nothing
-
-The orchestrator does **not** check API keys or pick a provider. `npx hyperframes tts` / `npx hyperframes bgm` handle that internally using the env chain documented in `hyperframes-media`. If the user wants to force a provider, they can set `--provider <name>` in their own override layer; the workflow itself stays provider-agnostic.
+Provider 链 / voice id / mood prompt / env detection 全部 audio.mjs 内部处理；orchestrator 不挑。强制 provider 用 `--provider <name>`，覆盖 BGM mood 用 `--bgm-prompt "<text>"`。底层能力文档见 `hyperframes-media` skill。
 
 ## Failure modes
 
-| Failure                  | Behavior                                                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Single scene TTS exits 1 | Omit that scene from `audio_meta.json["scenes"]`. Other scenes proceed. Phase 4a falls back to `estimatedDuration`. |
-| BGM exits 1              | `bgm_enabled: false`, `bgm_path: null`. Voice still completes. Phase 4c skips the `<audio>` element.                |
-| All scenes fail          | Exit 1 with stderr; stop the pipeline.                                                                              |
+| Failure                  | 行为                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| Single scene TTS exits 1 | 该 scene 不进 `audio_meta.scenes`，其他继续。Phase 4a 用 `estimatedDuration` 兜底。 |
+| BGM exits 1              | `bgm_enabled: false`, `bgm_path: null`。voice 完成，Phase 4c 跳 `<audio>` 元素。    |
+| All scenes fail          | audio.mjs 退 1，stderr 报错，pipeline 停。                                          |
 
-BGM failure never blocks the pipeline. Only "zero scenes got voice" is fatal.
+BGM 失败永不阻塞；只有"零场景拿到 voice"是 fatal。

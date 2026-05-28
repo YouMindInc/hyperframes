@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Phase 4a — prep + group plan (deterministic; no subagent).
-// launch-video-v2 port of skills/product-launch-video/scripts/prep.mjs.
 //
 // Reads:  section_plan.md (Phase 3), narrator_scripts.json (Phase 2),
 //         audio_meta.json (Phase 2.5, optional), capture/assets/ (Phase 1 —
@@ -8,8 +7,9 @@
 //         build-design.mjs from capture's font binaries),
 //         hyperframes-animation/rules/*.md (existence only).
 // Writes: public/<assets>, public/fonts/<woff2>, ./group_spec.json inside the
-//         HyperFrames project root passed via --hyperframes. The launch-video-v2
-//         orchestrator initializes that project root before calling prep.
+//         HyperFrames project root passed via --hyperframes. The
+//         product-launch-video orchestrator initializes that project root
+//         before calling prep.
 //
 // section_plan.md anchors recognised:
 //   **Effects:**     — required, 4-7 backtick-wrapped rule ids

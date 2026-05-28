@@ -1,6 +1,6 @@
 # Captions (Phase 4a.5)
 
-为 launch-video-v2 写一个 **全片 full-bleed sub-composition** `compositions/captions.html`，由 hyperframes-finalize 在 `index.html` 以 track 12 clip 挂上去。
+为 product-launch-video 写一个 **全片 full-bleed sub-composition** `compositions/captions.html`，由 hyperframes-finalize 在 `index.html` 以 track 12 clip 挂上去。
 
 这是 **agent-authored**（不是 registry-patch）：你直接读 `group_spec.json` + 各 scene 的 whisper word JSON + `design-system/chunks/tokens.css`，写一个 HTML 出来。**没有** registry `caption-*` 组件、**没有** builder 脚本、**不读** `narrator_scripts.json` 的 `captions[]` 字段。
 

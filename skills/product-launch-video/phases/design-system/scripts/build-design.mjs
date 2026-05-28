@@ -55,7 +55,7 @@ if (!fs.statSync(outDir).isDirectory()) {
   process.exit(1);
 }
 
-// Default capture dir: sibling to design-system/ — matches the v2 PROJECT_DIR
+// Default capture dir: sibling to design-system/ — matches the PROJECT_DIR
 // layout: PROJECT_DIR/capture/ (input) + PROJECT_DIR/design-system/ (output).
 const captureDir = cliCaptureDir
   ? path.resolve(cliCaptureDir)
@@ -918,7 +918,7 @@ function parsePreset(presetDir) {
 //                    run `auto_install` command (if non-null) to materialise it.
 //   env_var_set:     process.env[var] is set + non-empty.
 // Paths in verify_* are resolved relative to process.cwd() — that's the project
-// root for the v2 pipeline. build-design.mjs is invoked from project root, not
+// root for the pipeline. build-design.mjs is invoked from project root, not
 // from the design-system/ dir, so relative paths Just Work.
 function checkCapabilities(preset) {
   const missing = [];
@@ -2521,7 +2521,7 @@ const html = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${esc(brandName)} × ${esc(preset.label)} — design.html</title>
 <!--
-  AGENT NOTE — design.html (launch-video-v2 Phase 1b output)
+  AGENT NOTE — design.html (product-launch-video Phase 1b output)
   Brand DNA from: ${esc(sourceUrl)}
   Style preset:   ${esc(preset.name)} (${mode})
   Generated:      ${new Date().toISOString()}

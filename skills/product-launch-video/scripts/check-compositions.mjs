@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // check-compositions.mjs — Step 7 finalize 预飞 harness
-// launch-video-v2 port of skills/product-launch-video/scripts/check-compositions.mjs.
 //
 // 跑在 Step 6 worker 全部返回后、Step 7 finalize 开始拼 index.html 之前。
-// 拦历史 worker bug（finalize 平均花 13 分钟 edit-and-retry 排查）+ v2
-// 新增的 blueprint 软引用检查：
+// 拦历史 worker bug（finalize 平均花 13 分钟 edit-and-retry 排查）+ blueprint
+// 软引用检查：
 //
 //   1. Wrapper-ancestor selector —— CSS / JS selector 写成 `.<scene-id>-root .foo`
 //      / `.<scene-id>-root #foo`。preview / snapshot OK（bundler 保留 wrapper），
@@ -20,7 +19,7 @@
 //      `data-composition-id`、没 `data-duration`、没 `window.__timelines[...]`。
 //   5. Asset 引用了 <project-root>/public/ 里不存在的文件 —— worker 编造或拼写错
 //      了 basename。
-//   6. （v2 新增）blueprint 引用了 hyperframes-animation/blueprints/ 下不存在
+//   6. blueprint 引用了 hyperframes-animation/blueprints/ 下不存在
 //      的 id —— anomaly，不 fatal（blueprint 是 soft 引用，worker 应该已经按
 //      composed 回退）。
 //
@@ -48,9 +47,9 @@ const hyperframesDir = resolve(flag("hyperframes", "."));
 const groupSpecPath = resolve(flag("group-spec", "./group_spec.json"));
 const compositionsDir = join(hyperframesDir, "compositions");
 
-// blueprints 目录可显式指定；否则按 skill 默认布局推断（launch-video-v2/scripts/
-// 旁边的 ../../hyperframes-animation/blueprints/）。推断失败也无所谓，blueprint
-// 校验是 soft，路径不存在直接跳过该检查。
+// blueprints 目录可显式指定；否则按 skill 默认布局推断（product-launch-video/
+// scripts/ 旁边的 ../../hyperframes-animation/blueprints/）。推断失败也无所谓，
+// blueprint 校验是 soft，路径不存在直接跳过该检查。
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const defaultBlueprintsDir = resolve(scriptDir, "..", "..", "hyperframes-animation", "blueprints");
 const blueprintsDir = flag("blueprints-dir")
@@ -198,7 +197,7 @@ for (const sceneId of sceneIds) {
   // `.<scene-id>-root .foo` / `.<scene-id>-root #foo` 形态：preview / snapshot 走
   // bundler 路径会保留 wrapper element，所以 selector OK；但 `hyperframes render`
   // 走 producer 路径，会**剥掉** wrapper，selector 全部失配 → scene 渲成黑屏。
-  // 历史 bug：launch-video-v2 第一版 worker prompt 教 agent 这么写。
+  // 历史 bug：product-launch-video 早期 worker prompt 教 agent 这么写。
   //
   // root 样式写 `#root { ... }`。compiler 会把 authored root id 改写成
   // instance-safe selector；不要写 `[data-composition-id="<scene-id>"]`，
@@ -373,7 +372,7 @@ for (const sceneId of sceneIds) {
     });
   }
 
-  // Rule 7（v2 新增，soft）：blueprint 引用
+  // Rule 7（soft）：blueprint 引用
   //
   // group_spec.json.groups[].scenes[<sid>].blueprint 取值：
   //   "composed"            → 无 blueprint 引用，跳过
@@ -403,7 +402,7 @@ for (const sceneId of sceneIds) {
     }
   }
 
-  // Rule 8 (v2 新增，fatal once metadata is present)：rank-1 唯一性 + forbidden_with 冲突
+  // Rule 8 (fatal once metadata is present)：rank-1 唯一性 + forbidden_with 冲突
   //
   // 来源 = design-system/chunks/index.json.components[].{rank, forbidden_with}（由
   // emit-chunks.mjs 写出，最初由 preset components/<id>.md 的 YAML frontmatter 声明）。
