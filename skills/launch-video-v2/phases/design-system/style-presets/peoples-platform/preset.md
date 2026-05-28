@@ -29,9 +29,18 @@
     "fintech compliance pages",
     "data-heavy dashboards",
     "luxury / glass aesthetics"
-  ]
+  ],
+  "chromeFonts": {
+    "googleFontsHref": "https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Source+Sans+3:wght@400;500;600;700&family=Caveat+Brush&family=DM+Mono:wght@400;500&display=swap",
+    "display": "Alfa Slab One",
+    "body": "Source Sans 3",
+    "script": "Caveat Brush",
+    "mono": "DM Mono"
+  }
 }
 ```
+
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Alfa Slab + Caveat Brush + Source Sans + DM Mono — instead of the brand DNA fonts. The brand fonts still apply to §6 component code (paste-ready for Phase 4b) and to the LEFT column of §6's dual preview. The RIGHT column uses `.preset-native-scope` to re-bind `--font-display/body/script/mono` to these native families so reviewers can compare brand-applied vs preset-native side-by-side.
 
 ## §A Director's intent
 
@@ -47,11 +56,20 @@ One **Caveat-script handwritten accent** threads through each plate, rotated −
 
 ## §B Decoration tokens (merge into design.html `:root`)
 
-This preset depends on the **5-slot brand alias system** (`--brand-primary` / `--brand-secondary` / `--brand-tertiary` / `--brand-accent` / `--brand-costume`) plus the **script font role** (`--font-script`). build-design.mjs emits these automatically. The aliases below give peoples-native names to those slots so component CSS can use the original peoples vocabulary (`var(--paper)`, `var(--blue)`, `var(--orange)`).
+This preset uses the **5-slot brand alias system** (`--brand-primary` / `--brand-secondary` / `--brand-tertiary` / `--brand-accent` / `--brand-costume`) plus the **script font role** (`--font-script`). build-design.mjs emits these automatically. The aliases below give peoples-native names to those slots so component CSS can use the original peoples vocabulary (`var(--paper)`, `var(--blue)`, `var(--orange)`).
+
+**Poster hue anchors** (blue / orange / cream) are a §8.2 preset-character exception. People's Platform collapses if the authority plate becomes a near-black tertiary token or the stamp signal stops reading orange; the original system is a saturated royal-blue plate with orange stamp type. Brand DNA still tints the plate, but the orange signal remains anchored.
 
 **Drop colours** (red / red-deep) are visual signatures — they MUST contrast with the brand accent regardless of brand DNA, so they live as warm-complement literals. If a future brand's accent is red itself, override these in §B with HSL-rotated drops.
 
 ```css
+/* §8.2 exception: poster hue anchors. Declared once so every surface keeps the
+   original peoples high-chroma blue/orange register while brand DNA lightly
+   tints the authority plate. */
+--anchor-blue: #2c2cdc;
+--anchor-orange: #f2a03a;
+--anchor-cream: #f4e9d6;
+
 /* Surface aliases — bind brand DNA + system neutrals into peoples vocabulary.
  *
  * IMPORTANT MAPPING NOTE: peoples uses "primary/secondary/..." as SURFACE roles
@@ -59,18 +77,17 @@ This preset depends on the **5-slot brand alias system** (`--brand-primary` / `-
  * (brand-primary = the most identifying hue, often the signal). Don't confuse:
  *
  *   peoples --paper  = system canvas (light surface)           → var(--canvas)
- *   peoples --orange = signal hue (the brand's loudest color)  → var(--brand-primary)
- *   peoples --blue   = second authority surface (dark plate)   → var(--brand-tertiary)
+ *   peoples --orange = orange stamp signal                     → var(--anchor-orange)
+ *   peoples --blue   = vivid authority surface                 → anchor blue + brand tint
  *
- * For brands without a second hue (brand-tertiary falls back to accent), the
- * blue plate degrades to a light-tinted surface — known limitation; document
- * via Stage 1 remix-from-golden audit before committing to a video.
+ * Do not map --blue directly to --brand-tertiary: many sites expose very dark
+ * text/semantic blues there, which turns the poster plate muddy instead of vivid.
  */
 --paper: var(--canvas); /* system light canvas — NOT brand-primary */
 --ink-line: var(--ink); /* system dark line — NOT brand-secondary */
---blue: var(--brand-tertiary); /* authority dark plate (second hue) */
---orange: var(--brand-primary); /* THE signal — brand's loudest hue */
---cream: var(--brand-costume); /* second light surface — often equals --canvas */
+--blue: color-mix(in srgb, var(--brand-primary) 18%, var(--anchor-blue));
+--orange: var(--anchor-orange); /* THE signal — always reads orange */
+--cream: color-mix(in srgb, var(--brand-costume) 68%, var(--anchor-cream));
 
 /* Triple-stamp drop palette — warm-complement of accent (literal by design) */
 --red: #e83a2a;
@@ -112,6 +129,138 @@ This preset depends on the **5-slot brand alias system** (`--brand-primary` / `-
 - **script**: `'Caveat Brush'` · `'Pacifico'` · `'Kalam'` wght 400
 
 The script role is unique to this preset — `var(--font-script)` resolves at render time when the host preset declares §D's script bullet OR the site ships a script face. If absent the role degrades to system-cursive.
+
+## §T Type-role atlas (Phase 4b reads this to size text correctly)
+
+Each entry is a **named type role** with concrete render parameters at 1920×1080 — family token, px range, weight, leading, tracking, case, and any color/shadow/rotation decoration. Phase 4b scene workers may cite roles by `id` ("use a `stamp-statement` here"); the brand DNA fonts plug in automatically via `var(--font-*)` tokens. This is the same atlas peoples-design.html ships in its `// 03 / type` section, ported as machine-readable JSON.
+
+The atlas is the **sole authoring source** for non-component text. If a scene needs a `mega-stat` numeral that isn't covered by §6 components, the worker reads role `mega-stat` here and writes inline CSS from these values. Do NOT invent ad-hoc sizes.
+
+```type-roles
+[
+  {
+    "id": "display",
+    "family": "display",
+    "purpose": "hero display with triple shadow",
+    "px_min": 120, "px_max": 200, "weight": 400, "leading": "0.86", "tracking": "0.005em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-display\">{BRAND_NAME}.</div>"
+  },
+  {
+    "id": "mega-stamp",
+    "family": "display",
+    "purpose": "closing stamp",
+    "px_min": 140, "px_max": 260, "weight": 400, "leading": "0.82", "tracking": "-0.01em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-mega-stamp\">Stamped.</div>"
+  },
+  {
+    "id": "stat-numeral",
+    "family": "display",
+    "purpose": "hero stat with red + red-deep shadow",
+    "px_min": 140, "px_max": 260, "weight": 400, "leading": "0.82", "tracking": "-0.015em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-stat-numeral\">63<sup>%</sup></div>"
+  },
+  {
+    "id": "script-line",
+    "family": "script",
+    "purpose": "rotated script accent (−3°)",
+    "px_min": 80, "px_max": 140, "weight": 400, "leading": "0.95", "tracking": "0.005em", "case": "lower",
+    "sample_html": "<div class=\"t-trole-script-line\">over to you —</div>"
+  },
+  {
+    "id": "framed-headline",
+    "family": "display",
+    "purpose": "cream-framed blue plate",
+    "px_min": 60, "px_max": 108, "weight": 400, "leading": "0.92", "tracking": "0.005em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-framed-headline\">Framed plate.</span></div>"
+  },
+  {
+    "id": "stamp-statement",
+    "family": "display",
+    "purpose": "paper statement with red drop + orange em",
+    "px_min": 72, "px_max": 128, "weight": 400, "leading": "0.95", "tracking": "0.005em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-stamp-statement\">The product <em>gets simpler.</em></div>"
+  },
+  {
+    "id": "script-inline",
+    "family": "display + script",
+    "purpose": "inline script accent word inside display run",
+    "px_min": 40, "px_max": 64, "weight": 400, "leading": "1", "tracking": "0.005em", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-script-inline\">SET IN <em>slab</em> &amp; SCRIPT.</div>"
+  },
+  {
+    "id": "lead",
+    "family": "body",
+    "purpose": "deck lead beside the stamp",
+    "px_min": 36, "px_max": 60, "weight": 600, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-lead\">The lede sits beside the stamp. Same width as the shadow; never above the headline.</p>"
+  },
+  {
+    "id": "body",
+    "family": "body",
+    "purpose": "body paragraph",
+    "px_min": 36, "px_max": 60, "weight": 500, "leading": "1.55", "tracking": "0", "case": "sentence",
+    "sample_html": "<p class=\"t-trole-body\">Body holds at 500. Tight measure, no italic — the script does the curve.</p>"
+  },
+  {
+    "id": "pill-row",
+    "family": "mono",
+    "purpose": "cream-bordered pill chip (chrome marker, not verdict)",
+    "px_min": 27, "px_max": 32, "weight": 500, "leading": "1", "tracking": "0.18em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-pill-row\"><span class=\"t-trole-pill\">Vol. 01</span><span class=\"t-trole-pill t-trole-pill-paper\">May 2026</span><span class=\"t-trole-pill t-trole-pill-dark\">★ Stamped ★</span></div>"
+  },
+  {
+    "id": "mono-chrome",
+    "family": "mono",
+    "purpose": "mono chrome line with star separators",
+    "px_min": 27, "px_max": 32, "weight": 500, "leading": "1.5", "tracking": "0.18em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-mono-chrome\">★ ★ ★&nbsp; OUR THESIS &nbsp;★ ★ ★</div>"
+  },
+  {
+    "id": "diamond-row",
+    "family": "body",
+    "purpose": "diamond-bulleted list row (one sentence per row)",
+    "px_min": 27, "px_max": 40, "weight": 500, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "sample_html": "<div class=\"t-trole-diamond-row\"><span>Stamped, signed, framed.</span><span>Three lines, no more.</span></div>"
+  },
+  {
+    "id": "star-ribbon",
+    "family": "mono",
+    "purpose": "orange star-ribbon strip with ink rule top + bottom",
+    "px_min": 27, "px_max": 32, "weight": 500, "leading": "1", "tracking": "0.22em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-star-ribbon\"><span>★ Focus</span><span>★ Learn</span><span>★ Ship</span></div>"
+  },
+  {
+    "id": "rotated-stamp",
+    "family": "display + mono",
+    "purpose": "rotated round stamp (−9°) with red drop",
+    "px_min": 120, "px_max": 220, "weight": 400, "leading": "1", "tracking": "0", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-rotated-stamp\"><span class=\"big\">END</span><span class=\"small\">— V. 01 —</span></span></div>"
+  },
+  {
+    "id": "track-row",
+    "family": "mono",
+    "purpose": "dotted track timeline row (alternating orange + blue dots)",
+    "px_min": 27, "px_max": 32, "weight": 500, "leading": "1", "tracking": "0.16em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-track-row\"><span class=\"dot\"></span><span class=\"bar\"></span><span class=\"dot alt\"></span><span class=\"bar\"></span><span class=\"dot\"></span><span class=\"bar\"></span><span class=\"dot alt\"></span><span class=\"label\">May → October</span></div>"
+  },
+  {
+    "id": "cta-block",
+    "family": "display",
+    "purpose": "cream-bordered orange CTA button",
+    "px_min": 32, "px_max": 48, "weight": 400, "leading": "1", "tracking": "0.02em", "case": "upper",
+    "sample_html": "<div><span class=\"t-trole-cta\">Let's talk</span></div>"
+  },
+  {
+    "id": "end-mark",
+    "family": "display",
+    "purpose": "closing end mark",
+    "px_min": 80, "px_max": 140, "weight": 400, "leading": "0.9", "tracking": "0.005em", "case": "upper",
+    "sample_html": "<div class=\"t-trole-end-mark\">Stamped.</div>"
+  }
+]
+```
+
+The atlas omits `grain-tile` from peoples-design (it's a texture, not a type role — belongs in §B decoration tokens).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -190,6 +339,75 @@ Scene transitions go through hard cut, not surface fade.
 - 30% — `var(--cream)` for frame chrome, `var(--ink)` for type
 - 10% — `var(--orange)` for the stamp head — exactly one focal element per plate
 
+## §M Atomic motifs (gestures the plan agent can reference)
+
+Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:triple-shadow on the headline" without specifying which pattern the headline sits in.
+
+```motifs
+[
+  {
+    "id": "triple-shadow",
+    "label": "Triple shadow",
+    "role": "signature-shadow",
+    "surface_safe": ["paper", "blue", "cream"],
+    "description": "Orange word + 6px red drop + 12px red-deep drop. The system's only shadow. Apply to every focal headline; never duplicate within a scene.",
+    "wide": true,
+    "demo": "<div class=\"pp-motif-shadow\">SHADOW.</div>",
+    "css": ".pp-motif-shadow{font-family:var(--f-disp-native);font-weight:400;font-size:clamp(64px,8vw,120px);line-height:.9;text-transform:uppercase;letter-spacing:.005em;color:var(--orange);text-shadow:6px 6px 0 var(--red),12px 12px 0 var(--red-deep);text-align:center}"
+  },
+  {
+    "id": "script-flick",
+    "label": "Script flick",
+    "role": "handwritten-accent",
+    "surface_safe": ["paper", "blue", "orange"],
+    "description": "Caveat Brush, −3° rotation, in red ink. One handwritten word per stamp; never two. Threads humanity through authority.",
+    "demo": "<span class=\"pp-motif-flick\">— simpler</span>",
+    "css": ".pp-motif-flick{display:inline-block;font-family:var(--f-script-native);font-weight:400;font-size:clamp(48px,5vw,80px);line-height:1;color:var(--red);transform:rotate(-3deg)}"
+  },
+  {
+    "id": "star-flank",
+    "label": "Star flank",
+    "role": "separator-stars",
+    "surface_safe": ["orange", "paper"],
+    "surface": "orange",
+    "description": "★ ★ ★ separators frame chrome lines in mono caps. The only ornament allowed inside ribbon strips.",
+    "demo": "<div class=\"pp-motif-star\">★ ★ ★&nbsp; OUR THESIS &nbsp;★ ★ ★</div>",
+    "css": ".pp-motif-star{font-family:var(--f-mono-native);font-weight:500;font-size:clamp(16px,1.6vw,22px);line-height:1;letter-spacing:.22em;text-transform:uppercase;color:var(--blue);text-align:center}"
+  },
+  {
+    "id": "diamond-row",
+    "label": "Diamond row",
+    "role": "list-marker",
+    "surface_safe": ["paper", "cream"],
+    "description": "Red square rotated 45°. List items only — never decorative. Three rows is the cap; one sentence per row.",
+    "demo": "<div class=\"pp-motif-diamonds\"><span>Stamped.</span><span>Signed.</span><span>Framed.</span></div>",
+    "css": ".pp-motif-diamonds{display:flex;flex-direction:column;gap:10px}.pp-motif-diamonds span{font-family:var(--f-body-native);font-weight:500;font-size:clamp(16px,1.6vw,22px);line-height:1.4;color:var(--ink);padding-left:30px;position:relative}.pp-motif-diamonds span::before{content:\"\";position:absolute;left:0;top:.4em;width:16px;height:16px;background:var(--red);transform:rotate(45deg)}"
+  },
+  {
+    "id": "rotated-stamp",
+    "label": "Rotated stamp",
+    "role": "round-approval",
+    "surface_safe": ["paper", "blue"],
+    "surface": "cream",
+    "description": "Cream disc, orange border, −9° rotation, red drop shadow. Reserved for END / APPROVED beats — never opens, only closes.",
+    "demo": "<div class=\"pp-motif-round\">★</div>",
+    "css": ".pp-motif-round{width:140px;height:140px;border-radius:50%;background:var(--cream);color:var(--blue);border:6px solid var(--orange);display:grid;place-items:center;font-family:var(--f-disp-native);font-weight:400;font-size:36px;line-height:1;text-transform:uppercase;transform:rotate(-9deg);box-shadow:8px 8px 0 var(--red);margin:0 auto}"
+  },
+  {
+    "id": "end-mark",
+    "label": "End mark",
+    "role": "closing-mark",
+    "surface_safe": ["blue"],
+    "surface": "blue",
+    "description": "The closing lock: triple-stamped headline on cream-framed blue plate, with rotated round stamp. Last-shot only; never used mid-arc.",
+    "demo": "<div class=\"pp-motif-end\">End.</div>",
+    "css": ".pp-motif-end{font-family:var(--f-disp-native);font-weight:400;font-size:clamp(64px,8vw,120px);line-height:.9;text-transform:uppercase;letter-spacing:.005em;color:var(--orange);text-shadow:6px 6px 0 var(--red),12px 12px 0 var(--red-deep);text-align:center}"
+  }
+]
+```
+
+The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
+
 **Sound design hooks** (Phase 4b worker; not encoded in §E):
 
 - Each triple-stamp entry → kick + snare double-hit
@@ -203,6 +421,24 @@ Scene transitions go through hard cut, not surface fade.
 ## §I Page-level CSS (makes design.html itself read as peoples)
 
 ```css
+/* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
+ * These let the doc chrome render in Alfa Slab/Caveat Brush/Source Sans/DM Mono
+ * regardless of which brand DNA the preset is applied to. The §6 component
+ * preview also reads these via .preset-native-scope.
+ *
+ * The fallback chain matters: if Google Fonts is blocked (some IDE previews) or
+ * slow, we DO NOT want to fall through to generic `serif` (renders as Times,
+ * which kills the stamped-slab character). Each chain ends in a font that still
+ * carries the preset's vibe — Archivo Black / Anton / Impact for the display
+ * slab; Inter for body; system cursives for script. Falling all the way to
+ * generic should never happen in practice. */
+:root {
+  --f-disp-native: "Alfa Slab One", "Archivo Black", "Anton", "Impact", "Arial Black", "Helvetica Neue", sans-serif;
+  --f-body-native: "Source Sans 3", "Inter", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --f-script-native: "Caveat Brush", "Pacifico", "Kalam", "Brush Script MT", "Comic Sans MS", cursive;
+  --f-mono-native: "DM Mono", "Space Mono", "JetBrains Mono", "Menlo", ui-monospace, monospace;
+}
+
 body {
   background: var(--paper);
   color: var(--ink);
@@ -210,6 +446,7 @@ body {
   background-size: var(--grain-size);
   background-position: var(--grain-offset);
   background-blend-mode: multiply;
+  font-family: var(--f-body-native);
 }
 
 /* ── Title card: cream-framed blue plate, peoples signature ── */
@@ -235,11 +472,20 @@ body {
   color: var(--cream);
 }
 .title-display {
+  font-family: var(--f-disp-native);
+  font-weight: 400;
+  font-size: clamp(96px, 14vw, 220px);
   text-transform: uppercase;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.005em;
   color: var(--orange);
-  text-shadow: var(--shadow-triple-lg);
+  text-shadow: 8px 8px 0 var(--red), 16px 16px 0 var(--red-deep);
   line-height: 0.86;
+}
+.brand-row {
+  font-family: var(--f-mono-native);
+}
+.title-meta {
+  font-family: var(--f-mono-native);
 }
 .brand-name {
   color: var(--cream);
@@ -263,27 +509,52 @@ body {
 /* ── Section chrome: thick ink dividers, blue eyebrow, triple-shadow h2 ── */
 .ds-section {
   border-top: 4px solid var(--ink);
+  padding: clamp(56px, 9vh, 120px) 0;
 }
 .eyebrow {
+  font-family: var(--f-mono-native);
   color: var(--blue);
   font-weight: 700;
   letter-spacing: 0.2em;
+  font-size: 13px;
+  opacity: 1;
+  margin-bottom: 24px;
 }
-h2 {
+h1, h2, h3 {
+  font-family: var(--f-disp-native);
+}
+.ds-section h2 {
+  font-family: var(--f-disp-native);
+  font-weight: 400;
+  font-size: clamp(56px, 9vw, 128px);
+  line-height: 0.88;
   text-transform: uppercase;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.005em;
   color: var(--blue);
-  text-shadow: var(--shadow-triple-sm);
+  text-shadow: 6px 6px 0 var(--red);
+  margin-bottom: clamp(32px, 5vh, 56px);
+  max-width: 18ch;
 }
-h2 em {
+.ds-section h2 em {
   font-style: normal;
   color: var(--orange);
-  text-shadow: var(--shadow-triple-sm);
+  text-shadow: 6px 6px 0 var(--red), 12px 12px 0 var(--red-deep);
 }
 .ds-h3 {
+  font-family: var(--f-disp-native) !important;
+  font-weight: 400 !important;
+  font-size: clamp(20px, 1.8vw, 28px) !important;
   color: var(--blue);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.005em !important;
+  opacity: 1 !important;
+}
+.ds-prose,
+.ds-prose-block .ds-prose {
+  font-family: var(--f-body-native);
+  font-size: clamp(15px, 1.2vw, 17px);
+  line-height: 1.7;
+  opacity: 0.9;
 }
 
 /* ── Markdown table: peoples-flavor ── */
@@ -372,5 +643,392 @@ h2 em {
   background: var(--orange);
   color: var(--blue);
   font-weight: 700;
+}
+
+/* ── .preset-native-scope: re-bind brand DNA font tokens to preset-native
+ * families. Wraps §6 component previews and §M motifs demos so var(--font-*)
+ * resolves to Alfa Slab / Source Sans / Caveat Brush / DM Mono regardless of
+ * the brand DNA tokens emitted in :root. The paste-ready component source is
+ * untouched — Phase 4b still grep + paste original `var(--font-display)`
+ * tokens, which resolve to brand DNA at scene-render time. */
+.preset-native-scope {
+  --font-display: var(--f-disp-native);
+  --font-body: var(--f-body-native);
+  --font-script: var(--f-script-native);
+  --font-mono: var(--f-mono-native);
+}
+
+/* ── §M Motifs grid: atomic gestures.
+ * Mirrors peoples-design.html "06 moves" — a 12-col grid of small cards each
+ * teaching ONE reusable gesture (triple-shadow, script-flick, star-flank,
+ * diamond-row, rotated-stamp, end-mark). Cards may declare a surface
+ * (orange / blue / cream) to demonstrate the gesture against its native bg. */
+.ds-motif-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+.ds-motif {
+  grid-column: span 4;
+  min-height: 280px;
+  padding: 30px;
+  border: 4px solid var(--ink);
+  border-radius: 14px;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.ds-motif.ds-motif-wide { grid-column: span 8; }
+.ds-motif.ds-motif-surface-blue { background: var(--blue); color: var(--cream); border-color: var(--cream); }
+.ds-motif.ds-motif-surface-orange { background: var(--orange); color: var(--blue); }
+.ds-motif.ds-motif-surface-cream { background: var(--cream); color: var(--ink); }
+.ds-motif-h {
+  margin: 0;
+  font-family: var(--f-disp-native);
+  font-weight: 400;
+  font-size: clamp(26px, 2.8vw, 40px);
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.005em;
+  color: var(--blue);
+  text-shadow: 4px 4px 0 var(--red);
+}
+.ds-motif.ds-motif-surface-blue .ds-motif-h { color: var(--orange); text-shadow: 4px 4px 0 var(--red); }
+.ds-motif.ds-motif-surface-orange .ds-motif-h { color: var(--blue); text-shadow: 4px 4px 0 var(--red); }
+.ds-motif-h em { font-style: normal; color: var(--orange); text-shadow: 4px 4px 0 var(--red); }
+.ds-motif.ds-motif-surface-orange .ds-motif-h em { color: var(--cream); }
+.ds-motif-desc {
+  margin: 0;
+  font-family: var(--f-body-native);
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+  max-width: 30ch;
+}
+.ds-motif.ds-motif-surface-blue .ds-motif-desc { color: color-mix(in srgb, var(--cream) 85%, transparent); }
+.ds-motif.ds-motif-surface-orange .ds-motif-desc { color: var(--blue); }
+.ds-motif-demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+}
+.ds-motif-id {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-family: var(--f-mono-native);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: 0.45;
+}
+.ds-motif.ds-motif-surface-blue .ds-motif-id { color: var(--cream); opacity: 0.7; }
+@media (max-width: 880px) {
+  .ds-motif-grid { grid-template-columns: repeat(2, 1fr); }
+  .ds-motif, .ds-motif.ds-motif-wide { grid-column: auto; }
+}
+
+/* ── §T Type-role atlas (declared as JSON in §T; rendered in §3 Typography).
+ * Container = peoples-design's `.type-box` look. Each row's `.t-trole-*` class
+ * encodes the role's family / size / weight / leading / tracking / case /
+ * shadow / decoration. Family selectors use var(--font-display) etc. so the
+ * atlas renders in BRAND DNA fonts (heygen → ABC Solar Display etc.), not
+ * preset-native. The role itself is preset-declared (the recipe is peoples-
+ * native), only the actual typeface comes from brand. */
+.ds-trole-box {
+  display: flex;
+  flex-direction: column;
+  border: 4px solid var(--ink);
+  border-radius: 14px;
+  background: var(--paper);
+  overflow: hidden;
+  margin-top: 24px;
+}
+.ds-trole-row {
+  display: grid;
+  grid-template-columns: 14em 1fr;
+  gap: 32px;
+  padding: 30px 36px;
+  border-bottom: 2px dashed color-mix(in srgb, var(--ink) 30%, transparent);
+  align-items: baseline;
+}
+.ds-trole-row:last-child { border-bottom: 0; }
+.ds-trole-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--f-mono-native);
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.ds-trole-meta b {
+  color: var(--red);
+  font-family: var(--f-disp-native);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.005em;
+}
+.ds-trole-sample { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 960px) {
+  .ds-trole-row { grid-template-columns: 1fr; gap: 14px; padding: 24px; }
+}
+
+/* ── Type-role samples. Each .t-trole-* class mirrors a peoples-design
+ *    `.t-*` class but uses var(--font-display/body/mono/script) tokens so the
+ *    actual typeface comes from brand DNA. Decoration (shadow, color, frame,
+ *    rotation, pill, ribbon, dots, button, etc.) is peoples-native and stays
+ *    declared with hard-coded peoples colors (var(--orange), var(--red), etc.). */
+.t-trole-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(96px, 13vw, 200px);
+  line-height: 0.86;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  color: var(--orange);
+  text-shadow: 8px 8px 0 var(--red), 16px 16px 0 var(--red-deep);
+}
+.t-trole-mega-stamp {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(140px, 18vw, 260px);
+  line-height: 0.82;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--blue);
+  text-shadow: 10px 10px 0 var(--red), 20px 20px 0 var(--red-deep);
+}
+.t-trole-stat-numeral {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(140px, 18vw, 260px);
+  line-height: 0.82;
+  letter-spacing: -0.015em;
+  color: var(--orange);
+  text-shadow: 8px 8px 0 var(--red), 16px 16px 0 var(--red-deep);
+}
+.t-trole-stat-numeral sup {
+  font-size: 0.36em;
+  color: var(--blue);
+  text-shadow: 5px 5px 0 var(--red);
+  vertical-align: top;
+  line-height: 1;
+}
+.t-trole-script-line {
+  font-family: var(--font-script);
+  font-weight: 400;
+  font-size: clamp(80px, 9vw, 140px);
+  line-height: 0.95;
+  color: var(--red);
+  transform: rotate(-3deg);
+  display: inline-block;
+}
+.t-trole-framed-headline {
+  display: inline-block;
+  padding: 24px 32px;
+  border: 5px solid var(--cream);
+  background: var(--blue);
+  color: var(--orange);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(60px, 7vw, 108px);
+  line-height: 0.92;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  text-shadow: 5px 5px 0 var(--red);
+}
+.t-trole-stamp-statement {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(72px, 8vw, 128px);
+  line-height: 0.95;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  color: var(--blue);
+  text-shadow: 5px 5px 0 var(--red);
+}
+.t-trole-stamp-statement em {
+  font-style: normal;
+  color: var(--orange);
+  text-shadow: 5px 5px 0 var(--red);
+}
+.t-trole-script-inline {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(40px, 4vw, 64px);
+  line-height: 1;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+.t-trole-script-inline em {
+  font-style: normal;
+  font-family: var(--font-script);
+  text-transform: lowercase;
+  color: var(--red);
+  font-size: 1.05em;
+  transform: rotate(-3deg);
+  display: inline-block;
+  margin: 0 0.12em;
+}
+.t-trole-lead {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: clamp(28px, 2.4vw, 40px);
+  line-height: 1.4;
+  color: var(--ink);
+  max-width: 44ch;
+  margin: 0;
+}
+.t-trole-body {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 27px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 60ch;
+  margin: 0;
+}
+.t-trole-pill-row { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.t-trole-pill {
+  display: inline-block;
+  padding: 8px 18px;
+  border: 3px solid var(--cream);
+  background: var(--blue);
+  color: var(--cream);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border-radius: 999px;
+}
+.t-trole-pill.t-trole-pill-dark { background: var(--ink); border-color: var(--ink); color: var(--orange); }
+.t-trole-pill.t-trole-pill-paper { background: var(--paper); border-color: var(--ink); color: var(--ink); }
+.t-trole-mono-chrome {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-diamond-row { display: flex; flex-direction: column; gap: 14px; }
+.t-trole-diamond-row span {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.4;
+  color: var(--ink);
+  padding-left: 36px;
+  position: relative;
+}
+.t-trole-diamond-row span::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.4em;
+  width: 18px;
+  height: 18px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+.t-trole-star-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  padding: 14px 24px;
+  background: var(--orange);
+  border-top: 5px solid var(--ink);
+  border-bottom: 5px solid var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  color: var(--blue);
+  text-transform: uppercase;
+}
+.t-trole-rotated-stamp {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: var(--cream);
+  color: var(--blue);
+  border: 6px solid var(--orange);
+  transform: rotate(-9deg);
+  box-shadow: 8px 8px 0 var(--red);
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+  text-align: center;
+  gap: 8px;
+}
+.t-trole-rotated-stamp .big { font-size: 44px; line-height: 0.9; }
+.t-trole-rotated-stamp .small { font-size: 13px; letter-spacing: 0.18em; font-family: var(--font-mono); }
+.t-trole-track-row { display: flex; align-items: center; gap: 14px; }
+.t-trole-track-row .dot {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--orange);
+  border: 5px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--red);
+  flex-shrink: 0;
+}
+.t-trole-track-row .dot.alt { background: var(--blue); }
+.t-trole-track-row .bar { flex: 0 1 60px; height: 8px; background: var(--ink); }
+.t-trole-track-row .label {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.t-trole-cta {
+  display: inline-block;
+  padding: 18px 32px;
+  background: var(--orange);
+  color: var(--blue);
+  border: 5px solid var(--cream);
+  box-shadow: 8px 8px 0 var(--red);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.t-trole-end-mark {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(80px, 9vw, 140px);
+  line-height: 0.9;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  color: var(--orange);
+  text-shadow: 6px 6px 0 var(--red), 12px 12px 0 var(--red-deep);
 }
 ```

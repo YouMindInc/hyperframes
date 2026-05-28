@@ -483,6 +483,11 @@ function parsePreset(presetDir) {
     // score and surfaces a capabilities_missing[] list in inference.json so
     // the subagent can auto-install or report. See checkCapabilities() below.
     requiresCapabilities: Array.isArray(meta.requires_capabilities) ? meta.requires_capabilities : [],
+    // Optional preset-native chrome fonts. When declared, build-design.mjs
+    // injects an extra Google Fonts <link> and renderComponents() switches
+    // §6 to dual-column (brand-applied | preset-native). See §I CSS for
+    // .preset-native-scope and chromeFonts schema in preset-meta JSON.
+    chromeFonts: meta.chromeFonts || null,
     sections,
     components,
     rawBody: body,
@@ -1421,17 +1426,74 @@ ${fontScriptLine}${tokenLines.map((l) => "  " + l).join("\n")}`;
 <section id="color-tokens" class="ds-section">
   <div class="eyebrow">§2 · Color × Style overlay</div>
   <h2>Color tokens + ${esc(preset.label)} decoration vars</h2>
-  <p class="ds-prose">Brand colors come from the site. Decoration variables come from the <strong>${esc(preset.label)}</strong> preset. Below is the <code>:root</code> block — it is live on this page (so §6 component previews render properly) and also copy-paste-ready for scene <code>&lt;style&gt;</code> blocks.</p>
+  <p class="ds-prose">Brand colors come from the site. Decoration variables come from the <strong>${esc(preset.label)}</strong> preset. The <code>:root</code> block is live on this page (so §6 component previews render properly). The paste-ready source for <code>chunks/tokens.css</code> is collapsed below — open it to copy.</p>
   <style>:root {${rootBody}
   }</style>
-  <pre class="ds-code"><!-- ROOT-START -->:root {${rootBody}
+  <details class="ds-paste-ready">
+    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/tokens.css</code></summary>
+    <pre class="ds-code"><!-- ROOT-START -->:root {${rootBody}
 }<!-- ROOT-END --></pre>
+  </details>
 </section>`;
 }
 
 // ═══════════════════ Render: §3 Typography ═══════════════
+// Parse §T type-roles JSON block. Each entry is a named text role the Phase 4b
+// scene worker may cite by `id` ("use a stamp-statement here") to pick correct
+// size / weight / leading / tracking / case + decoration. The atlas renders in
+// brand DNA fonts (var(--font-*) tokens), so the role catalog is preset-declared
+// but the actual typeface is whatever the brand ships. Returns [] when no §T.
+function parseTypeRoles() {
+  const sect = preset.sections?.T?.content;
+  if (!sect) return [];
+  const fenced = sect.match(/```type-roles\n([\s\S]+?)\n```/);
+  if (!fenced) return [];
+  try {
+    const arr = JSON.parse(fenced[1]);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    console.error(`✗ ${preset.name}: §T type-roles JSON failed to parse — ${e.message}`);
+    return [];
+  }
+}
+
 function renderTypography() {
   const recipe = preset.sections.D?.content || "";
+  const typeRoles = parseTypeRoles();
+  const atlasBlock = typeRoles.length
+    ? `
+  <h3 class="ds-h3" style="margin-top: 48px;">Type-role atlas (preset §T)</h3>
+  <p class="ds-prose">Each row is a named role the Phase 4b scene worker may cite by <code>id</code> to size and decorate text correctly. Family tokens (<code>var(--font-display)</code> etc.) resolve to the brand's actual typeface — so a <code>stamp-statement</code> renders here in <strong>${esc(display.name)}</strong>, not Alfa Slab. Use this whenever you need text outside the §6 components.</p>
+  <div class="ds-trole-box">
+    ${typeRoles
+      .map((r) => {
+        const sample = String(r.sample_html || "").replace(/\{(\w+)\}/g, (_, k) => placeholderFor(k));
+        const dataAttrs = [
+          `data-scale="${esc(r.id || "")}"`,
+          `data-family="${esc(r.family || "")}"`,
+          `data-px-min="${esc(String(r.px_min ?? ""))}"`,
+          `data-px-max="${esc(String(r.px_max ?? ""))}"`,
+          `data-weight="${esc(String(r.weight ?? ""))}"`,
+          `data-leading="${esc(String(r.leading ?? ""))}"`,
+          `data-tracking="${esc(String(r.tracking ?? ""))}"`,
+          `data-case="${esc(r.case || "")}"`,
+          `data-purpose="${esc(r.purpose || "")}"`,
+        ].join(" ");
+        const pxRange = r.px_min && r.px_max ? `${r.px_min}–${r.px_max}px` : "";
+        return `
+    <div class="ds-trole-row" ${dataAttrs}>
+      <div class="ds-trole-meta">
+        <span>${esc(pxRange)}</span>
+        <b>${esc(r.family || "")}</b>
+        <span>${esc(r.purpose || "")}</span>
+        <span>wght ${esc(String(r.weight ?? ""))} · lh ${esc(String(r.leading ?? ""))} · ${esc(r.case || "")}</span>
+      </div>
+      <div class="ds-trole-sample">${sample}</div>
+    </div>`;
+      })
+      .join("")}
+  </div>`
+    : "";
   return `
 <section id="typography" class="ds-section">
   <div class="eyebrow">§3 · Typography</div>
@@ -1463,8 +1525,9 @@ function renderTypography() {
     </div>`;
     }).join("")}
   </div>
+${atlasBlock}
 
-  <details>
+  <details style="margin-top: 32px;">
     <summary class="ds-summary">Font pairing recipe (preset §D)</summary>
     <div class="ds-prose-block">${mdBlockToHtml(recipe)}</div>
   </details>
@@ -1483,10 +1546,12 @@ function renderMotion() {
   <div class="eyebrow">§4 · Motion (preset)</div>
   <h2>${esc(preset.label)} motion language</h2>
   <div class="ds-prose-block">${mdBlockToHtml(intent)}</div>
-  <p class="ds-prose"><strong>Paste these consts at the top of every scene's <code>&lt;script&gt;</code>:</strong></p>
-  <pre class="ds-code"><!-- MOTION-START -->
+  <details class="ds-paste-ready">
+    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/easings.js</code> (paste at top of every scene's <code>&lt;script&gt;</code>)</summary>
+    <pre class="ds-code"><!-- MOTION-START -->
 ${esc(motionJs)}
 <!-- MOTION-END --></pre>
+  </details>
 </section>`;
 }
 
@@ -1554,10 +1619,12 @@ ${recipe}
       : ""
   }
 
-  <h3 class="ds-h3" style="margin-top: 32px;">Paste-ready (Phase 4b reads chunks/voice.md)</h3>
-  <pre class="ds-code"><!-- VOICE-START -->
+  <details class="ds-paste-ready" style="margin-top: 32px;">
+    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/voice.md</code> (Phase 4b applies recipe to DOM text)</summary>
+    <pre class="ds-code"><!-- VOICE-START -->
 ${esc(voiceMd)}
 <!-- VOICE-END --></pre>
+  </details>
 </section>`;
 }
 
@@ -1624,21 +1691,93 @@ function renderHints() {
 <section id="hints" class="ds-section">
   <div class="eyebrow">§H · Scene composition hints (plan agent reads these)</div>
   <h2>${esc(preset.label)} composition rules</h2>
-  <p class="ds-prose">Surface contracts, material composition rules, brand-color placement, sound-design hooks — anything that constrains <strong>which</strong> components a Phase 3 plan can mix in a single scene. Pasted verbatim into <code>chunks/composition-hints.md</code> for the plan agent.</p>
+  <p class="ds-prose">Surface contracts, material composition rules, brand-color placement, sound-design hooks — anything that constrains <strong>which</strong> components a Phase 3 plan can mix in a single scene.</p>
   <div class="ds-prose-block">${mdBlockToHtml(hintsContent || "_no §H declared_")}</div>
-  <pre class="ds-code"><!-- HINTS-START -->
+  <details class="ds-paste-ready">
+    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/composition-hints.md</code> (plan agent reads this)</summary>
+    <pre class="ds-code"><!-- HINTS-START -->
 ${esc(hintsMd)}
 <!-- HINTS-END --></pre>
+  </details>
+</section>`;
+}
+
+// Parse §M motifs JSON block. The preset declares a single fenced ```motifs ... ```
+// block inside §M; each entry is an atomic gesture the plan agent can reference.
+// Returns [] when the preset doesn't declare §M.
+function parseMotifs() {
+  const sect = preset.sections?.M?.content;
+  if (!sect) return [];
+  const fenced = sect.match(/```motifs\n([\s\S]+?)\n```/);
+  if (!fenced) return [];
+  try {
+    const arr = JSON.parse(fenced[1]);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    console.error(`✗ ${preset.name}: §M motifs JSON failed to parse — ${e.message}`);
+    return [];
+  }
+}
+
+function renderMotifs() {
+  const motifs = parseMotifs();
+  if (!motifs.length) return "";
+  const total = motifs.length;
+  const cards = motifs
+    .map((m, idx) => {
+      const num = String(idx + 1).padStart(2, "0");
+      const totalStr = String(total).padStart(2, "0");
+      const surface = m.surface ? ` ds-motif-surface-${esc(m.surface)}` : "";
+      const wide = m.wide ? " ds-motif-wide" : "";
+      // Pull the em-tagging from the label: "Triple shadow" → "Triple <em>shadow.</em>"
+      // (peoples-design pattern: last word becomes the em, plus a period). Falls back
+      // to the raw label when label has no space.
+      const label = String(m.label || m.id || "");
+      const parts = label.split(/\s+/);
+      const labelHtml =
+        parts.length >= 2
+          ? `${esc(parts.slice(0, -1).join(" "))} <em>${esc(parts[parts.length - 1])}.</em>`
+          : `${esc(label)}.`;
+      return `
+    <article class="ds-motif${surface}${wide}" data-motif="${esc(m.id || "")}" data-role="${esc(m.role || "")}">
+      <span class="ds-motif-id">${num} / ${totalStr} · ${esc(m.id || "")}</span>
+      <div>
+        <h3 class="ds-motif-h">${labelHtml}</h3>
+        <p class="ds-motif-desc">${esc(m.description || "")}</p>
+      </div>
+      <div class="ds-motif-demo">
+        <style>${m.css || ""}</style>
+        ${m.demo || ""}
+      </div>
+    </article>`;
+    })
+    .join("");
+  return `
+<section id="motifs" class="ds-section">
+  <div class="eyebrow">§M · Atomic motifs (preset-native gestures)</div>
+  <h2>Atomic <em>moves.</em></h2>
+  <p class="ds-prose">Each fragment teaches ONE reusable gesture. Patterns (§7) compose motifs; motifs themselves are indivisible. Plan agent and scene worker may cite motifs by <code>id</code> when annotating which gesture a scene relies on.</p>
+  <div class="ds-motif-grid">${cards}
+  </div>
 </section>`;
 }
 
 function renderComponents() {
   if (!preset.components.length) return "";
+  // When the preset declares chromeFonts, render the live preview inside
+  // .preset-native-scope so var(--font-*) resolves to preset-native families
+  // (e.g. Alfa Slab) instead of brand DNA. The paste-ready source block under
+  // <details> is untouched — Phase 4b still grep + paste the original tokens,
+  // and those resolve to brand DNA at scene-render time. The preview is purely
+  // a visual reference for what each component looks like at full preset-native
+  // expression. No dual-column — reviewers see the north-star directly.
+  const presetNative = !!preset.chromeFonts?.googleFontsHref;
+  const previewClass = presetNative ? "comp-preview preset-native-scope" : "comp-preview";
   return `
 <section id="components" class="ds-section">
   <div class="eyebrow">§6 · Components (paste-ready)</div>
   <h2>${esc(preset.label)} component library</h2>
-  <p class="ds-prose">Each component below is wrapped with <code>&lt;!-- COMPONENT: name --&gt;</code> markers. Phase 4b workers can <code>grep</code> by name and paste verbatim. CSS variables (<code>--brand-primary</code>, <code>--canvas</code>, etc.) come from §2. Font families have been rewritten to <code>var(--font-display/body/mono)</code> tokens so they resolve to the brand's actual typefaces.</p>
+  <p class="ds-prose">Each component below is wrapped with <code>&lt;!-- COMPONENT: name --&gt;</code> markers. Phase 4b workers can <code>grep</code> by name and paste verbatim. CSS variables (<code>--brand-primary</code>, <code>--canvas</code>, etc.) come from §2.${presetNative ? " The preview renders inside <code>.preset-native-scope</code>, so <code>var(--font-display)</code> etc. resolve to the preset's native typefaces. The paste-ready source under <em>Source</em> still references the brand tokens — those resolve to brand DNA at scene-render time." : " Font families have been rewritten to <code>var(--font-display/body/mono)</code> tokens so they resolve to the brand's actual typefaces."}</p>
 
   ${preset.components
     .map((rawC) => {
@@ -1650,15 +1789,16 @@ function renderComponents() {
       const htmlSnippet = htmlMatch ? htmlMatch[1].trim() : "";
       // Strip <style> from the html before live-rendering
       const htmlForPreview = htmlSnippet.replace(/<style[\s\S]*?<\/style>/g, "").trim();
+      const expanded = htmlForPreview.replace(/\{(\w+)\}/g, (_, key) => placeholderFor(key));
       return `
   <div class="comp-card">
     <div class="comp-head">
       <span class="comp-name">${esc(c.name)}</span>
       <span class="comp-marker">&lt;!-- COMPONENT: ${esc(c.name)} --&gt;</span>
     </div>
-    <div class="comp-preview">
+    <div class="${previewClass}">
       <style>${cssMatch ? cssMatch[1] : ""}</style>
-      ${htmlForPreview.replace(/\{(\w+)\}/g, (_, key) => placeholderFor(key))}
+      ${expanded}
     </div>
     <details>
       <summary class="ds-summary">Source</summary>
@@ -1763,6 +1903,15 @@ function renderPageStyles() {
   .ds-summary { cursor: pointer; padding: 8px 0; font-family: '${esc(mono.name)}', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; }
   details[open] .ds-summary { opacity: 1; }
 
+  /* Paste-ready source blocks — collapsed by default because the raw markdown / CSS
+     in <pre> doesn't render as a readable doc (it's machine-bound for emit-chunks).
+     The rendered version sits above each <details>. */
+  .ds-paste-ready { margin: 16px 0; padding: 12px 16px; border: 1px dashed ${isLight(canvasHex) ? "#bbb" : "#444"}; border-radius: 8px; background: ${isLight(canvasHex) ? "#fafafa" : "#181818"}; }
+  .ds-paste-ready > .ds-summary { padding: 4px 0; font-size: 11px; opacity: 0.85; }
+  .ds-paste-ready > .ds-summary code { background: ${isLight(canvasHex) ? "#eee" : "#222"}; padding: 1px 5px; border-radius: 3px; font-size: 0.95em; }
+  .ds-paste-ready[open] > .ds-summary { margin-bottom: 8px; }
+  .ds-paste-ready > pre.ds-code { margin: 0; }
+
   /* ── Title card */
   .title-card { padding: 80px 0 64px; border-bottom: 1px solid ${isLight(canvasHex) ? "#e5e5e5" : "#222"}; }
   .title-card-inner { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
@@ -1866,6 +2015,17 @@ ${(() => {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="${url}" rel="stylesheet">`;
 })()}
+${(() => {
+  // Preset-native chrome fonts (preset-meta.chromeFonts.googleFontsHref).
+  // Loads e.g. Alfa Slab One + Source Sans 3 + Caveat Brush + DM Mono so the
+  // doc chrome (title, section heads, lede) renders in the preset's native
+  // typography regardless of brand DNA. Also enables .preset-native-scope in §6.
+  const chromeFonts = preset.chromeFonts;
+  const chromeHref = chromeFonts?.googleFontsHref;
+  if (!chromeHref) return "<!-- (preset declares no chromeFonts — doc chrome uses brand DNA fonts) -->";
+  return `<!-- preset chromeFonts: native typography for doc chrome + .preset-native-scope -->
+<link href="${esc(chromeHref)}" rel="stylesheet">`;
+})()}
 <style>
 ${localFontFaceBlock}
 ${renderPageStyles()}
@@ -1884,6 +2044,7 @@ ${renderMotion()}
 ${renderVoice()}
 ${renderHints()}
 ${renderComponents()}
+${renderMotifs()}
 </main>
 
 </body>
