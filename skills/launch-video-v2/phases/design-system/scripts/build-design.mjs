@@ -1457,6 +1457,54 @@ function parseTypeRoles() {
   }
 }
 
+// Pull every `.t-trole-<roleId>` CSS rule out of §I page-level CSS so the
+// paste-ready chunks/type-roles.md ships decoration (color, shadow, transform,
+// pseudo descendants) alongside the role's metadata. Matches plain selectors,
+// descendant pseudo (`.t-trole-foo em`), compound classes (`.t-trole-foo.x`),
+// and chained children (`.t-trole-foo .bar`). Uses a permissive `{…}` body
+// matcher — these blocks are hand-authored CSS with no nesting.
+function extractRoleCss(roleId, sectionICss) {
+  if (!sectionICss) return "";
+  const re = new RegExp(`\\.t-trole-${roleId}(?![a-zA-Z0-9_-])[^{}]*\\{[^}]*\\}`, "g");
+  return [...sectionICss.matchAll(re)].map((m) => m[0].trim()).join("\n\n");
+}
+
+// Build chunks/type-roles.md content. One section per role: metadata header +
+// CSS rule (from §I) + sample HTML. Returns "" when preset declares no §T —
+// emit-chunks will then leave type-roles.md unwritten and index.json's
+// type_roles_file = null.
+function buildTypeRolesMd() {
+  const roles = parseTypeRoles();
+  if (!roles.length) return "";
+  const sectionICss = [...(preset.sections.I?.content || "").matchAll(/```css\n([\s\S]*?)```/g)]
+    .map((m) => m[1])
+    .join("\n");
+  const sections = roles.map((r) => {
+    const css = extractRoleCss(r.id, sectionICss);
+    const sample = String(r.sample_html || "").trim();
+    return `## type-role: ${r.id}
+
+- family: ${r.family || "—"} · px: ${r.px_min ?? "—"}–${r.px_max ?? "—"} · weight: ${r.weight ?? "—"}
+- leading: ${r.leading ?? "—"} · tracking: ${r.tracking ?? "—"} · case: ${r.case || "—"}
+- purpose: ${r.purpose || "—"}
+
+\`\`\`css
+${css || `/* (preset §I did not ship CSS for .t-trole-${r.id} — derive from metadata above) */`}
+\`\`\`
+
+Sample:
+
+\`\`\`html
+${sample}
+\`\`\``;
+  });
+  return `# Type-roles atlas — ${preset.label}
+
+Phase 4b scene worker reads this when text outside §6 components is needed (hero displays, ledes, pill rows, CTA buttons, …). Workflow: pick role by id → paste the CSS rule into scene \`<style>\` with \`s<N>-\` prefix on the class names → wrap content using the prefixed class. Family tokens (\`var(--font-*)\`) resolve to brand DNA at scene-render time.
+
+${sections.join("\n\n")}`;
+}
+
 function renderTypography() {
   const recipe = preset.sections.D?.content || "";
   const typeRoles = parseTypeRoles();
@@ -1526,7 +1574,17 @@ function renderTypography() {
     }).join("")}
   </div>
 ${atlasBlock}
-
+${(() => {
+  const typeRolesMd = buildTypeRolesMd();
+  if (!typeRolesMd) return "";
+  return `
+  <details class="ds-paste-ready" style="margin-top: 32px;">
+    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/type-roles.md</code> (scene worker reads on demand)</summary>
+    <pre class="ds-code"><!-- TYPE-ROLES-START -->
+${esc(typeRolesMd)}
+<!-- TYPE-ROLES-END --></pre>
+  </details>`;
+})()}
   <details style="margin-top: 32px;">
     <summary class="ds-summary">Font pairing recipe (preset §D)</summary>
     <div class="ds-prose-block">${mdBlockToHtml(recipe)}</div>
@@ -1719,6 +1777,52 @@ function parseMotifs() {
   }
 }
 
+// Map design.html-native font vars back to brand DNA tokens so motif CSS is
+// paste-ready inside a scene composition (where only --font-* tokens exist).
+// Preset §M motif CSS uses `--f-disp-native` etc. because the design.html doc
+// chrome renders motifs in preset-native typography; at scene-render time we
+// want the brand's actual typeface.
+function rewriteMotifVars(css) {
+  return String(css || "")
+    .replace(/--f-disp-native/g, "--font-display")
+    .replace(/--f-body-native/g, "--font-body")
+    .replace(/--f-mono-native/g, "--font-mono")
+    .replace(/--f-script-native/g, "--font-script");
+}
+
+// Build chunks/motifs.md content. Per motif: metadata + var-rewritten CSS +
+// demo HTML. Returns "" when preset declares no §M — emit-chunks then writes no
+// file and index.json's motifs_file = null.
+function buildMotifsMd() {
+  const motifs = parseMotifs();
+  if (!motifs.length) return "";
+  const sections = motifs.map((m) => {
+    const css = rewriteMotifVars(m.css || "");
+    const surfaceSafe = (m.surface_safe || []).join(", ") || "—";
+    const surfaceTag = m.surface ? ` · default-surface: ${m.surface}` : "";
+    const demo = String(m.demo || "").trim();
+    return `## motif: ${m.id}
+
+- role: ${m.role || "—"} · surface_safe: [${surfaceSafe}]${surfaceTag}
+- ${m.description || ""}
+
+\`\`\`css
+${css || "/* (preset §M did not declare CSS for this motif) */"}
+\`\`\`
+
+Demo:
+
+\`\`\`html
+${demo}
+\`\`\``;
+  });
+  return `# Motifs catalog — ${preset.label}
+
+Phase 3 plan agent may cite motifs by id in the \`**Motifs:**\` anchor ("this scene uses motif:triple-shadow + motif:script-flick"). Phase 4b worker reads this catalog when planting a cited motif: paste the CSS rule into scene \`<style>\` (add \`s<N>-\` prefix on class names → update selectors), then place the demo HTML in the DOM. Font vars are already rewritten from preset-native (\`--f-disp-native\`) to brand DNA (\`var(--font-display)\`).
+
+${sections.join("\n\n")}`;
+}
+
 function renderMotifs() {
   const motifs = parseMotifs();
   if (!motifs.length) return "";
@@ -1752,13 +1856,23 @@ function renderMotifs() {
     </article>`;
     })
     .join("");
+  const motifsMd = buildMotifsMd();
+  const pasteReady = motifsMd
+    ? `
+  <details class="ds-paste-ready" style="margin-top: 32px;">
+    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/motifs.md</code> (plan agent + worker read this)</summary>
+    <pre class="ds-code"><!-- MOTIFS-START -->
+${esc(motifsMd)}
+<!-- MOTIFS-END --></pre>
+  </details>`
+    : "";
   return `
 <section id="motifs" class="ds-section">
   <div class="eyebrow">§M · Atomic motifs (preset-native gestures)</div>
   <h2>Atomic <em>moves.</em></h2>
   <p class="ds-prose">Each fragment teaches ONE reusable gesture. Patterns (§7) compose motifs; motifs themselves are indivisible. Plan agent and scene worker may cite motifs by <code>id</code> when annotating which gesture a scene relies on.</p>
   <div class="ds-motif-grid">${cards}
-  </div>
+  </div>${pasteReady}
 </section>`;
 }
 

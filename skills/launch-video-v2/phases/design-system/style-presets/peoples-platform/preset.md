@@ -319,6 +319,46 @@ Apply ONLY to DOM-visible text (headlines, chips, button labels, stat captions).
 
 Scene transitions go through hard cut, not surface fade.
 
+**Surface `#root` CSS** — paste-ready stanza for the Phase 4b scene worker. When `dispatch.surface` is set, the worker drops the matching block into the scene's `#root { ... }` instead of the default `background: var(--canvas)`. Missing the override → mp4 renders generic SaaS canvas, loses half the preset's visual signature.
+
+```css
+/* surface: paper —— poster-board base + paper grain */
+#root {
+  background: var(--paper);
+  color: var(--ink);
+  background-image: var(--grain-image);
+  background-size: var(--grain-size);
+  background-position: var(--grain-offset);
+  background-blend-mode: multiply;
+  font-family: var(--font-body);
+}
+
+/* surface: blue —— authority plate + cream-frame inset.
+   ::after frame is z-index:0, so all scene content MUST be wrapped in
+   <div style="position:relative; z-index:1;"> to sit above the frame. */
+#root {
+  position: relative;
+  background: var(--blue);
+  color: var(--cream);
+  font-family: var(--font-body);
+}
+#root::after {
+  content: "";
+  position: absolute;
+  inset: 48px 64px;
+  border: var(--frame-cream);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* surface: orange —— signal plate (≤ 1 scene per video) */
+#root {
+  background: var(--orange);
+  color: var(--blue);
+  font-family: var(--font-body);
+}
+```
+
 **Material composition rules** (peoples invariants — encoded in component frontmatter `avoids_same_scene`):
 
 - Single triple-stamp per plate. `stamp-statement` + `framed-stamp` in same scene → visual collision; pick one.
@@ -433,9 +473,13 @@ The `motifs` JSON block above is the SOLE source of truth. build-design.mjs read
  * slab; Inter for body; system cursives for script. Falling all the way to
  * generic should never happen in practice. */
 :root {
-  --f-disp-native: "Alfa Slab One", "Archivo Black", "Anton", "Impact", "Arial Black", "Helvetica Neue", sans-serif;
-  --f-body-native: "Source Sans 3", "Inter", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --f-script-native: "Caveat Brush", "Pacifico", "Kalam", "Brush Script MT", "Comic Sans MS", cursive;
+  --f-disp-native:
+    "Alfa Slab One", "Archivo Black", "Anton", "Impact", "Arial Black", "Helvetica Neue", sans-serif;
+  --f-body-native:
+    "Source Sans 3", "Inter", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --f-script-native:
+    "Caveat Brush", "Pacifico", "Kalam", "Brush Script MT", "Comic Sans MS", cursive;
   --f-mono-native: "DM Mono", "Space Mono", "JetBrains Mono", "Menlo", ui-monospace, monospace;
 }
 
@@ -478,7 +522,9 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.005em;
   color: var(--orange);
-  text-shadow: 8px 8px 0 var(--red), 16px 16px 0 var(--red-deep);
+  text-shadow:
+    8px 8px 0 var(--red),
+    16px 16px 0 var(--red-deep);
   line-height: 0.86;
 }
 .brand-row {
@@ -520,7 +566,9 @@ body {
   opacity: 1;
   margin-bottom: 24px;
 }
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   font-family: var(--f-disp-native);
 }
 .ds-section h2 {
@@ -538,7 +586,9 @@ h1, h2, h3 {
 .ds-section h2 em {
   font-style: normal;
   color: var(--orange);
-  text-shadow: 6px 6px 0 var(--red), 12px 12px 0 var(--red-deep);
+  text-shadow:
+    6px 6px 0 var(--red),
+    12px 12px 0 var(--red-deep);
 }
 .ds-h3 {
   font-family: var(--f-disp-native) !important;
@@ -682,10 +732,22 @@ h1, h2, h3 {
   position: relative;
   overflow: hidden;
 }
-.ds-motif.ds-motif-wide { grid-column: span 8; }
-.ds-motif.ds-motif-surface-blue { background: var(--blue); color: var(--cream); border-color: var(--cream); }
-.ds-motif.ds-motif-surface-orange { background: var(--orange); color: var(--blue); }
-.ds-motif.ds-motif-surface-cream { background: var(--cream); color: var(--ink); }
+.ds-motif.ds-motif-wide {
+  grid-column: span 8;
+}
+.ds-motif.ds-motif-surface-blue {
+  background: var(--blue);
+  color: var(--cream);
+  border-color: var(--cream);
+}
+.ds-motif.ds-motif-surface-orange {
+  background: var(--orange);
+  color: var(--blue);
+}
+.ds-motif.ds-motif-surface-cream {
+  background: var(--cream);
+  color: var(--ink);
+}
 .ds-motif-h {
   margin: 0;
   font-family: var(--f-disp-native);
@@ -697,10 +759,22 @@ h1, h2, h3 {
   color: var(--blue);
   text-shadow: 4px 4px 0 var(--red);
 }
-.ds-motif.ds-motif-surface-blue .ds-motif-h { color: var(--orange); text-shadow: 4px 4px 0 var(--red); }
-.ds-motif.ds-motif-surface-orange .ds-motif-h { color: var(--blue); text-shadow: 4px 4px 0 var(--red); }
-.ds-motif-h em { font-style: normal; color: var(--orange); text-shadow: 4px 4px 0 var(--red); }
-.ds-motif.ds-motif-surface-orange .ds-motif-h em { color: var(--cream); }
+.ds-motif.ds-motif-surface-blue .ds-motif-h {
+  color: var(--orange);
+  text-shadow: 4px 4px 0 var(--red);
+}
+.ds-motif.ds-motif-surface-orange .ds-motif-h {
+  color: var(--blue);
+  text-shadow: 4px 4px 0 var(--red);
+}
+.ds-motif-h em {
+  font-style: normal;
+  color: var(--orange);
+  text-shadow: 4px 4px 0 var(--red);
+}
+.ds-motif.ds-motif-surface-orange .ds-motif-h em {
+  color: var(--cream);
+}
 .ds-motif-desc {
   margin: 0;
   font-family: var(--f-body-native);
@@ -710,8 +784,12 @@ h1, h2, h3 {
   color: var(--ink-dim);
   max-width: 30ch;
 }
-.ds-motif.ds-motif-surface-blue .ds-motif-desc { color: color-mix(in srgb, var(--cream) 85%, transparent); }
-.ds-motif.ds-motif-surface-orange .ds-motif-desc { color: var(--blue); }
+.ds-motif.ds-motif-surface-blue .ds-motif-desc {
+  color: color-mix(in srgb, var(--cream) 85%, transparent);
+}
+.ds-motif.ds-motif-surface-orange .ds-motif-desc {
+  color: var(--blue);
+}
 .ds-motif-demo {
   display: flex;
   align-items: center;
@@ -729,10 +807,18 @@ h1, h2, h3 {
   color: var(--ink);
   opacity: 0.45;
 }
-.ds-motif.ds-motif-surface-blue .ds-motif-id { color: var(--cream); opacity: 0.7; }
+.ds-motif.ds-motif-surface-blue .ds-motif-id {
+  color: var(--cream);
+  opacity: 0.7;
+}
 @media (max-width: 880px) {
-  .ds-motif-grid { grid-template-columns: repeat(2, 1fr); }
-  .ds-motif, .ds-motif.ds-motif-wide { grid-column: auto; }
+  .ds-motif-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ds-motif,
+  .ds-motif.ds-motif-wide {
+    grid-column: auto;
+  }
 }
 
 /* ── §T Type-role atlas (declared as JSON in §T; rendered in §3 Typography).
@@ -759,7 +845,9 @@ h1, h2, h3 {
   border-bottom: 2px dashed color-mix(in srgb, var(--ink) 30%, transparent);
   align-items: baseline;
 }
-.ds-trole-row:last-child { border-bottom: 0; }
+.ds-trole-row:last-child {
+  border-bottom: 0;
+}
 .ds-trole-meta {
   display: flex;
   flex-direction: column;
@@ -781,9 +869,16 @@ h1, h2, h3 {
   text-transform: uppercase;
   letter-spacing: 0.005em;
 }
-.ds-trole-sample { min-width: 0; overflow-wrap: anywhere; }
+.ds-trole-sample {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 960px) {
-  .ds-trole-row { grid-template-columns: 1fr; gap: 14px; padding: 24px; }
+  .ds-trole-row {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 24px;
+  }
 }
 
 /* ── Type-role samples. Each .t-trole-* class mirrors a peoples-design
@@ -799,7 +894,9 @@ h1, h2, h3 {
   letter-spacing: 0.005em;
   text-transform: uppercase;
   color: var(--orange);
-  text-shadow: 8px 8px 0 var(--red), 16px 16px 0 var(--red-deep);
+  text-shadow:
+    8px 8px 0 var(--red),
+    16px 16px 0 var(--red-deep);
 }
 .t-trole-mega-stamp {
   font-family: var(--font-display);
@@ -809,7 +906,9 @@ h1, h2, h3 {
   letter-spacing: -0.01em;
   text-transform: uppercase;
   color: var(--blue);
-  text-shadow: 10px 10px 0 var(--red), 20px 20px 0 var(--red-deep);
+  text-shadow:
+    10px 10px 0 var(--red),
+    20px 20px 0 var(--red-deep);
 }
 .t-trole-stat-numeral {
   font-family: var(--font-display);
@@ -818,7 +917,9 @@ h1, h2, h3 {
   line-height: 0.82;
   letter-spacing: -0.015em;
   color: var(--orange);
-  text-shadow: 8px 8px 0 var(--red), 16px 16px 0 var(--red-deep);
+  text-shadow:
+    8px 8px 0 var(--red),
+    16px 16px 0 var(--red-deep);
 }
 .t-trole-stat-numeral sup {
   font-size: 0.36em;
@@ -902,7 +1003,11 @@ h1, h2, h3 {
   max-width: 60ch;
   margin: 0;
 }
-.t-trole-pill-row { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.t-trole-pill-row {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .t-trole-pill {
   display: inline-block;
   padding: 8px 18px;
@@ -917,8 +1022,16 @@ h1, h2, h3 {
   text-transform: uppercase;
   border-radius: 999px;
 }
-.t-trole-pill.t-trole-pill-dark { background: var(--ink); border-color: var(--ink); color: var(--orange); }
-.t-trole-pill.t-trole-pill-paper { background: var(--paper); border-color: var(--ink); color: var(--ink); }
+.t-trole-pill.t-trole-pill-dark {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--orange);
+}
+.t-trole-pill.t-trole-pill-paper {
+  background: var(--paper);
+  border-color: var(--ink);
+  color: var(--ink);
+}
 .t-trole-mono-chrome {
   font-family: var(--font-mono);
   font-weight: 500;
@@ -928,7 +1041,11 @@ h1, h2, h3 {
   text-transform: uppercase;
   color: var(--ink);
 }
-.t-trole-diamond-row { display: flex; flex-direction: column; gap: 14px; }
+.t-trole-diamond-row {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .t-trole-diamond-row span {
   font-family: var(--font-body);
   font-weight: 500;
@@ -984,9 +1101,20 @@ h1, h2, h3 {
   text-align: center;
   gap: 8px;
 }
-.t-trole-rotated-stamp .big { font-size: 44px; line-height: 0.9; }
-.t-trole-rotated-stamp .small { font-size: 13px; letter-spacing: 0.18em; font-family: var(--font-mono); }
-.t-trole-track-row { display: flex; align-items: center; gap: 14px; }
+.t-trole-rotated-stamp .big {
+  font-size: 44px;
+  line-height: 0.9;
+}
+.t-trole-rotated-stamp .small {
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  font-family: var(--font-mono);
+}
+.t-trole-track-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 .t-trole-track-row .dot {
   width: 40px;
   height: 40px;
@@ -996,8 +1124,14 @@ h1, h2, h3 {
   box-shadow: 4px 4px 0 var(--red);
   flex-shrink: 0;
 }
-.t-trole-track-row .dot.alt { background: var(--blue); }
-.t-trole-track-row .bar { flex: 0 1 60px; height: 8px; background: var(--ink); }
+.t-trole-track-row .dot.alt {
+  background: var(--blue);
+}
+.t-trole-track-row .bar {
+  flex: 0 1 60px;
+  height: 8px;
+  background: var(--ink);
+}
 .t-trole-track-row .label {
   font-family: var(--font-mono);
   font-weight: 500;
@@ -1029,6 +1163,8 @@ h1, h2, h3 {
   letter-spacing: 0.005em;
   text-transform: uppercase;
   color: var(--orange);
-  text-shadow: 6px 6px 0 var(--red), 12px 12px 0 var(--red-deep);
+  text-shadow:
+    6px 6px 0 var(--red),
+    12px 12px 0 var(--red-deep);
 }
 ```

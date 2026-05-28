@@ -44,9 +44,60 @@ try {
   process.exit(1);
 }
 
+// Load design-system/chunks/index.json (best-effort, relative to plan dir).
+// Drives three preset-conditional checks:
+//   1. Surface anchor is REQUIRED when any component declares a `surface` field
+//      (surface-aware presets). Legacy presets ship components with no `surface`
+//      field → check is skipped.
+//   2. `avoids_same_scene` cross-check between cited components — preset
+//      invariants like "single signature element per plate" live there. Missing
+//      index.json → cross-check is skipped (prep.mjs still validates existence).
+//   3. Motifs anchor id validation when index.json.motifs_file is set — every
+//      cited motif id must appear as a `## motif: <id>` heading in motifs.md.
+const chunksIndexPath = resolve(dirname(planPath), "design-system/chunks/index.json");
+let chunksIndex = null;
+try {
+  chunksIndex = JSON.parse(readFileSync(chunksIndexPath, "utf8"));
+} catch {
+  // chunks/index.json absent or unreadable — surface / avoids_same_scene checks skipped.
+}
+
+const componentsById = new Map();
+const knownSurfaces = new Set();
+let surfaceRequired = false;
+if (chunksIndex?.components) {
+  for (const c of chunksIndex.components) {
+    componentsById.set(c.id, c);
+    if (c.surface) {
+      surfaceRequired = true;
+      knownSurfaces.add(c.surface);
+    }
+  }
+}
+
+// Load chunks/motifs.md and extract known motif ids from `## motif: <id>` headings.
+// Skipped when preset declares no §M (motifs_file null in index.json). The check
+// is best-effort: motifs.md unreadable → log inside the loop the first time we
+// hit a Motifs anchor and downgrade to syntax-only validation.
+const knownMotifIds = new Set();
+let motifsLoadError = null;
+if (chunksIndex?.motifs_file) {
+  const motifsPath = resolve(dirname(planPath), "design-system", chunksIndex.motifs_file);
+  try {
+    const motifsMd = readFileSync(motifsPath, "utf8");
+    for (const m of motifsMd.matchAll(/^##\s+motif:\s+([a-z0-9-]+)\s*$/gm)) {
+      knownMotifIds.add(m[1]);
+    }
+  } catch (e) {
+    motifsLoadError = `motifs.md referenced by index.json (${chunksIndex.motifs_file}) but unreadable: ${e.message}`;
+  }
+}
+
 const errors = [];
 let totalEffectsCited = 0;
 let totalComponentsCited = 0;
+let totalSurfaceCommitments = 0;
+let totalMotifsCited = 0;
 
 // ---- Per-scene anchor validation (Phase 4a contract) ----
 // Every "## Scene N:" block must have all three required anchors. Phase 4a's
@@ -58,7 +109,7 @@ let totalComponentsCited = 0;
 const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
 const heads = [...plan.matchAll(sceneHeadRe)];
 const ANCHORS = ["Effects", "Duration", "Continuity"];
-const OPTIONAL_ANCHORS = ["Blueprint", "Components"];
+const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Motifs"];
 
 const hasAnchor = (body, name) => {
   const re = new RegExp(`^\\*\\*${name}:\\*\\*`, "mi");
@@ -130,6 +181,28 @@ for (let i = 0; i < heads.length; i++) {
     }
   }
 
+  // Surface anchor (preset-conditional): required when chunks/index.json shows
+  // any component declares a `surface` field. Value must be one of those declared
+  // surfaces. Mixing surfaces within one scene breaks the preset's visual
+  // contract — surface registers are paired with specific component shapes that
+  // don't compose across surfaces.
+  const surfaceMatch = body.match(/^\*\*Surface:\*\*\s*(.*)$/m);
+  if (surfaceRequired && !surfaceMatch) {
+    errors.push(
+      `${sceneId}: missing **Surface:** anchor — preset declares surface-aware components (allowed: ${[...knownSurfaces].sort().join(", ")})`,
+    );
+  } else if (surfaceMatch) {
+    const v = surfaceMatch[1].trim().toLowerCase();
+    if (surfaceRequired && !knownSurfaces.has(v)) {
+      errors.push(
+        `${sceneId}: **Surface:** "${v}" not declared by any component (allowed: ${[...knownSurfaces].sort().join(", ")})`,
+      );
+    } else {
+      found.Surface = v;
+      totalSurfaceCommitments++;
+    }
+  }
+
   if (found.Continuity != null) {
     const v = found.Continuity.toLowerCase();
     if (v !== "break" && v !== "continue") {
@@ -197,6 +270,13 @@ for (let i = 0; i < heads.length; i++) {
   // design-system/chunks/components/<id>.html. Existence is enforced by
   // prep.mjs (which has filesystem access to chunks/index.json); here we only
   // require well-formed syntax if the anchor is present.
+  //
+  // Optional **Motifs:** anchor — preset-conditional: when index.json.motifs_file
+  // is set we cross-check each backticked id against the `## motif: <id>` headings
+  // in motifs.md. When the preset declared no §M (motifs_file null) we still
+  // syntax-validate the anchor but skip the id existence check (motif unknown is
+  // accepted as a soft cite).
+  let pickedIds = [];
   for (const a of OPTIONAL_ANCHORS) {
     const re = new RegExp(`^\\*\\*${a}:\\*\\*\\s*(.*)$`, "m");
     const am = body.match(re);
@@ -216,7 +296,74 @@ for (let i = 0; i < heads.length; i++) {
           );
         } else {
           totalComponentsCited++;
+          pickedIds.push(id);
         }
+      }
+    } else if (a === "Motifs") {
+      const ids = [...raw.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+      if (raw && ids.length === 0) {
+        errors.push(
+          `${sceneId}: **Motifs:** present but has no backtick-wrapped ids (got "${raw}")`,
+        );
+      }
+      for (const id of ids) {
+        if (!/^[a-z0-9-]+$/.test(id)) {
+          errors.push(
+            `${sceneId}: **Motifs:** id "${id}" — must be lowercase + digits + dashes`,
+          );
+          continue;
+        }
+        totalMotifsCited++;
+        if (chunksIndex?.motifs_file) {
+          if (motifsLoadError) {
+            errors.push(`${sceneId}: ${motifsLoadError}`);
+            motifsLoadError = null; // report once
+          } else if (!knownMotifIds.has(id)) {
+            errors.push(
+              `${sceneId}: **Motifs:** id "${id}" not in chunks/motifs.md (known: ${[...knownMotifIds].sort().join(", ") || "(empty)"})`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // avoids_same_scene cross-check: every pair of cited components is checked
+  // against each other's avoids_same_scene list (from chunks/index.json
+  // component frontmatter). Preset invariants like "single signature element
+  // per plate" live there; the specific mutex pairs are preset-declared.
+  // Skipped when chunks/index.json wasn't loaded.
+  if (chunksIndex && pickedIds.length > 1) {
+    for (let i = 0; i < pickedIds.length; i++) {
+      for (let j = i + 1; j < pickedIds.length; j++) {
+        const a = pickedIds[i];
+        const b = pickedIds[j];
+        const ca = componentsById.get(a);
+        const cb = componentsById.get(b);
+        if (!ca || !cb) continue; // unknown ids — prep.mjs will reject them
+        const aAvoidsB = (ca.avoids_same_scene || []).includes(b);
+        const bAvoidsA = (cb.avoids_same_scene || []).includes(a);
+        if (aAvoidsB || bAvoidsA) {
+          errors.push(
+            `${sceneId}: **Components:** "${a}" and "${b}" conflict (avoids_same_scene) — pick one and re-plan`,
+          );
+        }
+      }
+    }
+  }
+
+  // Surface ↔ component surface consistency: when scene commits to a surface
+  // and a cited component carries a different `surface` field, that's a visual
+  // contract break (e.g. paper-only component on a blue scene). Surface-agnostic
+  // components (no `surface` field) pass through.
+  if (found.Surface && chunksIndex) {
+    for (const id of pickedIds) {
+      const c = componentsById.get(id);
+      if (!c || !c.surface) continue;
+      if (c.surface !== found.Surface) {
+        errors.push(
+          `${sceneId}: **Components:** "${id}" is surface=${c.surface}, but scene **Surface:** is ${found.Surface} — surface mix breaks preset visual contract`,
+        );
       }
     }
   }
@@ -239,6 +386,9 @@ if (errors.length) {
 
 const componentsNote =
   totalComponentsCited > 0 ? `, ${totalComponentsCited} component citation(s)` : "";
+const surfaceNote =
+  totalSurfaceCommitments > 0 ? `, ${totalSurfaceCommitments} surface commitment(s)` : "";
+const motifsNote = totalMotifsCited > 0 ? `, ${totalMotifsCited} motif citation(s)` : "";
 console.log(
-  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote} — OK`,
+  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote}${surfaceNote}${motifsNote} — OK`,
 );

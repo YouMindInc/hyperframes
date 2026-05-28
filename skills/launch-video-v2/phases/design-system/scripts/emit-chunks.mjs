@@ -127,6 +127,40 @@ if (hintsMatch) {
   hintsFile = "chunks/composition-hints.md";
 }
 
+// ─── 3.6 type-roles.md ────────────────────────────────────────────
+// §T type-role atlas (optional). Phase 4b scene worker reads on demand when
+// text outside §6 components is needed — paste-ready markdown with per-role
+// metadata, the §I CSS rule, and a sample snippet. Presets without §T → no
+// file written, index.json's type_roles_file = null.
+const typeRolesMatch = html.match(
+  new RegExp(`${PRE_OPEN}<!--\\s*TYPE-ROLES-START\\s*-->([\\s\\S]*?)<!--\\s*TYPE-ROLES-END\\s*-->`),
+);
+let typeRolesFile = null;
+let typeRolesBytes = 0;
+if (typeRolesMatch) {
+  const typeRolesMd = htmlDecode(typeRolesMatch[1]).trim();
+  fs.writeFileSync(path.join(chunksDir, "type-roles.md"), typeRolesMd + "\n");
+  typeRolesFile = "chunks/type-roles.md";
+  typeRolesBytes = Buffer.byteLength(typeRolesMd);
+}
+
+// ─── 3.7 motifs.md ────────────────────────────────────────────────
+// §M atomic motifs (optional). Plan agent cites motif ids in the **Motifs:**
+// anchor; scene worker reads on demand to plant a cited motif. Font vars are
+// rewritten from preset-native (--f-disp-native) to brand DNA (--font-display)
+// in build-design before the marker block is emitted, so paste is one step.
+const motifsMatch = html.match(
+  new RegExp(`${PRE_OPEN}<!--\\s*MOTIFS-START\\s*-->([\\s\\S]*?)<!--\\s*MOTIFS-END\\s*-->`),
+);
+let motifsFile = null;
+let motifsBytes = 0;
+if (motifsMatch) {
+  const motifsMd = htmlDecode(motifsMatch[1]).trim();
+  fs.writeFileSync(path.join(chunksDir, "motifs.md"), motifsMd + "\n");
+  motifsFile = "chunks/motifs.md";
+  motifsBytes = Buffer.byteLength(motifsMd);
+}
+
 // ─── 4. components ────────────────────────────────────────────────
 // Component blocks live inside <pre class="ds-code">...</pre> with HTML-entity-
 // escaped markers (so design.html renders the markers as visible text for human
@@ -200,6 +234,11 @@ const index = {
   // hints_file is null when the preset doesn't declare §H. Plan agent treats null
   // as "no preset-level composition contract — pick by component id only".
   hints_file: hintsFile,
+  // type_roles_file / motifs_file are null when preset declares no §T / §M.
+  // Worker reads on demand (paths flow through prep.mjs → dispatch). Plan agent
+  // also reads motifs.md when validating the Motifs anchor.
+  type_roles_file: typeRolesFile,
+  motifs_file: motifsFile,
   components: components.map(({ id, file, meta }) =>
     // Spread frontmatter (surface / composes / role / avoids_same_scene / slots)
     // alongside id+file. Plan agent reads these without opening component .html.
@@ -216,13 +255,16 @@ const voiceBytes = Buffer.byteLength(voiceMd);
 const hintsBytes = hintsFile ? Buffer.byteLength(htmlDecode(hintsMatch[1]).trim()) : 0;
 const compBytes = components.reduce((sum, c) => sum + c.size, 0);
 const designBytes = Buffer.byteLength(html);
-const chunksBytes = tokenBytes + easingBytes + voiceBytes + hintsBytes + compBytes;
+const chunksBytes =
+  tokenBytes + easingBytes + voiceBytes + hintsBytes + typeRolesBytes + motifsBytes + compBytes;
 
 console.log(`✓ ${path.relative(process.cwd(), chunksDir)}/`);
 console.log(`  tokens.css         ${fmt(tokenBytes)} KB`);
 console.log(`  easings.js         ${fmt(easingBytes)} KB`);
 console.log(`  voice.md           ${fmt(voiceBytes)} KB`);
 if (hintsFile) console.log(`  composition-hints.md  ${fmt(hintsBytes)} KB`);
+if (typeRolesFile) console.log(`  type-roles.md      ${fmt(typeRolesBytes)} KB`);
+if (motifsFile) console.log(`  motifs.md          ${fmt(motifsBytes)} KB`);
 console.log(`  components/        ${components.length} files`);
 for (const c of components) {
   console.log(`    ${c.id}.html  (${fmt(c.size)} KB)`);

@@ -189,7 +189,11 @@ const heads = [...planText.matchAll(sceneHeadRe)];
 if (heads.length === 0) die("no '## Scene N: <name>' headings found in section_plan.md");
 
 const ANCHORS = ["Effects", "Duration", "Continuity"];
-const OPTIONAL_ANCHORS = ["Blueprint", "Components"];
+// Surface is preset-conditional in the validator (required when chunks/index.json
+// shows surface-aware components). prep.mjs treats it as OPTIONAL here purely so
+// the anchor doesn't leak into creative_brief — its value is forwarded to
+// group_spec.json so the Step 6 dispatch can pass it to scene workers.
+const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Surface"];
 
 function anchorRe(name) {
   return new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`, "m");
@@ -243,6 +247,11 @@ function parseSceneBlock(body, sceneId, isFirst) {
     ? [...raw.Components.matchAll(/`([^`]+)`/g)].map((m) => m[1])
     : [];
 
+  // Surface (soft, preset-conditional): lower-cased single token (preset-declared)
+  // or null. Worker uses this to pick #root background style from the preset's
+  // composition-hints; validator enforces presence + allowed values upstream.
+  const surface = raw.Surface ? raw.Surface.trim().toLowerCase() : null;
+
   // creative_brief = everything after the LAST anchor line, verbatim
   const brief = body.slice(lastAnchorEnd).replace(/^\s*\n+/, "");
 
@@ -252,6 +261,7 @@ function parseSceneBlock(body, sceneId, isFirst) {
     continuity: cont,
     blueprint,
     componentIds,
+    surface,
     creative_brief: brief,
   };
 }
@@ -350,6 +360,26 @@ for (const s of scenes) {
   if (!existsSync(voiceAbs))
     die(`design_chunks: voice_file "${voiceAbs}" referenced by index.json but missing on disk`);
 
+  // Optional chunks (null when preset declared no §H / §T / §M). Worker reads
+  // these on demand — paths are passed through dispatch verbatim. We only check
+  // file existence when index.json references one (consistency guard); the
+  // worker then opens it lazily without re-checking.
+  const hintsAbs = chunksIndex.hints_file
+    ? join(designSystemDir, chunksIndex.hints_file)
+    : null;
+  if (hintsAbs && !existsSync(hintsAbs))
+    die(`design_chunks: hints_file "${hintsAbs}" referenced by index.json but missing on disk`);
+  const typeRolesAbs = chunksIndex.type_roles_file
+    ? join(designSystemDir, chunksIndex.type_roles_file)
+    : null;
+  if (typeRolesAbs && !existsSync(typeRolesAbs))
+    die(`design_chunks: type_roles_file "${typeRolesAbs}" referenced by index.json but missing on disk`);
+  const motifsAbs = chunksIndex.motifs_file
+    ? join(designSystemDir, chunksIndex.motifs_file)
+    : null;
+  if (motifsAbs && !existsSync(motifsAbs))
+    die(`design_chunks: motifs_file "${motifsAbs}" referenced by index.json but missing on disk`);
+
   const componentPaths = [];
   for (const cid of s.componentIds) {
     const abs = availableComponents.get(cid);
@@ -365,6 +395,9 @@ for (const s of scenes) {
     tokens_file: tokensAbs,
     easings_file: easingsAbs,
     voice_file: voiceAbs,
+    hints_file: hintsAbs,
+    type_roles_file: typeRolesAbs,
+    motifs_file: motifsAbs,
     components: componentPaths,
   };
 }
@@ -511,6 +544,7 @@ for (const s of scenes) {
     voicePath: s.voicePath,
     wordsPath: s.wordsPath,
     blueprint: s.blueprint,
+    surface: s.surface,
     design_chunks: s.design_chunks,
     creative_brief: s.creative_brief,
   };

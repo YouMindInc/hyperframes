@@ -216,10 +216,14 @@ prep 退出 0 后，读 `group_spec.json.groups[]`，得到 worker 数 N。**同
       estimatedDuration_s: <float>
       voicePath: assets/voice/scene_<N>.wav (空字符串就略)
       blueprint: composed | based-on <id> | extended <id>
+      surface: <preset-declared-surface> | null   # 仅 surface-aware preset 非 null（值由 chunks/index.json.components[].surface 决定）
       design_chunks:
         tokens_file: <abs path to chunks/tokens.css>
         easings_file: <abs path to chunks/easings.js>
         voice_file: <abs path to chunks/voice.md>
+        hints_file: <abs path to chunks/composition-hints.md> | null    # surface contract / 60-30-10 / 互斥；preset 未声明 §H 时 null
+        type_roles_file: <abs path to chunks/type-roles.md> | null      # 命名 text role 目录；§6 组件之外的文字（hero / lede / pill / CTA）按需读
+        motifs_file: <abs path to chunks/motifs.md> | null              # 原子手势目录；plan agent 的 **Motifs:** 锚点 cite 后 worker 按需读
         components:
           - <abs path to chunks/components/<id>.html>
           - ...      # 0-N 个，Phase 3 的 **Components:** 锚点决定；为空时 worker 仍拿 tokens + easings + voice
