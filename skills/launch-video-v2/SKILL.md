@@ -155,6 +155,7 @@ cat <SKILL_DIR>/phases/visual-design/blueprints-index.md
   SKILL_DIR: <绝对路径>
   PROJECT_DIR: <视频项目根>
   Schema validator: <SKILL_DIR>/scripts/validate-section-plan.mjs
+  SFX manifest: <SKILL_DIR>/assets/sfx/manifest.json
   ## Effects catalog
   <effects-catalog.md 全文>
   ## Blueprints index
@@ -174,6 +175,8 @@ Phase 3 visual-design 退出且 `section_plan.md` 存在后，跑 `prep.mjs` 合
   --research ./research \
   --design-system ./design-system \
   --hyperframes . \
+  --sfx-lib <SKILL_DIR>/assets/sfx \
+  --captions-builder <SKILL_DIR>/scripts/captions.mjs \
   --out ./group_spec.json)
 ```
 
@@ -182,12 +185,14 @@ Phase 3 visual-design 退出且 `section_plan.md` 存在后，跑 `prep.mjs` 合
 1. 依赖 Step 0 已经把 `PROJECT_DIR` 初始化为 HyperFrames 项目；这里不再创建 `hyperframes/` 子目录
 2. 复制 `research/**/*.{png,jpg,jpeg,webp,svg,mp4,mov,webm}` 到 `public/`
 3. 复制 `design-system/fonts/*` 到 `public/fonts/`（v2 暂无 download-fonts 时静默跳过）
-4. 解析 `section_plan.md` 的 anchors：必选 Effects / Duration / Continuity，可选 Blueprint / Components
+4. 解析 `section_plan.md` 的 anchors：必选 Effects / Duration / Continuity，可选 Blueprint / Components / Surface / Motifs / **SFX**
 5. 校验每个 effect id 都对应 `hyperframes-animation/rules/<id>.md` 存在
 6. 解析 `design-system/chunks/index.json` —— 把 Components 锚点引用的 component id 解析为绝对路径；id 不在 index.json 中 → fatal 退出
 7. 合并 `audio_meta.json` —— `voiceDuration` 覆盖 section_plan duration（差 >10% 时）
 8. 按 `Continuity` 分组（`break` 开新 worker、`continue` 续到 cap=2）
-9. 写 `./group_spec.json` + stdout summary（含每 scene 的 design_chunks 块）
+9. **SFX**：复制 `<sfxLibDir>/*.mp3` + `manifest.json` 到 `assets/sfx/`，校验每条 cue 文件存在于 manifest，把 scene-local `t` 加 `start_s` offset 转全局秒数，写入 `group_spec.sfx[]`（flat list 按 t 排序）
+10. **Captions**：当 `audio_meta.json` 存在且 `design-system/chunks/captions.md` 存在（preset 声明 §C），调用 `<captionsBuilder>` 生成 `compositions/captions.html`（单条 full-bleed sub-comp，覆盖整个时长）
+11. 写 `./group_spec.json` + stdout summary（含每 scene 的 design_chunks 块、SFX 条数、captions 是否生成）
 
 退出码：
 

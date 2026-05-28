@@ -20,6 +20,7 @@
 - **Surface 锚点（surface-aware preset 必填）**：preset 的 `components[]` 任一 entry 含 `surface` 字段时，每个 scene 必填 `**Surface:** <preset-declared-surface>`（合法值由 chunks/index.json 决定）。值不在 preset 声明的集合里 / 与 Components 含 surface 字段的成员冲突 → validator fatal。详见 guide.md §2 硬契约。
 - **Components 锚点（强烈推荐）**：每个场景在必选锚点之后加 `**Components:** [\`<id>\`, ...]`。当 chunks 含 `avoids_same_scene` 元数据时，validator 自动跑互斥 cross-check（互斥关系由 preset 声明）。详细语法、为什么要标、写错的代价见 guide.md §2 的 "Components 锚点" 段。
 - **Motifs 锚点（推荐，仅当 preset 声明 §M）**：每个场景在 Components 之后加 `**Motifs:** [\`<motif-id>\`, ...]`。motif id 必须出现在 `chunks/motifs.md`；列错 id → validator fatal。详见 guide.md §2 的 "Motifs 锚点" 段。
+- **SFX 锚点（可选 soft）**：要给场景配音效，在所有上面的锚点之后加 `**SFX:**` 一行 + 零或多个 bullet（`- \`<file>.mp3\` at <T>s, volume <V> — <note>`）。`<file>`来自 Dispatch 上下文`SFX manifest:` 给出的 manifest.json 文件名；`<T>s` 是 scene-local 秒。**Less is more**——大多数场景**零**音效；一场 1 条是典型。详细放置规则（impact-vs-riser、volume、不要估算时间戳）见 guide.md §2 的 "SFX 锚点" 段。
 
 ## 自校验
 

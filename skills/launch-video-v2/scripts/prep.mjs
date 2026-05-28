@@ -71,6 +71,10 @@ const designSystemDir = resolve(flag("design-system", "./design-system"));
 const hyperframesDir = resolve(flag("hyperframes", "."));
 const outPath = resolve(flag("out", "./group_spec.json"));
 const scenesPerGroupMax = parseInt(flag("scenes-per-group", "2"), 10);
+// Optional — orchestrator passes <SKILL_DIR>/assets/sfx and scripts/captions.mjs absolute paths.
+// If absent: SFX cues in section_plan are silently ignored; captions are skipped.
+const sfxLibDir = flag("sfx-lib") ? resolve(flag("sfx-lib")) : null;
+const captionsBuilder = flag("captions-builder") ? resolve(flag("captions-builder")) : null;
 if (!isFinite(scenesPerGroupMax) || scenesPerGroupMax < 1) {
   die(`--scenes-per-group must be a positive integer (got "${flag("scenes-per-group")}")`);
 }
@@ -252,6 +256,52 @@ function parseSceneBlock(body, sceneId, isFirst) {
   // composition-hints; validator enforces presence + allowed values upstream.
   const surface = raw.Surface ? raw.Surface.trim().toLowerCase() : null;
 
+  // SFX (soft, multi-line bullet block):
+  //   **SFX:**
+  //   - `impact-bass-1.mp3` at 0.2s, volume 0.35 — hero snap
+  //   - `whoosh-short.mp3` at 4.1s — exit
+  // We scan from the **SFX:** header forward, accepting bullet lines until we
+  // hit a non-bullet line or a blank line followed by an anchor / scene head.
+  // sfx_cues[].t is SCENE-LOCAL seconds (this function knows nothing about
+  // global timing; we add s.start_s offset in Step 6).
+  const sfxCues = [];
+  const sfxHeaderRe = /^\*\*SFX:\*\*\s*$/m;
+  const sfxHeaderM = body.match(sfxHeaderRe);
+  if (sfxHeaderM) {
+    const sfxHeaderEnd = sfxHeaderM.index + sfxHeaderM[0].length;
+    if (sfxHeaderEnd > lastAnchorEnd) lastAnchorEnd = sfxHeaderEnd;
+    const afterHeader = body.slice(sfxHeaderEnd);
+    const lines = afterHeader.split("\n");
+    let consumed = 0; // chars consumed past the header
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      const trimmed = line.trim();
+      if (trimmed === "") {
+        consumed += line.length + 1;
+        continue;
+      }
+      if (!trimmed.startsWith("-")) break; // next anchor / prose / scene heading
+      // Parse: `<file>.mp3` at <T>s[, volume <V>][, — <note>]
+      const cueRe = /^[\s\-*]+`([^`]+\.mp3)`\s+at\s+([\d.]+)\s*s(?:[,\s]+volume\s+([\d.]+))?(?:\s*[—–-]\s*(.*))?$/;
+      const m = trimmed.match(cueRe);
+      if (m) {
+        const file = m[1];
+        const tLocal = parseFloat(m[2]);
+        const volume = m[3] != null ? parseFloat(m[3]) : null;
+        const note = m[4] ? m[4].trim() : "";
+        if (!isFinite(tLocal) || tLocal < 0) {
+          die(`${sceneId}: **SFX:** invalid t for "${file}": "${m[2]}"`);
+        }
+        sfxCues.push({ file, t_local: tLocal, volume, note });
+      } else {
+        die(`${sceneId}: **SFX:** unparseable cue line: "${trimmed}"`);
+      }
+      consumed += line.length + 1;
+    }
+    const sfxBlockEnd = sfxHeaderEnd + consumed;
+    if (sfxBlockEnd > lastAnchorEnd) lastAnchorEnd = sfxBlockEnd;
+  }
+
   // creative_brief = everything after the LAST anchor line, verbatim
   const brief = body.slice(lastAnchorEnd).replace(/^\s*\n+/, "");
 
@@ -262,6 +312,7 @@ function parseSceneBlock(body, sceneId, isFirst) {
     blueprint,
     componentIds,
     surface,
+    sfxCues,
     creative_brief: brief,
   };
 }
@@ -552,6 +603,87 @@ for (const s of scenes) {
 }
 if (cur) groups.push(cur);
 
+// ---------- Step 6.5: SFX library copy + cue → global timing ----------
+// SFX library is OPT-IN: when orchestrator passes --sfx-lib the directory is
+// copied into <PROJECT_DIR>/assets/sfx/ and section_plan **SFX:** cues are
+// validated against manifest.json. Without --sfx-lib, scene cues are silently
+// dropped (warning only). Voice/bgm live under assets/; SFX matches.
+const sfx = [];
+if (sfxLibDir) {
+  const sfxManifestPath = join(sfxLibDir, "manifest.json");
+  if (!existsSync(sfxManifestPath)) {
+    die(`--sfx-lib points to ${sfxLibDir} but manifest.json is missing`);
+  }
+  let sfxManifest;
+  try {
+    sfxManifest = JSON.parse(readFileSync(sfxManifestPath, "utf8"));
+  } catch (e) {
+    die(`sfx manifest.json parse: ${e.message}`);
+  }
+  // Build filename → { duration, key } lookup so cues can reference by filename
+  // (matching v1 storyboard syntax: `impact-bass-1.mp3` not the manifest key).
+  const sfxByFile = new Map();
+  for (const [key, entry] of Object.entries(sfxManifest)) {
+    if (entry?.file && isFinite(entry.duration)) {
+      sfxByFile.set(entry.file, { key, duration: entry.duration });
+    }
+  }
+
+  // Copy entire SFX directory into <PROJECT_DIR>/assets/sfx/ (mp3 + manifest +
+  // CREDITS). Idempotent: skip files that already exist (e.g. re-runs).
+  const sfxDestDir = join(hyperframesDir, "assets", "sfx");
+  mkdirSync(sfxDestDir, { recursive: true });
+  let sfxCopied = 0;
+  for (const ent of readdirSync(sfxLibDir, { withFileTypes: true })) {
+    if (!ent.isFile()) continue;
+    const src = join(sfxLibDir, ent.name);
+    const dest = join(sfxDestDir, ent.name);
+    if (!existsSync(dest)) {
+      copyFileSync(src, dest);
+      sfxCopied++;
+    }
+  }
+
+  // Resolve each scene's cues against manifest + add scene.start_s offset.
+  for (const g of groups) {
+    for (const sid of g.scene_ids) {
+      const sceneEntry = g.scenes[sid];
+      const sceneCues = scenes.find((x) => x.sceneId === sid)?.sfxCues || [];
+      for (const cue of sceneCues) {
+        const hit = sfxByFile.get(cue.file);
+        if (!hit) {
+          anomalies.push(
+            `${sid}: SFX cue file "${cue.file}" not in manifest — dropping (known files: ${[...sfxByFile.keys()].slice(0, 5).join(", ")}${sfxByFile.size > 5 ? ", …" : ""})`,
+          );
+          continue;
+        }
+        const tGlobal = Number((sceneEntry.start_s + cue.t_local).toFixed(3));
+        sfx.push({
+          file: cue.file,
+          t: tGlobal,
+          duration: hit.duration,
+          volume: cue.volume != null ? cue.volume : 0.35,
+          scene_id: sid,
+          t_local: cue.t_local,
+          note: cue.note || "",
+        });
+      }
+    }
+  }
+  // Sort by global t for predictable index.html emission order.
+  sfx.sort((a, b) => a.t - b.t);
+  console.log(`  sfx lib copied: ${sfxCopied} file(s) → assets/sfx/`);
+} else {
+  // Surface plan cues that won't make it to the timeline because no lib was provided.
+  let droppedCueCount = 0;
+  for (const s of scenes) droppedCueCount += (s.sfxCues?.length || 0);
+  if (droppedCueCount > 0) {
+    anomalies.push(
+      `section_plan declares ${droppedCueCount} SFX cue(s) but --sfx-lib not passed — all cues dropped`,
+    );
+  }
+}
+
 // ---------- Step 7: emit group_spec.json ----------
 const total_duration_s = scenes.reduce((sum, s) => sum + s.estimatedDuration_s, 0);
 // BGM may still be rendering (audio.mjs spawns Lyria detached and exits before
@@ -580,9 +712,45 @@ const spec = {
   bgm_path,
   font_face_css: fontFaceCss,
   groups,
+  sfx,
 };
 
 writeFileSync(outPath, JSON.stringify(spec, null, 2));
+
+// ---------- Step 7.5: invoke captions builder ----------
+// Captions are OPT-IN: orchestrator passes --captions-builder when audio is
+// available. The builder reads audio_meta + group_spec + chunks/captions.md
+// and writes compositions/captions.html. finalize-agent checks file existence
+// before emitting the track 12 clip.
+let captionsBuilt = false;
+if (captionsBuilder && audioMetaPath && existsSync(audioMetaPath)) {
+  const chunksCaptionsPath = join(designSystemDir, "chunks", "captions.md");
+  if (existsSync(chunksCaptionsPath)) {
+    const captionsOut = join(hyperframesDir, "compositions", "captions.html");
+    const r = spawnSync(
+      "node",
+      [
+        captionsBuilder,
+        "--audio-meta", audioMetaPath,
+        "--group-spec", outPath,
+        "--narrator-scripts", narratorScriptsPath,
+        "--chunks-captions", chunksCaptionsPath,
+        "--hyperframes", hyperframesDir,
+        "--out", captionsOut,
+      ],
+      { stdio: "inherit" },
+    );
+    if (r.status === 0 && existsSync(captionsOut)) {
+      captionsBuilt = true;
+    } else if (r.status !== 0) {
+      anomalies.push(
+        `captions builder exited ${r.status} — finalize will skip captions clip`,
+      );
+    }
+  } else {
+    // Preset doesn't ship §C — silent skip (not every preset has captions).
+  }
+}
 
 // ---------- Step 8: summary ----------
 console.log(`✓ wrote ${outPath}`);
@@ -590,6 +758,8 @@ console.log(
   `  scenes: ${spec.total_scenes}, groups: ${groups.length}, total: ${spec.total_duration_s}s`,
 );
 console.log(`  bgm: ${bgm_path || "(none)"}`);
+console.log(`  sfx cues:      ${sfx.length}${sfxLibDir ? "" : " (--sfx-lib not passed; cues dropped)"}`);
+console.log(`  captions:      ${captionsBuilt ? "compositions/captions.html built" : "(skipped)"}`);
 console.log(`  assets copied: ${copied} (collisions skipped: ${collisions.length})`);
 console.log(`  fonts copied:  ${fontsCopied}`);
 console.log(

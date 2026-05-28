@@ -19,6 +19,7 @@
 - **Asset path 转换规则**：context_pack.md 中的路径是 `assets/<filename>`，写入 `assetCandidates[].path` 时必须改为 `"public/<filename>"`。例：`assets/022-abc.png` → `"public/022-abc.png"`。Phase 4a 把 `research/assets/` 复制到 `PROJECT_DIR/public/`；路径写错会导致 fatal error。
 - 不要生成 `research/analysis.json`
 - scene 中不要包含 `voicePath` 或 `voiceDuration` 字段
+- **`captions: string[]`（每个 narration scene 必写）**：每条 = 屏幕一行 caption，2-3 个词，去标签后词序与 `script` 完全一致。Word 可包 4 类 inline tag：`<em>`（script-flick，一组 ≤1 次）/ `<brand>` / `<emph>` / `<cta>`，TTS 自动 strip。ALL CAPS / 数字开头词由下游自动加 class，不用包标签。完整规则（每类 tag 何时用、节奏、容量上限）见 guide.md `narrator_scripts.json — canonical schema` 章节。Validator 卡词数（≤3）/ tag 嵌套 / 闭合。
 
 ## 报告完成前自检
 

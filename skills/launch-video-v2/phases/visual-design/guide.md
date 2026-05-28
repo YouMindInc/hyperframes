@@ -100,6 +100,7 @@
 **Motifs:** [`<motif-id>`, `<motif-id>`, ...] ← preset-conditional（preset 声明 §M / motifs_file != null 时推荐），见下方
 **PrimarySubjectTimeline:** <only for multi-act / dense multi-subject scenes>
 **Handoff:** <only for multi-act / dense multi-subject scenes>
+**SFX:** ← 可选（soft）；不用音效就整段省略，多行 bullet list 见下方
 
 <散文正文 —— 见 §4>
 ```
@@ -141,6 +142,36 @@
 - 列错 id（拼写错 / motif 不存在）→ validator fatal（chunks/index.json.motifs_file 存在时强制校验）
 
 写 Motifs 锚点的价值：和 Components 同一逻辑 —— motif 是 component 之下、比 effect 更细的可复用 gesture（preset 的"招牌微动作"）。Plan 提前承诺"这个 hero 上的招牌动作是 motif A、accent 词是 motif B"，worker 拿到 brief 直接去 `chunks/motifs.md` 找 CSS + demo HTML 粘，跳过 reverse-engineering preset 视觉签名的过程。**没有 Motifs 锚点 ≠ 散文里不能 mention motif**，但 cite 进锚点后，validator 能保证拼写不爆。
+
+**SFX 锚点（soft —— validator 不强制，但有音效就必写在这）**：
+
+格式是 `**SFX:**` 单独一行，紧接零或多个 bullet：
+
+```markdown
+**SFX:**
+
+- `impact-bass-1.mp3` at 0.2s, volume 0.35 — hero stamp lands
+- `whoosh-short.mp3` at 4.1s — exit
+```
+
+- `<file>.mp3` 必须是 `<SKILL_DIR>/assets/sfx/manifest.json` 里登记过的文件（prep.mjs 拷贝到 `<PROJECT_DIR>/assets/sfx/` 后核对，对不上 → 跳过该 cue + warning）
+- `<T>s` 是 **scene-local 秒数**（场景开始为 0）；prep.mjs 自动加 `start_s` offset 转全局时间
+- `volume` 可选，缺省 `0.35`；narration 下垫一般 0.2-0.3，纯 SFX 时刻可 0.4-0.6，避免 0.5+ 盖过人声
+- ` — <note>` 是给人看的注解，build / verify 都忽略
+
+**SFX 放置规则**：
+
+- **Impact / hit**（`impact-bass-*`、`ping`、`pop`、`glitch-*`、`whoosh`）：峰值在 clip 开头，触发于视觉点**当下**，让 decay 尾巴拖到下一镜（J-cut，专业拍法）
+- **Riser / build-up**（`riser` = 10s、`whoosh-cinematic` = 5.5s）：峰值在 clip **结尾**，要 N 秒处爆 → 在 `N − duration` 秒触发。例：`riser.mp3` 在 t=20s 处爆 → 在 9.97s 触发（10.03s duration）
+- **Short accent**（`click`、`click-soft`、`chime`、`sparkle`、`ping`、`whoosh-short`）：trigger 在视觉点同步
+
+**Less is more**：多数场景**零** SFX。一场 1 条是典型；2+ 条仅当场景有明显的多个 punctuation 时刻。**不要**在场景转场处加 SFX（hard cut 本身就是 audio-visual event）。
+
+**禁用：估算时间戳**。SFX `t` 必须计算出来（依据散文里描述的 phase 时长），不能凭"感觉应该在 X 秒"目测。`sfx-verify.mjs` 卡 ±0.1s drift。
+
+**禁用：截短 SFX**。`data-duration` 永远等于 manifest 的 duration 字段。截短让 impact 在 decay 中段被砍 = 业余感的根源。
+
+写 SFX 锚点的价值：plan 一次性把 SFX 决定写完，finalize 只翻译不发挥。可用 mp3 清单（文件名 + 时长 + 描述）见 Dispatch 上下文 `SFX manifest:` 给出的 manifest.json——按描述挑文件，不要凭名字猜。
 
 ### Primary / Supporting 防 overlap 契约
 

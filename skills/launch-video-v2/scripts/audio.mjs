@@ -96,12 +96,23 @@ mkdirSync(voiceDir, { recursive: true });
 if (!existsSync(narratorPath)) die(`narrator_scripts.json not found at ${narratorPath}`);
 const narrator = JSON.parse(readFileSync(narratorPath, "utf8"));
 
+// story-design agents may embed inline caption-styling tags in the script
+// field: <em>...</em>, <brand>...</brand>, <emph>...</emph>, <cta>...</cta>.
+// captions.mjs reads narrator_scripts.json directly to render those — audio.mjs
+// strips them before TTS so the provider doesn't speak the tag names. The
+// strip is conservative: only known tag names; unknown markup is passed
+// through (the agent would have to face the TTS pronouncing it).
+const CAPTION_TAG_RE = /<\/?(em|brand|emph|cta)\b[^>]*>/gi;
+function stripCaptionTags(s) {
+  return String(s).replace(CAPTION_TAG_RE, "");
+}
+
 const scenes = (narrator.scenes || []).map((s) => {
   const dm = String(s.estimatedDuration ?? "0").match(/[\d.]+/);
   return {
     sceneNumber: s.sceneNumber,
     sceneId: `scene_${s.sceneNumber}`,
-    script: typeof s.script === "string" ? s.script : "",
+    script: stripCaptionTags(typeof s.script === "string" ? s.script : ""),
     estimatedDuration: dm ? parseFloat(dm[0]) : 0,
   };
 });
@@ -121,7 +132,7 @@ const bgmInferenceBlob = (() => {
   ];
   for (const s of narrator.scenes || []) {
     parts.push(s.sceneName || "");
-    parts.push(s.script || "");
+    parts.push(stripCaptionTags(s.script || ""));
     if (s.narrativeIntent) {
       parts.push(s.narrativeIntent.narrativeRole || "");
       parts.push(s.narrativeIntent.keyMessage || "");

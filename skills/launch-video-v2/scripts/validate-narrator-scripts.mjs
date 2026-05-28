@@ -131,6 +131,76 @@ function validate(filePath) {
           });
         }
       }
+
+      // captions: optional string[] (one entry = one caption group).
+      // Hard rules (cheap to check at schema time; semantic alignment to TTS
+      // word grid happens at captions.mjs build time):
+      //   - must be an array of strings (when present)
+      //   - each entry has ≥1 non-whitespace word
+      //   - per-group max 3 words after tag-strip (peoples §C cap)
+      //   - tags are not nested
+      //   - tag inner content non-empty (no <em></em>)
+      // Tags allowed: <em> <brand> <emph> <cta>. Empty captions[] is fine
+      // (text-only scenes / empty script).
+      if ("captions" in scene) {
+        if (!Array.isArray(scene.captions)) {
+          errors.push(`${ctx}.captions must be an array of strings (use [] when no captions needed)`);
+        } else {
+          const TAG_RE = /<(\/?)(em|brand|emph|cta)\b[^>]*>/gi;
+          scene.captions.forEach((entry, j) => {
+            const ectx = `${ctx}.captions[${j}]`;
+            if (typeof entry !== "string") {
+              errors.push(`${ectx}: must be a string (got ${typeof entry})`);
+              return;
+            }
+            // Strip tags, then count words.
+            const stripped = entry.replace(TAG_RE, "").trim();
+            if (!stripped) {
+              errors.push(`${ectx}: empty caption group after tag-strip`);
+              return;
+            }
+            const wordCount = stripped.split(/\s+/).filter(Boolean).length;
+            if (wordCount > 3) {
+              errors.push(
+                `${ectx}: ${wordCount} words after tag-strip — peoples §C max 3 words/group ("${stripped}")`,
+              );
+            }
+            // Validate tag balance + no nesting in one quick pass.
+            let depth = 0;
+            let openTag = null;
+            let lastOpenEnd = -1;
+            let m;
+            TAG_RE.lastIndex = 0;
+            while ((m = TAG_RE.exec(entry)) !== null) {
+              const isClose = m[1] === "/";
+              const tagName = m[2].toLowerCase();
+              if (!isClose) {
+                if (depth > 0) {
+                  errors.push(`${ectx}: nested tag <${tagName}> inside <${openTag}> not allowed`);
+                  break;
+                }
+                depth = 1;
+                openTag = tagName;
+                lastOpenEnd = m.index + m[0].length;
+              } else {
+                if (depth === 0 || openTag !== tagName) {
+                  errors.push(`${ectx}: stray </${tagName}> with no matching opener`);
+                  break;
+                }
+                const inner = entry.slice(lastOpenEnd, m.index).trim();
+                if (!inner) {
+                  errors.push(`${ectx}: empty <${tagName}></${tagName}> — tag inner content required`);
+                }
+                depth = 0;
+                openTag = null;
+              }
+            }
+            if (depth !== 0) {
+              errors.push(`${ectx}: unclosed <${openTag}> tag`);
+            }
+          });
+        }
+      }
     });
 
     // UI demo requirement from story-design SKILL.md.

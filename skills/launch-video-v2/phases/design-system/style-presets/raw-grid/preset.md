@@ -75,7 +75,7 @@ No literal hex declarations are required — the muted-pastel character is deleg
 
 ## §D Font pairing fallback (if brand fonts not on Google Fonts)
 
-Raw Grid's aesthetic argument is "this is the user's actual system font." If brand DNA ships a Google Font, keep it — preset only enforces the weight ladder (900 / 800 / 700 / 500) and uppercase rule via §C. If brand fonts fail, fall back to the system sans stack below; do NOT load a display face just to fill the slot.
+Raw Grid's aesthetic argument is "this is the user's actual system font." If brand DNA ships a Google Font, keep it — preset only enforces the weight ladder (900 / 800 / 700 / 500) and the uppercase rule. If brand fonts fail, fall back to the system sans stack below; do NOT load a display face just to fill the slot.
 
 - **display**: `'system-ui'` · `'Segoe UI'` · `'Inter'` wght 900
 - **body**: `'system-ui'` · `'Segoe UI'` · `'Inter'` wght 500

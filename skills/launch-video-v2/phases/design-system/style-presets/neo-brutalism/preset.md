@@ -50,7 +50,7 @@ viewports. Only the spacing variable uses `vw`.
 - **body**: `'Inter'` · `'IBM Plex Sans'` wght 500
 - **mono**: `'Space Mono'` · `'JetBrains Mono'` wght 700
 
-If brand fonts ARE on Google Fonts, keep brand fonts — preset only overrides weight/tracking via §C.
+If brand fonts ARE on Google Fonts, keep brand fonts — preset only overrides weight and tracking.
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 

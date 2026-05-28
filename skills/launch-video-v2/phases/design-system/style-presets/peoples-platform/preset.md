@@ -491,6 +491,11 @@ When `captions.mjs` cannot sample the per-window surface (default case), it ship
   "position_landscape":   { "bottom": "100px", "anchor": "center" },
   "position_portrait":    { "bottom": "700px", "anchor": "center" },
   "font_size_clamp":      "clamp(72px, 8vw, 128px)",
+  "fit_font_family":      "Alfa Slab One",
+  "fit_max_width_landscape": 1600,
+  "fit_max_width_portrait":  900,
+  "fit_base_font_size":   96,
+  "fit_min_font_size":    56,
   "group_words_min":      2,
   "group_words_max":      3,
   "group_split_on":       ["sentence_boundary", "silence_150ms", "max_words"],
@@ -507,14 +512,11 @@ When `captions.mjs` cannot sample the per-window surface (default case), it ship
     "orange": { "color": "var(--blue)",   "drop": "5px 5px 0 var(--red)" },
     "blue":   { "color": "var(--orange)", "drop": "5px 5px 0 var(--red)" }
   },
-  "default_variant":      "paper",
-  "sound_hooks": {
-    "per_active_word":    "kick + snare double-hit (matches §H stamp-slam cue) — track 20+",
-    "per_emphasis":       "soft pluck or pen-stroke (script-flick)",
-    "per_line_entry":     "low whoosh-short, optional (skip if SFX budget tight)"
-  }
+  "default_variant":      "paper"
 }
 ```
+
+`fit_font_family` 是 `window.__hyperframes.fitTextFontSize` 用来 measure 的字面字体名（不能用 `var(--font-display)`，API 需要真字体加载好才量得到）。peoples-platform 决定 caption 走 preset-native 的 Alfa Slab One（slab serif，跟 brand DNA 解耦）。`fit_*` 其它参数对齐 `hyperframes/references/captions.md` 默认值。
 
 ### Caption CSS (paste into `compositions/captions.html` `<style>`)
 
@@ -580,6 +582,47 @@ When `captions.mjs` cannot sample the per-window surface (default case), it ship
   opacity: 1;
 }
 
+/* ── Per-word styling hooks (set by story-design <brand>/<emph>/<cta> tags
+ * and by captions.mjs auto-detection of ALL CAPS + numerics). Each hook
+ * stacks on top of the base .cap-word{active,passed,upcoming} states. */
+
+/* Brand / product names — always orange, slight scale boost. Always-on. */
+.cap-word.cap-brand {
+  color: var(--orange);
+  font-size: 1.08em;
+}
+
+/* ALL CAPS auto-detected — scale boost always, active-state orange override. */
+.cap-word.cap-allcaps {
+  font-size: 1.04em;
+}
+.cap-word.cap-allcaps.active {
+  color: var(--orange);
+}
+
+/* Numbers / statistics — bold weight always, active-state orange override. */
+.cap-word.cap-num {
+  font-weight: 700;
+}
+.cap-word.cap-num.active {
+  color: var(--orange);
+}
+
+/* Emotional keyword (cap-emph — distinct from <em> script-flick) — red ink,
+ * NO rotation NO script font. The emotional pop without the handwritten voice. */
+.cap-word.cap-emph {
+  color: var(--red);
+  opacity: 1;
+}
+
+/* CTA — highlight + thick underline in red. Always-on. */
+.cap-word.cap-cta {
+  text-decoration: underline;
+  text-decoration-thickness: 4px;
+  text-decoration-color: var(--red);
+  text-underline-offset: 0.08em;
+}
+
 /* Portrait variant — lower-third position, smaller cap. */
 @media (max-aspect-ratio: 9/16) {
   .cap-line {
@@ -594,9 +637,12 @@ When `captions.mjs` cannot sample the per-window surface (default case), it ship
 ```caption-template
 <div class="cap-line" id="cap-g-{N}">
   <span class="cap-word" id="cap-g-{N}-w-0">{WORD_0}</span>
-  <span class="cap-word" id="cap-g-{N}-w-1">{WORD_1}</span>
-  <!-- 2-3 words per group · wrap one in <em class="cap-word"> for script-flick -->
-  <!-- Add `class="cap-line surface-blue"` when the underlying scene is blue -->
+  <span class="cap-word cap-brand" id="cap-g-{N}-w-1">{BRAND_WORD}</span>
+  <em class="cap-word" id="cap-g-{N}-w-2">{EM_WORD}</em>
+  <!-- 2-3 words per group. Per-word hooks: cap-brand / cap-allcaps / cap-num /
+       cap-emph / cap-cta (set by story-design tags + captions.mjs auto-detect)
+       · wrap in <em class="cap-word"> for script-flick (story-design <em> tag)
+       · Add class="cap-line surface-blue" when the underlying scene is blue -->
 </div>
 ```
 
@@ -655,14 +701,6 @@ tl.to(line, { opacity: 0, y: -12, duration: 0.35, ease: "power4.in" }, group.end
 //    and by captions.md (no two groups visible simultaneously).
 tl.set(line, { opacity: 0, visibility: "hidden" }, group.end);
 ```
-
-### Sound hooks (wired by hyperframes-finalize on track 20+)
-
-Captions inherit the peoples percussive register declared in §H — they don't introduce a new audio voice.
-
-- **Per active stamp** → `kick + snare` double-hit at `word.start`. Same gesture as headline stamp-slams in primary scenes.
-- **Per script-flick** → optional `pluck` or `pen-stroke` at the emphasis word's `start`. Skip if the same beat already has a primary-scene SFX (don't double-trigger).
-- **Per line entry** → optional `whoosh-short` at `group.start - 0.05`. Skip if SFX budget is tight; the per-word stamp hits carry the rhythm alone.
 
 ### Edge cases & lints (captions.mjs enforces)
 
