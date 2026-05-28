@@ -1,15 +1,44 @@
 # Text To Speech
 
-Generate local narration audio with Kokoro-82M. No API key, runs on-device. Default voice is `af_heart`.
+`npx hyperframes tts` auto-detects a provider from env vars; explicit override via `--provider`.
+
+## Provider chain
+
+| Order | Provider          | Env trigger             | Voice IDs                                   | Word timestamps                           | Audio format         |
+| ----- | ----------------- | ----------------------- | ------------------------------------------- | ----------------------------------------- | -------------------- |
+| 1     | HeyGen (Starfish) | `$HEYGEN_API_KEY`       | UUIDs from `GET /v3/voices?engine=starfish` | **Yes** (`word_timestamps[]` in response) | mp3 → wav via ffmpeg |
+| 2     | ElevenLabs        | `$ELEVENLABS_API_KEY`   | UUIDs from elevenlabs.io dashboard          | No                                        | mp3 → wav via ffmpeg |
+| 3     | Kokoro-82M        | always (local fallback) | `am_michael`, `af_heart`, … (54 voices)     | No                                        | wav direct           |
 
 ```bash
-npx hyperframes tts "Text here" --voice af_heart --output narration.wav
-npx hyperframes tts script.txt --voice bf_emma --output narration.wav
-npx hyperframes tts --list                            # all 54 voices
-npx hyperframes tts "Slow and clear" --speed 0.8      # speech speed multiplier
+# Auto-detect (HeyGen if key set, else ElevenLabs, else Kokoro)
+npx hyperframes tts "Welcome to HyperFrames" -o narration.wav
+
+# Pin the provider explicitly
+npx hyperframes tts "Hello" --provider kokoro
+npx hyperframes tts "Hello" --provider heygen --voice <heygen-uuid>
+npx hyperframes tts "Hello" --provider elevenlabs --voice 21m00Tcm4TlvDq8ikWAM
+
+# HeyGen path: capture word timestamps in one call (skips a Whisper pass)
+npx hyperframes tts "Hi there" --words narration.words.json
 ```
 
-## Voice Selection
+## When to use which provider
+
+| Goal                                                      | Use                                                 |
+| --------------------------------------------------------- | --------------------------------------------------- |
+| Best voice quality + word timestamps in one call          | **HeyGen**                                          |
+| Drop-in cloud TTS, big voice catalog                      | **ElevenLabs**                                      |
+| Offline, no API key, fast iteration                       | **Kokoro**                                          |
+| Non-English multilingual with deterministic phonemization | **Kokoro** (`ef_dora`, `jf_alpha`, `zf_xiaobei`, …) |
+
+## ffmpeg requirement
+
+HeyGen + ElevenLabs return mp3. The CLI transcodes to wav when `--output` ends in `.wav` (the default and what downstream `ffprobe` + Whisper expect). If you'd rather skip the transcode, pass `-o file.mp3`. Without `ffmpeg` on PATH, `.wav` output from the cloud providers fails — install ffmpeg or use `.mp3`.
+
+## Voice selection (Kokoro)
+
+Default `af_heart`. Curated picks:
 
 | Content type      | Voice                  |
 | ----------------- | ---------------------- |
@@ -19,11 +48,11 @@ npx hyperframes tts "Slow and clear" --speed 0.8      # speech speed multiplier
 | Documentation     | `bf_emma`, `bm_george` |
 | Casual / social   | `af_heart`, `af_sky`   |
 
-Run `--list` for the full 54.
+Run `npx hyperframes tts --list` for the bundled set.
 
-## Multilingual (voice prefix → language)
+## Multilingual (Kokoro voice prefix → language)
 
-The first letter of the voice ID picks the phonemizer language; `--lang` is only needed to override auto-detection (e.g. English text in a French voice for a stylized accent).
+The first letter of a Kokoro voice ID picks the phonemizer language; `--lang` overrides auto-detection.
 
 | Prefix | Language             |
 | ------ | -------------------- |
@@ -38,9 +67,11 @@ The first letter of the voice ID picks the phonemizer language; `--lang` is only
 | `z`    | Mandarin             |
 
 ```bash
-npx hyperframes tts "La reunión empieza a las nueve" --voice ef_dora --output es.wav
-npx hyperframes tts "今日はいい天気ですね" --voice jf_alpha --output ja.wav
+npx hyperframes tts "La reunión empieza a las nueve" --voice ef_dora --provider kokoro
+npx hyperframes tts "今日はいい天気ですね" --voice jf_alpha --provider kokoro
 ```
+
+Valid `--lang` codes (only needed to override the voice's auto-detected language): `en-us`, `en-gb`, `es`, `fr-fr`, `hi`, `it`, `pt-br`, `ja`, `zh`.
 
 Non-English phonemization requires `espeak-ng` system-wide (`brew install espeak-ng` / `apt-get install espeak-ng`).
 
@@ -51,6 +82,21 @@ Non-English phonemization requires `espeak-ng` system-wide (`brew install espeak
 - `1.1-1.2` — intros, transitions, upbeat content
 - `1.5+` — rarely appropriate, test carefully
 
-## Long Scripts
+Honored by Kokoro + HeyGen; ElevenLabs ignores `--speed` (use voice settings on their dashboard).
+
+## Long scripts
 
 Past a few paragraphs, write the text to a `.txt` file and pass the path. Inputs over ~5 minutes of speech may benefit from splitting into segments.
+
+## HeyGen word-timestamp shape
+
+When `--words <path>` is passed to a HeyGen call, the file is written in the same flat shape `transcribe` produces — drop-in compatible with the captions pipeline:
+
+```json
+[
+  { "id": "w0", "text": "Hi", "start": 0.0, "end": 0.21 },
+  { "id": "w1", "text": "there", "start": 0.22, "end": 0.55 }
+]
+```
+
+For ElevenLabs / Kokoro, run `npx hyperframes transcribe narration.wav --model small.en` to get the same shape.

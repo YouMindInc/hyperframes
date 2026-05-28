@@ -94,6 +94,50 @@ Both share the same `--quality` and run from a single inference pass — only en
 
 **Hole-cut, not inpainted.** The subject region in `plate.webm` is fully transparent — composite something opaque under it to fill the hole.
 
+**Single test for whether `--background-output` is the right tool:** _will anything ever be visible through the subject's silhouette where the subject used to be?_ If no, you don't need the plate — `subject.webm` alone over a different background is enough.
+
+### Use case → right tool
+
+| Use case                                                                            | Right tool                                                                         |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Text/graphics between the cutout and the plate (this command's reason for existing) | **Hole-cut** (`--background-output`)                                               |
+| Subject onto an unrelated scene                                                     | Just `subject.webm`; ignore the plate                                              |
+| Show the room _without_ the person, alone over no other content                     | **Clean plate** — needs an inpainter (LaMa, ProPainter, E2FGVI). Not this command. |
+| Replace the subject with a different subject                                        | **Clean plate** — same as above                                                    |
+
+### Canonical 3-layer template (plate + content + cutout)
+
+Ship just the two transparent layers and let arbitrary content live between them — no original mp4 needed:
+
+```html
+<!-- z=1 plate: surroundings opaque, subject silhouette transparent -->
+<video
+  src="plate.webm"
+  data-start="0"
+  data-duration="6"
+  data-track-index="0"
+  muted
+  playsinline
+></video>
+
+<!-- z=2 your content lives between the layers -->
+<h1 id="headline" style="z-index:2; ...">MAKE IT IN HYPERFRAMES</h1>
+
+<!-- z=3 cutout floats the subject back on top -->
+<div class="cutout-wrap" style="position:absolute; inset:0; z-index:3">
+  <video
+    src="subject.webm"
+    data-start="0"
+    data-duration="6"
+    data-track-index="1"
+    muted
+    playsinline
+  ></video>
+</div>
+```
+
+Functionally equivalent to the text-behind-subject pattern above, but doesn't require shipping the original mp4 — the plate replaces it. Use this when delivering just the two transparent layers as a reusable asset.
+
 ## When `remove-background` is NOT the right tool
 
 If a user asks for "the room **without** the person, displayed standalone" (no subject anywhere, no compositing on top), `--background-output` is wrong — its plate has a transparent hole, not a filled-in clean plate. They need an **inpainter**: LaMa, ProPainter, or E2FGVI. Tell them this command can't do it.
