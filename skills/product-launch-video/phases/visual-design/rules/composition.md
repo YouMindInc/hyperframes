@@ -1,251 +1,202 @@
 ---
 name: video-composition
-description: "1920x1080 canvas layout, whitespace rhythm, visual hierarchy, depth layering [layout, composition, whitespace, hierarchy, canvas]"
+description: "Composition design decisions for 1920x1080 HyperFrames videos — canvas zones, 7 layout templates, density rules, hierarchy logic, depth principles. Specific px / scale / shadow values live in build agent territory."
 category: visual-design
 ---
 
-# Composition for 1920x1080 Video
+# 1920x1080 视频的构图 —— 设计判断层
 
-This file is the **video-craft numeric overlay** — exact safe margins, canvas zones, density targets, depth values calibrated against the actual layouts in the golden samples (hyperframes-animation/examples × 13, codex-plugin, timeline-editor-launch-v5, playground-launch, hermes, inspector-logo-intro, article-walkthrough). Composition is brand-agnostic — pair the geometry below with the actual palette/typography from `./design-system/design.html`.
+视频构图更接近电影与海报，而非网页布局。没有滚动，没有响应式重排。每一帧都是固定画布，每个像素都重要。
 
-Video composition is closer to film and poster design than web layout. There is no scroll, no responsive reflow. Every frame is a fixed canvas where every pixel matters.
+**本文件大部分是 plan 层的设计判断** —— 画布分区**概念**、7 套 composition 模板、密度规则、层级逻辑、深度层级原则。具体 px（安全边距 96-150）、scale 数（1.05 / 0.92）、`box-shadow` 三层配方、`perspective` 800-1400px 等实现细节属于 build agent；plan 不写代码。
 
-## The squint test
+Composition 是 plan 含金量最高的领域 —— 选哪套布局、主元素占多少画面、用几层景深，**这些就是导演的决策**。
 
-Blur your eyes (or blur a screenshot). Can you still identify:
+## 眯眼测试
 
-- The most important element?
-- The second most important?
-- Clear spatial groupings?
+把眼睛眯起来（或对截图做模糊处理）。你是否仍能识别出：
 
-If everything looks the same weight when blurred, you have a hierarchy problem. Redesign before coding. The archive's strongest beats (codex Beat 1, inspector Beat 5, timeline-editor Act 0 trio) all pass the squint test — a single dominant mass plus one supporting structural element, with everything else recessed.
+- 最重要的元素？
+- 第二重要的元素？
+- 清晰的空间分组？
 
-## Canvas zones
+模糊后如果所有元素权重相同，就是层级出问题 —— 在写 plan 前重新设计。Archive 最强节拍都通过这测试：单一主导块 + 一个支撑性结构元素，其余退居其后。
 
-Divide the 1920x1080 canvas into functional zones:
+## 画布分区（概念）
+
+1920×1080 画布划分四区：
 
 ```
 +--------------------------------------------------+
-|         Optional top chrome (5-7%, 36-58px)      |
-|  +----------------------------------------------+|
-|  |         Safe margin (96-150px / 5-8%)        ||
-|  |  +----------------------------------------+  ||
-|  |  |                                        |  ||
-|  |  |       Primary content area             |  ||
-|  |  |    (center 65-75% of frame)            |  ||
-|  |  |                                        |  ||
-|  |  +----------------------------------------+  ||
-|  |  |   Caption / subtitle zone (bottom 15%) |  ||
-|  |  +----------------------------------------+  ||
-|  +----------------------------------------------+|
+|         Optional top chrome                       |
+|  +----------------------------------------------+ |
+|  |         Safe margin                          | |
+|  |  +----------------------------------------+  | |
+|  |  |                                        |  | |
+|  |  |       Primary content area             |  | |
+|  |  |    (画面中心 65-75%)                   |  | |
+|  |  |                                        |  | |
+|  |  +----------------------------------------+  | |
+|  |  |   Caption / subtitle zone (底部 ~15%)  |  | |
+|  |  +----------------------------------------+  | |
+|  +----------------------------------------------+ |
 +--------------------------------------------------+
 ```
 
-- **Top chrome** (only when running a workspace-mockup scene): codex-plugin's topbar is `top: 36px, left: 48px, right: 48px, height: 58px`. If you are not showing a tool UI, skip this zone entirely.
-- **Safe margin**: Keep critical content away from edges. The archive's measured values are 96px (5%) at minimum, 120-150px (7-8%) for editorial / hero scenes, up to 200px when the scene is a single hero word. Codex uses `padding: 150px 120px 92px`. Article-walkthrough uses 128px horizontal.
-- **Primary content area**: The center 65-75% of the frame is where the eye naturally rests. Place the hero visual here. Max-width for text blocks in the archive caps at ~1360px even on a 1920-wide canvas — never edge-to-edge prose.
-- **Caption zone**: Bottom 15% is reserved for narrator subtitles. Do not place critical visuals here during narrated segments. demo-page-scroll-spotlight pins captions at `position: absolute; bottom: 60px`.
+- **Top chrome** —— 只在 workspace mockup 场景用；否则跳过
+- **Safe margin** —— 关键内容远离边缘；hero / 编辑类需要更大留白
+- **Primary content area** —— 画面中心 65-75% 是视线自然停留处；正文文本块**永远**不要顶到边
+- **Caption zone** —— 底部 ~15% 留给字幕；旁白段落不在这里放关键视觉
 
-## Composition templates
+Plan 写"hero 词居中，留宽安全边距"；不写 `padding: 150px 120px 92px`。
 
-Mix at least three of these across the scenes of a single video. The archive's strongest plans never repeat the same layout family twice in a row.
+## 7 套 Composition 模板
 
-### Centered (hero moments)
+单个视频中至少混 3 套（5 场景 → 3+ 套，9 场景 → 4+ 套）。**不要把所有场景默认为居中型。** Archive 最强方案从不连续两次用同一类布局。
 
-Single dominant element centered with generous breathing room. Use for: brand reveals, key statistics, CTAs, climax beats.
+### 1. 居中型（hero / 高潮）
 
-Archive examples: `brand-reveal-assemble-zoom`, `cta-morph-press`, `hook-counter-burst` (counter at 806px occupies ~50% of canvas height), `cta-orbit-collapse` (center cluster with orbiting icons), inspector Beat 5 ("Inspector" at 70% width centered after zoom).
+单个主导元素居中，充足呼吸空间。用于：品牌亮相、关键数据、CTA、高潮节拍。
 
-### Rule of thirds
+### 2. 三分法
 
-Place the visual anchor at a third-line intersection. The remaining space holds supporting elements or stays empty for breathing room. Use for: feature showcases, product demos with description.
+视觉锚点放在三分线交点。剩余空间承载辅助元素或留白。用于：功能展示、带描述的产品演示。
 
-Archive examples: vercel-intro storyboard triangle at lower-left third intersection; demo-page-scroll-spotlight with `.video` at left third, caption at bottom-right third.
+### 3. 分屏型（对比 / 双焦点）
 
-### Split (comparison / dual focus)
+左右两半各自承载独立元素。用于：前后对比、功能对比、问题/解决、调色板切换瞬间。
 
-Left and right halves each contain a distinct element. Use for: before/after, feature comparison, problem/solution, palette-swap moments.
+### 4. 分层深度型（沉浸式）
 
-Archive examples: `comparison-split-cards` (left card +18° rotateY, right card -18°), `metric-video-text-pivot` (video left ~35% width, MP4 stat right), `workflow-approve-press` (steps list left, button right), playground Beat 2B (bicolor horizontal split), fadeglow Beat 6 (palette-swap left=navy+lime vs right=magenta+yellow).
+前景 / 中景 / 背景用不同 scale + opacity 拉景深。用于：开场钩子、氛围重场景、工作台节拍。
 
-### Layered depth (immersive)
+### 5. 非对称型（编辑风）
 
-Foreground, midground, background at different scales and opacity. Use for: opening hooks, atmosphere-heavy scenes, codex's workbench beats.
+主内容推向一侧（60/40 或 70/30）。刻意不平衡 → 视觉张力 + 精致感。用于：功能聚焦、文本密集信息、编辑佐证节拍。
 
-Archive examples: `demo-page-scroll-spotlight` (card + carousel stacking), `problem-mockup-overwhelm` (3-phone cluster → avatar morph), codex Beat 1 (terminal + command palette + grid + scan bars all on separate z-planes).
+### 6. 三联型（三栏面板）
 
-### Asymmetric (editorial)
+三个等宽分区，常用于同时展示三种能力 / 三个功能节拍。
 
-Main content pushed to one side (60/40 or 70/30 split). Deliberate imbalance creates visual tension and sophistication. Use for: feature spotlight, text-heavy information, editorial proof beats.
+### 7. 满屏条带
 
-Archive examples: article-walkthrough `.proof-layout { grid-template-columns: minmax(0, 1fr) 500px }` — copy left, 620px artifact right with 86px gap and 128px outer padding. hermes Beat 3 panels are also asymmetric within the triptych.
+单个水平条带（滚动条、logo 链、跑马灯）。通常只占画布高度 20%。
 
-### Triptych (3-up panel)
+## 画面密度 —— 避免空荡
 
-Three equal-width zones, often used to show three capabilities or three feature beats at once.
+常见失败：小元素漂浮在 1920×1080 中央，周围空白。每个场景必须显得**有意被填满**，而不是稀疏。
 
-Archive example: hermes Beat 3 — three 540px panels side by side (Lottie, Captions, Templates), each animating independently but in sync.
+**密度规则**：
 
-### Full-bleed strip
+- **主视觉元素至少占画布 40%** —— 产品图 ~800×600 起步。hero 文本 50-75% 高 × 60-80% 宽；居中卡片 30-50% 宽 × 50-70% 高
+- **每个场景至少 3 个视觉层** —— 背景（渐变 / 粒子 / 网格）、中景（主内容）、前景（强调 / 装饰）
+- **开场和结尾**特别容易空荡 —— 黑底孤零零一行字 = 占位符感。加环境层：dual-radial swell、漂浮粒子、品牌色环境纹理、低不透明度扫描线
+- **纯文字场景**也要加视觉元素 —— logo、提取素材、图标装饰、半色调网点场、品牌色派生几何
+- **积极用 `assetCandidates`** —— 提取的真实素材是最有价值的视觉材料；占帧 60% 的产品截图配支撑文字 + 环境层 = 满；同样的文字单独出现 = 空
 
-A single horizontal strip carrying ticker, logo chain, or marquee content. Often only 20% of canvas height.
+**充盈测试**：这一帧能当海报或社交媒体图用吗？看起来像留白过多的 PPT 幻灯片 → 加视觉层。
 
-Archive examples: `takeover-ticker-displace` (typewriter left + scrolling ticker right), `proof-logo-chain` (avatar ring + brand labels, ~90% width × 20% height).
+**海报暂停测试**：随时冻结视频，这一静帧能作为独立平面设计成立吗？Codex 6 个 beat 全部通过。
 
-**Do not default to centered for every scene.** A 5-scene video should hit 3+ of these templates; a 9-scene video should hit 4+.
+## 留白作为设计工具
 
-## Frame density — avoid empty-looking scenes
+留白不是浪费，是引导注意力。
 
-A common failure is scenes that feel hollow: a small element floating in the center of a 1920×1080 canvas with nothing else. Every scene should feel **intentionally filled**, not sparse.
+- **紧密分组**（图标 + 标签、图片 + 说明）—— 小间距
+- **充裕分隔**（不相关分组）—— 大间距
+- **非对称外边距**比处处相等内边距更显设计感
+- **Hero 词左右常保留大块空白** —— 让单个词承担"这就是一切"的分量
 
-**Density rules** (measured against archive scenes):
+### 间距失败模式
 
-- The primary visual element should occupy at least **40% of the canvas area** (e.g., a product image filling ~800×600px or larger). Archive medians: hero text 50-75% height × 60-80% width; centered card 30-50% width × 50-70% height; full-width strip 90% × 20%.
-- Every scene should have at least **3 visual layers**: background (gradient / particles / ambient texture / architectural grid), midground (main content — images, cards, text blocks), foreground (accent elements, overlays, subtle decorations).
-- **Opening and closing scenes** are especially prone to emptiness — a lone logo on black or a single line of text feels like a placeholder, not a finished scene. Add environmental layers: dual-radial swell background, floating particles, brand-tinted ambient texture, scanline overlay at 3-5% opacity.
-- If a scene has only text and no imagery, add visual elements: brand logo, extracted product images, icon decorations, halftone field, or geometric shapes derived from the brand palette. Inspector's intro uses a halftone dot field as the _primary character_ of the scene, not decoration — the field warps and breathes per beat.
-- Use **extracted assets aggressively** — they are the most valuable visual material. A product screenshot at 60% frame size with supporting text and ambient layers looks rich; the same text alone looks empty.
+- 每个元素与其他每个元素等距 → 没有分组，没有层级
+- 元素无意中相触或重叠
+- 文字紧贴容器边缘
+- 字幕与底部视觉碰撞
+- 因为是框架默认值，所有地方都用同一个内边距
 
-**The fullness test:** Would this frame work as a poster or social media image? If it looks like a PowerPoint slide with too much empty space, add more visual layers.
+## 帧内视觉层级
 
-**The poster-pause test:** If you froze the video at any moment, would the still frame be defensible as a graphic on its own? Codex Beats 1-6 all pass this — each frozen frame reads as a deliberate poster.
+视觉权重顺序（强 → 弱）：
 
-## Whitespace as a design tool
+1. **大幅图像**（mockup、照片、hero 视觉）
+2. **运动**（动比静先抓眼）
+3. **高对比度**（暗底亮字、中性底饱和色）
+4. **字号刻度**（display > heading > body）
+5. **位置**（中心和上三分之一是黄金位）
 
-Whitespace is not wasted space. It directs attention and creates hierarchy.
+**至少结合两个**才能立清晰层级。一个又大又在动又在上三分之一的元素，毫无疑问就是主焦点。
 
-### Rhythm through varied spacing
+### 层级要叠多维度
 
-- **Tight groupings** for related elements (icon + label, image + caption) — 8-16px gaps
-- **Generous separation** between unrelated groups — 32-48px gaps (the archive's measured rhythm; codex uses multiples of 8 throughout)
-- **Asymmetric margins** feel more designed than equal padding everywhere
+仅尺寸更大的标题、字重颜色间距与正文相同 —— 层级感弱。把维度叠起来：
 
-### Breathing room
+| 维度     | 强对比                     |
+| -------- | -------------------------- |
+| Size     | 3:1 比例或更大             |
+| Weight   | 800-900 vs 400             |
+| Color    | 与背景高对比               |
+| Motion   | 一个元素在动 vs 其他全静止 |
+| Position | 顶部 / 左侧 = 主要         |
+| Space    | 周围大块留白 vs 与一切等距 |
 
-- A hero image needs empty space around it to feel important
-- A data counter needs distance from other elements to read as a standalone statement
-- Crowded frames with no breathing room feel chaotic and unpolished
-- The archive's hero moments routinely surround a single word with 200-400px of empty space on each side (timeline-editor Act 0 "ever" — the word is everything; everything else recedes)
+## 卡片与分组
 
-### Common spacing failures
+间距 + 对齐就能自然分组 —— **卡片容器不是必需**。
 
-- Every element equidistant from every other element (no grouping, no hierarchy)
-- Elements touching or overlapping unintentionally
-- Text crammed against the edge of a container
-- Subtitle text colliding with bottom-positioned visuals
-- Default 24px padding on everything because it's the framework default
+**该用卡片**：
 
-## Visual hierarchy in a frame
+- 内容与周围真正不同
+- UI 演示场景里该分组是独立可操作的（命令面板的行、功能卡）
+- 你需要阴影堆叠传达"高于画布的浮起感"
 
-Order of visual weight (strongest to weakest):
+**不该用卡片**：
 
-1. **Large imagery** (mockups, photos, hero visuals)
-2. **Motion** (animated elements draw the eye before static ones)
-3. **High contrast** (bright on dark, saturated on neutral)
-4. **Typography scale** (display text > heading > body)
-5. **Position** (center and upper third are prime real estate)
+- 只是想做视觉分隔 → 用留白替代
+- 内容属于连续列表或流
 
-**Combine at least two** to establish clear hierarchy. A large, moving element in the upper third is unmistakably the primary focus.
+**永远不要在卡片里嵌套卡片** —— 视觉幽闭 + 层级模糊。想嵌套通常说明外层卡不必要。
 
-### Hierarchy through multiple dimensions
+Plan 写"comparison-split：左右双卡，三层 shadow stack"；不写 `box-shadow: 0 30px 60px rgba(0,0,0,0.45)...` —— 那是 build。
 
-Do not rely on size alone. Effective hierarchy stacks 2-3 signals:
+## 素材的突出度
 
-| Dimension | Strong contrast                             | Weak contrast               | Archive example                                          |
-| --------- | ------------------------------------------- | --------------------------- | -------------------------------------------------------- |
-| Size      | 3:1 ratio or more                           | Less than 2:1               | timeline-editor Act 0: 500px "ever" vs 220px surrounding |
-| Weight    | Bold (800-900) vs Light (400)               | Medium vs Regular           | codex h1 (900) vs eyebrow (400 mono)                     |
-| Color     | High contrast to background                 | Similar tone                | Single accent word in cyan on graphite scene             |
-| Motion    | Element animating vs static everything else | Everything drifting same    | hook-counter-burst counter scaling vs static surround    |
-| Position  | Top / left = primary                        | Center mass = neutral       | proof-logo-chain logo strip centered horizontally        |
-| Space     | Surrounded by 200-400px whitespace          | Equidistant from everything | timeline-editor Act 0 trio                               |
+提取的素材（logo、产品图、截图）是最有价值的视觉材料。它们真实、与品牌强相关。
 
-A heading that is merely larger but the same weight, color, and spacing as body text has weak hierarchy. Stack dimensions.
+- **突出展示**，不当小装饰
+- 产品截图作焦点时，**至少填帧 40-60%**
+- Logo 在播放尺寸下要清晰可辨 —— 不要缩成图标
+- 用可获得的最高质量版本
+- **真实素材存在时永远不要用 AI 生成的装饰图形替换**（通用色块、抽象色块）—— 提取这步是有原因的
 
-## Cards and grouping
+## 在 2D 画布中制造深度
 
-Spacing and alignment create natural grouping — a card container is not always needed.
+每个场景**至少叠 2-3 种深度技术**，避免平面海报感。具体数值（perspective px、rotate 度、scale 数）是 build 的事：
 
-**Use cards when**:
+| 技术                | 效果                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| **尺寸差异**        | 更大 = 更近，更小 = 更远                                                              |
+| **模糊**            | 模糊 = 背景，清晰 = 前景                                                              |
+| **不透明度梯度**    | 低 = 后退，满 = 主要                                                                  |
+| **重叠**            | 前景部分遮盖后景                                                                      |
+| **阴影堆叠**        | 三层阴影 = 浮起 + 品牌感知                                                            |
+| **运动速度**        | 视差更快 = 更近                                                                       |
+| **反向 scale 技巧** | 相机推向焦点 → 背景看起来变大、焦点元素 CSS scale <1 但合成后充满画面（archive 招牌） |
 
-- Content is truly distinct from surrounding content
-- The group is independently actionable in a UI demo scene (codex command palette rows; demo-page-scroll-spotlight feature cards)
-- You need a shadow stack to communicate "elevated above the canvas"
+Plan 写"3 层景深：背景层 + 中景主内容 + 前景强调，背景做反向 scale 让相机推近感"；不写 `scale: 1.05 / 1.0 / 0.92` —— 那是 build。
 
-**Do not use cards when**:
+## 推广视频中不该出现什么
 
-- You just want visual separation — use whitespace instead
-- Content is part of a continuous list or flow
+- 导航栏、页脚、cookie 横幅（视频里没用途的交互式网页元素）
+- 滚动条、光标箭头、浏览器 chrome —— 除非场景**有意**是工作区 mockup
+- 无法点击的按钮
+- 用通用装饰形状（色块、球体、飘带）替代真实产品素材
+- 漂浮 bokeh / 紫到蓝的 AI 渐变 —— "默认 AI 烂俗外观"，多个品牌简报明确禁过
 
-**Never nest cards inside cards.** Nested containment creates visual claustrophobia and ambiguous hierarchy. If you feel the need to nest, the outer card is likely unnecessary.
+**例外**：有意重建产品界面的 UI 演示场景。导航栏、命令面板、时间线轨道、CTA 按钮提供真实上下文 —— 这种约定让场景感觉像**真实**工作流而非营销重演。
 
-**Card shadow stack** — the archive's recurring three-layer recipe:
+## Plan 引用样例
 
-```css
-.card {
-  box-shadow:
-    /* Drop shadow (depth) */
-    0 30px 60px rgba(0, 0, 0, 0.45),
-    /* Glow halo (brand color) */ 0 0 60px rgba(<brand-accent>, 0.2),
-    /* Inner highlight */ inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-```
+> "Composition: 非对称 60/40 —— 产品截图占左 60%，文案 + CTA 占右 40%。Safe margin 大，文本块封顶在 primary content area 内。3 层景深：background swell + 中景产品截图 + 前景 CTA glow。Density: 主视觉 ~55% 画布，环境层加 5% scanline + 建筑感网格。"
 
-Used in `comparison-split-cards`, `cta-orbit-collapse` (CTA card), `problem-mockup-overwhelm` (phone mockups). Single-layer shadows look flat; the three-layer stack reads as "lifted, brand-aware, and dimensional."
-
-## Asset prominence
-
-Extracted assets (logos, product images, screenshots) are the most valuable visual material. They are real and specific to the brand.
-
-- **Feature them prominently**, not as small decorations
-- A product screenshot should fill at least 40-60% of the frame when it is the scene's focus. metric-video-text-pivot puts the demo video at ~35% width × 60% height. heygen-iphone-canvas-test puts the iPhone device at ~45-55% of frame width.
-- Logos should be recognizable at playback size — do not shrink them to icons
-- Use the highest-quality asset version available
-
-**Never replace real assets with AI-invented decorative graphics** (generic shapes, abstract blobs) when real assets exist. The extraction step gathered them for a reason. The codex-plugin DESIGN.md is explicit: _"No empty abstract visuals: every frame should show the plugin, Codex, HTML, timeline, or render workflow."_
-
-## Depth in a 2D canvas
-
-Even without 3D transforms, create perceived depth through:
-
-| Technique           | Effect                                          | Archive example                                                                    |
-| ------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Scale difference    | Larger = closer, smaller = farther              | hook-counter-burst: bg `scale: 1.05`, camera `scale: 0.92`                         |
-| Blur (filter: blur) | Blurred = background, sharp = foreground        | problem-mockup `filter: blur(80-120px)` on frosted overlay                         |
-| Opacity gradient    | Lower opacity = recedes, full opacity = primary | Three-tier 0.15 / 0.6 / 1.0 stack across most examples                             |
-| Overlap             | Front elements partially cover back elements    | problem-mockup mail-card `translateX(-14px)` behind bell-card                      |
-| Shadow stack        | Three-layer shadow = lifted + brand-aware       | comparison-split-cards card shadow                                                 |
-| Motion speed        | Faster parallax = closer, slower = farther      | concept-demo-decode-pan: foreground `x: -PARALLAX_DIST` (400px) faster than camera |
-
-Layer at least 2-3 depth levels per scene to avoid the flat-poster look.
-
-### Depth via opacity and transform
-
-Different opacity values assign elements to different depth planes instantly. Set them via GSAP at the appropriate timeline position so they participate in the seekable timeline:
-
-```js
-// Background plane — receding
-tl.set(".bg-layer", { opacity: 0.15, scale: 1.05 }, 0);
-
-// Midground plane — supporting
-tl.set(".mid-layer", { opacity: 0.6, scale: 1.0 }, 0);
-
-// Foreground plane — primary focus
-tl.set(".fg-layer", { opacity: 1.0, scale: 0.92 }, 0);
-```
-
-Note the **inversion**: the foreground sits at _smaller_ scale (0.92) while the background sits at _larger_ scale (1.05). This is the camera-perspective trick used in `hook-counter-burst` (lines 492-493) and `brand-reveal-assemble-zoom` (zoom-scale + counter-translate pattern): the camera is "pushed in" on the focal element, so the background appears scaled up and the focal element compositely fills the frame at scale 1.0 even though its CSS scale is < 1.0.
-
-Use `scale` (values slightly above or below 1.0) to reinforce the depth assignment. Elements at 1.05 scale feel like they are leaning toward the viewer; elements at 0.92 feel set back. Combined with opacity, this creates convincing foreground/background separation without 3D transforms.
-
-For genuine 3D, set `perspective: 800-1400px` on the parent (the archive's measured range — `comparison-split-cards` uses `980px`) and use `rotateY: ±15°, rotateX: ±5°` on the children. Higher rotation than ±20° starts to feel gimmicky.
-
-## What not to show in a promo video
-
-- Navigation bars, footers, cookie banners (interactive web elements with no video purpose)
-- Scrollbars, cursor arrows, browser chrome — unless the scene is _deliberately_ a workspace mockup
-- Buttons that cannot be clicked
-- Generic decorative shapes (blobs, orbs, swooshes) standing in for real product assets
-- Floating bokeh / purple-to-blue AI gradients — explicitly banned in the codex-plugin and hermes briefs as the "default AI slop look"
-
-**Exception**: UI demo scenes intentionally recreating the product interface. Here, a navbar, command palette, timeline rail, and CTA button provide realistic context — codex Beats 1-5 are entirely built from this convention, and the convention is what makes them feel like a _real_ workflow rather than a marketing reenactment.
+不写具体 px / scale 数 / shadow 配方。

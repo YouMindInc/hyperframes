@@ -19,13 +19,7 @@ const REQUIRED_SCENE = [
   "script",
   "estimatedDuration",
 ];
-const REQUIRED_INTENT = [
-  "type",
-  "narrativeRole",
-  "keyMessage",
-  "persuasion",
-  "emotionalBeat",
-];
+const REQUIRED_INTENT = ["type", "narrativeRole", "keyMessage", "persuasion", "emotionalBeat"];
 const VALID_INTENT_TYPES = new Set([
   "hook",
   "pain_point",
@@ -118,9 +112,7 @@ function validate(filePath) {
       // Empty array is allowed (text-only scenes).
       if ("assetCandidates" in scene) {
         if (!Array.isArray(scene.assetCandidates)) {
-          errors.push(
-            `${ctx}.assetCandidates must be an array (use [] for text-only scenes)`,
-          );
+          errors.push(`${ctx}.assetCandidates must be an array (use [] for text-only scenes)`);
         } else {
           scene.assetCandidates.forEach((cand, j) => {
             const cctx = `${ctx}.assetCandidates[${j}]`;
@@ -131,15 +123,23 @@ function validate(filePath) {
             if (typeof cand.path !== "string" || !cand.path) {
               errors.push(`${cctx}: missing or empty "path"`);
             } else if (!cand.path.startsWith("public/")) {
-              errors.push(
-                `${cctx}.path: must start with "public/" (got "${cand.path}")`,
-              );
+              errors.push(`${cctx}.path: must start with "public/" (got "${cand.path}")`);
             }
             if (typeof cand.description !== "string" || !cand.description) {
               errors.push(`${cctx}: missing or empty "description"`);
             }
           });
         }
+      }
+
+      // captions field is no longer consumed (LV2 captions are agent-authored
+      // in Phase 4a.5 from whisper word JSON). Surface a stderr warning if it's
+      // still present so story-design templates get updated, but don't fail
+      // validation — old narrator_scripts.json files should still pass.
+      if ("captions" in scene) {
+        console.warn(
+          `! ${ctx}.captions: field is deprecated and ignored by Phase 4a.5 captions agent — remove from narrator_scripts.json`,
+        );
       }
     });
 

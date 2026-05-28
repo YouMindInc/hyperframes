@@ -1,44 +1,31 @@
-# Audio (Phase 2.5) — reference
+# Audio (Phase 2.5) — workflow guide
 
-Phase 2.5 is **deterministic** — owned by [`scripts/audio.mjs`](../../scripts/audio.mjs). No subagent. This document is a reference for the script's contract and design choices; not a procedure (the script _is_ the procedure).
+Phase 2.5 generates narration + (optional) background music for each scene. All capability lives in the **`hyperframes-media`** skill — `npx hyperframes tts` and `npx hyperframes bgm` do provider auto-detection internally. This file only describes how to wire those commands into the launch-video-v2 workflow.
 
-## Procedure at a glance (what the script does)
+For provider chains, voice IDs, mood prompts, env-var detection, and failure modes, read:
 
-1. Detect TTS provider (ElevenLabs if `$ELEVENLABS_API_KEY` + python `elevenlabs` import OK, else Kokoro)
-2. For each scene in parallel: TTS → Whisper transcribe (chained per-scene, not waiting for siblings)
-3. Spawn Lyria BGM **detached** (if `$GOOGLE_API_KEY` + `--lyria-recipe` set) — does NOT block voice
-4. ffprobe each voice wav → write `audio_meta.json` with real `voiceDuration` per scene
-5. Exit 0 the moment voice + transcribe done; BGM keeps rendering in the background
+- `hyperframes-media` → `references/tts.md` — HeyGen / ElevenLabs / Kokoro chain, `--words` flag for HeyGen word timestamps
+- `hyperframes-media` → `references/bgm.md` — Lyria / MusicGen chain, `--from-file` mood inference, Lyria knobs
+- `hyperframes-media` → `references/tts-to-captions.md` — when to skip Whisper (HeyGen Path A) vs. chain TTS → transcribe (Path B)
+- `hyperframes-media` → `references/transcribe.md` — Whisper model + Language Rule
 
-## What the script does
-
-1. Reads `narrator_scripts.json`. BGM mood inference looks at the script bodies + `narrativeArchetype` + `emotionalArc` directly — no `tokens.json` side file (Phase 1 web-research writes asset/section data, not styling tokens; styling lives in Phase 1b's `design-system/`).
-2. Picks TTS provider once at startup:
-   - `$ELEVENLABS_API_KEY` set **and** `python3 -c 'import elevenlabs'` succeeds → **ElevenLabs** (cloud).
-   - Otherwise → **Kokoro** (local, free) via `npx hyperframes tts`.
-3. Writes every scene's narration to `/tmp/scene_<N>.txt`.
-4. Per-scene **pipelined** TTS → transcribe: each scene's whisper run starts the moment its own TTS finishes (does NOT wait for sibling scenes). All scenes run in parallel via `Promise.all`.
-5. Spawns Lyria BGM **detached** in parallel (if `$GOOGLE_API_KEY` set and `--lyria-recipe` path provided). The BGM child outlives the script — `audio.mjs` exits as soon as voice + transcribe finish.
-6. ffprobes each voice file for true `voiceDuration` and writes `./audio_meta.json`.
-
-## Outputs
+## What this phase produces
 
 ```
 ./audio_meta.json                                   # index for Phase 4a / 4c
-hyperframes/assets/voice/scene_<N>.wav              # narration audio
-hyperframes/assets/voice/scene_<N>_words.json       # Whisper word-level timestamps (omitted if transcribe failed or count=0)
-hyperframes/assets/bgm.wav                          # background music (lands after audio.mjs exits if Lyria takes longer)
+hyperframes/assets/voice/scene_<N>.wav              # narration audio per scene
+hyperframes/assets/voice/scene_<N>_words.json       # word-level timestamps per scene
+hyperframes/assets/bgm.wav                          # background music (optional)
 ```
 
-`audio_meta.json` schema:
+`audio_meta.json` schema (consumed by `prep.mjs`):
 
 ```json
 {
-  "tts_provider": "kokoro" | "elevenlabs",
-  "voice_id": "<voice id used>",
+  "tts_provider": "heygen" | "elevenlabs" | "kokoro",
+  "bgm_provider": "lyria" | "musicgen" | null,
   "bgm_enabled": true | false,
   "bgm_path": "assets/bgm.wav" | null,
-  "bgm_pending": true | false,
   "total_duration_s": <Σ voiceDuration>,
   "scenes": {
     "scene_1": {
@@ -51,64 +38,31 @@ hyperframes/assets/bgm.wav                          # background music (lands af
 }
 ```
 
-- `bgm_pending: true` means Lyria is still rendering when the script exited. `prep.mjs` (Phase 4a) trusts the path; `finalize` (Phase 4c) re-checks `[ -s hyperframes/assets/bgm.wav ]` before emitting the `<audio>` element.
-- `wordsPath` is `""` when transcribe failed or the JSON has zero words. Downstream effects (e.g. `asr-keyword-glow`) detect this and degrade.
-- Scenes whose TTS failed are **omitted from `scenes` entirely** — Phase 4a falls back to `estimatedDuration` for those.
+## Procedure (orchestrator)
 
-## CLI
+For each scene in `narrator_scripts.json`, in parallel:
 
-```bash
-node <SKILL_DIR>/scripts/audio.mjs \
-  --narrator-scripts ./narrator_scripts.json \
-  --hyperframes ./hyperframes \
-  --out ./audio_meta.json \
-  [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
-  [--voice <id>] [--lang en] \
-  [--provider kokoro|elevenlabs] \
-  [--no-bgm] [--bgm-prompt "<custom prompt>"]
-```
+1. **TTS** — `npx hyperframes tts <scene_text> -o hyperframes/assets/voice/scene_<N>.wav --words hyperframes/assets/voice/scene_<N>_words.json --json`
+   - If the result's `wordCount > 0` (HeyGen Path A), the words file is already populated — no Whisper pass needed.
+   - If `wordCount == 0` (ElevenLabs / Kokoro), chain `npx hyperframes transcribe scene_<N>.wav --model small.en` to fill in word timing.
+2. **Duration** — read `durationSeconds` from the TTS JSON result (it's the same number `ffprobe` would report).
 
-Exit 0 = voice + transcribe + `audio_meta.json` done (BGM may still be rendering).
-Exit 1 = zero scenes got voice; stderr names the reason.
+In parallel with all scenes:
 
-## Voice IDs
+3. **BGM** — `npx hyperframes bgm --duration <total_duration_s> --from-file narrator_scripts.json -o hyperframes/assets/bgm.wav --json &` (run detached / in the background; voice work doesn't block on it).
 
-**Kokoro (Path B)** — default `am_michael` for English. Other options (see `/hyperframes-media` → `references/tts.md`):
+4. **Meta** — once all per-scene TTS + word-data is settled, write `audio_meta.json` aggregating the results. Set `bgm_pending: true` if BGM is still running; Phase 4c re-checks `bgm.wav` on disk before emitting the `<audio>` element.
 
-- English: `am_michael`, `af_heart`, `af_sky`, `af_nova`, `bf_emma`, `bm_george`
-- Non-English: pass `--voice <id> --lang <iso>` AND the script switches Whisper to `small` + `--language <iso>` for transcribe.
+## Provider selection — do nothing
 
-**ElevenLabs (Path A)** — default voice id `21m00Tcm4TlvDq8ikWAM` (Rachel). Override with `--voice <voice-id-from-elevenlabs-dashboard>`.
+The orchestrator does **not** check API keys or pick a provider. `npx hyperframes tts` / `npx hyperframes bgm` handle that internally using the env chain documented in `hyperframes-media`. If the user wants to force a provider, they can set `--provider <name>` in their own override layer; the workflow itself stays provider-agnostic.
 
-## BGM mood prompt (auto-inferred)
+## Failure modes
 
-The script concatenates `project` + `narrativeArchetype` + `emotionalArc` + every scene's `sceneName` / `script` / `narrativeIntent.{narrativeRole, keyMessage}` into a single lowercased blob, then matches industry keywords against it. Defaults by industry:
+| Failure                  | Behavior                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Single scene TTS exits 1 | Omit that scene from `audio_meta.json["scenes"]`. Other scenes proceed. Phase 4a falls back to `estimatedDuration`. |
+| BGM exits 1              | `bgm_enabled: false`, `bgm_path: null`. Voice still completes. Phase 4c skips the `<audio>` element.                |
+| All scenes fail          | Exit 1 with stderr; stop the pipeline.                                                                              |
 
-| Heuristic                                                | Default prompt                                                                                |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `saas / api / cloud / developer / platform / sdk` …      | `"Uplifting corporate tech, bright and modern, gentle piano with synth pads, BPM 110, MAJOR"` |
-| `crypto / nft / web3 / defi / token / blockchain` …      | `"Atmospheric electronic, deep bass, futuristic synths, restrained percussion, BPM 100"`      |
-| `creative / agency / design / studio / art / brand` …    | `"Playful electronic, warm pads, light percussion, BPM 115, MAJOR"`                           |
-| `finance / fintech / bank / payment / invest / wealth` … | `"Calm cinematic, soft strings, restrained percussion, BPM 95"`                               |
-| _(default)_                                              | `"Uplifting corporate tech, bright and modern, gentle piano with synth pads, BPM 110, MAJOR"` |
-
-Override the entire prompt with `--bgm-prompt "..."`. The Lyria recipe at [`lyria-recipe.py`](./lyria-recipe.py) accepts `--prompt / --duration / --output`; tune with `--bpm` (90-110 calm, 110-130 energetic), `--brightness ≥ 0.7` for promotional, `--scale MAJOR` upbeat / `MINOR` somber by editing the recipe call.
-
-## Failure modes (built into the script)
-
-| Failure                                                  | Behavior                                                                                                                                                                                      |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$ELEVENLABS_API_KEY` unset OR `import elevenlabs` fails | Auto-fallback to Kokoro.                                                                                                                                                                      |
-| Both providers unavailable                               | The script logs the missing dep and exits 1 with an empty `scenes` map written. Orchestrator decides to skip audio (Phase 4a falls back to `estimatedDuration`) or install the dep and retry. |
-| Single scene TTS fails                                   | Omit that scene from `audio_meta.json["scenes"]`. Other scenes proceed.                                                                                                                       |
-| `$GOOGLE_API_KEY` missing or Lyria fails                 | `"bgm_enabled": false`, `"bgm_path": null`. Voice + transcribe still complete.                                                                                                                |
-| Single scene transcribe fails OR word count 0            | Keep `voicePath` + `voiceDuration`, set `wordsPath: ""`. Downstream effects detect missing word data and avoid `asr-keyword-glow` for that scene.                                             |
-
-BGM failure never blocks the pipeline. Only "zero scenes got voice" exits 1.
-
-## See also
-
-- `/hyperframes-media` → `references/tts.md` (Kokoro voice list, language flag)
-- `/hyperframes-media` → `references/transcribe.md` (Whisper Language Rule, output shape)
-- `/hyperframes-media` → `references/tts-to-captions.md` (full TTS → captions chain context)
-- [`lyria-recipe.py`](./lyria-recipe.py) — BGM generator script (Google Lyria)
+BGM failure never blocks the pipeline. Only "zero scenes got voice" is fatal.

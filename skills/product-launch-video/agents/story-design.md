@@ -1,51 +1,46 @@
-# Subagent prompt: story-design (Phase 2)
+# Subagent prompt（子代理提示词）：story-design（Phase 2）
 
-**INPUT:** `./research/` (context_pack.md + extraction.json + assets/)
-**OUTPUT:** `./narrator_scripts.json` (archetype + scenes[] with narrativeIntent / transition / assetCandidates / script / estimatedDuration)
-**TOOLS:** Read `<SKILL_DIR>/phases/story-design/guide.md` · Read 1 archetype overview (the one you pick) · Optionally Read 0-2 sample files · Bash validate-narrator-scripts.mjs
-**DONE:** Validator exits 0, report archetype + scene count + total duration, append to `./context.log`
+**输入（INPUT）：** `<PROJECT_DIR>/capture/context_pack.md`（主输入）· `<PROJECT_DIR>/capture/assets/`（asset pool）
+**输出（OUTPUT）：** `<PROJECT_DIR>/narrator_scripts.json`
+**工具（TOOLS）：** 读取 `<SKILL_DIR>/phases/story-design/guide.md` · 读取 1 个 archetype overview · 选择读取 2 个 sample files · Bash（运行 Dispatch context 给出的 validator 路径）
+**完成标准（DONE）：** Validator exit 0 后，报告 archetype、scene count 和 total duration，并追加到 `<PROJECT_DIR>/context.log`
 
-You are the story-design subagent for the **product-launch-video** pipeline (Phase 2 of 4 dispatched subagent phases).
+你是 **launch-video-v2** pipeline 的 story-design subagent。
 
-## Your task
+## 你的任务
 
-Read the phase guide at `<SKILL_DIR>/phases/story-design/guide.md` (path injected by the orchestrator), then follow its full procedure to design the story arc and write `narrator_scripts.json`. The guide describes archetypes, the 5 narrative fields, UI demo requirement, per-scene `assetCandidates`, validation checklist, and the canonical JSON schema. Archetype detail pages live alongside the guide at `phases/story-design/archetypes/<name>/`.
+读取 `<SKILL_DIR>/phases/story-design/guide.md`，按其流程设计 story arc，写出 `narrator_scripts.json`。Archetype 详情页位于 `<SKILL_DIR>/phases/story-design/archetypes/<name>/`。
 
-## Pipeline contract (this run's specifics)
+**Path contract**：Dispatch 给 `PROJECT_DIR`（视频项目根）。读 `<PROJECT_DIR>/capture/context_pack.md`，写 `<PROJECT_DIR>/narrator_scripts.json`，Bash 用 `(cd "$PROJECT_DIR" && ...)` subshell。
 
-- Your cwd is the project root. **NEVER** run `cd` as a standalone command. Use subshells.
-- All output paths relative to cwd. Write `./narrator_scripts.json`.
-- **Voice-over and BGM are OUT OF SCOPE for this pipeline.** Set realistic `estimatedDuration` per scene — that's the timing contract downstream agents use. Do **NOT** include `voicePath` or `voiceDuration` fields anywhere.
-- Inputs ready (from Phase 1 — web-research, see `phases/web-research/guide.md`):
-  - `research/context_pack.md` — **read first**, the compact LLM-friendly digest
-  - `research/extraction.json` — drill-down JSON for full asset URLs, section rects, colors, fonts
-  - `research/screenshot_full.png` — full-page rendered screenshot
-  - `research/assets/` — downloaded image/SVG/font files (this is your asset pool for the `assetCandidates[].path` values)
-- **Do NOT generate `research/analysis.json`.** Analysis is fused into your output — you produce `narrator_scripts.json` instead, which captures product understanding via archetype choice + section→scene mapping + asset recommendations via `assetCandidates`.
+**输入约束：**
 
-## Self-validate before reporting done
+- `capture/context_pack.md` 是**唯一需要主动读取的文件**，它包含 product signals、headings、sections（含 CTAs + assetUrls）、visible text，以及 Asset Inventory（已下载 assets，每项直接是本地路径如 `assets/foo.png`、可选 description）
+- **Asset path 转换规则**：context_pack.md 中的路径是 `assets/<filename>`，写入 `assetCandidates[].path` 时必须改为 `"public/<filename>"`。例：`assets/hero.png` → `"public/hero.png"`。Phase 4a 把 `capture/assets/` 复制到 `PROJECT_DIR/public/`；路径写错会导致 fatal error。
+- 不要生成 `capture/analysis.json` 或其它派生文件
+- scene 中不要包含 `voicePath` 或 `voiceDuration` 字段
+- 不写 `captions: string[]` 字段。`script` 里 `<em>/<brand>/<emph>/<cta>` 标签会被 TTS 端 strip，写不写都不驱动下游视觉。
 
-The Dispatch context block of your prompt contains a "Schema validator:" line with an absolute path. After writing `narrator_scripts.json`, **run that validator and fix every error it reports**:
+## 报告完成前自检
+
+你 prompt 的 Dispatch context block 中包含一行 “Schema validator:”，后面是一个 absolute path。写完 `narrator_scripts.json` 后，直接运行它，**不要读取 script source**：
 
 ```bash
-node <validator-path> ./narrator_scripts.json
+(cd "$PROJECT_DIR" && node <validator-path> ./narrator_scripts.json)
 ```
 
-The validator catches the documented drift modes (`scene_id` vs `sceneNumber`, `narration` vs `script`, flattened `narrativeIntent` fields, missing UI-demo scene type, etc.). Iterate until it exits 0.
+持续迭代直到 exit 0。完整 schema 规则见 guide 的 `narrator_scripts.json — canonical schema` 章节。
 
-Do not report done until the validator passes.
+## 完成后报告
 
-## When done — report
+- 选择的 Narrative archetype
+- Scene count + total estimated duration（scene 数量 + 估算总时长）
+- 每个 scene 的 one-line summary（sceneNumber + sceneName + 8-word gist）
 
-- Narrative archetype chosen
-- Scene count
-- Total estimated duration (sum of `estimatedDuration`)
-- One-line summary of each scene (sceneNumber + sceneName + 8-word gist)
-
-Then append to `./context.log`:
+然后追加到 `<PROJECT_DIR>/context.log`：
 
 ```
-## Phase 2: story-design [done <ISO timestamp>]
+## story-design [done <ISO timestamp>]
 Archetype: <name>
-Scenes: <count>, total ~<duration>
+Scenes: <count>, total ~<duration>s
 ```

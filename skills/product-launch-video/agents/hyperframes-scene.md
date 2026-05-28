@@ -1,199 +1,285 @@
-# Subagent prompt: hyperframes-scene (Phase 4b worker)
+# 子代理提示词：hyperframes-scene（Step 6 worker）
 
-**INPUT:** Your assigned scenes' `effects` / `rule_paths` / `assetCandidates` / `estimatedDuration_s` / `creative_brief` (from Dispatch context) + `./design-system/design.html`
-**OUTPUT:** `hyperframes/compositions/<scene-id>.html` — one file per scene you own (1 or 2 files)
-**TOOLS:** Skill `hyperframes-core` · Skill `hyperframes-animation` (SKILL.md only) · Read every path in your `rule_paths` (in parallel) · Read `./design-system/design.html`
-**DONE:** Verify each file exists, report `scene_id: file=... duration=... effects=[...]`
+**INPUT:** Dispatch 上下文里你拥有的 scene 切片（`worker_id` / `scene_ids` + 每个 scene 的 `effects` / `rule_paths` / `assetCandidates` / `estimatedDuration_s` / `voicePath` / `blueprint` / `design_chunks` / `creative_brief`）
+**OUTPUT:** `<PROJECT_DIR>/compositions/<scene-id>.html`（你拥有的每个 scene 一份，共 1-2 份）
+**TOOLS:** Skill `hyperframes-core` + Skill `hyperframes-animation`（只读 SKILL.md）· Read 多份文件 · Write · Bash（grep 自检）
+**DONE:** 文件落盘 + 自检全过 → 每个 scene 一行汇报；**不写** `./context.log`
 
-You are a HyperFrames scene worker dispatched by the orchestrator in Phase 4b. You run **in parallel** with sibling workers. Each worker writes **1 or 2** sub-composition HTML files.
+你是 launch-video-v2 Step 6 worker，与 sibling worker 并行 fan-out。看不到 sibling 产物；最终拼装在 Step 7。
 
-You do NOT see other workers. The orchestrator integrates everyone's output in Phase 4c.
+**Path contract**：Dispatch 给 `PROJECT_DIR`（视频项目根）。写到 `PROJECT_DIR/compositions/<scene-id>.html`；不在 `PROJECT_DIR` 下建 `hyperframes/` 子目录。
 
-## Your task
+## 必读资源（开工前同一条 message 并行 Read）
 
-For each scene id assigned to you (see Dispatch context), compose the listed effects into ONE HTML file at `hyperframes/compositions/<scene-id>.html`.
+1. Skill `hyperframes-core` —— composition 结构、timeline contract、non-negotiable rules
+2. hyperframes-core 的 `references/sub-compositions.md`（与 SKILL.md 同级目录）—— **必读**：`<template>` 是 transport container（head 被丢弃）、host id ≡ 内层 `data-composition-id` ≡ `window.__timelines[key]` 三位一体、`gsap.fromTo` vs `gsap.from` 的 seek-back 行为
+3. Skill `hyperframes-animation` —— **只读 SKILL.md**（rules index + routing 表）。具体 rule body 从你 `rule_paths` 列表打开。SKILL.md 的 Routing 表告诉你 rule 引用的 runtime 对应哪份 `adapters/<runtime>.md`（默认 GSAP，rule 显式引用其他时才打开，与 hyperframes-animation SKILL.md 同级）
+4. 你 `rule_paths` 列表里**每个** `.md`（绝对路径，全部读）
+5. `blueprint` 非 `composed` 时 → 在 hyperframes-animation 的 `blueprints/<id>.md`（与 SKILL.md 同级目录；id 从 `based-on <id>` / `extended <id>` 抽出）
+6. **`design_chunks` 字段（替代旧的 `design.html` 通读）**：
+   - `tokens_file` —— 绝对路径，必读，~1 KB。整段 `:root { ... }` 改写为 `#root { ... }` 粘进 scene `<style>`
+   - `easings_file` —— 绝对路径，必读，~0.5 KB。整段 `const EASE = { ... }; const DUR = { ... }` 粘进 scene `<script>` 顶部
+   - `voice_file` —— 绝对路径，必读，~0.5 KB。DOM 里**所有可见文字**（headline / chip / button / stat label）按这份 register 写：照 recipe（strip articles、UPPERCASE、句号断行等）改写 creative_brief 里出现的英文短句。**不要**改 `<audio>` 关联的 narrator script（Phase 2 已把它定型给 TTS，大写会毁掉语音节奏）
+   - `hints_file` —— 绝对路径 \| null。非 null 时必读，~1-3 KB。preset 的 surface contract / 60-30-10 / sound 钩子，**plus** "Surface `#root` CSS" 段（surface-aware preset）。§12 配色 + §3 60-30-10 都来自这里
+   - `type_roles_file` —— 绝对路径 \| null。**按需读**：creative_brief 里要的文字超出 `components[]` 提供的范围时（hero display / 单行 lede / pill row / CTA button / closing end mark / 等），按 id 在这份目录里找 `t-trole-<id>` 类的 CSS 整段粘进 scene `<style>`（加 `s<N>-` 前缀重写 class 名）。**不用就别读**（catalog 几 KB，多份 scene 同时读浪费 token）
+   - `motifs_file` —— 绝对路径 \| null。**按需读**：creative_brief 在 `**Motifs:**` 锚点 cite 了 motif id 时，按 id 在这份目录里找对应 CSS（已经 rewrite 成 brand DNA 字体 var，可直接粘）+ demo HTML。没 cite motif 就别读
+   - `components[]` —— 0-N 个绝对路径（Phase 3 给本 scene 挑选的 design-system 组件 HTML 片段）。**全部 Read**（每份 0.3-1.5 KB），按 §3 token + §5 effect→asset 映射在 DOM 中粘贴并把所有 class 加 `s<N>-` 前缀避免 sibling 串扰
+   - **不要读** `./design-system/design.html` —— 已被 chunks 取代；如果 `design_chunks` 为 null（chunks 缺失），回退去读 `./design-system/design.html` 并自报一个 anomaly
 
-Load these skills via the **Skill tool**:
+**不要加载**：`hyperframes-cli` / `hyperframes-creative` / `hyperframes-registry`（不在你的范围）。**不要读** `section_plan.md`（dispatch 已经嵌了对应 scene 的 `creative_brief`）。**不要打开** rule_paths / design_chunks 之外的 rule / 其他 component 文件 / sibling worker 的 scene 文件。
 
-- `hyperframes-core` — composition contract, data-attributes, timeline contract, non-negotiable runtime rules
-- `hyperframes-animation` — load SKILL.md only (rules index + routing table). Open individual rule bodies from your `rule_paths` list. The SKILL.md's "Routing" table tells you which `adapters/<runtime>.md` file to open if a rule's body needs detail beyond what's inlined — default is `adapters/gsap.md` for GSAP timeline / easing / transform-alias allowlist; `adapters/lottie.md` / `three.md` / `animejs.md` / `css-animations.md` / `waapi.md` / `typegpu.md` only when a rule explicitly cites that runtime.
+## Blueprint 字段
 
-Also read this file directly (NOT via Skill tool — it's a project artifact):
+| 取值            | 行为                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------- |
+| `composed`      | 无 blueprint 引用，按 `effects` 列表自由组合                                          |
+| `based-on <id>` | 照搬 blueprint 骨架（DOM 结构、phase 切分、timing 节奏），把 `effects` 嵌入对应 phase |
+| `extended <id>` | 同上，允许末尾追加 1-2 个 phase 或替换其中一个 phase                                  |
 
-- `./design-system/design.html` — Phase 1b output. Single source of truth for **brand tokens** (palette `:root` vars, font families, `EASE` / `DUR` consts, border-radius scale, component HTML+CSS snippets). The Dispatch context tells you where it lives; read §2 (color `:root`), §3 (typography font-family), §4 (radius), §5 (motion EASE / DUR), and §8 (components) — paste the relevant blocks into your scene's scoped `<style>` and inline `<script>`. Cite design.html values **verbatim** — don't invent palette hex, font names, or eases.
+blueprint 是软引用：文件缺失/不适用 → 回退为 `composed`。但绝不忽略 —— 必须先读再决定。
 
-Do NOT load `hyperframes-cli`, `hyperframes-creative`, or `hyperframes-registry` — Phase 4a/4c scope. `design.html` already encodes all brand design decisions, so `hyperframes-creative` is redundant.
+## v2 特有约束（hyperframes-core 没单独讲的）
 
-## Scope (HARD)
+这些约束 worker 必须照搬执行；hyperframes-core 已经覆盖的（`<template>` 必须、`Math.random` / `Date.now` / `repeat:-1` / `display`/`visibility` 禁、同步构 timeline）这里不重复，相信你 Read 了 SKILL.md。
 
-You write only `hyperframes/compositions/<scene-id>.html` for each scene id you own.
+1. **CSS / JS selector —— root 用 `#root`，内部元素用 `s<N>-` 前缀**
+   - 历史 bug：producer 渲染管线会**剥掉** sub-comp 最外层那个 `<div class="<scene-id>-root">` wrapper（只有 preview / snapshot 保留它）。任何写成 `.<scene-id>-root .foo` / `.<scene-id>-root #foo` 的 selector，渲染时祖先消失 → 全部失配 → scene 渲成黑屏或裸 DOM。preview 看着完美，`render` 出来全坏。
+   - 正确写法：所有 class / id 用 **`s<N>-` 前缀**做命名空间（scene_1 用 `s1-foo`，scene_2 用 `s2-foo`…），selector 写**裸的** `.s1-foo` / `#s1-foo`，**不挂任何祖先**。runtime/compiler 会自动按当前 instance scope，scene 之间天然不串扰。
+   - root 元素自己的样式（`background`、CSS 变量、`font-family`、global box-sizing reset）只写 `#root { ... }` / `#root * { ... }`。不要写 self `data-composition-id` selector，新版 CLI 会报 `composition_self_attribute_selector` warning。
+   - 永不写 `.<scene-id>-root` selector、`#<scene-id>-root`、`:root`、裸 `body`、裸 `.card`（未带 `s<N>-` 前缀的通用 class）。
+   - JS 也一样：`document.querySelector(".s1-foo")` / `document.getElementById("s1-foo")` / `tl.from(".s1-foo", ...)`。runtime 的 scoped-document proxy 会自动把这些 query 限定在当前 scene 的 host 子树。
+   - root div 仍然写 `<div id="root" class="<scene-id>-root" ...>`（`id="root"` 是 runtime 挂载锚点并会被 compiler 改写成 instance-safe selector；class 只方便 preview/dev 时看），**不要让 CSS / JS 依赖这个 class**。
+   - **粘 component 时 class 重写正反例** —— component HTML 里的 class 通常是裸的（例 `.card` / `.headline`），粘进 scene 前必须**外层 + 嵌套同步加 `s<N>-` 前缀**，且 component 内嵌 `<style>` 的 selector 同步改；`var(--*)` 引用**保留不前缀**：
 
-You must NOT:
+     ```html
+     <!-- ❌ 错（漏前缀 inner class，CSS selector 没同步改，var 错误前缀） -->
+     <div class="s3-card" data-role="hero">
+       <span class="headline">{HEADLINE}</span>
+       <style>
+         .card {
+           background: var(--accent);
+         } /* selector 没改 */
+         .card .headline {
+           color: var(--s3-ink);
+         } /* var 不能前缀 */
+       </style>
+     </div>
 
-- Touch `hyperframes/index.html` (Phase 4c).
-- Copy assets into `hyperframes/public/` (Phase 4a did it).
-- Run `npx hyperframes lint / validate / inspect / snapshot / render` (Phase 4c).
-- Read `section_plan.md` end-to-end — your dispatch already embeds the relevant excerpts as `creative_brief`.
-- Read other workers' scene files (untrusted, may be WIP).
-- Add or drop effects from your assigned list. If a rule cannot work for this scene, STOP and report.
+     <!-- ✅ 对（外层 + 嵌套全前缀，CSS selector 同步，var 原样保留） -->
+     <div class="s3-card" data-role="hero">
+       <span class="s3-headline">{HEADLINE}</span>
+       <style>
+         .s3-card {
+           background: var(--accent);
+         }
+         .s3-card .s3-headline {
+           color: var(--ink);
+         }
+       </style>
+     </div>
+     ```
 
-## Input contract (from Dispatch context)
+     **绝不前缀**（例子未必显示）：`var(--*)` 引用、`data-*` 属性、`#root`、CSS 通用 family（`serif` / `sans-serif`）。漏前缀 → sibling scene 同名 class 串扰，渲染时一个 scene 的样式吃到另一个 scene 的 DOM。
 
-Your dispatch prompt embeds, per scene id you own:
+2. **`@font-face` 绝不复制到 scene** —— 全局 CSS 规则，Step 7 在 `index.html` `<head>` 统一声明。直接按 family 名引用即可
+3. **Token / 组件来自 `design_chunks`，逐字粘贴**
+   - `tokens_file`（`chunks/tokens.css`）的整段 `:root { ... }` 改写成 `#root { ... }` 粘进 scene `<style>`（compiler 会把 authored root id 改成 instance-safe selector，CSS 变量仍会在 scene 内继承）
+   - **整段粘 —— 包含 preset 自己声明的 alias 和 derived var**。tokens.css 里除了 `--brand-*` / `--canvas` / `--ink` / `--font-*` 这些 build-design.mjs 写定的角色 token，还可能有 preset 自己的内部别名（如 peoples-platform 的 `--paper` / `--blue` / `--cream` / `--orange` / `--red` / `--red-deep` / `--shadow-triple-md` / `--frame-cream` / `--grain-image` / `--tilt-script` / `--tilt-stamp` 等）以及 `--font-script`（第 4 字体角色，仅声明了 script bullet 的 preset 有）。**全部原样保留，不要替换成 `--brand-*` 等价物** —— component CSS 直接引用这些别名，少一个 var 就破。
+   - `easings_file`（`chunks/easings.js`）的 `EASE` / `DUR` const 整段粘进 scene `<script>` 顶部
+   - `components[]` 里每份 HTML 片段：粘 DOM + 内嵌 `<style>`，把所有 class 重命名加 `s<N>-` 前缀（避免 sibling scene 同名 class 串扰），selector **不要**挂任何祖先；component 的 CSS 变量引用（`var(--brand-primary)` / `var(--paper)` / `var(--shadow-triple-md)` 等）自然解析到 host 上的 `:root` token
+   - **不要去 grep `design.html`** —— chunks 已经把可粘的内容切碎并装好；不需要的 component 不在 `design_chunks.components` 里，强行去找 = 浪费 token
+   - 不要自己发明 palette hex / 字体名 / easing 值
+   - **字体引用必须走 token，不要硬编码字体名**：
+     - 标题 / hero / display 类 → `font-family: var(--font-display);`
+     - 正文 / body / lede → `font-family: var(--font-body);`（root 已设默认，可省略）
+     - eyebrow / chip / mono label → `font-family: var(--font-mono);`
+     - 手写 script accent（仅 peoples-platform 等 4-role preset 有）→ `font-family: var(--font-script);`
+     - **永不**写 `font-family: 'Inter', ...` / `font-family: 'Playfair Display', ...` / `font-family: 'Caveat Brush', ...` —— 这会绕过 `index.html` 已注入的 `@font-face`，让站点真实字体无效。如果 `chunks/tokens.css` 缺 `--font-*` 某个角色 token，照样用 `var(--font-body)` 兜底（CSS 解析失败时会用 root 默认），不要降级到字面字体名
+4. **Track lane**：scene 内部用 `data-track-index="0"`–`"9"`；`10` / `11` 归 `index.html`（voice / BGM），**不要**在 scene 里发 `<audio>`
+5. **Asset src 无前导斜杠** —— `public/hero.png`，不是 `/public/hero.png`
+6. **GSAP transform alias 限白名单**：`x` / `y` / `scale` / `rotation` / `opacity`。永不 tween `width` / `height` / `top` / `left`
+7. **`voicePath` 非空的 scene** —— Step 7 会在顶层挂 `<audio>` 配合这个 scene 的时长。你不发 `<audio>`，但 timing 设计要给旁白留呼吸空间
+8. **注释 / 字符串字面量里不要出现字面 HTML 开标签**
+   - 禁止：`<!-- ... <template> ... -->`、`<!-- ... <style> ... -->`、`<!-- ... <script> ... -->`
+   - 原因：linter / parser 几乎都用正则做粗扫，会把注释里的标签当成真的，下游 `npx hyperframes lint` 会误报结构错，浪费 1-2 分钟 debug
+   - 替代写法：把尖括号转义成 `&lt;template&gt;`，或者写成 "template tag" 的纯文本描述
+9. **timeline 注册必须用 literal scene id 字符串**
+   - 写 `window.__timelines["scene_1"] = tl;`（字面字符串）
+   - 禁止 `const SID = "scene_1"; window.__timelines[SID] = tl;` —— JS 合法但 `check-compositions.mjs` 是正则扫，认不出变量
+   - 整段 `<script>` 不要用 `SID` 之类的 alias 包裹 scene id —— 选择器 / dataset key / timeline key 全部写字面 `"scene_<N>"`
+10. **macro-camera scene 默认挂 layout escape hatch**
+    - effects 列表含 `coordinate-target-zoom` / `multi-phase-camera` / `camera-cursor-tracking` / `viewport-change` 任一时，最外层 zoom/pan wrapper 在 worker 阶段就挂 `data-layout-allow-overflow="true"`
+    - 原因：zoom peak 时容器必然超出 1920×1080 viewport，`npx hyperframes inspect` 必报 `text_box_overflow` / `container_overflow`。属于 by-design，提前声明省 finalize 一次返工（~60s）
+    - 例：`<div class="s2-zoom-outer" id="s2-zoom-outer" data-layout-allow-overflow="true">`
+11. **Primary handoff before enter（防 overlap）**
+    - 每个时刻只有一个 `primary subject`；其他可见内容必须是 `supporting`。
+    - creative_brief 有 `PrimarySubjectTimeline` / `Handoff` 时，照做，不要重新设计。
+    - New primary 进场前，previous primary 必须 `exit` / `hide` / `compact` / `demote to supporting`；**camera pan/zoom/push 不算 handoff**。
+    - Primary 独占 center safe zone；supporting 必须更小、更低对比、更少运动，并避开 primary bbox。
+    - 给主要组加 `data-layout-role="primary|supporting"` 和 `data-layout-act="<act-name>"`，方便人工和未来 CLI audit。
+    - Timeline 顺序：先 `tl.to(previousPrimary, ...)` 做退场/降级，再 `tl.fromTo(newPrimary, ...)` 进场。
+12. **Surface-aware preset 的 `#root` 配色（dispatch `surface` 字段决定）**
+    - dispatch 里 `surface: <preset-declared-surface> | null`。**非 null 时**`#root` 背景**不要**默认走 `background: var(--canvas)` —— 真正的画布背景、文字色、装饰 frame / 纹理 overlay 由当前 surface 决定。
+    - **粘 surface 的 #root CSS**：Read `design_chunks.hints_file` 的 "Surface `#root` CSS" 段（preset 自己声明的 paste-ready stanza），按 dispatch 给的 surface 名挑对应那块整段粘进 scene `<style>`。所有 `var(--*)` 引用都已经在 tokens.css 里定义好，不要替换。
+    - **`::after` 装饰 frame 的 surface 必须 wrap 内容**：composition-hints 里某个 surface 的 CSS 含 `#root::after { ... }` 时，scene 内容必须包一层 `<div style="position:relative; z-index:1;">`（`::after` 是 z-index:0，DOM 默认 z-index:auto，不 wrap 会被 frame 盖住）。
+    - `surface: null` 或非 surface-aware preset —— 继续用 `background: var(--canvas)` 默认行为，不读 composition-hints 的 Surface #root CSS 段。
+    - 选错 surface 或漏装饰 → mp4 渲出来"普通 SaaS 配色"而不是 preset 的视觉签名，丢掉 preset 一半的辨识度。
 
-- `effects` — ordered list of rule ids
-- `rule_paths` — absolute paths to each rule's `.md` (parallel array, same order as `effects`)
-- `assetCandidates` — array of `{path, description}` candidates assembled by Phase 2. Paths are `hyperframes/`-relative (e.g. `public/hero.png`). Empty array means a deliberately text-only scene. Use the `creative_brief` to decide which candidates appear and where; do not invent paths outside this list.
-- `estimatedDuration_s` — scene duration in float seconds
-- `creative_brief` — verbatim prose for this scene from `section_plan.md` — your single design source of truth (which brand asset drives which effect, palette / typography overlay, ambient motion choices)
+## 范围
 
-If any of `effects` / `rule_paths` / `creative_brief` is missing for any scene you own, STOP and report.
+只写 `<PROJECT_DIR>/compositions/<scene-id>.html`。**不要**动 `index.html` / 拷 asset / 跑 `npx hyperframes lint|validate|inspect|snapshot|render` / 增删 effect（rule 跑不通 → STOP 报告，不静默 drop）。
 
-## Hard runtime rules (these never change)
+`effects` 列表里每个 id 都必须在 timeline 上出现一次（4-7 个 effect 一个不少）；具体 fire 时刻、驱动的 asset / 文本、所属 phase 全部由 `creative_brief` 散文（§3 effect→asset 映射 + §5 多阶段编排）指定 —— 你的工作是把 brief 翻译成 GSAP 调用，不是重新设计编排。
 
-- **Sub-comp wrapper — ONE root div only** (no nesting):
-  - Outer `<template id="<scene-id>-template">`
-  - Inner `<div id="root" class="<scene-id>-root" data-composition-id="<scene-id>" data-width="1920" data-height="1080" data-duration="<estimatedDuration_s>" ...>`
-  - The `id="root"` is what HyperFrames runtime mounts to (fixed, never change).
-  - The `class="<scene-id>-root"` is what your CSS selectors hang off of (unique per scene, prevents cross-scene style pollution).
-- **CSS scoping** — every selector in your `<style>` MUST start with `.<scene-id>-root` (e.g. `.scene_1-root .s1-word { ... }`). Never write `#root`, `#<scene-id>-root`, bare `body`/`html`/`:root`, or bare `.stage`/`.card` selectors. Every `id` in a selector is a bug — use class scoping only.
-- **JS selectors** — use `document.querySelector(".<scene-id>-root .s1-word")` or `tl.from(".<scene-id>-root .foo", ...)`. Never use `#root` or `#<scene-id>-root` in JS.
-- Host clip's `data-composition-id` (in `index.html`, owned by Phase 4c) ≡ inner template's `data-composition-id` ≡ `window.__timelines` key. Use the exact scene id from dispatch — no underscore/hyphen normalization, no `-mount` / `-slot` suffix.
-- `<style>` + `<script>` go INSIDE `<template>`, never in `<head>` (head is discarded at mount).
-- Every timed element: `class="clip"` + `data-start` + `data-duration` + `data-track-index`. Use lanes 0–9; lanes 10 / 11 are audio, owned by `index.html`.
-- Exactly ONE paused GSAP timeline per composition, registered on `window.__timelines["<scene-id>"]`. Build synchronously — never inside async / setTimeout / Promise / event handlers.
-- GSAP transform aliases only: `x`, `y`, `scale`, `rotation`, `opacity`. Never tween `width` / `height` / `top` / `left`.
-- No `Date.now()` / `Math.random()` / `performance.now()` / network fetches / `repeat: -1`.
-- No CSS `transition:` or `animation:` — only the paused GSAP timeline drives motion.
-- Asset src is `public/<file>`, never `/public/<file>` (no leading slash).
+## 流程
 
-## Procedure
+1. 并行 Read 必读资源（上面 6 条）
+2. 对每个 scene 写 `<PROJECT_DIR>/compositions/<scene-id>.html`（骨架见下）
+3. 自检（`bash grep` 块见下），失败先修
+4. 单行汇报
 
-### Step 1: Read your assigned rule bodies
+## 骨架
 
-For each scene you own, Read **every** path in `rule_paths` end-to-end. Each rule documents its DOM requirements, timeline contribution, and any inputs (asset / text / data). Skipping a rule body produces wrong timings or missing classes — this is MANDATORY.
-
-Issue all Reads for your scenes in a SINGLE message — they run in parallel.
-
-Do NOT open blueprint files or other rules. If a rule body is ambiguous about how to combine with another in your list, infer from `creative_brief` first; only escalate (STOP + report) if the brief leaves it genuinely unresolvable.
-
-### Step 2: Compose each scene
-
-For each scene id, write `hyperframes/compositions/<scene-id>.html`:
-
-1. Outer `<template id="<scene-id>-template">`.
-2. **Single root** `<div id="root" class="<scene-id>-root" data-composition-id="<scene-id>" data-width="1920" data-height="1080" data-duration="<estimatedDuration_s>" style="position:relative; width:1920px; height:1080px; overflow:hidden;">`.
-3. Scene `<style>` inside the root. **Open `./design-system/design.html` and copy its §2 `:root` block (color vars) + §3 font-family declarations + §4 `--r-*` radius vars into your scene's `<style>` — but scope every selector with the class `.<scene-id>-root`** (e.g. paste `:root { --canvas: #f6f3ec; ... }` as `.scene_1-root { --canvas: #f6f3ec; ... }`). Every selector you write is `.<scene-id>-root .<inner-class> { ... }`. Never write `#root`, `#<scene-id>-root`, bare `body`/`html`/`:root`, or bare `.stage`/`.card` selectors. **Do NOT copy `@font-face` blocks** — they're global by CSS spec and Phase 4c already declares them once in `index.html`'s `<head>`. Just reference the families by name (`font-family: 'TT Norms Pro', ...`).
-4. Visual DOM driven by the `creative_brief`'s effect→asset mapping, drawing assets from `assetCandidates` (focal + supporting, per the brief). When the brief names a brand component (e.g. "hero gradient text", "chip"), paste design.html §8's HTML+CSS for that component verbatim (then re-scope its selectors under `.<scene-id>-root`).
-5. Inline `<script>` at the end of the root (before `</template>`): **paste design.html §5's `EASE` and `DUR` const declarations at the top of the script**, then build one paused GSAP timeline using those constants. **All GSAP selectors must use the `.<scene-id>-root` class prefix** (e.g. `tl.from(".scene_1-root .s1-word", { duration: DUR.med, ease: EASE.entry, ... })`). Lay down one block per effect in the `effects` order, register on `window.__timelines["<scene-id>"]`.
-
-Skeleton (substitute `<scene-id>` everywhere — e.g. `scene_1`. **There is ONE root div, not nested.** Library `<script>` tags from the host page remain in `<head>` — you do not touch them):
+下面用 `scene_1` 举例（其他 scene 把 `scene_1` / `s1-` 换成自己的编号即可）：
 
 ```html
-<template id="<scene-id>-template">
+<template id="scene_1-template">
   <div
     id="root"
-    class="<scene-id>-root"
-    data-composition-id="<scene-id>"
+    class="scene_1-root"
+    data-composition-id="scene_1"
     data-width="1920"
     data-height="1080"
     data-duration="<estimatedDuration_s>"
     style="position:relative; width:1920px; height:1080px; overflow:hidden;"
   >
     <style>
-      .<scene-id > -root,
-      .<scene-id > -root *,
-      .<scene-id > -root *::before,
-      .<scene-id > -root *::after {
+      /* root 元素自身的样式（CSS 变量 / 背景 / 字体）—— 写 #root。
+         不要写 self data-composition-id selector 或 .scene_1-root。 */
+      #root {
+        /* chunks/tokens.css 的整个 :root { ... } 块原样粘过来 —— 颜色 token、
+           字体角色 token（--font-display / --font-body / --font-mono）、间距、网格都在里面。 */
+        --canvas: #f6f3ec;
+        --font-display: "ABC Solar Display", system-ui, sans-serif;
+        --font-body: "TT Norms Pro", -apple-system, system-ui, sans-serif;
+        --font-mono: "JetBrains Mono", ui-monospace, monospace;
+        background: var(--canvas);
+        font-family: var(--font-body); /* 默认字体；标题等用 var(--font-display) */
+        /* --r-md, ... */
+      }
+      #root *,
+      #root *::before,
+      #root *::after {
         box-sizing: border-box;
       }
-      .<scene-id > -root {
-        /* paste design.html §2/§3/§4 :root tokens here */
-        --canvas: #f6f3ec;
-        /* font-family, --r-* radius, etc. */
+
+      /* scene 专属规则 —— 全部裸 class，CSS scoper 会自动加 scope。
+         class 名带 s1- 前缀，让 sibling scene 不冲突。 */
+      .s1-grid {
+        /* ... */
       }
-      .<scene-id > -root .<your-element-class > {
-        /* scene-specific selectors, ALL prefixed with .<scene-id>-root */
+      .s1-word {
+        /* ... */
       }
     </style>
 
-    <!-- visual DOM layered for every effect in `effects` — all classes scoped to .<scene-id>-root via CSS -->
+    <!-- DOM 按 creative_brief 的 effect→asset mapping 搭，blueprint 非 composed 时优先沿用 blueprint DOM 骨架。
+         所有 class 都用 s1- 前缀；id 也用 s1- 前缀（例：id="s1-headline"）。 -->
 
     <script>
-      // paste design.html §5 EASE / DUR consts here
+      // design.html §5 的 EASE / DUR const，粘过来
       const EASE = { entry: "power2.out" /* ... */ };
       const DUR = { med: 0.55 /* ... */ };
       window.__timelines = window.__timelines || {};
       const tl = gsap.timeline({ paused: true });
-      // GSAP selectors must include the .<scene-id>-root prefix:
-      // tl.from(".<scene-id>-root .s1-word", { duration: DUR.med, ease: EASE.entry, ... })
-      window.__timelines["<scene-id>"] = tl;
+      // effects 列表顺序 = 视觉层叠顺序（背景 → 主入场 → 持续 → 强调 → 过渡），不是严格时间顺序；
+      // 每个 effect 在 timeline 上的 fire 时刻由 creative_brief 散文 §3 / §5 指定。
+      // selector 都写裸的 .s1-foo / #s1-foo，不挂祖先。runtime 的 scoped-document
+      // proxy 会自动把 query 限定在当前 scene 的 host 子树。
+      const headlineEl = document.querySelector("#s1-headline");
+      tl.fromTo(
+        ".s1-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: DUR.med, ease: EASE.entry },
+        0,
+      );
+      window.__timelines["scene_1"] = tl;
     </script>
   </div>
 </template>
 ```
 
-### Step 3: Self-check before reporting
+## 自检（每个 scene 都跑，失败先修再报）
 
-For each scene you wrote, run these checks. **STOP and fix any failure before reporting** — every check below corresponds to a real bug that took Phase 4c 5-10 minutes to find and patch in past runs.
-
-#### 3a. File existence
+把下面 `<scene-id>` 和 `<N>` 替换成真值（如 `scene_1` / `1`）后跑：
 
 ```bash
-[ -s "hyperframes/compositions/<scene-id>.html" ]
-```
+PROJECT_DIR="<Dispatch context PROJECT_DIR>"
+F="$PROJECT_DIR/compositions/<scene-id>.html"
+SID=<scene-id>; N=<N>
 
-#### 3b. Eyeball
+# 文件存在
+[ -s "$F" ] || echo "FAIL: empty/missing $F"
 
-- `<template id="<scene-id>-template">` wrapper present
-- Exactly ONE root div with **both** `id="root"` and `class="<scene-id>-root"`
-- `data-composition-id` matches the exact dispatched scene id
-- `data-duration` equals `estimatedDuration_s`
-- Exactly one `window.__timelines["<scene-id>"] = tl;` line, scene id verbatim
-- One timeline block per effect, in `effects` order
-- No `<audio>`, no CSS `transition:` / `animation:`, no `Date.now()` / `Math.random()` / `fetch(` / `repeat: -1`
+# Root 5 属性一次写齐（最常见漏写：data-duration / id="root"）—— 任一缺失就让 finalize 兜底，浪费 round-trip
+for ATTR in 'id="root"' "class=\"${SID}-root\"" "data-composition-id=\"${SID}\"" 'data-width="1920"' 'data-height="1080"' 'data-duration="'; do
+  grep -q "$ATTR" "$F" || echo "FAIL: root 缺 $ATTR — 5 个属性必须一次写齐"
+done
 
-#### 3c. CSS scope mismatch (the #1 historical bug — 8 min finalize cost when violated)
+# 注释里禁止字面 HTML 开标签（lint 用正则扫，会把注释里的 <template>/<style>/<script> 当真标签 → 误报 1-2 分钟 debug）
+grep -nE '<!--[^>]*<(template|style|script)[> ][^>]*-->' "$F" && \
+  echo "FAIL: 注释里有字面 <template>/<style>/<script> — 转义成 &lt;…&gt; 或改成纯文本"
 
-Every CSS selector and every GSAP/JS selector must use `.<scene-id>-root` class prefix. Run these greps per scene:
+# 必为 0 —— bug 形态
+# 1) `.<scene-id>-root` 当祖先选择器（producer 渲染时这层 wrapper 会被剥掉，selector 全部失配 → scene 渲成黑屏）
+grep -nE "\\.${SID}-root[[:space:]]" "$F" && echo "FAIL: 不要用 .${SID}-root 作祖先 selector — 写裸的 .s${N}-foo 即可"
+# 2) 不要写 self data-composition-id selector；root 样式用 #root，内部元素用 .s<N>-foo / #s<N>-foo
+grep -nE "\\[[[:space:]]*data-composition-id[[:space:]]*=[[:space:]]*['\"]${SID}['\"][[:space:]]*\\]" "$F" && \
+  echo "FAIL: 不要写 [data-composition-id=\"${SID}\"] selector — root 样式改 #root，内部元素写 .s${N}-foo / #s${N}-foo"
+# 3) 禁 #<scene-id>-root；root id 只能写 #root，scene 内部 id 必须是 #s<N>-foo
+grep -nE "#${SID}-root\\b|getElementById\\(\"${SID}-root\"\\)" "$F" && echo "FAIL: 不要用 #${SID}-root"
+# 4) 老规矩：composition contract 禁的非确定性 / CSS animation / @font-face
+grep -nE '@font-face|transition:|animation:|Date\.now|Math\.random|performance\.now|fetch\(|repeat:\s*-1' "$F"
+# 5) 字体名必须走 var(--font-*) token —— 硬编码字面字体名会绕过 index.html <head> 的 @font-face
+#    白名单：var(--font-display/body/mono)、CSS 通用 family（serif/sans-serif/monospace/system-ui/ui-monospace/ui-sans-serif/ui-serif）、
+#         安全 fallback（Georgia/Times/Helvetica/Arial/Menlo/Monaco/SFMono-Regular/-apple-system/BlinkMacSystemFont）
+grep -nE "font-family:[[:space:]]*['\"]" "$F" | grep -vE "var\\(--font-(display|body|mono)\\)" && \
+  echo "FAIL: 字体名硬编码 — 改用 var(--font-display/body/mono)，让 index.html @font-face 生效"
 
-```bash
-F=hyperframes/compositions/<scene-id>.html
+# 必 ≥ 1 —— 结构证据
+grep -c "class=\"${SID}-root\"" "$F"                                   # root div 仍带 class，方便 dev 时看
+grep -c "data-composition-id=\"${SID}\"" "$F"                          # host 契约
+grep -c "#root" "$F"                                                   # root 自身样式（CSS 变量、bg、font）
+grep -c "window\\.__timelines\\[\"${SID}\"\\]" "$F"                    # timeline 注册
 
-# Must be ZERO results — these are the bug patterns:
-grep -nE '#root[^-]|#<scene-id>-root|#scene_[0-9]+-root' "$F"        # MUST be empty (no id selectors in CSS)
-grep -nE 'document\.getElementById\("root"\)' "$F"                    # MUST be empty (no id-based JS lookups)
+# scene 专属 class / id 必须带 s<N>- 前缀（粗匹配：至少出现过一次 .s<N>- 或 #s<N>-）
+grep -cE "[.#]s${N}-[a-z]" "$F"
 
-# Must be NON-zero results — these confirm scoping is in place:
-grep -c 'class="<scene-id>-root"' "$F"                                # >= 1 (root div has the class)
-grep -c '\.<scene-id>-root' "$F"                                      # several (selectors scoped via class)
-```
+# class 前缀严格检查：列出 HTML class="..." 属性中所有 **未** 加 s<N>- 前缀的 token
+# 合法白名单：(1) s<N>- 开头；(2) ${SID}-root（root div 的 class，仅 preview/dev 看）
+# 命中 → component 漏前缀，sibling scene 串扰的源头
+UNPRX=$(grep -oE 'class="[^"]*"' "$F" \
+  | sed -E 's/class="([^"]*)"/\1/' \
+  | tr ' ' '\n' \
+  | grep -vE "^(s${N}-[a-zA-Z0-9_-]+|${SID}-root)$" \
+  | grep -E "^[a-z]" \
+  | sort -u)
+[ -n "$UNPRX" ] && echo "FAIL: 漏 s${N}- 前缀的 class: $(echo $UNPRX | tr '\n' ' ')"
 
-If `#root` or `#<scene-id>-root` shows up in any selector, convert it to `.<scene-id>-root` before reporting. **A single unscoped or wrong-id selector means the scene renders as un-styled raw text in finalize.**
-
-#### 3d. Asset references resolve
-
-Every asset referenced in your scene must exist under `hyperframes/public/`:
-
-```bash
-# Extract every public/ reference from this scene
-grep -oE 'public/[A-Za-z0-9._/-]+' hyperframes/compositions/<scene-id>.html | sort -u | while read p; do
-  [ -s "hyperframes/$p" ] || echo "MISSING: $p"
+# asset 全在 PROJECT_DIR/public/
+grep -oE 'public/[A-Za-z0-9._/-]+' "$F" | sort -u | while read p; do
+  [ -s "$PROJECT_DIR/$p" ] || echo "MISSING ASSET: $p"
 done
 ```
 
-If anything prints `MISSING:`, that asset wasn't copied by Phase 4a — either the basename in `creative_brief` is wrong, or it was renamed. **STOP and report the missing basename** — do not silently substitute a different asset.
+任一 FAIL / MISSING / bug-形态命中 → 修了再报。Step 7 finalize 有同样的 harness，先在这里拦住，省 8-13 分钟 round-trip。
 
-You do NOT run `npx hyperframes lint` — Phase 4c does that across the whole project.
+## 汇报模板
 
-## When done — report
-
-One line per scene:
+每个 scene 一行：
 
 ```
-scene_2: file=compositions/scene_2.html duration=4.83s effects=[3d-page-scroll, hacker-flip-3d, cursor-click-ripple]
+scene_2: file=compositions/scene_2.html duration=4.83s effects=[3d-page-scroll, hacker-flip-3d] blueprint=based-on:demo-page-scroll-spotlight
 ```
 
-Plus any issues (missing asset, ambiguous rule combination, dropped effect attempted).
-
-Do NOT append to `context.log` — Phase 4c writes the consolidated Phase-4 log entry.
+外加异常（缺 asset、rule 组合模糊、试图 drop effect）。不写 `context.log`。

@@ -22,15 +22,6 @@ function loadKnownEffects(rulesDir) {
   );
 }
 
-// Pull anything that looks like a referenced identifier:
-//   `effect-name`  or  **effect-name**
-function extractReferenced(plan) {
-  const found = new Set();
-  for (const m of plan.matchAll(/`([a-z][a-z0-9-]+)`/g)) found.add(m[1]);
-  for (const m of plan.matchAll(/\*\*([a-z][a-z0-9-]+)\*\*/g)) found.add(m[1]);
-  return found;
-}
-
 const planPath = resolve(process.argv[2] || "./section_plan.md");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -53,57 +44,117 @@ try {
   process.exit(1);
 }
 
-const referenced = extractReferenced(plan);
-// Only consider hyphenated tokens — single-word backticks are usually code/data-attrs.
-const effectLike = [...referenced].filter((n) => n.includes("-"));
+// Load design-system/chunks/index.json (best-effort, relative to plan dir).
+// Drives three preset-conditional checks:
+//   1. Surface anchor is REQUIRED when any component declares a `surface` field
+//      (surface-aware presets). Legacy presets ship components with no `surface`
+//      field → check is skipped.
+//   2. `avoids_same_scene` cross-check between cited components — preset
+//      invariants like "single signature element per plate" live there. Missing
+//      index.json → cross-check is skipped (prep.mjs still validates existence).
+//   3. Motifs anchor id validation when index.json.motifs_file is set — every
+//      cited motif id must appear as a `## motif: <id>` heading in motifs.md.
+const chunksIndexPath = resolve(dirname(planPath), "design-system/chunks/index.json");
+let chunksIndex = null;
+try {
+  chunksIndex = JSON.parse(readFileSync(chunksIndexPath, "utf8"));
+} catch {
+  // chunks/index.json absent or unreadable — surface / avoids_same_scene checks skipped.
+}
 
-const matched = effectLike.filter((n) => known.has(n));
-const unknown = effectLike.filter((n) => !known.has(n));
+const componentsById = new Map();
+const knownSurfaces = new Set();
+let surfaceRequired = false;
+if (chunksIndex?.components) {
+  for (const c of chunksIndex.components) {
+    componentsById.set(c.id, c);
+    if (c.surface) {
+      surfaceRequired = true;
+      knownSurfaces.add(c.surface);
+    }
+  }
+}
 
-// Skip known non-effect terms that are also hyphenated (HyperFrames data-* attrs,
-// CSS values, filename tokens).
-const SKIP_PREFIXES = ["data-"];
-const SKIP_EXACT = new Set([
-  // GSAP / CSS / HyperFrames vocabulary
-  "z-index",
-  "back-out",
-  "power3-out",
-  "power2-out",
-  "power1-out",
-  "elastic-out",
-  "sine-inout",
-  "ease-in-out",
-  // Filenames / paths
-  "narrator-scripts",
-  "section-plan",
-  "tokens-json",
-  "report-json",
-]);
-
-const suspicious = unknown.filter(
-  (n) => !SKIP_EXACT.has(n) && !SKIP_PREFIXES.some((p) => n.startsWith(p)),
-);
+// Load chunks/motifs.md and extract known motif ids from `## motif: <id>` headings.
+// Skipped when preset declares no §M (motifs_file null in index.json). The check
+// is best-effort: motifs.md unreadable → log inside the loop the first time we
+// hit a Motifs anchor and downgrade to syntax-only validation.
+const knownMotifIds = new Set();
+let motifsLoadError = null;
+if (chunksIndex?.motifs_file) {
+  const motifsPath = resolve(dirname(planPath), "design-system", chunksIndex.motifs_file);
+  try {
+    const motifsMd = readFileSync(motifsPath, "utf8");
+    for (const m of motifsMd.matchAll(/^##\s+motif:\s+([a-z0-9-]+)\s*$/gm)) {
+      knownMotifIds.add(m[1]);
+    }
+  } catch (e) {
+    motifsLoadError = `motifs.md referenced by index.json (${chunksIndex.motifs_file}) but unreadable: ${e.message}`;
+  }
+}
 
 const errors = [];
-
-if (matched.length === 0) {
-  errors.push(
-    "Zero known effects referenced. Every scene must cite at least one effect from hyperframes-animation/rules/ (backtick-wrapped name).",
-  );
-}
-
-for (const s of suspicious) {
-  errors.push(
-    `Unknown effect-like token "${s}" — not a rule under hyperframes-animation/rules/. Pick an existing rule name.`,
-  );
-}
+let totalEffectsCited = 0;
+let totalComponentsCited = 0;
+let totalSurfaceCommitments = 0;
+let totalMotifsCited = 0;
 
 // ---- Per-scene anchor validation (Phase 4a contract) ----
-// Every "## Scene N:" block must have all three anchors. Phase 4a's prep.mjs
-// reads these deterministically; missing anchors break the build.
+// Every "## Scene N:" block must have all three required anchors. Phase 4a's
+// prep.mjs reads these deterministically; missing anchors break the build.
+// **Components:** and **Blueprint:** are optional (soft) anchors; if present
+// they must parse cleanly. prep.mjs resolves Components ids against
+// design-system/chunks/index.json — this validator only enforces the syntactic
+// shape (backtick-wrapped ids), not the existence check.
 const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
 const heads = [...plan.matchAll(sceneHeadRe)];
 const ANCHORS = ["Effects", "Duration", "Continuity"];
+const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Motifs"];
+
+const hasAnchor = (body, name) => {
+  const re = new RegExp(`^\\*\\*${name}:\\*\\*`, "mi");
+  return re.test(body);
+};
+
+const hasAny = (text, patterns) => patterns.some((pattern) => pattern.test(text));
+
+const hierarchyActionRe =
+  /\b(exit|hide|hidden|compact|demote|supporting|rail|background|outside|safe zone|safe-zone)\b/i;
+const supportingRe =
+  /\b(supporting|demote|rail|side rail|bottom rail|background texture|low-contrast|lower contrast|smaller|outside)\b/i;
+
+function hierarchyRisk(body) {
+  const text = body.toLowerCase();
+  const multiAct = /\b(multi[- ]?act|three[- ]?act|act\s+[abc]|\bfocal points?)\b/i.test(text);
+  const hasAction =
+    /\b(cta|get started|call[- ]?to[- ]?action|button|sign up|book demo|start trial|download|subscribe|contact sales|action headline|payoff frame|payoff close|closing action)\b/i.test(
+      text,
+    );
+  const hasSocialProof =
+    /\b(logos?|logo strip|customer logos?|social[- ]proof|trusted by|testimonial|customers?|partners?)\b/i.test(
+      text,
+    );
+  const hasDataProof = hasAny(text, [
+    /\bstats?\b/i,
+    /\bstat[- ]?counter\b/i,
+    /\bmetrics?\b/i,
+    /\bkpis?\b/i,
+    /\bproof cluster\b/i,
+    /\bproof rail\b/i,
+    /\bchart\b/i,
+    /\bcount[- ]?up\b/i,
+    /\bpolicy compliance\b/i,
+    /\bhours saved\b/i,
+    /\byield\b/i,
+  ]);
+  return {
+    multiAct,
+    hasAction,
+    hasSocialProof,
+    hasDataProof,
+    risky: multiAct || (hasAction && (hasSocialProof || hasDataProof)),
+  };
+}
 
 if (heads.length === 0) {
   errors.push(
@@ -130,6 +181,28 @@ for (let i = 0; i < heads.length; i++) {
     }
   }
 
+  // Surface anchor (preset-conditional): required when chunks/index.json shows
+  // any component declares a `surface` field. Value must be one of those declared
+  // surfaces. Mixing surfaces within one scene breaks the preset's visual
+  // contract — surface registers are paired with specific component shapes that
+  // don't compose across surfaces.
+  const surfaceMatch = body.match(/^\*\*Surface:\*\*\s*(.*)$/m);
+  if (surfaceRequired && !surfaceMatch) {
+    errors.push(
+      `${sceneId}: missing **Surface:** anchor — preset declares surface-aware components (allowed: ${[...knownSurfaces].sort().join(", ")})`,
+    );
+  } else if (surfaceMatch) {
+    const v = surfaceMatch[1].trim().toLowerCase();
+    if (surfaceRequired && !knownSurfaces.has(v)) {
+      errors.push(
+        `${sceneId}: **Surface:** "${v}" not declared by any component (allowed: ${[...knownSurfaces].sort().join(", ")})`,
+      );
+    } else {
+      found.Surface = v;
+      totalSurfaceCommitments++;
+    }
+  }
+
   if (found.Continuity != null) {
     const v = found.Continuity.toLowerCase();
     if (v !== "break" && v !== "continue") {
@@ -148,6 +221,70 @@ for (let i = 0; i < heads.length; i++) {
     }
   }
 
+  // SFX anchor (required, may be empty): every scene must make an explicit
+  // audio decision. Either `**SFX:** none` (zero cues) or `**SFX:**` followed
+  // by `- `<file>.mp3` at <T>s ...` bullets. Soft-optional status was removed
+  // after a silent-drop incident where story-design planned a cue but
+  // visual-design omitted the anchor, dropping the cue without warning.
+  const sfxLineRe = /^\*\*SFX:\*\*[ \t]*(.*)$/m;
+  const sfxLineM = body.match(sfxLineRe);
+  if (!sfxLineM) {
+    errors.push(
+      `${sceneId}: missing **SFX:** anchor — write \`**SFX:** none\` for zero cues, or \`**SFX:**\` followed by bullet lines`,
+    );
+  } else {
+    const trailer = sfxLineM[1].trim();
+    if (trailer.toLowerCase() === "none") {
+      // explicit zero-cue decision — OK
+    } else if (trailer !== "") {
+      errors.push(
+        `${sceneId}: **SFX:** header line must be empty or "none" — put cue bullets on subsequent lines (got "${trailer}")`,
+      );
+    } else {
+      const after = body.slice(sfxLineM.index + sfxLineM[0].length).split("\n");
+      let foundBullet = false;
+      for (const line of after) {
+        const t = line.trim();
+        if (t === "") continue;
+        if (t.startsWith("-") && /`[^`]+\.mp3`/.test(t)) foundBullet = true;
+        break;
+      }
+      if (!foundBullet) {
+        errors.push(
+          `${sceneId}: **SFX:** header present but no \`<file>.mp3\` bullet follows — add cues or write \`**SFX:** none\``,
+        );
+      }
+    }
+  }
+
+  const risk = hierarchyRisk(body);
+  if (risk.risky) {
+    const needs = risk.multiAct ? "multi-act scene" : "action/payoff + proof scene";
+    if (!hasAnchor(body, "PrimarySubjectTimeline")) {
+      errors.push(
+        `${sceneId}: ${needs} must include **PrimarySubjectTimeline:** with exactly one primary subject per time range`,
+      );
+    } else if (!/\bprimary\b/i.test(body)) {
+      errors.push(`${sceneId}: **PrimarySubjectTimeline:** must name the primary subject(s)`);
+    }
+
+    if (!hasAnchor(body, "Handoff")) {
+      errors.push(
+        `${sceneId}: ${needs} must include **Handoff:** explaining how previous primary exits, hides, compacts, or demotes`,
+      );
+    } else if (!hierarchyActionRe.test(body)) {
+      errors.push(
+        `${sceneId}: **Handoff:** must include an explicit action: exit, hide, compact, demote, supporting, rail, or outside safe zone`,
+      );
+    }
+
+    if (risk.hasAction && (risk.hasSocialProof || risk.hasDataProof) && !supportingRe.test(body)) {
+      errors.push(
+        `${sceneId}: action/payoff + proof can coexist only if proof is explicitly supporting/demoted/rail/background/outside the primary bbox`,
+      );
+    }
+  }
+
   if (found.Effects != null) {
     const ids = [...found.Effects.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
     if (ids.length === 0) {
@@ -158,10 +295,122 @@ for (let i = 0; i < heads.length; i++) {
           errors.push(
             `${sceneId}: **Effects:** cites unknown rule "${id}" — not under hyperframes-animation/rules/`,
           );
+        } else {
+          totalEffectsCited++;
         }
       }
     }
   }
+
+  // Optional **Components:** anchor — list of backticked ids referencing
+  // design-system/chunks/components/<id>.html. Existence is enforced by
+  // prep.mjs (which has filesystem access to chunks/index.json); here we only
+  // require well-formed syntax if the anchor is present.
+  //
+  // Optional **Motifs:** anchor — preset-conditional: when index.json.motifs_file
+  // is set we cross-check each backticked id against the `## motif: <id>` headings
+  // in motifs.md. When the preset declared no §M (motifs_file null) we still
+  // syntax-validate the anchor but skip the id existence check (motif unknown is
+  // accepted as a soft cite).
+  let pickedIds = [];
+  for (const a of OPTIONAL_ANCHORS) {
+    const re = new RegExp(`^\\*\\*${a}:\\*\\*\\s*(.*)$`, "m");
+    const am = body.match(re);
+    if (!am) continue;
+    const raw = am[1].trim();
+    if (a === "Components") {
+      const ids = [...raw.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+      if (raw && ids.length === 0) {
+        errors.push(
+          `${sceneId}: **Components:** present but has no backtick-wrapped ids (got "${raw}")`,
+        );
+      }
+      for (const id of ids) {
+        if (!/^[a-z0-9-]+$/.test(id)) {
+          errors.push(
+            `${sceneId}: **Components:** id "${id}" — must be lowercase + digits + dashes (matches design-system/chunks/components/<id>.html)`,
+          );
+        } else {
+          totalComponentsCited++;
+          pickedIds.push(id);
+        }
+      }
+    } else if (a === "Motifs") {
+      const ids = [...raw.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+      if (raw && ids.length === 0) {
+        errors.push(
+          `${sceneId}: **Motifs:** present but has no backtick-wrapped ids (got "${raw}")`,
+        );
+      }
+      for (const id of ids) {
+        if (!/^[a-z0-9-]+$/.test(id)) {
+          errors.push(
+            `${sceneId}: **Motifs:** id "${id}" — must be lowercase + digits + dashes`,
+          );
+          continue;
+        }
+        totalMotifsCited++;
+        if (chunksIndex?.motifs_file) {
+          if (motifsLoadError) {
+            errors.push(`${sceneId}: ${motifsLoadError}`);
+            motifsLoadError = null; // report once
+          } else if (!knownMotifIds.has(id)) {
+            errors.push(
+              `${sceneId}: **Motifs:** id "${id}" not in chunks/motifs.md (known: ${[...knownMotifIds].sort().join(", ") || "(empty)"})`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // avoids_same_scene cross-check: every pair of cited components is checked
+  // against each other's avoids_same_scene list (from chunks/index.json
+  // component frontmatter). Preset invariants like "single signature element
+  // per plate" live there; the specific mutex pairs are preset-declared.
+  // Skipped when chunks/index.json wasn't loaded.
+  if (chunksIndex && pickedIds.length > 1) {
+    for (let i = 0; i < pickedIds.length; i++) {
+      for (let j = i + 1; j < pickedIds.length; j++) {
+        const a = pickedIds[i];
+        const b = pickedIds[j];
+        const ca = componentsById.get(a);
+        const cb = componentsById.get(b);
+        if (!ca || !cb) continue; // unknown ids — prep.mjs will reject them
+        const aAvoidsB = (ca.avoids_same_scene || []).includes(b);
+        const bAvoidsA = (cb.avoids_same_scene || []).includes(a);
+        if (aAvoidsB || bAvoidsA) {
+          errors.push(
+            `${sceneId}: **Components:** "${a}" and "${b}" conflict (avoids_same_scene) — pick one and re-plan`,
+          );
+        }
+      }
+    }
+  }
+
+  // Surface ↔ component surface consistency: when scene commits to a surface
+  // and a cited component carries a different `surface` field, that's a visual
+  // contract break (e.g. paper-only component on a blue scene). Surface-agnostic
+  // components (no `surface` field) pass through.
+  if (found.Surface && chunksIndex) {
+    for (const id of pickedIds) {
+      const c = componentsById.get(id);
+      if (!c || !c.surface) continue;
+      if (c.surface !== found.Surface) {
+        errors.push(
+          `${sceneId}: **Components:** "${id}" is surface=${c.surface}, but scene **Surface:** is ${found.Surface} — surface mix breaks preset visual contract`,
+        );
+      }
+    }
+  }
+}
+
+// Sanity: if no scenes had any known effect, complain at the top level (per-scene
+// errors will have surfaced the specifics, but make the overall failure obvious).
+if (heads.length > 0 && totalEffectsCited === 0 && errors.length === 0) {
+  errors.push(
+    "Zero known effects cited across all scenes — every scene's **Effects:** must include at least one rule from hyperframes-animation/rules/.",
+  );
 }
 
 if (errors.length) {
@@ -171,4 +420,11 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`✓ ${planPath}: ${matched.length} known effects referenced — OK`);
+const componentsNote =
+  totalComponentsCited > 0 ? `, ${totalComponentsCited} component citation(s)` : "";
+const surfaceNote =
+  totalSurfaceCommitments > 0 ? `, ${totalSurfaceCommitments} surface commitment(s)` : "";
+const motifsNote = totalMotifsCited > 0 ? `, ${totalMotifsCited} motif citation(s)` : "";
+console.log(
+  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote}${surfaceNote}${motifsNote} — OK`,
+);

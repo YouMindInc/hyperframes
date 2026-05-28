@@ -1,185 +1,168 @@
 ---
 name: video-color-system
-description: "Brand color extraction, palette roles, 60-30-10 allocation, cross-scene consistency [color, palette, brand, tokens, contrast]"
+description: "Color design decisions for HyperFrames videos — palette roles, 60-30-10 allocation logic, cross-scene consistency, dangerous combos. Hex values and contrast math live in build agent territory."
 category: visual-design
 ---
 
-# Color System for Video
+# 视频色彩系统 —— 设计判断层
 
-**Palette hex values come from `./design-system/design.html` §2. This file owns video-craft numerics** — 60-30-10 allocation, off-black/off-white targets, dual-radial glow recipe, dark-scene compensations — calibrated against the golden-sample archive.
+**本文件只负责 plan 层的设计判断** —— 角色、60-30-10 分配逻辑、跨场景一致性、危险组合。具体 hex 值、对比度 4.5:1 计算、暗场 saturation 补偿、双层 glow 配方都属于 build agent 在写 CSS 时查 design.html 与 `/hyperframes-core` 的事；plan 不抄。
 
-## Palette comes from `./design-system/design.html` §2
+## 调色板来源
 
-design.html §2 is the **single source of truth** for this brand's palette. Read the `:root` variable block and named-hex table verbatim — `--canvas` / `--paper-2` / `--ink` / `--ink-soft` / `--rule` / `--brand-primary` / `--brand-accent` etc. (names vary per brand).
+**Hex 值来自 design.html**（`:root` 里的命名 token，按品牌不同会有 `--brand-primary` / `--brand-accent` / `--canvas` / `--ink` 等）。Plan 里按**角色**引用，**不要**抄具体 hex —— build agent 自己会从 design.html grep。
 
-In every scene's prose body, cite the **actual hex** (not the variable name alone, not a placeholder like "brand cyan"). Example: `palette: --canvas #f6f3ec 60%, --paper-2 #efebe1 30%, --accent #00c3ff 10%`.
+> **预设规范优先于本文件的通用规则**。design.html 的 preset（editorial / neo-brutalism / 等）会定义自己的颜色纪律 —— 例如 editorial 明确"accent ≤ 5% frame area、primary 不做背景填充、canvas is the hero"。如果通用规则（如"背景用 dual-radial swell"）与预设的 §H 颜色纪律冲突，**预设胜出**。Plan 阶段读 design.html 时连同 preset 名一起识别（`title` 标签或 §1 eyebrow），并以预设的规范约束本片调色板使用。
 
-If a scene's `narrativeIntent.emotionalBeat` calls for a deliberate palette shift (e.g., a pain-point scene needs dread/restraint), invert canvas/ink using design.html's own dark-theme block (look for `[data-theme="dark"]` overrides) — don't swap in foreign palettes.
+### 痛点 / 凝重场景
 
-**Never** invent hex values. **Never** substitute pure `#000` / `#fff` for design.html's off-black / off-white. **Never** pick a palette from anywhere else.
+如果某场景的 `emotionalBeat` 需要刻意的调色板转换：
 
-## Map design.html variables to video-craft roles
+- design.html **有** `[data-theme="dark"]` 块 → 用它（反转 canvas / ink），不引入外来调色板
+- design.html **没有**暗主题块（editorial 等亮色预设常见）→ **不要**自创暗色。改用：accent 灰化（去饱和）+ 低对比（用 `--paper-warm` 替代 `--canvas` 把场景压暗一档）+ 收紧留白 + 静止节拍承担凝重感
 
-Each variable plays a role in the 60-30-10 allocation:
+### 当 `--ink` / `--canvas` 是纯黑 / 纯白
 
-| Role                   | design.html source               | Usage share | Archive example                                                  |
-| ---------------------- | -------------------------------- | ----------- | ---------------------------------------------------------------- |
-| **Primary accent**     | `--brand-primary` / `--accent`   | ~10%        | HyperFrames cyan `#06E3FA` on hero word; Vercel red on geometry  |
-| **Secondary accent**   | `--brand-secondary` (if present) | ~5%         | HyperFrames lime `#4FDB5E` paired with cyan in codex scan bars   |
-| **Restrained third**   | A neutral or paper tone          | <2%         | Codex amber `#F5B84B` — only on plugin-card moments              |
-| **Neutral background** | `--canvas` / `--paper`           | 60%         | `#0B0D0E` graphite (codex), `#f5f5f7` warm-paper (timeline)      |
-| **Neutral surface**    | `--paper-2` / `--surface`        | ~20%        | Codex panels `#141A1B` / `#1C2424` — barely brighter than bg     |
-| **Foreground text**    | `--ink` / `--ink-soft`           | ~10%        | `#F2F6EF` text on graphite; `#1d1d1f` ink on warm paper          |
-| **Semantic**           | Derived from brand palette       | Sparingly   | Green for success, red for error — both shifted toward brand hue |
+某些预设（editorial / Swiss / brutalist / 报刊风）的 `--ink: #000` / `--canvas: #fff` 是**风格选择**，不是缺陷 —— "印在白纸上的黑墨"是这些预设的核心美学。
 
-### The 60-30-10 rule in video
+- **`--ink: #000`** —— 这些预设里 OK，保留作为 ink 使用
+- **`--canvas: #fff`** —— 视频远观时纯白会"开花"，**优先用预设提供的 `--paper-warm`**（editorial 预设主动注释了 "fallback if canvas is pure white"）；如果没有 fallback token，build agent 自己合成一档暖白
+- 其他预设（saas / material 等）若出现纯黑纯白，按通用规则处理（用 off-black / off-white）
 
-This rule is about **visual weight**, not pixel count:
+判定路径：先读 preset 名 → 若是 editorial / brutalist 系列接受纯黑作 ink + 优先 `--paper-warm` 作 canvas；其他预设遵循 off-black/off-white 通用规则。
 
-- **60% Neutral backgrounds** — the dominant surface. Must not compete with content
-- **30% Secondary surface + body text** — panels, borders, supporting copy
-- **10% Accent** — brand primary color, used only on the focal element of the moment
+## 角色映射
 
-**The number one mistake**: using the brand color everywhere because it is "the brand." Accent colors work because they are rare. Overuse kills their impact. The codex-plugin DESIGN.md gets this right by reserving cyan `#06E3FA` for HyperFrames moments, lime `#4FDB5E` for render moments, and amber `#F5B84B` for Codex moments — three accents, each tied to a _meaning_, never overlapping in the same beat.
+每个 token 在 60-30-10 里扮演一个角色：
 
-The strongest archive examples take this even further: **vercel-intro-storyboard** uses a single brand red on near-black geometry plus one short RGB aberration event, then "snap back to clean black-on-white immediately after." One color, one effect, total restraint.
+| 角色                    | 典型 token 名（按品牌而异）                                                 | 视觉权重                                   |
+| ----------------------- | --------------------------------------------------------------------------- | ------------------------------------------ |
+| **中性背景（canvas）**  | `--canvas` / `--paper` / 最浅 neutral                                       | **60%** —— 占主导，不与内容争注意力        |
+| **中性表面（surface）** | `--paper-2` / `--surface` / 次浅 neutral；**不存在则用 hairline rule 分层** | **~20%** —— 面板、卡片、边界               |
+| **前景文本（ink）**     | `--ink` / `--ink-soft` / off-black 或 off-white                             | **~10%**                                   |
+| **主强调（accent）**    | `--brand-primary` / `--brand-accent`                                        | **~10%** —— **只用在每个节拍的焦点元素上** |
+| **次强调**              | `--brand-secondary`（若存在）                                               | **~5%** —— 与主强调绑不同语义              |
+| **克制第三色**          | 中性或纸调                                                                  | **<2%** —— 偶尔出现                        |
+| **语义色**              | 成功/错误/警告（从品牌色相派生）                                            | 节制使用                                   |
 
-## Tinted neutrals
+> **当 design.html 缺 `--surface` 这一档** —— 这份预设用 hairline rule 分层而非 surface 色 —— plan 应明确说"30% 用 hairline + canvas 重复"，而不是编一个假的中间色。
 
-Pure gray has no personality. Always tint neutral colors toward the brand hue:
+## 60-30-10 是**视觉权重**，不是像素数量
 
-- If the brand is warm (red/orange/yellow): add a subtle warm cast to grays
-- If the brand is cool (blue/purple/green): add a subtle cool cast
+- 60% canvas —— 占主导，不抢戏
+- 30% surface + 文本 —— 面板、边框、辅助文案
+- 10% accent —— 只用在**当下的焦点元素**上
 
-The tint should be barely perceptible but creates subconscious cohesion. Real examples from the archive:
+**头号错误**：因为品牌色是"品牌的标识"就到处涂。Accent 之所以有效，是因为它**稀有**。Archive 中最强示例（codex-plugin）把每个 accent 绑定到一个**语义**：cyan = HyperFrames moment、lime = render、amber = Codex —— 三种 accent，每种只在自己负责的节拍出现，从不重叠。
 
-```css
-/* Codex (cool teal/cyan brand) — graphite tinted cool */
-.scene {
-  background: #0b0d0e;
-} /* canvas */
-.panel {
-  background: #141a1b;
-} /* one step warmer surface */
-.panel-raised {
-  background: #1c2424;
-} /* two steps */
+更极致：vercel-intro 整片只用一种品牌红 + 一次 RGB 色差，立刻切回干净黑底白字。**一种颜色，一次效果，极致克制。**
 
-/* Inspector (green brand) — canvas tinted green */
-.scene {
-  background: #07100c;
-} /* near-black with green bias */
+## 带色调的中性色
 
-/* HyperFrames-animation examples (cyan/violet brand) */
-.scene {
-  background: #0a0a0f;
-} /* cool near-black */
-.scene-deep {
-  background: #060812;
-} /* deeper cool for hero moments */
-```
+纯灰没有个性。中性色必须向品牌色调偏移：
 
-**OKLCH approach**: Add a chroma of ~0.01 to all neutral stops in OKLCH space. This is the minimum perceptible hue that still reads as "gray" but feels alive. Warm brand → positive hue angle (~30-60°), cool brand → ~200-260°. The archive's `#07100c` (inspector) and `#0B0D0E` (codex) both encode this — they're not 0-chroma greys.
+- 暖品牌（红 / 橙 / 黄）→ 灰加微妙暖铸调
+- 冷品牌（蓝 / 紫 / 绿 / 青）→ 灰加微妙冷铸调
 
-## Palette structure
+色调要几乎不可察觉，但在潜意识层创造一致性。这通常已经在 design.html 的 `--canvas` / `--paper-2` token 里编码好了；plan 只需引用角色，不需要算 OKLCH。
 
-A complete video palette has four layers — skip any that are not needed, but do not add extra:
+## 调色板四层结构
 
-1. **Primary accent**: 1-2 colors, used at 10-15% combined visual weight. Each tied to a specific meaning (e.g., HyperFrames=cyan, render=lime, Codex=amber).
-2. **Neutral**: A 3-step ladder — `canvas → surface → surface-raised` — each one perceptual step apart. For dark mode, that's roughly `#0B0D0E → #141A1B → #1C2424`. For light mode, `#f5f5f7 → #ffffff → #fafafa`. Used at 60% (canvas) + ~20% (surfaces).
-3. **Foreground**: 1-2 off-white or off-ink values for text (`#F2F6EF` warm-cool, `#fff8e9` warm-paper, `#1d1d1f` ink). Used at ~10%.
-4. **Semantic**: Success (green), error (red), warning (amber). Derive from brand hue if possible.
+完整视频调色板有四层（不需要的可跳过，**不要**多加）：
 
-Skip secondary and tertiary accent colors unless the brief explicitly requires them. Extra colors dilute the brand primary and create visual noise.
+1. **主强调** —— 1-2 种，绑定语义，10-15% 权重
+2. **中性阶梯** —— canvas → surface → surface-raised 三档（亮色或暗色皆然），60% + 20%
+3. **前景** —— 1-2 个 off-white 或 off-ink 用于文本，10%
+4. **语义色** —— 成功 / 错误 / 警告，从品牌色相派生
 
-**Per-beat palette isolation is also a valid move.** Fadeglow-v4 demonstrates the opposite of unified harmony: Beat 2 uses hot magenta `#FF2D7A` on pure white with black outlines (neobrutalist crunch), Beat 4 uses soft peach→teal→lilac gradients on soft-light blend (gradient glow garden), Beat 7 uses single-color `#E63946` on full bleed (RED moment). No attempt to make them cohesive — the song's emotional arc dictates the color logic.
+**逐节拍隔离调色板也是合法的**（fadeglow-v4 在 Beat 2 / 4 / 7 用完全不同的色感）—— 由情感弧线决定，不强求一致。
 
-## Never use pure black or pure white
+## 跨场景一致性
 
-Pure black (#000000) and pure white (#FFFFFF) do not exist in nature. They create harsh contrast that feels synthetic and crush detail in video compression.
+视频每个场景必须感觉属于同一视觉系统（除非明确做"每场一个宇宙"的模式）。
 
-Use these calibrated off-blacks (every one is a real archive value):
+- 背景调色板在项目级定义一次（`:root` / 共享 `<style>`），不要逐场景临时写死 hex
+- 各场景可在**明度**上变化（暗 → 亮形成节奏），但共享相同**色相家族**
+- Accent 用途必须一致：场景 1 的 cyan 是 HyperFrames moment 颜色 → 场景 5 它就不能变成背景渐变
+- 数据可视化颜色从品牌调色板派生，不要任意选
 
-- `#0a0a0f` — cool tint (HyperFrames default in animation examples)
-- `#060812` — deeper cool, for hero/climax beats (hook-counter-burst)
-- `#07100c` — green tint (inspector-logo-intro)
-- `#0B0D0E` — graphite (codex-plugin canvas)
-- `#0a1415` — navy bias (comparison-split-cards)
+**限度内变化 OK**：暗/亮交替做节奏、去饱和（平静）↔ 饱和（强调）、品牌相近色之间渐变。
 
-And these off-whites:
+## 永远不要纯黑 / 纯白
 
-- `#f8fafc` — neutral cool off-white (default for text on near-black)
-- `#fff8e9` — warm paper (inspector, magnetic-caption — "warm paper" in the named palettes)
-- `#f2f6ef` — soft near-white with green undertone (codex foreground)
-- `#f5f5f7` — Apple-warm-white (timeline-editor-launch-v5 canvas)
-- `#f7fff7` — green-tinted soft white (playground beat 2A)
+纯 `#000` / `#fff` 在自然界不存在 —— 对比刺眼、显合成、压缩破细节。永远用 design.html 提供的 off-black / off-white token（典型名 `--ink` / `--canvas`）。
 
-Exception: pure white glow `text-shadow` or `drop-shadow` _aura_ on an accent moment is acceptable — `cta-orbit-collapse` and `workflow-approve-press` both use white at low opacity inside a stacked shadow for the click ripple peak.
+例外：强调时刻的纯白 `text-shadow` / `drop-shadow` 光环（点击涟漪峰值）是 OK 的 —— 用 build agent 的低不透明度叠加，不直接当文本色。
 
-## Cross-scene color consistency
+## 危险组合（禁用模式）
 
-Every scene in the video must feel like it belongs to the same visual system — unless you are explicitly running the fadeglow-style "each scene a new universe" pattern (which only works when the audio/narrative arc justifies the shock).
+- **白底浅灰文字** —— 对比塌陷，小屏幕崩
+- **彩色背景上的灰色** —— 读起来像褪色 / 脏污；应改用**背景色相的更深色调**
+- **图像上的细体浅色文本** —— 即使加阴影也不可靠；上遮罩 + 加重字重，或两者并用
+- **`#000` 上的纯饱和霓虹** —— AI 默认套娃外观。改用 off-black + 强调色降到 0.20-0.35 glow 不透明度（这是 build 的事；plan 只需点名"避免霓虹"）
+- **紫到蓝的 AI 渐变** —— codex-plugin / hermes 都明确禁过 ("no generic purple-blue AI gradients")。需要深度感时用品牌色调的径向膨胀替代
 
-**Rules**:
+## 背景：brand-color mesh background 是项目默认
 
-- Define the background palette once at the project level — CSS custom properties on `:root` (or a shared `<style>` in `index.html`), referenced from every scene's `<style>` — not per scene as ad-hoc hex values
-- Scenes can vary in lightness (dark scene → light scene for contrast) but must share the same hue family
-- Accent color usage must be consistent: if primary cyan is the HyperFrames-moment color in scene 1, it cannot become a background gradient in scene 5
-- Data visualization colors should be derived from the brand palette, not arbitrary
+**本项目级决策（覆盖所有预设的默认背景规则）**：
 
-**Scene-level variation is fine within limits**:
+- **每个场景默认背景 = brand-color mesh background**（多个 brand 色 blob + 高斯模糊 + canvas veil 的氛围底盘）
+- **Veil 重 —— mesh 作为"背景里隐约的品牌色氛围"**，远观仍读作克制底盘，前景文字清晰可读；不喧宾夺主
+- **Mesh 是单一背景层** —— 不再叠 dual-radial swell、scanline、半色调、建筑感网格。**只有粒子层**（品牌色稀疏浮粒）可与 mesh 共存
+- **前景 accent 不受预设约束** —— 走标准 60-30-10，editorial 的"accent ≤ 5%"纪律**已被明确放开**：前景文字、CTA、卡片可以更自由地使用品牌色
 
-- Alternating dark/light backgrounds for rhythm (timeline-editor-launch-v5: Act 0 light, Act 1 dark, Act 2 light)
-- Shifting from desaturated (calm scenes) to saturated (emphasis scenes)
-- Using a gradient between two brand-adjacent colors (timeline-editor "know" word: cyan→lime continuous scan)
+> **关于 component 实现**：多数预设把它实现为 `gradient-mesh-bg` component（editorial.md 已注册）—— build agent 优先复用该 component；预设未提供同名 component 时，build agent 按"brand 色 blob + 高斯模糊 + canvas veil"功能描述合成同等效果。Plan **不需要**知道具体哪个预设有这个 component —— 写功能名即可。
 
-**Forbidden**:
+### 与预设规范的关系
 
-- Each scene inventing its own color scheme without narrative justification
-- Using colors not present in or derived from the brand palette
-- Default "neon-on-dark" AI slop palette (electric purple + magenta + cyan on `#000`) — the archive uses muted glows at 0.15-0.35 opacity, not full-saturation neon
+本项目级 mesh 默认**覆盖以下 preset 的 §H 背景纪律**（"canvas is the hero"、"accent ≤ 5%"、"primary 不做背景填充"等），把它们的印刷克制感偏向品牌化 marketing 视频方向：
 
-## Contrast for readability
+**走 mesh 默认（D 类，9 个）**：
+`editorial` · `capsule` · `soft-editorial` · `daisy-days` · `block-frame` · `playful` · `studio` · `neo-grid-bold` · `emerald-editorial`
 
-Video is often viewed small (phone, embedded player). Text contrast must be aggressive:
+> 命中以上 preset 时，plan agent **必须**在每个 scene 散文里写出 mesh 句式（见下方"Plan 引用样例"），不要因为 preset §H 写了 "canvas is the hero" 就退回纯 canvas。
 
-| Content                  | Minimum contrast   | Target                                                                   |
-| ------------------------ | ------------------ | ------------------------------------------------------------------------ |
-| Display text on solid bg | 4.5:1              | 7:1                                                                      |
-| Body/caption text        | 4.5:1              | 7:1                                                                      |
-| Text on image            | Use scrim + shadow | `rgba(0,0,0,0.62-0.72)` panel + `drop-shadow(0 2px 8px rgba(0,0,0,0.6))` |
-| Text on gradient         | Check both ends    | Readable across full gradient                                            |
+**不走 mesh 默认（保留 preset 自带背景设计）**：
 
-**Gray text on colored backgrounds always looks washed out.** Use a darker shade of the background color or a transparent overlay instead. The codex-plugin's `#94A09A` muted text only sits on `#0B0D0E` graphite, never on a saturated panel.
+- 显式反对渐变 / 网格 / 软光晕：`long-table` · `neo-brutalism` · `editorial-forest` · `raw-grid`
+- 自带核心背景介质：`liquid-glass`（aurora 着色器）· `8-bit-orbit`（CRT 显象管）· `sakura-chroma`（半色调暖纸）· `scatterbrain`（cork / paper / warm 三变体）
+- Paper-grain 系（mesh 与 grain 美学冲突）：`pin-and-paper` · `retro-zine` · `peoples-platform` · `creative-mode` · `stencil-tablet`
 
-## Background treatment
+以上 14 个 preset 命中时，plan agent **保留 preset 自己的背景设计**——按 preset §H 写。
 
-Solid flat backgrounds are safe but boring. The archive layers depth into every background:
+> 若未来要回归严格 editorial：把 mesh 仅保留给 1-2 个高潮节拍、其他场景换回纯 canvas + hairline + 12-col 网格暗示、前景 accent ≤ 5%。**当前 D 类默认是放开的。**
 
-1. **Base color** — the tinted off-black or off-white
-2. **Subtle gradient or radial swell** — the dual-radial overlay is the recurring HyperFrames signature: two offset radial glows + a linear base. Endpoints typically `rgba(<accent>, 0.17-0.20)` to `transparent` at 30-50% radius. Hermes uses a warm orange `rgba(216, 95, 63, 0.18)` at 14% 8% paired with teal `rgba(47, 127, 117, 0.17)` at 84% 20% — warm + cool quadrant split.
-3. **Ambient texture** — noise overlay at 2-5% opacity, scanline `repeating-linear-gradient(0deg, #ffffff 0 1px, transparent 1px 3px)` at 0.035 (playground beat 2A), or a halftone dot field whose density breathes per beat (inspector-logo-intro).
-4. **Architectural grid** — codex uses `rgba(148, 160, 154, 0.08)` at 80px spacing — barely visible, but it tells the viewer "this is a real workspace, not a marketing video."
-5. **Particle layer** — brand-colored floating particles (handled by environment layer); hermes uses 100-150 dots in 6 colors at low opacity as a sparse noise field across the whole video.
+### 例外场景
 
-This creates visual richness without competing with foreground content. **A flat solid background is the strongest signal that the scene was undercooked.**
+少数场景可以离开 mesh 默认（plan 必须明说为什么）：
 
-## Dangerous color combinations
+- **纯工作区演示**（屏幕录制、UI 截图）—— 改用 `--canvas` + 建筑感网格，避免 mesh 与 UI 截图的色彩竞争
+- **暗场氛围 / 痛点节拍** —— mesh 降饱和、blob 用 neutral 替代 brand 色；或直接换 off-black 底
+- **品牌揭幕高潮** —— mesh veil 临时调轻，让品牌色饱和释放，配合 hero 词的双层 glow
 
-Combinations that look fine in a design tool but fail at video playback size:
+Plan 写："默认 brand-color mesh 背景（veil 重，brand-primary + secondary + accent 三 blob，氛围底盘）"；或例外："本场景换 canvas + 12-col 网格暗示 —— 屏幕录制不要 mesh 干扰"。**不要**写 `opacity: 0.7` / `blur(140px)` —— 这是 build 的事。
 
-- **Light gray on white**: contrast collapses, especially on lower-quality screens
-- **Gray on a colored background**: the gray reads as washed-out or dirty; use a darker shade of the background hue instead
-- **Thin light text on images**: even with a shadow, sub-500-weight text under 40px on a busy image is unreliable — add a scrim, increase weight, or both
-- **Pure-saturation neon on `#000`**: reads as AI default. Tone the background to an off-black and drop the accent to 0.20-0.35 glow opacity instead of full
-- **Purple-to-blue "AI" gradients**: explicitly banned in the codex-plugin DESIGN.md — "no generic purple-blue AI gradients." If you need depth, use brand-tinted radial swells.
+## 暗场景规则（plan 层）
 
-## Dark scene rules
+暗场景不只是反转：
 
-Dark scenes require adjustments beyond just inverting colors:
+- 用带色调的 off-black（design.html 的 dark token），**不要**纯 `#000`
+- 文字字重比亮场降一级（这是 build 的事，plan 知道存在即可）
+- 强调色去饱和（build 处理；plan 只说"暗场氛围"）
+- Hero 词上的 glow 通常**双层**（紧 + 广）—— plan 点名"hero 加双层 glow"
 
-- **Never pure black**: use a dark tinted neutral from the off-black list above. The archive's strongest hero moments (`hook-counter-burst` 806px counter on `#060812`) all anchor against tinted off-blacks, not `#000000`.
-- **Reduce text font weight one step**: bold text on dark tends to bloom and look heavier than intended — drop one weight (700 → 600, 900 → 800). The codex-plugin uses 700-800 for body text on graphite where the website probably used 600.
-- **Desaturate accents 10-20%**: a brand color at full saturation on dark background can feel garish — reduce saturation by 10-20% or drop opacity to 90%. Codex's `#06E3FA` is already a calibrated calmer cyan than a pure spectral cyan would be.
-- **Increase line-height**: as noted in typography rules, light text on dark needs +0.05 to 0.1 line-height to maintain perceived spacing
-- **Accent glow stack**: an off-black scene with a glowing accent word typically uses _two_ drop-shadows — a tight one (`drop-shadow(0 0 24px <accent> / 0.30)`) for crisp edge and a wide one (`drop-shadow(0 0 72px <accent> / 0.15)`) for the aura. Single-layer glow looks anemic.
+## Plan 引用样例
+
+**标准场景（mesh 默认背景，适用于 D 类全部 9 个 preset：editorial / capsule / soft-editorial / daisy-days / block-frame / playful / studio / neo-grid-bold / emerald-editorial）**：
+
+> "Background: brand-color mesh 默认（veil 重，brand-primary + secondary + accent 三 blob 作为隐约氛围，远观仍读作克制底盘）。Palette 60-30-10：60% canvas（mesh veil 之上仍读作 canvas）+ 30% hairline + chapter-label rule 分层（无 surface token）+ 10% accent 用在 hero 词与 CTA underline。`--ink` 纯黑保留作为印刷感墨色。"
+
+**例外：工作区演示场景**：
+
+> "本场景跳出 mesh 默认 —— 屏幕录制 + UI 截图占帧 60%，mesh 会与 UI 色彩竞争。改用 `--paper-warm` 60% + 12-col 建筑感网格暗示 30% + `--brand-primary` underline 标章节 10%。下一场景回归 mesh 默认。"
+
+**例外：品牌揭幕高潮**：
+
+> "Beat 6 hero 揭幕：mesh veil 临时调轻让品牌色饱和释放，hero 词加双层 glow（紧 + 广）。这是整片唯一让 mesh 强度释放的节拍。下一场景回归默认重 veil。"
+
+不写具体 hex / opacity / saturation 百分比 —— 那是 build 的事。

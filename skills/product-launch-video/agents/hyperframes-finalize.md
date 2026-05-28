@@ -1,105 +1,86 @@
-# Subagent prompt: hyperframes-finalize (Phase 4c)
+# 子代理提示词：hyperframes-finalize（Step 7）
 
-**INPUT:** `./group_spec.json` + `hyperframes/compositions/*.html` + `hyperframes/public/` + `hyperframes/assets/` (voice/bgm)
-**OUTPUT:** `hyperframes/index.html` (assembled clip refs + audio tracks) + `hyperframes/snapshots/*.png` + `hyperframes/renders/video.mp4`
-**TOOLS:** Skill `hyperframes-core` · Skill `hyperframes-cli` · Bash `(cd hyperframes && npx hyperframes lint / validate / inspect / snapshot / render)` · Bash `ffprobe`
-**DONE:** mp4 verified (size ≥10KB, ffprobe duration ±0.5s of total_duration_s), report mp4 path + size + duration + quality, append to `./context.log`
+**INPUT:** `<PROJECT_DIR>/group_spec.json` · `<PROJECT_DIR>/compositions/*.html` · `<PROJECT_DIR>/public/` · `<PROJECT_DIR>/assets/`（voice / bgm，可能为空）
+**OUTPUT:** `<PROJECT_DIR>/index.html` · `<PROJECT_DIR>/snapshots/*.png` · `<PROJECT_DIR>/renders/video.mp4`
+**TOOLS:** Skill `hyperframes-core` + Skill `hyperframes-cli` · Bash（`(cd "$PROJECT_DIR" && npx hyperframes ...)`、`ffprobe`、`node check-compositions.mjs`）· Edit（修 worker 文件局部 bug）
+**DONE:** mp4 三检通过（存在、≥10KB、ffprobe duration 误差 ±0.5s）→ 汇报 + 追加 `<PROJECT_DIR>/context.log`
 
-You are the finalize subagent for the **product-launch-video** pipeline. Scene workers (Phase 4b) have written every `hyperframes/compositions/<scene-id>.html`; prep (Phase 4a) placed assets under `hyperframes/public/`. **You own the final mp4 end-to-end** — assemble, gate, render, verify.
+你是 launch-video-v2 Step 7 finalize。Step 6 worker 已写齐 `<PROJECT_DIR>/compositions/<scene-id>.html`；Step 5 prep 已把 asset 放进 `<PROJECT_DIR>/public/`。**mp4 端到端归你管**。
 
-## Your task
+## 必读资源（开工前并行 Read）
 
-Load `hyperframes-core` and `hyperframes-cli` via the **Skill tool** (no other skills — you don't compose animations).
+1. Skill `hyperframes-core` —— composition 结构、timeline contract
+2. Skill `hyperframes-cli` —— 命令路由表
+3. hyperframes-cli 的 `references/lint-validate-inspect.md`（与 SKILL.md 同级目录）—— gate 命令的语义和失败模式
+4. hyperframes-cli 的 `references/preview-render.md`（同级）—— render flag、quality、输出路径
 
-Then in order:
+**不要加载** `hyperframes-animation` / `hyperframes-creative` / `hyperframes-registry` / `hyperframes-media`。
 
-1. Verify Phase 4a/4b outputs landed.
-2. Assemble `hyperframes/index.html` with scene clip refs in playback order.
-3. Run the pre-render gate: `lint` → `validate` → `inspect` → `snapshot`.
-4. Render `hyperframes/renders/video.mp4`.
-5. Verify the mp4 (exists / non-empty / ffprobe-parseable / duration matches).
+## 范围
 
-## Scope
+**你 own**：
 
-You own:
+- `<PROJECT_DIR>/index.html` 拼装
+- `npx hyperframes lint / validate / inspect / snapshot / render`
+- mp4 验证
+- 用 `Edit` 修 worker 写的 scene 文件中 **gate 抱怨的局部 bug**（未 scope selector、CSS `transition:` 漏网、缺 `class="clip"` 等）
 
-- `hyperframes/index.html` assembly
-- `npx hyperframes lint / validate / inspect / snapshot`
-- `npx hyperframes render` and post-render verification
-- Edit-fixing minor issues in worker-authored `compositions/<scene-id>.html` if a gate complains and the fix is localized
+**你不**：
 
-You do NOT:
+- 从头写 scene 文件（编排器重派 worker）
+- 拷 / 重生成 asset（Step 5 干过了）
+- 自己改 flag 重试 render（gate 过了 render 仍失败 → STOP 汇报）
 
-- Write `compositions/<scene-id>.html` from scratch — use `Edit` to patch. If a scene is broken beyond `Edit`, STOP and report; only the orchestrator can re-dispatch a worker.
-- Copy / regenerate assets (Phase 4a did it).
-- Retry render with different flags on your own — if render fails after gates passed, STOP and report; the orchestrator decides whether to flip `--strict` / `--quality` / re-dispatch upstream.
+## 流水线契约
 
-## Pipeline contract
+- **Path contract**：Dispatch 给 `PROJECT_DIR`（视频项目根）。所有 CLI 调用用 `(cd "$PROJECT_DIR" && npx hyperframes ...)` subshell。
+- Dispatch 上下文给：`Step 6 summary` + `Render quality`（默认 `high`）
 
-- Your cwd is the project root. **NEVER** run `cd` as a standalone command — wrap CLI calls in `(cd hyperframes && ...)` so npx resolves to the project-local CLI.
-
-Dispatch context contains:
-
-- `Phase 4b summary:` scene count + worker count
-- `Render quality:` one of `draft` / `standard` / `high` (default `high` for delivery; orchestrator may pass `draft` during iteration)
-
-## Procedure
-
-### Step 1: Verify inputs + pre-flight harness
+## Step 1：预飞 harness
 
 ```bash
-[ -s group_spec.json ] || echo MISSING_GROUP_SPEC
-[ -d hyperframes/compositions ] || echo MISSING_COMPOSITIONS
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/check-compositions.mjs \
+  --hyperframes . \
+  --group-spec ./group_spec.json)
 ```
 
-Parse `group_spec.json`:
+harness 检查 root contract / timeline registration / CSS+JS scope / asset 引用 / forbidden patterns / asset path 前导斜杠 / blueprint 软引用。**Exit 0 → 继续**。**Exit 1 → STOP**，列违规给编排器；修在上游（重派 worker），不在 finalize 里 patch。
 
-- Playback order = flatten `groups[].scene_ids` in array order.
-- `total_duration_s` = the value already in `group_spec.json`.
-- For each scene id: confirm `[ -s "hyperframes/compositions/<scene-id>.html" ]`. STOP and list any missing — the orchestrator will re-dispatch the affected worker.
+> **注意**：dispatch 上下文可能告诉你"编排器已跑过 check-compositions.mjs"，**但这不代替** Step 3 的 `npx hyperframes lint / validate / inspect`。自定义 harness 与官方 CLI gate 用不同的扫描逻辑，覆盖面不同（典型差异：harness 不查注释里字面 HTML 标签、不查 layout overflow）。Step 3 必须完整跑，不要因为预飞过了就跳过任何 gate。
 
-**Pre-flight harness** (catches 4 classes of worker bugs that historically cost 8-13 min of finalize edit-and-retry):
+（finalize 里 `Edit` 修只允许 lint/validate/inspect 抱怨的、harness 没拦下来的局部问题。）
 
-```bash
-node <SKILL_DIR>/scripts/check-compositions.mjs \
-  --hyperframes ./hyperframes \
-  --group-spec ./group_spec.json
-```
+## Step 2：拼装 `<PROJECT_DIR>/index.html`
 
-`<SKILL_DIR>` is the orchestrator-injected absolute path of the product-launch-video skill directory.
+从 `group_spec.json` 取：
 
-The harness verifies, per scene:
+- `total_duration_s` → 写到 root 的 `data-duration`
+- 播放顺序 = `groups[].scene_ids` 按数组顺序展开
+- `font_face_css` → 见下
+- 每个 scene 的 `voicePath`、`bgm_path`
 
-- root contract: `<div id="root" class="<scene-id>-root" data-composition-id=... data-duration=...>`
-- timeline registration: `window.__timelines["<scene-id>"] = ...` (verbatim scene id)
-- **CSS scope**: no `#root` or `#<scene-id>-root` selectors in `<style>` blocks (must be `.<scene-id>-root` class selectors)
-- **JS scope**: no `#root` / `#<scene-id>-root` / `getElementById("root")` in `<script>` blocks
-- asset references: every `public/...` path in the HTML exists in `hyperframes/public/`
-- forbidden patterns: no CSS `transition:` / `animation:`, no `Date.now()` / `Math.random()` / `performance.now()` / `fetch(` / `repeat: -1`
-- no leading slash in asset paths
+### `<head>` 字体声明
 
-**Exit 0 → proceed to Step 2.** Exit 1 → STOP and report the per-scene violation list to the orchestrator. The fix is upstream (re-dispatch the affected worker), not patch-in-finalize.
-
-(Edit-fixing in finalize is allowed only for `lint` / `validate` / `inspect` warnings that the harness did NOT catch — i.e. structural issues that pass these regex checks but fail HyperFrames' runtime validators.)
-
-### Step 2: Assemble hyperframes/index.html
-
-Set the root composition's `data-duration` to `total_duration_s`.
-
-**Inject the brand `@font-face` block into `<head>`.** `group_spec.json.font_face_css` (a string, may be empty) holds the `@font-face` rules Phase 4a extracted from `design.html` with URLs already rewritten to `url('public/fonts/<file>')`. `@font-face` is global by CSS spec and cannot live inside a scoped `<style>` — declaring it once in `index.html`'s `<head>` is what makes the brand fonts actually load (otherwise Chrome silently falls back to system fonts; `document.fonts.ready` resolves either way, so the failure is invisible until you watch the mp4). When `font_face_css` is non-empty, paste it verbatim inside a `<style>` block in `<head>`, e.g.:
+`font_face_css` 是 Step 5 prep 从 `design.html` 抽出的 `@font-face` 块，URL 已重写到 `public/fonts/<file>`。`@font-face` 是全局 CSS 规则，**必须**在 `index.html` `<head>` 声明（scoped `<style>` 装不下）。
 
 ```html
-<style>
-  /* Brand fonts (Phase 4a, from design-system/design.html) */
-  <font_face_css verbatim>
-</style>
+<head>
+  <style>
+    /* Brand fonts */
+    <font_face_css verbatim>
+  </style>
+</head>
 ```
 
-If `font_face_css` is empty (no brand fonts were extracted), skip the block — the video will render with system fallbacks, which is acceptable for sites that don't self-host fonts.
+`font_face_css` 为空 → 整段跳过（系统字体兜底）。
 
-For each scene in playback order, with cumulative start `S` (running sum of preceding `estimatedDuration_s`), emit:
+### `<body>` clip + audio
 
-**(a) Scene clip ref** (always, track 0):
+按播放顺序，**直接读 `groups[].scenes[<sid>].start_s` 作为 `S`**。prep.mjs 已经把 cumulative start 预计算并 round 到 3 位 —— 不要自己 `S += dur` 累加，浮点累积会触发 lint `overlapping_clips_same_track`（典型 `2.24 + 6.357 = 8.597000000000001`）。
+
+发：
+
+**(a) Scene clip ref**（每个 scene 都发，track 0）：
 
 ```html
 <div
@@ -111,9 +92,9 @@ For each scene in playback order, with cumulative start `S` (running sum of prec
 ></div>
 ```
 
-Per-scene `data-duration` here MUST equal the `data-duration` the worker put on that scene's inner `#root`. If they disagree, prefer the worker's value (it matches what was authored) and report the mismatch.
+`data-duration` 必须等于 worker 写在内层 root 上的值。不一致 → 以 worker 的为准 + 汇报 mismatch。
 
-**(b) Per-scene voice `<audio>`** (track 10, **only if** that scene's `group_spec.json.scenes[<scene-id>].voicePath` is non-empty):
+**(b) Voice `<audio>`**（track 10，仅当该 scene `voicePath` 非空）：
 
 ```html
 <audio
@@ -124,9 +105,7 @@ Per-scene `data-duration` here MUST equal the `data-duration` the worker put on 
 ></audio>
 ```
 
-Skip the `<audio>` element entirely for scenes whose `voicePath` is empty string — they have no narration audio.
-
-**(c) Top-level BGM `<audio>`** (track 11, **only if** `group_spec.json.bgm_path` is non-empty AND the file exists):
+**(c) BGM `<audio>`**（track 11，仅当 `bgm_path` 非空 **且** `[ -s "$PROJECT_DIR/<bgm_path>" ]` 通过；Lyria detached 可能 Step 5 跑完时还没落盘）：
 
 ```html
 <audio
@@ -134,82 +113,141 @@ Skip the `<audio>` element entirely for scenes whose `voicePath` is empty string
   data-start="0"
   data-duration="<total_duration_s>"
   data-track-index="11"
-  data-volume="0.2"
+  data-volume="0.8"
 ></audio>
 ```
 
-Volume guidance: `0.15`–`0.25` when BGM plays under narration; raise to `0.40`–`0.60` if every scene's `voicePath` is empty (BGM-only video). Verify the file with `[ -s "hyperframes/<bgm_path>" ]` before emitting; if it disappeared between Phase 4a and now, log and skip the element.
+Volume：narration 下垫用 `0.8`；所有 `voicePath` 空（BGM-only）用 `0.9`–`1.0`。
 
-Lanes 0 (scene clips), 10 (voice), 11 (BGM) are the only ones owned by `index.html`. Workers stick to lanes 0–9 inside their sub-comps.
+**(d) Captions clip**（track 12，仅当 `compositions/captions.html` 存在；captions agent 跳过 / 没生成就跳过）：
 
-### Step 3: Pre-render gate (in order, STOP on first failure)
-
-```bash
-(cd hyperframes && npx hyperframes lint)
-(cd hyperframes && npx hyperframes validate)
-(cd hyperframes && npx hyperframes inspect)
+```html
+<div
+  class="clip"
+  data-composition-id="captions"
+  data-composition-src="compositions/captions.html"
+  data-start="0"
+  data-duration="<total_duration_s>"
+  data-track-index="12"
+></div>
 ```
 
-- **lint / validate**: if errors are localized to a single composition file (unscoped selector, CSS `transition:` slipped in, missing `class="clip"`), `Edit`-fix in place and re-run. If errors are structural (missing `data-composition-id`, broken sub-comp ref, unregistered timeline, async timeline build), STOP and report — those need a re-dispatched worker.
-- **inspect**: warnings are non-blocking unless severe (CTA fully off-screen, primary text clipped > 30 px). Log severe ones to `context.log` and `Edit`-fix; otherwise proceed.
+**(e) SFX `<audio>`**（track 20+i，每条 `group_spec.sfx[]` 一条）：逐条遍历 `group_spec.sfx[]`（已按 `t` 升序、文件已对照 manifest、`duration` 已锁 manifest 真值）。**翻译不发挥**——不挑文件 / 不调 volume / 不算 t / 不替代缺失 cue：
 
-### Step 4: Snapshot smoke test
-
-Compute per-scene midpoints = cumulative start + `estimatedDuration_s / 2`.
-
-```bash
-(cd hyperframes && npx hyperframes snapshot --at <midpoint_1>,<midpoint_2>,...)
+```html
+<audio
+  src="assets/sfx/<file>"
+  data-start="<t>"
+  data-duration="<duration>"
+  data-track-index="<20 + i>"
+  data-volume="<volume>"
+></audio>
 ```
 
-Eyeball every PNG in `hyperframes/snapshots/` against the matching scene's `creative_brief` (from `group_spec.json`). Symptoms → root causes:
+`<i>` = cue 在 `sfx[]` 的 index（0-based），每条独占一 track 避免 lint `overlapping_clips_same_track`。`data-duration` **不允许截短**——截短让 impact 在 decay 中段被砍。
 
-- Blank scene → asset path wrong, or sub-comp `<template>` missing
-- Scene shows only briefly / jumps frames → host `data-composition-id` ≠ inner template id ≠ timeline key
-- Wrong scene shows → playback order in `index.html` wrong
-
-Edit-fix or escalate to the orchestrator.
-
-### Step 5: Render
+发完跑 drift 校验（FAIL 即 STOP，按提示回补 section_plan）：
 
 ```bash
-(cd hyperframes && npx hyperframes render --quality <quality> --output renders/video.mp4)
-RENDER_EXIT=$?
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/sfx-verify.mjs \
+  --group-spec ./group_spec.json --index ./index.html)
 ```
 
-- `<quality>` comes from the `Render quality:` Dispatch context line; default `high` if absent.
-- Do NOT pass `--strict` automatically — gates already ran in Step 3. Only add it if the orchestrator explicitly asked.
-- If `RENDER_EXIT != 0`, STOP and report the last ~30 lines of render stderr plus which earlier gate (if any) was warn-but-shipped. Do NOT retry render with different flags.
+Lane 归属：0 = scene clip，10 = voice，11 = BGM，12 = captions，20+ = SFX。worker 内部只能用 0-9。
 
-### Step 6: Verify the mp4
+## Step 3：Pre-render gate（顺序，首个失败 STOP）
 
 ```bash
-OUTPUT=hyperframes/renders/video.mp4
-[ -s "$OUTPUT" ] || { echo "✗ render produced no output"; exit 1; }
+(cd "$PROJECT_DIR" && npx hyperframes lint)
+(cd "$PROJECT_DIR" && npx hyperframes validate)
+(cd "$PROJECT_DIR" && npx hyperframes inspect)
+```
+
+### 首次失败：立刻 `--json`，不要凭目测猜
+
+任何 gate 首次失败时，**立刻**用 `--json` 拿结构化输出（看 `snippet` / `line` / `column`），而不是先 Read 文件凭目测找差异 —— linter 用正则扫，触发点经常和"肉眼合理"完全错开（典型案例：注释里字面 `<template>` 被当成真标签）。
+
+failed 时的标准动作：
+
+```bash
+(cd "$PROJECT_DIR" && npx hyperframes lint --json 2>&1 | jq '.findings[] | {code, severity, snippet, line}')
+(cd "$PROJECT_DIR" && npx hyperframes validate --json 2>&1 | jq '.findings[] | {code, severity, snippet, line}')
+(cd "$PROJECT_DIR" && npx hyperframes inspect --json 2>&1 | jq '.findings[] | {code, severity, snippet, line}')
+```
+
+### Gate 报错分类决策表
+
+拿到 `--json` 输出后，对每条 finding 按下表分类，决定是回 worker 还是 finalize 内修：
+
+| Gate 报错类型                                                                                                          | 是 bug 还是 by-design？ | 修在哪                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **结构错** —— 缺 attribute / timeline 没注册 / sub-comp ref 断 / `data-composition-id` 缺失 / async 构 timeline        | bug                     | **回 worker**，finalize 内不修                                                                                  |
+| **regex 误伤 / 局部 layout 调整** —— 注释里字面标签、单行→多行、属性顺序、漏 `class="clip"`、未 scope selector         | bug                     | **finalize 内 `Edit` 一次修**，不需要回 worker                                                                  |
+| **by-design 视觉效果违反 layout 检查** —— depth-layer 故意溢出 ≤ 5px、装饰元素故意越框、低对比文字（editorial intent） | by-design               | **加 escape hatch**：`data-layout-allow-overflow="true"` / `data-contrast-allow-low="true"` —— 别去 reshape CSS |
+
+- **inspect** warning 默认不 block，严重（CTA 出画、主文字裁 >30px）按上表第二/三档处理并记 `<PROJECT_DIR>/context.log`
+
+## Step 4：Snapshot smoke test
+
+每 scene 先截 midpoint：`start_s + estimatedDuration_s * 0.5`。
+
+高风险 scene 再截 `75%` 和 `90%`：
+
+- duration >= 8s
+- multi-act / dense multi-subject / action-payoff / proof-heavy
+- effects 或 HTML 含 `multi-phase-camera` / `data-layout-role="primary"`
+
+去重后按升序传给 CLI：
+
+```bash
+(cd "$PROJECT_DIR" && npx hyperframes snapshot --at <m1>,<m2>,...)
+```
+
+眼检每张 PNG 对照 `creative_brief`：
+
+- 空白 → asset 路径错或 `<template>` 没找到
+- 闪一下 / 跳帧 → host `data-composition-id` ≠ 内层 id ≠ timeline key
+- 显错 scene → `index.html` 播放顺序错
+- Dense frame：是否只有一个 primary？supporting 是否更小、更低对比、更少运动，并避开 primary bbox？
+- 多个 subject 同时抢 center safe zone → STOP，回 worker；不要靠 `inspect` 放行（inspect 不查 semantic overlap）
+
+## Step 5：Render
+
+```bash
+(cd "$PROJECT_DIR" && npx hyperframes render --quality <quality> --output renders/video.mp4)
+```
+
+`<quality>` 取自 dispatch（默认 `high`）。**不加 `--strict`**（gate 跑过了）。失败 → STOP，汇报 stderr 末尾 ~30 行 + Step 3 哪个 gate warn 但放行；**不换 flag 重试**。
+
+## Step 6：验 mp4
+
+```bash
+OUTPUT="$PROJECT_DIR/renders/video.mp4"
+[ -s "$OUTPUT" ] || { echo "✗ no output"; exit 1; }
 SIZE=$(stat -f%z "$OUTPUT" 2>/dev/null || stat -c%s "$OUTPUT")
-DURATION=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$OUTPUT")
-echo "size=$SIZE  duration=$DURATION  total_duration_s=$total_duration_s"
+DUR=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$OUTPUT")
 ```
 
-Three checks (STOP on any failure):
+三检任一失败 STOP：
 
-1. File exists at `hyperframes/renders/video.mp4`
-2. Size ≥ 10 KB (sanity floor — even a 1-scene render is hundreds of KB)
-3. ffprobe duration within ±0.5 s of `total_duration_s` from `group_spec.json`
+1. 文件存在
+2. Size ≥ 10 KB
+3. `DUR` 与 `group_spec.json.total_duration_s` 误差 ±0.5s
 
-## When done — report
+## 完成汇报
 
-- Scene count assembled, total duration
-- lint / validate / inspect status (pass / N warnings)
-- Snapshot PNGs produced + one-line per scene against the brief
-- Any `Edit`-fixes you applied to worker output (file + nature)
-- **Render**: output path, byte size, ffprobe duration, quality used
-- Any unresolved warnings shipped
+- scene 数 / 总时长
+- lint / validate / inspect 状态
+- snapshot PNG 张数 + 每张一行对照 brief
+- `Edit` 修过的 worker 文件（file + 性质）
+- Render：路径 / 字节 / ffprobe duration / quality
+- 放行的未解决 warning
 
-Then append to `./context.log`:
+追加 `<PROJECT_DIR>/context.log`：
 
 ```
 ## Phase 4: hyperframes-build [done <ISO timestamp>]
 Scenes: <N> (workers: <G>)
 Gates: lint OK / validate OK / inspect OK / snapshot OK
-Render: hyperframes/renders/video.mp4 (<size>, <duration>s, quality=<quality>)
+Render: renders/video.mp4 (<size>, <duration>s, quality=<quality>)
 ```

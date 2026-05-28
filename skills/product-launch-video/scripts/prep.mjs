@@ -1,18 +1,35 @@
 #!/usr/bin/env node
-// Phase 4a — prep + group plan (deterministic replacement for the
-// hyperframes-prep subagent).
+// Phase 4a — prep + group plan (deterministic; no subagent).
+// launch-video-v2 port of skills/product-launch-video/scripts/prep.mjs.
 //
 // Reads:  section_plan.md (Phase 3), narrator_scripts.json (Phase 2),
-//         audio_meta.json (Phase 2.5, optional), research/ assets (Phase 1),
-//         design-system/fonts/ (Phase 1b, optional),
+//         audio_meta.json (Phase 2.5, optional), capture/assets/ (Phase 1 —
+//         hyperframes capture), design-system/fonts/ (Phase 1b, populated by
+//         build-design.mjs from capture's font binaries),
 //         hyperframes-animation/rules/*.md (existence only).
-// Writes: hyperframes/public/<assets>, hyperframes/public/fonts/<woff2>,
-//         ./group_spec.json.
-//         If hyperframes/ is missing, scaffolds it via `npx hyperframes init`.
+// Writes: public/<assets>, public/fonts/<woff2>, ./group_spec.json inside the
+//         HyperFrames project root passed via --hyperframes. The launch-video-v2
+//         orchestrator initializes that project root before calling prep.
+//
+// section_plan.md anchors recognised:
+//   **Effects:**     — required, 4-7 backtick-wrapped rule ids
+//   **Duration:**    — required, positive float seconds
+//   **Continuity:**  — required, "break" | "continue" (scene 1 must be break)
+//   **Blueprint:**   — optional (soft), "based-on <id>" | "extended <id>" |
+//                      "composed" | absent (→ "composed"). Passed through to
+//                      group_spec.json so Phase 4b workers can consult the
+//                      blueprint when wiring effects.
+//   **Components:**  — optional (soft), backtick-wrapped component ids that
+//                      reference design-system/chunks/components/<id>.html.
+//                      Resolved against design-system/chunks/index.json; each
+//                      scene's design_chunks.components[] in group_spec.json
+//                      becomes the absolute paths the Phase 4b worker reads.
+//                      Empty / absent → worker still gets tokens.css + easings.js
+//                      but no component paste-snippets.
 //
 // Usage:
 //   node prep.mjs --section-plan <path> --narrator-scripts <path> \
-//                 --rules-dir <abs> --research <path> --hyperframes <path> \
+//                 --rules-dir <abs> --capture <path> --hyperframes <path> \
 //                 --out <path> [--audio-meta <path>] [--design-system <path>] \
 //                 [--scenes-per-group <int>]
 //
@@ -26,6 +43,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -48,18 +66,26 @@ const audioMetaPath = flag("audio-meta") ? resolve(flag("audio-meta")) : null;
 const rulesDirArg = flag("rules-dir");
 if (!rulesDirArg) die("Missing required --rules-dir");
 const rulesDir = resolve(rulesDirArg);
-const researchDir = resolve(flag("research", "./research"));
+// `--capture` is the v3 flag (hyperframes capture). `--research` kept as a
+// deprecated alias to make in-flight projects upgrade cleanly. Either one
+// resolves to the same on-disk root that holds the page-load artifacts that
+// downstream phases reference.
+const captureDir = resolve(flag("capture", flag("research", "./capture")));
 const designSystemDir = resolve(flag("design-system", "./design-system"));
-const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
+const hyperframesDir = resolve(flag("hyperframes", "."));
 const outPath = resolve(flag("out", "./group_spec.json"));
 const scenesPerGroupMax = parseInt(flag("scenes-per-group", "2"), 10);
+// Optional — orchestrator passes <SKILL_DIR>/assets/sfx absolute path.
+// If absent: SFX cues in section_plan are silently ignored.
+// (Captions are written by the Phase 4a.5 captions agent, not by prep.)
+const sfxLibDir = flag("sfx-lib") ? resolve(flag("sfx-lib")) : null;
 if (!isFinite(scenesPerGroupMax) || scenesPerGroupMax < 1) {
   die(`--scenes-per-group must be a positive integer (got "${flag("scenes-per-group")}")`);
 }
 
-// ---------- Step 1: bootstrap hyperframes/ ----------
+// ---------- Step 1: bootstrap HyperFrames project root ----------
 if (!existsSync(hyperframesDir)) {
-  console.log(`hyperframes/ missing → npx hyperframes init ${hyperframesDir}`);
+  console.log(`HyperFrames project root missing → npx hyperframes init ${hyperframesDir}`);
   const r = spawnSync(
     "npx",
     [
@@ -74,13 +100,32 @@ if (!existsSync(hyperframesDir)) {
     { stdio: "inherit" },
   );
   if (r.status !== 0) die("npx hyperframes init failed");
+  rmSync(join(hyperframesDir, "AGENTS.md"), { force: true });
+  rmSync(join(hyperframesDir, "CLAUDE.md"), { force: true });
 }
 
-// ---------- Step 2: copy research assets → hyperframes/public/ ----------
+// ---------- Step 2: copy capture assets → public/ ----------
 const publicDir = join(hyperframesDir, "public");
 mkdirSync(publicDir, { recursive: true });
 
-const ASSET_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg"]);
+// `.bin` 是抓取阶段对未识别 MIME 的图片的兜底命名（典型为 image/* 但 Content-Type
+// 缺失或被 CDN 改写）。下游 Phase 4b worker 把它们当 <img src> 引用 —— 浏览器会按 magic bytes
+// 渲染，绝大多数能正常显示。把它纳入白名单避免文件被孤立。
+const ASSET_EXTS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".svg",
+  ".bin",
+  // Video extensions — Phase 3 frequently quotes hero/demo .mp4 from the
+  // capture. Forgetting these forces Phase 4b workers to substitute poster
+  // .webp, losing motion fidelity. Keep in sync with the playable formats
+  // hyperframes-core accepts in <video>/clip sub-comps.
+  ".mp4",
+  ".mov",
+  ".webm",
+]);
 const collisions = [];
 let copied = 0;
 
@@ -100,11 +145,15 @@ function walk(dir) {
     }
   }
 }
-walk(researchDir);
+// hyperframes capture writes assets/ + screenshots/ + extracted/ under
+// captureDir. We want only image/video media (assets/ + screenshots/), not
+// the JSON manifests under extracted/.
+walk(join(captureDir, "assets"));
+walk(join(captureDir, "screenshots"));
 
-// ---------- Step 2b: copy design-system/fonts → hyperframes/public/fonts/ ----------
+// ---------- Step 2b: copy design-system/fonts → public/fonts/ ----------
 // Phase 1b's download-fonts.mjs writes self-hosted brand fonts into
-// design-system/fonts/. Copy them into hyperframes/public/fonts/ so the
+// design-system/fonts/. Copy them into public/fonts/ so the
 // renderer resolves the @font-face rules that index.html declares.
 const fontsSrcDir = join(designSystemDir, "fonts");
 let fontsCopied = 0;
@@ -127,7 +176,7 @@ if (existsSync(fontsSrcDir)) {
 // ---------- Step 2c: extract @font-face block from design.html ----------
 // download-fonts.mjs wraps its injection with two comment anchors. Pull the
 // block out, rewrite url('fonts/<file>') → url('public/fonts/<file>') so the
-// paths resolve against hyperframes/, and emit into group_spec.font_face_css
+// paths resolve against the HyperFrames project root, and emit into group_spec.font_face_css
 // so Phase 4c can paste it into index.html's <head>. @font-face is global by
 // spec and cannot be class-scoped — declaring it once at the document root is
 // the only way it actually loads.
@@ -152,6 +201,11 @@ const heads = [...planText.matchAll(sceneHeadRe)];
 if (heads.length === 0) die("no '## Scene N: <name>' headings found in section_plan.md");
 
 const ANCHORS = ["Effects", "Duration", "Continuity"];
+// Surface is preset-conditional in the validator (required when chunks/index.json
+// shows surface-aware components). prep.mjs treats it as OPTIONAL here purely so
+// the anchor doesn't leak into creative_brief — its value is forwarded to
+// group_spec.json so the Step 6 dispatch can pass it to scene workers.
+const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Surface"];
 
 function anchorRe(name) {
   return new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`, "m");
@@ -166,6 +220,15 @@ function parseSceneBlock(body, sceneId, isFirst) {
     raw[a] = m[1].trim();
     const end = m.index + m[0].length;
     if (end > lastAnchorEnd) lastAnchorEnd = end;
+  }
+  // Optional anchors — 出现则纳入 lastAnchorEnd（防泄漏到 creative_brief），缺失不报错
+  for (const a of OPTIONAL_ANCHORS) {
+    const m = body.match(anchorRe(a));
+    if (m) {
+      raw[a] = m[1].trim();
+      const end = m.index + m[0].length;
+      if (end > lastAnchorEnd) lastAnchorEnd = end;
+    }
   }
 
   // Effects: ordered backtick-wrapped ids inside [...]
@@ -185,6 +248,76 @@ function parseSceneBlock(body, sceneId, isFirst) {
     die(`${sceneId}: **Continuity:** must be "break" or "continue" (got "${raw.Continuity}")`);
   if (isFirst && cont !== "break") die(`${sceneId}: scene 1 must be **Continuity:** break`);
 
+  // Blueprint (soft): "based-on <id>" | "extended <id>" | "composed" | (absent → "composed")
+  // 不做格式校验 —— validator 可后补；id 引用是松绑定，build agent 自行处理
+  const blueprint = raw.Blueprint || "composed";
+
+  // Components (soft): backtick-wrapped ids referencing
+  // design-system/chunks/components/<id>.html. Existence is checked later
+  // against design-system/chunks/index.json. Absent → empty list.
+  const componentIds = raw.Components
+    ? [...raw.Components.matchAll(/`([^`]+)`/g)].map((m) => m[1])
+    : [];
+
+  // Surface (soft, preset-conditional): lower-cased single token (preset-declared)
+  // or null. Worker uses this to pick #root background style from the preset's
+  // composition-hints; validator enforces presence + allowed values upstream.
+  const surface = raw.Surface ? raw.Surface.trim().toLowerCase() : null;
+
+  // SFX (required anchor; explicit "none" or bullet block):
+  //   **SFX:** none
+  // or
+  //   **SFX:**
+  //   - `impact-bass-1.mp3` at 0.2s, volume 0.35 — hero snap
+  //   - `whoosh-short.mp3` at 4.1s — exit
+  // The validator (validate-section-plan.mjs) enforces presence; this parser
+  // accepts either form. "none" means an explicit zero-cue decision and skips
+  // the bullet scan. Header-line trailer other than "none" is rejected by the
+  // validator before this runs, so we treat anything non-empty + non-"none"
+  // the same as "none" defensively (no cues, no parse).
+  // sfx_cues[].t is SCENE-LOCAL seconds (this function knows nothing about
+  // global timing; we add s.start_s offset in Step 6).
+  const sfxCues = [];
+  const sfxHeaderRe = /^\*\*SFX:\*\*[ \t]*(.*)$/m;
+  const sfxHeaderM = body.match(sfxHeaderRe);
+  if (sfxHeaderM) {
+    const sfxHeaderEnd = sfxHeaderM.index + sfxHeaderM[0].length;
+    if (sfxHeaderEnd > lastAnchorEnd) lastAnchorEnd = sfxHeaderEnd;
+  }
+  if (sfxHeaderM && sfxHeaderM[1].trim() === "") {
+    const sfxHeaderEnd = sfxHeaderM.index + sfxHeaderM[0].length;
+    const afterHeader = body.slice(sfxHeaderEnd);
+    const lines = afterHeader.split("\n");
+    let consumed = 0; // chars consumed past the header
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      const trimmed = line.trim();
+      if (trimmed === "") {
+        consumed += line.length + 1;
+        continue;
+      }
+      if (!trimmed.startsWith("-")) break; // next anchor / prose / scene heading
+      // Parse: `<file>.mp3` at <T>s[, volume <V>][, — <note>]
+      const cueRe = /^[\s\-*]+`([^`]+\.mp3)`\s+at\s+([\d.]+)\s*s(?:[,\s]+volume\s+([\d.]+))?(?:\s*[—–-]\s*(.*))?$/;
+      const m = trimmed.match(cueRe);
+      if (m) {
+        const file = m[1];
+        const tLocal = parseFloat(m[2]);
+        const volume = m[3] != null ? parseFloat(m[3]) : null;
+        const note = m[4] ? m[4].trim() : "";
+        if (!isFinite(tLocal) || tLocal < 0) {
+          die(`${sceneId}: **SFX:** invalid t for "${file}": "${m[2]}"`);
+        }
+        sfxCues.push({ file, t_local: tLocal, volume, note });
+      } else {
+        die(`${sceneId}: **SFX:** unparseable cue line: "${trimmed}"`);
+      }
+      consumed += line.length + 1;
+    }
+    const sfxBlockEnd = sfxHeaderEnd + consumed;
+    if (sfxBlockEnd > lastAnchorEnd) lastAnchorEnd = sfxBlockEnd;
+  }
+
   // creative_brief = everything after the LAST anchor line, verbatim
   const brief = body.slice(lastAnchorEnd).replace(/^\s*\n+/, "");
 
@@ -192,6 +325,10 @@ function parseSceneBlock(body, sceneId, isFirst) {
     effects,
     estimatedDuration_s,
     continuity: cont,
+    blueprint,
+    componentIds,
+    surface,
+    sfxCues,
     creative_brief: brief,
   };
 }
@@ -231,6 +368,107 @@ for (const s of scenes) {
   });
 }
 
+// anomalies collected throughout the rest of the script (non-fatal mismatches:
+// chunks missing → fallback, audio duration drift, voice file dropped, asset
+// candidate not on disk, BGM still rendering). Declared up-front so Step 4b
+// can append to it.
+const anomalies = [];
+
+// ---------- Step 4b: resolve design_chunks ----------
+// Phase 1b's emit-chunks.mjs writes design-system/chunks/{tokens.css, easings.js,
+// components/<id>.html, index.json}. Downstream Phase 4b workers read only the
+// chunks listed in their dispatch — never design.html — cutting per-worker
+// must-read load by ~4× (12 KB design.html → 1-3 KB per chunk file).
+//
+// Resolution policy:
+//   - chunks/index.json missing       → degrade gracefully: design_chunks = null
+//                                       for every scene, log an anomaly, and let
+//                                       the worker fall back to reading design.html.
+//   - index.json present              → every scene gets tokens_file + easings_file.
+//   - scene cites unknown component id → fatal (typo in section_plan that prep
+//                                        can catch up-front beats finalize rounding
+//                                        back to Phase 3 13 minutes later).
+const chunksDir = join(designSystemDir, "chunks");
+const chunksIndexPath = join(chunksDir, "index.json");
+let chunksIndex = null;
+if (existsSync(chunksIndexPath)) {
+  try {
+    chunksIndex = JSON.parse(readFileSync(chunksIndexPath, "utf8"));
+  } catch (e) {
+    anomalies.push(
+      `design-system/chunks/index.json present but unreadable (${e.message}) — workers will fall back to design.html`,
+    );
+  }
+} else {
+  anomalies.push(
+    `design-system/chunks/ missing — Phase 1b's emit-chunks.mjs was not run. Workers will fall back to reading design.html (slower).`,
+  );
+}
+
+let availableComponents = null;
+if (chunksIndex) {
+  availableComponents = new Map(
+    (chunksIndex.components || []).map((c) => [c.id, join(designSystemDir, c.file)]),
+  );
+}
+
+for (const s of scenes) {
+  if (!chunksIndex) {
+    s.design_chunks = null;
+    continue;
+  }
+  const tokensAbs = join(designSystemDir, chunksIndex.tokens_file || "chunks/tokens.css");
+  const easingsAbs = join(designSystemDir, chunksIndex.easings_file || "chunks/easings.js");
+  const voiceAbs = join(designSystemDir, chunksIndex.voice_file || "chunks/voice.md");
+  if (!existsSync(tokensAbs))
+    die(`design_chunks: tokens_file "${tokensAbs}" referenced by index.json but missing on disk`);
+  if (!existsSync(easingsAbs))
+    die(`design_chunks: easings_file "${easingsAbs}" referenced by index.json but missing on disk`);
+  if (!existsSync(voiceAbs))
+    die(`design_chunks: voice_file "${voiceAbs}" referenced by index.json but missing on disk`);
+
+  // Optional chunks (null when preset declared no §H / §T / §M). Worker reads
+  // these on demand — paths are passed through dispatch verbatim. We only check
+  // file existence when index.json references one (consistency guard); the
+  // worker then opens it lazily without re-checking.
+  const hintsAbs = chunksIndex.hints_file
+    ? join(designSystemDir, chunksIndex.hints_file)
+    : null;
+  if (hintsAbs && !existsSync(hintsAbs))
+    die(`design_chunks: hints_file "${hintsAbs}" referenced by index.json but missing on disk`);
+  const typeRolesAbs = chunksIndex.type_roles_file
+    ? join(designSystemDir, chunksIndex.type_roles_file)
+    : null;
+  if (typeRolesAbs && !existsSync(typeRolesAbs))
+    die(`design_chunks: type_roles_file "${typeRolesAbs}" referenced by index.json but missing on disk`);
+  const motifsAbs = chunksIndex.motifs_file
+    ? join(designSystemDir, chunksIndex.motifs_file)
+    : null;
+  if (motifsAbs && !existsSync(motifsAbs))
+    die(`design_chunks: motifs_file "${motifsAbs}" referenced by index.json but missing on disk`);
+
+  const componentPaths = [];
+  for (const cid of s.componentIds) {
+    const abs = availableComponents.get(cid);
+    if (!abs)
+      die(
+        `${s.sceneId}: **Components:** id "${cid}" not in design-system/chunks/index.json. Known: [${[...availableComponents.keys()].join(", ")}]`,
+      );
+    if (!existsSync(abs))
+      die(`${s.sceneId}: component "${cid}" listed in index.json but file missing at ${abs}`);
+    componentPaths.push(abs);
+  }
+  s.design_chunks = {
+    tokens_file: tokensAbs,
+    easings_file: easingsAbs,
+    voice_file: voiceAbs,
+    hints_file: hintsAbs,
+    type_roles_file: typeRolesAbs,
+    motifs_file: motifsAbs,
+    components: componentPaths,
+  };
+}
+
 // ---------- Step 5: cross-check narrator + audio merge ----------
 if (!existsSync(narratorScriptsPath))
   die(`narrator_scripts.json not found at ${narratorScriptsPath}`);
@@ -246,34 +484,73 @@ if (audioMetaPath) {
   }
 }
 
-const anomalies = [];
+// Duration truth ladder (highest → lowest):
+//   audio_meta.scenes[sceneId].voiceDuration   ← TTS wav 实测 = TRUE TRUTH
+//   section_plan.md "**Duration:** Xs"          ← plan agent decision (already
+//                                                  reconciled with audio per guide)
+//   narrator_scripts.json estimatedDuration    ← earliest estimate
+//
+// Final s.estimatedDuration_s = highest-priority source that exists.
+// Mismatch anomalies surface upstream inconsistencies but do NOT block.
 
 for (const s of scenes) {
-  // duration cross-check
+  const planDur = s.estimatedDuration_s; // value as parsed from section_plan
   const narrator = narratorByNumber.get(s.sceneNumber);
+  let narratorDur = NaN;
   if (narrator?.estimatedDuration != null) {
     const m = String(narrator.estimatedDuration).match(/[\d.]+/);
-    const narratorDur = m ? parseFloat(m[0]) : NaN;
-    if (isFinite(narratorDur) && Math.abs(narratorDur - s.estimatedDuration_s) > 0.01) {
-      anomalies.push(
-        `${s.sceneId}: duration mismatch — section_plan ${s.estimatedDuration_s}s vs narrator ${narratorDur}s (using section_plan)`,
-      );
+    narratorDur = m ? parseFloat(m[0]) : NaN;
+  }
+  let audioDur = NaN;
+  let audioScene = null;
+  if (audioMeta) {
+    audioScene = audioMeta.scenes?.[s.sceneId] || null;
+    if (audioScene && isFinite(audioScene.voiceDuration) && audioScene.voiceDuration > 0) {
+      audioDur = audioScene.voiceDuration;
     }
   }
 
-  // audio merge
-  s.voicePath = "";
-  s.wordsPath = "";
-  if (audioMeta) {
-    const a = audioMeta.scenes?.[s.sceneId];
-    if (a) {
-      if (isFinite(a.voiceDuration) && a.voiceDuration > 0) {
-        s.estimatedDuration_s = a.voiceDuration;
-      }
-      s.voicePath = a.voicePath || "";
-      s.wordsPath = a.wordsPath || "";
-    }
+  // Pick final value by truth ladder.
+  let finalDur = planDur;
+  let source = "section_plan";
+  if (isFinite(audioDur)) {
+    finalDur = audioDur;
+    source = "audio_meta";
   }
+  // Round to 3 decimals — naive cumulative `start_s += dur` accumulates
+  // float error fast enough that lint catches it (2.24 + 6.357 = 8.597000…1
+  // → overlapping_clips_same_track). Round per scene and we emit a
+  // precomputed start_s below so finalize never accumulates.
+  s.estimatedDuration_s = Number(finalDur.toFixed(3));
+
+  // Anomalies: surface cross-stage inconsistencies. audio_meta is truth when
+  // present; plan and narrator are estimates that may legitimately differ within
+  // small tolerances (guide.md §1 lets plan agent keep narrator when audio diff
+  // <10%). Report divergence but don't moralize about it.
+  const pct = (a, b) => (b > 0 ? (Math.abs(a - b) / b) * 100 : 0);
+  if (source === "audio_meta") {
+    if (Math.abs(audioDur - planDur) > 0.01) {
+      const p = pct(audioDur, planDur).toFixed(1);
+      anomalies.push(
+        `${s.sceneId}: audio_meta ${audioDur}s (truth) overrides section_plan ${planDur}s (${p}% diff)`,
+      );
+    }
+    if (isFinite(narratorDur) && Math.abs(audioDur - narratorDur) / audioDur > 0.1) {
+      const p = pct(audioDur, narratorDur).toFixed(1);
+      anomalies.push(
+        `${s.sceneId}: narrator estimate ${narratorDur}s off by ${p}% vs audio_meta ${audioDur}s (truth)`,
+      );
+    }
+  } else if (isFinite(narratorDur) && Math.abs(narratorDur - planDur) > 0.01) {
+    const p = pct(narratorDur, planDur).toFixed(1);
+    anomalies.push(
+      `${s.sceneId}: section_plan ${planDur}s vs narrator ${narratorDur}s (${p}% — no audio_meta available; using section_plan)`,
+    );
+  }
+
+  // audio merge: voice + words paths (independent of duration)
+  s.voicePath = audioScene?.voicePath || "";
+  s.wordsPath = audioScene?.wordsPath || "";
 
   // disk checks (drop missing voice/words paths to empty + record anomaly)
   if (s.voicePath && !existsSync(join(hyperframesDir, s.voicePath))) {
@@ -299,7 +576,7 @@ for (const s of scenes) {
       !existsSync(join(hyperframesDir, cand.path))
     ) {
       anomalies.push(
-        `${s.sceneId}: assetCandidate "${cand.path}" listed in narrator_scripts.json but not in hyperframes/public/ — Phase 4b worker may fail`,
+        `${s.sceneId}: assetCandidate "${cand.path}" listed in narrator_scripts.json but not in public/ — Phase 4b worker may fail`,
       );
     }
   }
@@ -309,6 +586,10 @@ for (const s of scenes) {
 // ---------- Step 6: group by continuity, cap=N ----------
 const groups = [];
 let cur = null;
+// Precomputed cumulative scene start — finalize reads this verbatim instead of
+// accumulating in JS, dodging FP-precision overlaps that lint catches as
+// `overlapping_clips_same_track`.
+let runningStart = 0;
 for (const s of scenes) {
   const startNew = s.continuity === "break" || !cur || cur.scene_ids.length >= scenesPerGroupMax;
   if (startNew) {
@@ -319,18 +600,105 @@ for (const s of scenes) {
       scenes: {},
     };
   }
+  const start_s = Number(runningStart.toFixed(3));
   cur.scene_ids.push(s.sceneId);
   cur.scenes[s.sceneId] = {
+    start_s,
     effects: s.effects,
     rule_paths: s.rule_paths,
     assetCandidates: s.assetCandidates,
     estimatedDuration_s: s.estimatedDuration_s,
     voicePath: s.voicePath,
     wordsPath: s.wordsPath,
+    blueprint: s.blueprint,
+    surface: s.surface,
+    design_chunks: s.design_chunks,
     creative_brief: s.creative_brief,
   };
+  runningStart += s.estimatedDuration_s;
 }
 if (cur) groups.push(cur);
+
+// ---------- Step 6.5: SFX library copy + cue → global timing ----------
+// SFX library is OPT-IN: when orchestrator passes --sfx-lib the directory is
+// copied into <PROJECT_DIR>/assets/sfx/ and section_plan **SFX:** cues are
+// validated against manifest.json. Without --sfx-lib, scene cues are silently
+// dropped (warning only). Voice/bgm live under assets/; SFX matches.
+const sfx = [];
+if (sfxLibDir) {
+  const sfxManifestPath = join(sfxLibDir, "manifest.json");
+  if (!existsSync(sfxManifestPath)) {
+    die(`--sfx-lib points to ${sfxLibDir} but manifest.json is missing`);
+  }
+  let sfxManifest;
+  try {
+    sfxManifest = JSON.parse(readFileSync(sfxManifestPath, "utf8"));
+  } catch (e) {
+    die(`sfx manifest.json parse: ${e.message}`);
+  }
+  // Build filename → { duration, key } lookup so cues can reference by filename
+  // (matching v1 storyboard syntax: `impact-bass-1.mp3` not the manifest key).
+  const sfxByFile = new Map();
+  for (const [key, entry] of Object.entries(sfxManifest)) {
+    if (entry?.file && isFinite(entry.duration)) {
+      sfxByFile.set(entry.file, { key, duration: entry.duration });
+    }
+  }
+
+  // Copy entire SFX directory into <PROJECT_DIR>/assets/sfx/ (mp3 + manifest +
+  // CREDITS). Idempotent: skip files that already exist (e.g. re-runs).
+  const sfxDestDir = join(hyperframesDir, "assets", "sfx");
+  mkdirSync(sfxDestDir, { recursive: true });
+  let sfxCopied = 0;
+  for (const ent of readdirSync(sfxLibDir, { withFileTypes: true })) {
+    if (!ent.isFile()) continue;
+    const src = join(sfxLibDir, ent.name);
+    const dest = join(sfxDestDir, ent.name);
+    if (!existsSync(dest)) {
+      copyFileSync(src, dest);
+      sfxCopied++;
+    }
+  }
+
+  // Resolve each scene's cues against manifest + add scene.start_s offset.
+  for (const g of groups) {
+    for (const sid of g.scene_ids) {
+      const sceneEntry = g.scenes[sid];
+      const sceneCues = scenes.find((x) => x.sceneId === sid)?.sfxCues || [];
+      for (const cue of sceneCues) {
+        const hit = sfxByFile.get(cue.file);
+        if (!hit) {
+          anomalies.push(
+            `${sid}: SFX cue file "${cue.file}" not in manifest — dropping (known files: ${[...sfxByFile.keys()].slice(0, 5).join(", ")}${sfxByFile.size > 5 ? ", …" : ""})`,
+          );
+          continue;
+        }
+        const tGlobal = Number((sceneEntry.start_s + cue.t_local).toFixed(3));
+        sfx.push({
+          file: cue.file,
+          t: tGlobal,
+          duration: hit.duration,
+          volume: cue.volume != null ? cue.volume : 0.35,
+          scene_id: sid,
+          t_local: cue.t_local,
+          note: cue.note || "",
+        });
+      }
+    }
+  }
+  // Sort by global t for predictable index.html emission order.
+  sfx.sort((a, b) => a.t - b.t);
+  console.log(`  sfx lib copied: ${sfxCopied} file(s) → assets/sfx/`);
+} else {
+  // Surface plan cues that won't make it to the timeline because no lib was provided.
+  let droppedCueCount = 0;
+  for (const s of scenes) droppedCueCount += (s.sfxCues?.length || 0);
+  if (droppedCueCount > 0) {
+    anomalies.push(
+      `section_plan declares ${droppedCueCount} SFX cue(s) but --sfx-lib not passed — all cues dropped`,
+    );
+  }
+}
 
 // ---------- Step 7: emit group_spec.json ----------
 const total_duration_s = scenes.reduce((sum, s) => sum + s.estimatedDuration_s, 0);
@@ -360,9 +728,14 @@ const spec = {
   bgm_path,
   font_face_css: fontFaceCss,
   groups,
+  sfx,
 };
 
 writeFileSync(outPath, JSON.stringify(spec, null, 2));
+
+// Captions: written by the Phase 4a.5 captions agent (agent-authored, brand-strict).
+// This script is no longer responsible for caption output — finalize-agent checks
+// for compositions/captions.html existence and emits the track-12 clip if present.
 
 // ---------- Step 8: summary ----------
 console.log(`✓ wrote ${outPath}`);
@@ -370,11 +743,27 @@ console.log(
   `  scenes: ${spec.total_scenes}, groups: ${groups.length}, total: ${spec.total_duration_s}s`,
 );
 console.log(`  bgm: ${bgm_path || "(none)"}`);
+console.log(`  sfx cues:      ${sfx.length}${sfxLibDir ? "" : " (--sfx-lib not passed; cues dropped)"}`);
 console.log(`  assets copied: ${copied} (collisions skipped: ${collisions.length})`);
 console.log(`  fonts copied:  ${fontsCopied}`);
 console.log(
   `  @font-face block: ${fontFaceCss ? `${fontFaceCss.length}B extracted (Phase 4c will inject into index.html <head>)` : "(none — design.html has no auto-injected block)"}`,
 );
+if (chunksIndex) {
+  const totalCompCitations = scenes.reduce(
+    (sum, s) => sum + (s.design_chunks?.components.length || 0),
+    0,
+  );
+  const uniqueComps = new Set();
+  for (const s of scenes) {
+    for (const p of s.design_chunks?.components || []) uniqueComps.add(basename(p, ".html"));
+  }
+  console.log(
+    `  design-chunks:    ${chunksIndex.components?.length || 0} components available, ${totalCompCitations} citation(s) across scenes (unique: ${[...uniqueComps].join(", ") || "none"})`,
+  );
+} else {
+  console.log(`  design-chunks:    none (workers will fall back to design.html)`);
+}
 for (const g of groups) {
   const items = g.scene_ids.map((id) => `${id}(${g.scenes[id].estimatedDuration_s}s)`).join(", ");
   console.log(`  ${g.worker_id}: ${items}`);

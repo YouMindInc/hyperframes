@@ -1,96 +1,123 @@
 # Design System (Phase 1b)
 
-Extract a website's design system into JSON tokens, then synthesize a consolidated brand-themed `design.html` that serves as the **single source of truth** for all design decisions in Phases 3 and 4b of this pipeline.
+合成 `design.html` + 切碎为 `chunks/`。两步确定性脚本（站点 DNA 直接吃 Phase 1 的 `capture/`），preset 选择是 agent 唯一的决策点。
 
-Runs **in parallel with Phase 1 (web-research)** since both only need the target URL.
-
-Output: `./design-system/design.html` (~80KB, 10 sections, brand-themed). Consumed verbatim by Phase 3 (visual-design) and Phase 4b (hyperframes-scene workers).
-
-## Procedure at a glance
-
-1. `npx designlang <url> --out ./design-system` → writes ~30 token JSON files
-2. `node build-design-html.mjs ./design-system` → synthesizes `design.html`
-3. `node download-fonts.mjs ./design-system` → downloads self-hosted brand fonts + injects `@font-face` into design.html
-4. Verify `design.html` exists + report primary/accent hex + fonts
-
-## Workflow (three steps)
-
-### Step 1 — Extract tokens with `designlang`
+## 1. 命令模板
 
 ```bash
 mkdir -p design-system
-npx designlang <url> --out ./design-system
+
+# Step 1 — baseline 推断，写 inference.json，不落 design.html
+# build-design.mjs 默认读 <design-system-dir>/../capture/，与 Phase 1 hyperframes capture 的输出对齐。
+node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system --no-emit
+
+# Step 2 — 见 §3 决策规则
+
+# Step 3 — 用 chosen preset 落 design.html
+node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system --style <chosen>
+
+# Step 4 — 切碎为 chunks/
+node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
 ```
 
-Writes ~30 artifacts including `<domain>-design-tokens.json`, `-motion-tokens.json`, `-visual-dna.json`, `-voice.json`, `-gradients.json`.
+可选 flag：
 
-Useful flags:
+- `build-design --capture <dir>` — 覆盖默认 `<design-system-dir>/../capture/` 路径
+- `build-design --out-scores <file>` — 改 inference.json 落盘路径（默认 `<dir>/inference.json`）
 
-- `--header "Accept-Language:en-US,en;q=0.9"` + `--user-agent "..."` — request English (many CDNs override via geo)
-- `--wait 2000` — wait for JS-heavy hydration before reading computed styles
-- `--smart` — LLM-assisted classifier; needs `ANTHROPIC_API_KEY`; not required
+## 2. inference.json 字段（agent 读这些）
 
-Typical runtime: 30-90s.
-
-### Step 2 — Synthesize `design.html`
-
-```bash
-node <SKILL_DIR>/phases/design-system/scripts/build-design-html.mjs ./design-system
+```jsonc
+{
+  "confidence": "high" | "medium" | "low" | "forced",
+  "baseline_winner": { "name": "...", "combined": 0.XX },
+  "top_candidates": [           // 已满足 capability 的候选，按 combined 降序
+    {
+      "name": "...",
+      "combined": 0.XX,
+      "delta_from_winner": 0.XX,
+      "matched_signals": [...],
+      "best_for": [...],
+      "avoid_for": [...],
+      "sectionA_excerpt": "..."
+    }
+  ],
+  "site_dna": {
+    "material": "flat|paper|glass|...",
+    "imagery": "photography|flat-illustration|...",
+    "page_intent": "landing|pricing|blog|...",
+    "section_role_counts": { "feature-grid": N, ... },
+    "voice_tone": "neutral|warm|formal|...",
+    "voice_heading_style": "Title Case|UPPERCASE|...",
+    "voice_heading_length": "tight|loose"
+  },
+  "capability_gated_presets": [ // 因 runtime / env 缺失被 0 分；可在装齐 capability 后升回 top_candidates
+    {
+      "name": "liquid-glass",
+      "combined_pre_capability": 0.42,
+      "capabilities_missing": [
+        {
+          "kind": "block_installed",
+          "auto_install": "npx hyperframes add liquid-glass-widgets" // 非 null 时 agent 可跑
+        },
+        {
+          "kind": "env_var_set",
+          "var": "PRODUCER_HEADLESS_SHELL_PATH",
+          "auto_install": null // null = 不能自动装
+        }
+      ]
+    }
+  ]
+}
 ```
 
-Auto-detects the file prefix from `*-design-tokens.json`. Writes `<dir>/design.html` and prints a one-line summary.
+## 3. 决策规则（Step 2）
 
-Flags: `--prefix <name>` (override auto-detection), `--out <file>` (override output path).
+按 `confidence` 决定：
 
-### Step 3 — Download self-hosted fonts
+| confidence       | 动作                                |
+| ---------------- | ----------------------------------- |
+| `high`           | 用 `baseline_winner.name` 跑 Step 3 |
+| `medium` / `low` | 进入下面的 override 判据            |
+| `forced`         | 已传 `--style`，跳过 review         |
 
-```bash
-node <SKILL_DIR>/phases/design-system/scripts/download-fonts.mjs ./design-system
+**override 判据**（按优先级）：
+
+1. **避坑**：top_candidates 中任一 preset 的 `avoid_for` 命中 `site_dna` 关键词 → 从候选剔除
+2. **best_for 命中**：剩下的里挑 `best_for` 与 `site_dna` 关键词重合最多的
+3. **capability_gated 选优**：如果某个 gated preset 的 `combined_pre_capability` 已能进 top-3 且 `site_dna` 明显契合（典型 `material: "glass"` → liquid-glass），处理 `capabilities_missing[]`：
+   - `auto_install` 非 null → 跑这条命令 → 重跑 `build-design.mjs --no-emit` 验证它已进 top_candidates → 用 `--style` 选它
+   - `auto_install: null` → 写进 anomaly 汇报，**改选别的 preset**
+4. **无明显赢家** → 保留 baseline_winner
+
+**禁止**：选择必须出自 `top_candidates[]` 或 `capability_gated_presets[]`，不能发明新名字。
+
+## 4. 汇报模板
+
+```
+preset review:
+  baseline: <name> (combined=<X>, confidence=<...>)
+  chosen:   <name>
+  reason:   <一句话，引用 site_dna / best_for / avoid_for 的具体关键词>
+  alternates_considered: [<name1>, <name2>]
+  capability_actions: [<装了什么 block / 哪个 env var 没设>]  # 没动作就写 none
 ```
 
-designlang extracts font-family **names** but does NOT download the actual `.woff2` files. For self-hosted brand fonts (e.g. `TT Norms Pro`, `ABC Solar Display`) that Google Fonts doesn't have, the renderer would otherwise fall back to system fonts and the video typography would not match the brand.
+外加 build-design 和 emit-chunks 两段 stdout 原样贴。
 
-What it does:
+## 5. 硬契约
 
-1. Reads `design.html` to find the source URL (from its AGENT NOTE comment) and the brand font families declared in its `font-family` lines.
-2. Fetches the source URL's HTML + any external stylesheets (capped at 10).
-3. Greps every `@font-face` block, filters to families that match the declared brand fonts, picks the preferred-format URL (woff2 > woff > ttf > otf).
-4. Downloads each file to `design-system/fonts/<family>-<weight>[i].<ext>` (idempotent — cached files are skipped on re-run).
-5. Writes `design-system/fonts/manifest.json` mapping family → [{ file, weight, style }].
-6. **Rewrites `design.html`** — injects `@font-face` rules pointing at relative `fonts/<file>` paths, immediately after the opening `<style>`. Sentinel comments make re-runs idempotent.
+- **`chunks/` 与 `design.html` 同源** — Step 3 重跑后必须重跑 Step 4，否则下游读旧 chunk
+- **Read 范围**：`./design-system/inference.json` + 验合成结果时 `./design-system/design.html`。**不读 capture 的 extracted/ 原始 JSON** —— inference.json 已经按 site_dna 摘要了关键信号
+- **不要自己设计 palette / typography / 字体 / decoration** — 全部由 build-design 写定
+- `--style` 是 deliberate override，agent 必须在跑它之前满足 capability；build-design 在 forced mode 下不再 gate
 
-Phase 4a (`prep.mjs`) then copies `design-system/fonts/*` → `hyperframes/public/fonts/`, so Phase 4b workers' scoped `<style>` blocks (pasted verbatim from design.html) resolve the brand fonts at render time.
+## 6. 排查
 
-If the site uses **only** Google Fonts, the script exits 0 with `no brand fonts to download` — that's fine (Google Fonts already load via design.html's `<head>`).
-
-Typical runtime: 2-15s (network + per-font download).
-
-### One-liner
-
-```bash
-mkdir -p design-system \
-  && npx designlang <url> --out ./design-system \
-  && node <SKILL_DIR>/phases/design-system/scripts/build-design-html.mjs ./design-system \
-  && node <SKILL_DIR>/phases/design-system/scripts/download-fonts.mjs ./design-system
-```
-
-## Output: design.html — section index
-
-| §   | Section           | Contents                                                                                    |
-| --- | ----------------- | ------------------------------------------------------------------------------------------- |
-| 0   | Agent intro       | Contract for downstream agents (Phase 3 + Phase 4b)                                         |
-| 1   | Brand DNA         | Primary, accent, ink, canvas + signature gradient                                           |
-| 2   | Color system      | Swatches + 📦 `:root` CSS variables block                                                   |
-| 3   | Typography        | Display / body / mono roles + 📦 font-family rule                                           |
-| 4   | Border radius     | All extracted radii + 📦 `--r-*` variables                                                  |
-| 5   | Motion            | Easings as SVG curves + 📦 `EASE` / `DUR` JS consts (CSS cubic-bezier → GSAP ease mapping)  |
-| 6   | Visual DNA        | Material (flat/material/glass) + imagery + background pattern                               |
-| 7   | Brand voice       | Tone, heading style, CTAs                                                                   |
-| 8   | Components        | 7 reusable pieces (hero text / chip / button / card / backdrop / eyebrow / stat) — HTML+CSS |
-| 9   | Agent cheat sheet | Per-agent guidance: what visual-design quotes vs what hyperframes-scene pastes              |
-
-## See also
-
-- `phases/web-research/guide.md` — Phase 1 runs in parallel
-- `phases/visual-design/guide.md` — Phase 3 consumes `design.html` as the single source of truth
-- `agents/design-system.md` — Phase 1b dispatch wrapper
+| 现象                                  | 修法                                                                                                                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 抓回非英语 hero                       | 已默认 `Accept-Language: en-US,en;q=0.9`；若仍是本地语言，重跑 Phase 1 capture                                                                 |
+| 抓回空 hero / 占位文字                | 给 capture 加 `--timeout 60000` 重跑；或确认 capture/BLOCKED.md 是否提示反爬                                                                   |
+| Step 4 报缺锚点                       | 重跑 Step 3，确认 design.html 含 ROOT-START / MOTION-START / VOICE-START / COMPONENT 注释；不要修 emit-chunks                                  |
+| `chunks/index.json` 缺 `components[]` | 看 build-design stdout `components: N paste-ready`；N=0 可接受（下游退化为 tokens + easings）                                                  |
+| 推断的 brand primary 颜色不对         | build-design 默认用第一个非中性 button 背景；如果 CTA 颜色不显眼，capture 跑完后手改 `inference.json` 的 site_dna 字段并 `--style` 强制 preset |

@@ -1,487 +1,388 @@
 ---
 name: product-launch-video
-description: End-to-end pipeline that turns a website URL (or product brief) into a 60-90s product-launch / SaaS explainer / promo video as a HyperFrames composition. Phase 1 (web-research, browser capture) and Phase 1b (design-system, brand-token extraction → design.html) run in parallel; Phase 2 (story-design) consumes the research pack to write the narrative + per-scene asset candidates; Phase 3 (visual-design) reads narrator_scripts.json + design.html only (design.html is the single source of truth for palette / typography / motion). Then a parallel HyperFrames build (prep → scene workers fanned out → finalize, where finalize also runs the render). Use when the user provides a URL and asks for a launch video, a promo video, a SaaS explainer, a feature reveal, or otherwise says "make me a video for <url>". You dispatch subagents via the Agent tool; you do NOT execute phase work yourself.
+description: product-launch video workflow — URL → narrator_scripts.json + audio（voice + BGM）+ section_plan.md。
 metadata:
-  tags: orchestrator, pipeline, product-launch, promo, saas-explainer, web-to-video
+  tags: orchestrator, pipeline, product-launch
 ---
 
-# Product Launch Video — Orchestrator
+# launch-video-v2 — dispatch entry
 
-You are the orchestrator. You dispatch one specialized subagent per phase, pass context between them, and handle user interaction. You do **NOT** execute phase work yourself.
+所有 artifact 都写到 `PROJECT_DIR = videos/<project-name>/`（Step 0 建立）。下表路径都相对 `PROJECT_DIR`。
 
-The pipeline separates **workflow-internal phases** (this workflow's owned procedures) from **shared domain skills** (cross-workflow technical references):
+| Phase                | 执行方式                                             | Primary artifact                                           | 详细流程                                             |
+| -------------------- | ---------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
+| init                 | Bash 直跑                                            | `hyperframes.json`                                         | Step 0（本文件）                                     |
+| capture              | Bash 直跑 hyperframes capture                        | `capture/extracted/tokens.json`                            | `phases/capture/guide.md`                            |
+| design-system        | subagent（general-purpose）                          | `design-system/design.html` + `chunks/`                    | `agents/design-system.md`                            |
+| story-design         | subagent（general-purpose）                          | `narrator_scripts.json`                                    | `agents/story-design.md`                             |
+| audio                | Bash 直跑 audio.mjs                                  | `audio_meta.json`                                          | `phases/audio/guide.md`（脚本即流程）                |
+| visual-design        | subagent（general-purpose）                          | `section_plan.md`                                          | `agents/visual-design.md`                            |
+| prep                 | Bash 直跑 prep.mjs                                   | `group_spec.json`                                          | `scripts/prep.mjs`（脚本即流程）                     |
+| captions + scenes    | (N+1)×subagent（general-purpose，同条 message 并行） | `compositions/captions.html` + `compositions/scene_*.html` | `agents/captions.md` · `agents/hyperframes-scene.md` |
+| hyperframes-finalize | subagent（general-purpose）                          | `renders/video.mp4`                                        | `agents/hyperframes-finalize.md`                     |
 
-- **Phases** (this workflow's `phases/` dir — `web-research`, `design-system`, `story-design`, `audio`, `visual-design`) — each phase has its own `guide.md` + supporting scripts / archetypes / rules / references. They are NOT standalone skills; they exist only as part of this pipeline. All capture, token-extraction, and design tooling lives under `phases/` — there are no cross-skill dependencies for the pre-build stages.
-- **Domain skills** (top-level, cross-workflow) — `/hyperframes-core`, `/hyperframes-animation`, `/hyperframes-cli`, `/hyperframes-media`, `/hyperframes-registry`. These are loaded by Phase 4 only and describe general HyperFrames technical capabilities.
-- **Subagent prompts** (this skill's `agents/` dir) — pipeline-specific wrappers. Each says "you are Phase N of THIS pipeline, here's your cwd contract, read this guide, here's how to report". You inject these as the `prompt` to the Agent tool.
+## 前置依赖（首次运行必装）
 
-## Pipeline
-
-| Phase | Subagent prompt file              | Subagent reads / loads                                                                                                 | Writes                                                                                         |
-| ----- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1     | `agents/web-research.md`          | `phases/web-research/guide.md` (+ capture script)                                                                      | `research/` (context_pack.md, extraction.json, assets/, screenshot_full.png, page.html)        |
-| 1b    | `agents/design-system.md`         | `phases/design-system/guide.md` (+ build script)                                                                       | `design-system/` (design.html + ~30 token JSON files)                                          |
-| 2     | `agents/story-design.md`          | `phases/story-design/guide.md` (+ archetypes) + `research/`                                                            | `narrator_scripts.json` (includes `assetCandidates` per scene)                                 |
-| 2.5   | `scripts/audio.mjs` (no subagent) | `narrator_scripts.json`                                                                                                | `audio_meta.json` + `hyperframes/assets/voice/*` + `hyperframes/assets/bgm.wav` (BGM detached) |
-| 3     | `agents/visual-design.md`         | `phases/visual-design/guide.md` (+ rules + effects-catalog.md) + `narrator_scripts.json` + `design-system/design.html` | `section_plan.md`                                                                              |
-| 4a    | `scripts/prep.mjs` (no subagent)  | section_plan.md + narrator_scripts.json + audio_meta.json (optional) + `research/assets/`                              | `group_spec.json` + `hyperframes/public/`                                                      |
-| 4b    | `agents/hyperframes-scene.md` × N | `/hyperframes-core` + `/hyperframes-animation` (Skill tool) + `design-system/design.html`                              | `hyperframes/compositions/scene_*.html`                                                        |
-| 4c    | `agents/hyperframes-finalize.md`  | `/hyperframes-core` + `/hyperframes-cli` (Skill tool)                                                                  | `hyperframes/index.html` + gates + `hyperframes/renders/video.mp4`                             |
-
-**Phase 1 ‖ Phase 1b run in parallel** — both only need the target URL and write disjoint directories (`research/` vs `design-system/`). Orchestrator launches both subagents in ONE assistant message, **both with `run_in_background: true`**. Phase 2 (story-design) cannot start until **both** finish.
-
-**Phase 2.5 ‖ Phase 3 run in parallel** — orchestrator **launches both simultaneously**: ONE assistant message containing TWO tool_use blocks (a `Bash` for `audio.mjs` + an `Agent` for visual-design), **both with `run_in_background: true`**. They share `narrator_scripts.json` (read-only for both) and write disjoint files. Phase 4a merges `audio_meta.json` into `group_spec.json` so workers + finalize see the real `voiceDuration`. **Lyria BGM is spawned detached by `audio.mjs` and may finish minutes after the script exits** — `audio_meta.bgm_pending: true` signals this; Phase 4c re-checks `bgm.wav` on disk before emitting the `<audio>` element.
-
-> ❌ **Critical anti-pattern**: do NOT issue Phase 1 first, wait for it to finish, then issue Phase 1b (nor 2.5 then 3). That serializes a flow that's designed parallel and adds 30-90s of wall-clock waste. Each parallel pair MUST be in the same assistant message, both with `run_in_background: true`. The same rule applies to Phase 4b's N scene workers.
-
-Phases 1–3 read **local files** (`phases/<name>/guide.md`). Phase 4 loads **shared domain skills** via the Skill tool. Phase 4b also reads `design-system/design.html` for `:root` tokens and component HTML+CSS.
-
-Phase 4 is split into three flat sub-phases so the orchestrator can fan out N scene workers **in parallel** in 4b. Each worker writes 1–2 scenes with a tiny per-worker context — only the rule bodies it owns, no `section_plan.md` walk, no asset copy, no gates.
-
-## Project layout
-
-```
-./                                       # project root (cwd — never leave)
-├── context.log                           # phase log (you append after each phase)
-├── narrator_scripts.json                 # Phase 2 output
-├── audio_meta.json                       # Phase 2.5 output (side file, do NOT mutate narrator_scripts.json)
-├── section_plan.md                       # Phase 3 output
-├── group_spec.json                       # Phase 4a output (scene groups + per-scene paths + audio refs)
-├── research/                             # Phase 1 output (web-research)
-├── design-system/                        # Phase 1b output (design.html + token JSON files)
-└── hyperframes/                          # Phase 2.5 + Phase 4 outputs
-    ├── public/                            # Phase 4a (bulk-copied visual assets)
-    ├── assets/
-    │   ├── voice/scene_*.wav              # Phase 2.5 (TTS narration)
-    │   ├── voice/scene_*_words.json       # Phase 2.5 (Whisper word-level timestamps)
-    │   └── bgm.wav                        # Phase 2.5 (Lyria BGM, optional)
-    ├── compositions/scene_*.html          # Phase 4b (parallel workers)
-    ├── index.html                         # Phase 4c (clip refs + <audio> tracks)
-    ├── snapshots/                         # Phase 4c (visual smoke test)
-    └── renders/video.mp4                  # Phase 4c (final render — finalize owns it end-to-end)
-```
-
-## Dispatch pattern (the "injection")
-
-For Phases 1–4, the dispatch is always the same shape:
-
-1. **Read** the subagent prompt file at `agents/<phase>.md` (relative to this SKILL.md's location).
-2. **Construct the Agent tool's `prompt`** by concatenating:
-   - The full contents of `agents/<phase>.md` (the wrapper)
-   - A `## Dispatch context` section with this run's data (target URL, prev-phase summary, etc.)
-3. **Call Agent** with `subagent_type: "general-purpose"`, that prompt, and a short `description`.
-
-The subagent gets a fresh context. Its first action depends on the phase:
-
-- **Phases 1-3** — Read `<SKILL_DIR>/phases/<phase-name>/guide.md` (the orchestrator injects `<SKILL_DIR>` as an absolute path in the Dispatch context).
-- **Phase 4** — Load the relevant domain skills via the Skill tool (`hyperframes-core`, `hyperframes-animation`, etc.).
-
-It then follows the guide / skill procedure with this pipeline's contract overlaid (cwd rules, out-of-scope flags, output filenames, when-done reporting).
-
-## Mode detection (do this BEFORE dispatching)
-
-Read `./context.log` if it exists:
-
-- **Missing or empty** → first run. Dispatch **(1 ‖ 1b in parallel)** → 2 → **(3 ‖ 2.5 in parallel)** → 4a → 4b (parallel fan-out) → 4c in order (autopilot). Phase 4c produces and verifies the final mp4 — no separate render step.
-- **Has completed phases, last entry not `[interrupted]`** → interactive mode (user is iterating). Dispatch only the phase relevant to their request, then any downstream cascade.
-- **Last entry ends with `[interrupted]`** → resume from that phase. Inspect disk to decide where to pick up:
-  - For Phase 1 / 1b interruptions: if one of (`research/context_pack.md` / `design-system/design.html`) is missing, re-dispatch only the missing phase (the other is unaffected and stays on disk).
-  - `research/` + `design-system/design.html` both present, no `narrator_scripts.json` → resume from Phase 2.
-  - `narrator_scripts.json` present, no `audio_meta.json` and no `section_plan.md` → resume parallel (3 ‖ 2.5)
-  - One of (`audio_meta.json` / `section_plan.md`) present, other missing → resume just the missing one
-  - Both audio + section_plan present, no `group_spec.json` → resume from Phase 4a
-  - Only `group_spec.json` present, no `compositions/` files → resume from Phase 4b
-  - Some `compositions/scene_*.html` present, not all → resume Phase 4b for the missing scene_ids only (one Agent call per missing scene)
-  - All scene files present, no `hyperframes/renders/video.mp4` (or mp4 corrupted) → resume from Phase 4c
-
-If audio is intentionally skipped (user said "no audio" or env lacks all TTS providers): orchestrator omits the `audio.mjs` Bash call and proceeds directly from Phase 2 → Phase 3 → 4a. Phase 4a tolerates a missing `audio_meta.json` and falls back to `estimatedDuration` everywhere.
-
-## Phase 1 ‖ Phase 1b — dispatch web-research + design-system in parallel
-
-Phase 1 (web-research, page capture) and Phase 1b (design-system, brand-token extraction) both only need the target URL and write to disjoint directories (`research/` vs `design-system/`). Both must complete before Phase 2 can start. The orchestrator launches them in ONE assistant message with TWO `Agent` tool_use blocks, both with `run_in_background: true`.
-
-### Phase 1 — web-research dispatch
-
-```
-1. Read product-launch-video/agents/web-research.md
-2. Compose prompt = <its contents>
-                  + "\n\n## Dispatch context\n"
-                  + "SKILL_DIR: <abs-path-to-this-skill>\n"
-                  + "Target URL: <USER_URL>\n"
-3. Agent block:
-     subagent_type: "general-purpose",
-     description: "Phase 1: web research",
-     prompt: <composed>,
-     run_in_background: true,    ← MANDATORY for parallelism
-```
-
-The subagent reads `<SKILL_DIR>/phases/web-research/guide.md` and runs the capture script with `--out ./research --download-assets`. Output: `research/context_pack.md`, `research/extraction.json`, `research/screenshot_full.png`, `research/page.html`, `research/assets/`. The phase does **NOT** generate an `analysis.json` — analysis is fused into Phase 2 (story-design).
-
-### Phase 1b — design-system dispatch
-
-```
-1. Read product-launch-video/agents/design-system.md
-2. Compose prompt = <its contents>
-                  + "\n\n## Dispatch context\n"
-                  + "SKILL_DIR: <abs-path-to-this-skill>\n"
-                  + "Target URL: <USER_URL>\n"
-3. Agent block:
-     subagent_type: "general-purpose",
-     description: "Phase 1b: design system",
-     prompt: <composed>,
-     run_in_background: true,    ← MANDATORY for parallelism
-```
-
-The subagent reads `<SKILL_DIR>/phases/design-system/guide.md` and runs `npx designlang` + `build-design-html.mjs`. Output: `design-system/design.html` plus ~30 token JSON sidecar files. **`design.html` is the single source of truth for all design decisions in Phases 3 and 4b** — palette, typography, motion eases, and component HTML+CSS are all defined there.
-
-### Dispatch both in ONE message — concrete shape
-
-The first autopilot turn after the user provides a URL MUST look like this:
-
-```
-<one sentence text: "Dispatching web-research + design-system subagents in parallel.">
-<tool_use block 1: Agent(... Phase 1 web-research, run_in_background: true)>
-<tool_use block 2: Agent(... Phase 1b design-system, run_in_background: true)>
-<tool_use block 3 (optional): Bash(model pre-warm, run_in_background: true)>
-```
-
-Two `Agent` blocks, same message, both backgrounded. Then stop emitting tool calls in that turn — the next turn is when results come back.
-
-**Self-check before sending**: is your draft about to emit only ONE block, planning to launch the other after? STOP — reconstruct as two blocks in this same message. That intent is the exact serialization bug this section exists to prevent.
-
-### Model pre-warm (optional, fire-and-forget)
-
-**While dispatching Phase 1 + 1b, kick off model pre-warm in background** so Kokoro + Whisper models are loaded into the OS page cache by the time Phase 2.5 needs them. This is fire-and-forget — failures are silent and harmless. Use a single Bash with `run_in_background: true` in the **same assistant message** as the Phase 1 + 1b dispatches:
+macOS Apple Silicon 或 Linux x64。系统工具：
 
 ```bash
-( WARM_DIR=$(mktemp -d) && \
-  echo "warm" > "$WARM_DIR/warm.txt" && \
-  npx hyperframes tts "$WARM_DIR/warm.txt" --output "$WARM_DIR/warm.wav" > /dev/null 2>&1 && \
-  npx hyperframes transcribe "$WARM_DIR/warm.wav" --model small.en --output "$WARM_DIR/warm.json" > /dev/null 2>&1; \
-  rm -rf "$WARM_DIR" ) || true
+brew install python@3.11 node ffmpeg                   # Linux 用 apt/dnf 等价命令
+npx hyperframes doctor                                  # 一次性确认 Chrome / 依赖齐了
 ```
 
-(Skip the pre-warm if the user has explicitly asked for "no audio" — there's nothing to warm.)
+- `python@3.11`（**用 homebrew python，别用系统 `/usr/bin/python3`**，否则 `pip install` 会被 PEP-668 拦；audio 阶段 MusicGen fallback 用）
+- `node ≥ 18` —— `npx hyperframes` 用
+- `ffmpeg` —— audio.mjs 用 `ffprobe` 取 voice duration
+- `hyperframes` CLI —— Phase 1 capture + design-system 共用同一份抓取，首次运行 `npx hyperframes capture` 时浏览器管理器会自动下载 Chrome
 
-### After both Phase 1 + 1b return
+可选 API key（不设走本地 fallback）。注入见 Step 0.5。`GEMINI_API_KEY` 和 `GOOGLE_API_KEY` 是等价别名。
 
-Verify on disk:
+| Key                             | 用在                                     | 默认 voice / fallback                                              |
+| ------------------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| `HEYGEN_API_KEY`                | TTS（云端，带 word-level timestamps）    | voice `1bd001e7e50f421d891986aad5158bc8`                           |
+| `ELEVENLABS_API_KEY`            | TTS（云端；需 `pip install elevenlabs`） | voice `21m00Tcm4TlvDq8ikWAM` (Rachel)                              |
+| 都不设                          | TTS                                      | 本地 Kokoro，voice `am_michael`（非英文需 `--voice`）              |
+| `GEMINI_API_KEY` (一把钥匙两用) | Capture vision caption + Lyria BGM       | 不设 → caption 仅 DOM 上下文；BGM 走本地 MusicGen（首次拉 ~300MB） |
+
+## 流程
+
+### Step 0 — 初始化视频项目
+
+cwd 是 agent workspace root（如 `/tmp/launch-video-202347`），只放 `.claude/skills/`、`node_modules/` 等 harness 状态。所有视频产物写到子目录 `PROJECT_DIR = videos/<project-name>/`。
+
+**`<project-name>` 命名**：
+
+- 用户 prompt 显式给目录（如 `Use ./videos/acme-launch`）→ 直接用
+- 否则 orchestrator 自选：短、语义清楚的 kebab-case，如 `<brand>-promo` / `<product>-launch`。**不要**用 workspace basename / 时间戳（`launch-video-204613` ❌）
+- 仅有 URL 时可先用域名/页面标题；`capture/` 写入前可以改名，写入后定型
+
+**初始化**（仅当 `$PROJECT_DIR/hyperframes.json` 不存在）：
 
 ```bash
-[ -s research/context_pack.md ] && [ -s research/extraction.json ] && [ -s design-system/design.html ] && echo "ok" || echo "missing artifacts"
+PROJECT_DIR="${LAUNCH_VIDEO_DIR:-videos/<project-name>}"
+mkdir -p "$(dirname "$PROJECT_DIR")"
+npx hyperframes init "$PROJECT_DIR" --non-interactive --skip-skills --example=blank
+rm -f "$PROJECT_DIR/AGENTS.md" "$PROJECT_DIR/CLAUDE.md"   # workflow 约束已在本 skill 内，不依赖 project 内 helper docs
 ```
 
-If `design-system/design.html` is missing, Phase 1b failed — read its report and decide whether to re-dispatch Phase 1b only, or proceed without it (in which case Phase 3 and 4b must fall back to defaults; this is a degraded mode, warn the user). If `research/` artifacts are missing, re-dispatch Phase 1 only.
+**约束**（违反一项后续 phase 会找不到产物 / 触发 lint 报错）：
 
-Relay key facts to the user (page captured, asset count under `research/assets/`, primary/accent hex from design.html, fonts chosen). Proceed to Phase 2.
+- 不在 workspace root 跑 `hyperframes init` / 生成 `AGENTS.md` / `CLAUDE.md`
+- 不在 `PROJECT_DIR` 下再建 `hyperframes/` 子项目
+- 所有 subagent 的 Dispatch context 含一行 `PROJECT_DIR: <path>`；subagent 把它当 project root，Bash 用 `(cd "$PROJECT_DIR" && ...)` subshell
 
-## Phase 2 — dispatch story-design
+**目录形态**：
 
+```text
+./                            # workspace root
+├── .claude/skills/
+├── node_modules/
+├── package.json
+└── videos/<project-name>/    # PROJECT_DIR — HyperFrames project root
+    ├── hyperframes.json
+    ├── context.log
+    ├── capture/              # hyperframes capture artifacts (replaces v2 的 research/)
+    │   ├── extracted/        # tokens / design-styles / animations / fonts-manifest / asset-descriptions / video-manifest / visible-text
+    │   ├── assets/           # 媒体 + svgs/ + fonts/ + videos/previews/ + contact sheets
+    │   ├── screenshots/      # scroll-*.png + contact-sheet-*.jpg
+    │   └── meta.json
+    ├── design-system/        # build-design 产物（由 capture 喂养）
+    │   ├── inference.json
+    │   ├── design.html
+    │   ├── chunks/
+    │   └── fonts/            # 自托管字体（build-design 从 capture 拷出来）
+    ├── narrator_scripts.json
+    ├── audio_meta.json
+    ├── section_plan.md
+    ├── group_spec.json
+    ├── public/  assets/  compositions/  snapshots/
+    └── renders/video.mp4
 ```
-1. Read product-launch-video/agents/story-design.md
-2. Compose prompt = <its contents>
-                  + "\n\n## Dispatch context\n"
-                  + "SKILL_DIR: <abs-path-to-this-skill>\n"
-                  + "Phase 1 + 1b summary: <one-paragraph: page captured, asset count under research/assets/, hero candidates seen in context_pack.md; design.html primary/accent hex, font choices>\n"
-                  + "Schema validator: <SKILL_DIR>/scripts/validate-narrator-scripts.mjs\n"
-3. Agent(
-     subagent_type: "general-purpose",
-     description: "Phase 2: story design",
-     prompt: <composed>,
-   )
-```
 
-`<SKILL_DIR>` is the absolute path of the directory containing this SKILL.md. The subagent uses it to (a) read `phases/story-design/guide.md`, and (b) invoke `node <SKILL_DIR>/scripts/...` validators directly.
+### Step 0.5 — API key 引导
 
-After it returns — **machine-validate before continuing**:
+**跳过条件**：`$PROJECT_DIR/.env` 已存在，或 `context.log` 非空（= 不是首次）。否则把下面这段说给用户：
 
-```bash
-node <SKILL_DIR>/scripts/validate-narrator-scripts.mjs ./narrator_scripts.json
-```
-
-- Exit 0 → surface archetype + scene list to the user, proceed to Phase 3.
-- Exit 1 → re-dispatch Phase 2 with the validator's stderr appended to the Dispatch context as "Schema errors to fix: <stderr>". Do NOT advance to Phase 3 on a failed schema — Phase 3 reads these field names and will silently produce wrong output.
-
-The subagent is also instructed (in `agents/story-design.md`) to self-validate before reporting done, so this is a double check, not the primary gate.
-
-## Phase 2.5 ‖ Phase 3 — run `audio.mjs` (Bash) + dispatch visual-design (Agent) in parallel
-
-After Phase 2 returns clean, **launch two things in parallel**: a Bash invocation of `audio.mjs` for Phase 2.5 and an Agent dispatch for Phase 3 visual-design. They share `narrator_scripts.json` (read-only) and write disjoint files (`audio_meta.json` + `hyperframes/assets/*` vs `section_plan.md`).
-
-**Phase 2.5 is no longer a subagent** — it's a deterministic script that:
-
-- detects TTS provider (`$ELEVENLABS_API_KEY` + python `elevenlabs` import → ElevenLabs, else Kokoro)
-- pipelines per-scene TTS → transcribe (each scene's whisper run starts the moment its own TTS finishes; doesn't wait for siblings)
-- spawns Lyria BGM **detached** in the background and **returns immediately** when voice work is done — BGM may finish minutes later. `audio_meta.json` sets `bgm_pending: true` so prep.mjs trusts the path and Phase 4c does the final on-disk check before render.
-
-**Mechanics (non-negotiable)**:
-
-1. **ONE assistant message** with **TWO tool_use blocks**: one Bash + one Agent.
-2. **Both calls pass `run_in_background: true`** — without this flag, Claude defaults to foreground (blocking) mode and the second call waits for the first to complete, serializing the flow.
-3. Issue both the moment Phase 2's schema validator exits 0. Do NOT pause for user confirmation between Phase 2 and this parallel pair.
-4. After issuing both, you will be auto-notified as each completes. Do not poll, sleep, or check on progress proactively.
-
-> ❌ **Anti-pattern (the documented Claude Code default behavior)** — see [GitHub issue #29181](https://github.com/anthropics/claude-code/issues/29181):
+> 这个流程能可选接 3 类云端 key，都不设也能跑（走本地 fallback）：
 >
-> ```
-> assistant: <text> + Bash(audio.mjs, run_in_background=false)     ← message 1
-> [waits 30-60s for Phase 2.5 to finish]
-> assistant: <text> + Agent(Phase 3,  run_in_background=false)     ← message 2
-> ```
+> - **TTS**：`HEYGEN_API_KEY`（带 word-level 时间戳）/ `ELEVENLABS_API_KEY` / 不设 → Kokoro 本地
+> - **Capture + BGM**：`GEMINI_API_KEY` 一把钥匙两用（图片 vision caption + Lyria BGM；`GOOGLE_API_KEY` 是等价别名）/ 不设 → DOM 描述 + 本地 MusicGen
 >
-> This serializes a flow that's designed parallel and adds 30-90s wall-clock waste. The orchestrator MUST consciously override the conservative-serial default; that is exactly what `run_in_background: true` + same-message dispatch are for.
+> 怎么回我：
+>
+> - 粘 key → 我写到 `$PROJECT_DIR/.env`
+> - "go" → 我假设已经设好了（shell `export` 或 `.env`）
+> - "skip" → 全部走本地 fallback
 
-If the user has explicitly asked for "no audio" (or no TTS provider is available at all in this environment), **skip the Phase 2.5 Bash call entirely** — dispatch Phase 3 only. Downstream phases tolerate a missing `audio_meta.json` (Phase 4a's `prep.mjs` falls back to `estimatedDuration` everywhere).
+**回应处理**：
 
-### Phase 2.5 (audio) — Bash command
+- 粘 key → Write/Edit 到 `$PROJECT_DIR/.env`，`KEY=value` 一行一条；同名覆盖。不评判、不换路径。
+- "go" / "skip" / "已经设好了" → 直接进 Step 1。
+
+### Step 1 — 抓取（Phase 1）
+
+1. 解析 `SKILL_DIR` 和 `TARGET_URL`。
+2. 按 Step 0 解析并确保 `PROJECT_DIR` 存在。
+3. 读 `$PROJECT_DIR/context.log`（若存在），按下方 Resume 表跳过已完成 phase。
+4. **Bash 直跑** hyperframes capture（**不再分两条并行 branch** —— design-system 现在直接吃 capture 产物）：
 
 ```bash
-node <SKILL_DIR>/scripts/audio.mjs \
+(cd "$PROJECT_DIR" && npx hyperframes capture "<TARGET_URL>" -o ./capture)
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/derive-context-pack.mjs --capture ./capture)
+```
+
+抓取产物：`capture/extracted/{tokens,design-styles,animations,fonts-manifest,asset-descriptions,video-manifest,visible-text}.{json,md,txt}` + `capture/assets/` + `capture/screenshots/` + `capture/context_pack.md`（derive-context-pack 合成的 LLM brief，Phase 2 / Phase 3 直接读）。
+
+校验：
+
+```bash
+[ -s "$PROJECT_DIR/capture/extracted/tokens.json" ] && \
+[ -s "$PROJECT_DIR/capture/extracted/design-styles.json" ] && \
+[ -s "$PROJECT_DIR/capture/context_pack.md" ] && \
+[ -d "$PROJECT_DIR/capture/assets" ] && echo ok || echo missing
+```
+
+缺任一 → 报错，停止。`capture/BLOCKED.md` 存在 = 反爬 / 超时，按里面说明排查。
+
+### Step 1b — 视觉系统（Phase 1b）
+
+capture 退 0 后启动 design-system subagent：
+
+- design-system：`Agent`（`subagent_type: "general-purpose"`），prompt = `agents/design-system.md` 内容 + `## Dispatch context`（含 `SKILL_DIR`、`PROJECT_DIR`、`Target URL`）。
+
+agent 跑 `build-design.mjs --no-emit` → review `inference.json` → 选 preset → `build-design.mjs --style <chosen>` → `emit-chunks.mjs`。Captions 的样式不在这里决定 —— 改由 Step 5.5 的 captions agent 直接读 `chunks/tokens.css` 现写 `compositions/captions.html`（agent-authored，无 registry 组件、无 builder 脚本）。
+
+### Step 2 — 故事设计（Phase 2）
+
+design-system 返回后，验证 `design-system/design.html` + `design-system/chunks/index.json` 存在，再启动：
+
+- story-design：`Agent`（`subagent_type: "general-purpose"`），prompt = `agents/story-design.md` 内容 + `## Dispatch context`：
+  ```
+  SKILL_DIR: <绝对路径>
+  PROJECT_DIR: <视频项目根>
+  Schema validator: <SKILL_DIR>/scripts/validate-narrator-scripts.mjs
+  Scene limit: 最多 4 个 scene
+  Script style: 每个 scene 的 script 保持简短——1-2 句话，不超过 20 个词
+  ```
+
+### Step 3 — 音频（Phase 2.5）
+
+story-design 返回且 `narrator_scripts.json` 存在后，启动：
+
+```bash
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/audio.mjs \
   --narrator-scripts ./narrator_scripts.json \
-  --hyperframes ./hyperframes \
+  --hyperframes . \
   --out ./audio_meta.json \
-  --lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py
+  --lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py)
 ```
 
-`audio.mjs` infers a BGM mood from `narrator_scripts.json` content directly (project + archetype + arc + per-scene script and intent fields). Use `--bgm-prompt "<text>"` to override the inferred mood.
+**BGM 前置条件**（满足其一即可，否则 BGM 静默跳过，voice 照常生成）：
 
-Optional flags:
+- `$GOOGLE_API_KEY` 已设置 + `--lyria-recipe` 路径存在 → Lyria 云端生成（detached，后台运行）
+- `pip install transformers torch soundfile` 已装（本地，免费）→ MusicGen via HuggingFace transformers 本地生成（首次运行下载 ~300MB 模型）。脚本会在 TTS 跑的同时后台 pip-install 缺失的包。
 
-- `--voice <id>` — override default voice (Kokoro default `am_michael`; ElevenLabs default `21m00Tcm4TlvDq8ikWAM`).
-- `--provider kokoro|elevenlabs` — force a provider (else auto-detect from env).
-- `--lang <iso>` — non-English (e.g. `--lang zh`); requires explicit `--voice` for Kokoro.
-- `--no-bgm` — skip BGM entirely.
-- `--bgm-prompt "<prompt>"` — override the auto-inferred brand-mood BGM prompt.
+可选 flags（默认不需要）：
 
-The script exits 0 once voice + transcribe + ffprobe are done. BGM keeps rendering in the background; the orchestrator does NOT need to wait for it. Exit 1 means zero scenes got voice — read stderr and decide whether to retry (e.g. install missing TTS deps) or proceed without audio.
+- `--voice <id>` — 默认 HeyGen `1bd001e7e50f421d891986aad5158bc8` / ElevenLabs `21m00Tcm4TlvDq8ikWAM` / Kokoro `am_michael`
+- `--provider heygen|elevenlabs|kokoro` — 强制 TTS provider（不传 = 按 env 自动选）
+- `--no-bgm` — 跳过 BGM
+- `--bgm-prompt "<text>"` — 覆盖自动推断的 BGM mood
 
-### Phase 3 (visual-design) — Agent dispatch
+exit 0 → voice + transcribe 完成（BGM 可能仍在后台渲染），继续。
+exit 1 → 零场景拿到 voice，报告错误，停止。
 
-```
-1. Read product-launch-video/agents/visual-design.md
-   Read product-launch-video/phases/visual-design/effects-catalog.md   ← inlined into Dispatch context
-2. Compose prompt = <wrapper contents>
-                  + "\n\n## Dispatch context\n"
-                  + "SKILL_DIR: <abs-path-to-this-skill>\n"
-                  + "Phase 2 summary: <archetype + scene count + emotional arc>\n"
-                  + "Design system: ./design-system/design.html  (Phase 1b output — single source of truth for palette/typography/motion)\n"
-                  + "Schema validator: <SKILL_DIR>/scripts/validate-section-plan.mjs\n"
-                  + "\n## Effects catalog (single source of truth — your `**Effects:**` anchor lines must cite ids from this list)\n\n"
-                  + <effects-catalog.md contents>
-3. Agent block:
-     subagent_type: "general-purpose",
-     description: "Phase 3: visual design",
-     prompt: <composed>,
-     run_in_background: true,    ← MANDATORY for parallelism
-```
+### Step 4 — 视觉设计（Phase 3）
 
-The subagent reads `narrator_scripts.json` (for scenes + assetCandidates) AND `design-system/design.html` (for actual brand palette/fonts/easing). Section_plan.md must quote real hex values from design.html, not invented ones.
-
-### Dispatch both in ONE message — concrete shape
-
-The assistant turn that fires after Phase 2 validator passes MUST look like this:
-
-```
-<one sentence text: "Running audio.mjs + dispatching visual-design subagent in parallel.">
-<tool_use block 1: Bash(node <SKILL_DIR>/scripts/audio.mjs ..., run_in_background: true)>
-<tool_use block 2: Agent(... Phase 3 ..., run_in_background: true)>
-```
-
-Two tool_use blocks, same message, both backgrounded. Then **stop emitting tool calls in that turn** — the next turn is when their results come back.
-
-Self-check before you hit "send": is your draft assistant message about to emit only ONE block, with the intent of "I'll launch the other after this one finishes"? **STOP and reconstruct as two blocks in this same message.** That intent is the exact bug this section exists to prevent.
-
-### After both return
-
-1. Run the Phase 3 schema validator:
-
-   ```bash
-   node <SKILL_DIR>/scripts/validate-section-plan.mjs ./section_plan.md
-   ```
-
-   - Exit 0 → continue
-   - Exit 1 → re-dispatch Phase 3 (only) with stderr appended; Phase 2.5's output is unaffected and stays on disk.
-
-2. Sanity-parse the audio side file (if it was produced):
-   ```bash
-   [ -f audio_meta.json ] && python3 -m json.tool < audio_meta.json > /dev/null
-   ```
-3. Surface to user: scene list (from section_plan), TTS provider + voice (from audio_meta), BGM status (`bgm_pending: true` means Lyria is still rendering in the background — that's expected, not an error), any scenes missing voice.
-
-Then proceed to Phase 4a.
-
-**Why pre-inject the effects catalog**: ~67 lines copied once into Dispatch context saves the Phase 3 subagent one Read round-trip and pins the catalog into the same context window as its instructions.
-
-The Phase 3 validator (`scripts/validate-section-plan.mjs`) asserts every effect name cited in `section_plan.md` exists in `skills/hyperframes-animation/rules/`. The "After both return" step above runs it; do NOT advance to Phase 4 on a non-zero exit — the build agent will hunt for non-existent rules and waste a phase.
-
-## Phase 4 — three flat sub-phases with parallel fan-out in 4b
-
-Phase 4 used to be one monolithic agent writing N scenes serially. It's now `prep → scene fan-out → finalize` so worker contexts stay tiny and scene authoring runs in parallel.
-
-### Phase 4a — run `prep.mjs` directly (no subagent)
-
-Phase 4a is **deterministic** — `section_plan.md` carries the `**Continuity:**` anchor that Phase 3 owns, and `prep.mjs` packs scenes into worker groups by it. Assets for each scene come from `narrator_scripts.json`'s `assetCandidates[]` (forwarded verbatim to the Phase 4b worker). No LLM judgment needed; no Agent dispatch. The orchestrator runs one Bash command:
+audio 完成且 `audio_meta.json` 存在后，读取 effects-catalog 与 blueprints-index：
 
 ```bash
-node <SKILL_DIR>/scripts/prep.mjs \
+cat <SKILL_DIR>/phases/visual-design/effects-catalog.md
+cat <SKILL_DIR>/phases/visual-design/blueprints-index.md
+```
+
+然后启动 visual-design subagent：
+
+- visual-design：`Agent`（`subagent_type: "general-purpose"`），prompt = `agents/visual-design.md` 内容 + `## Dispatch context`：
+  ```
+  SKILL_DIR: <绝对路径>
+  PROJECT_DIR: <视频项目根>
+  Schema validator: <SKILL_DIR>/scripts/validate-section-plan.mjs
+  SFX manifest: <SKILL_DIR>/assets/sfx/manifest.json
+  ## Effects catalog
+  <effects-catalog.md 全文>
+  ## Blueprints index
+  <blueprints-index.md 全文>
+  ```
+
+### Step 5 — Phase 4a prep（deterministic script，NO subagent）
+
+Phase 3 visual-design 退出且 `section_plan.md` 存在后，跑 `prep.mjs` 合并所有上游产物为 `group_spec.json`，供 Phase 4b/4c 消费：
+
+```bash
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/prep.mjs \
   --section-plan ./section_plan.md \
   --narrator-scripts ./narrator_scripts.json \
   $( [ -f audio_meta.json ] && echo "--audio-meta ./audio_meta.json" ) \
   --rules-dir <SKILL_DIR>/../hyperframes-animation/rules \
-  --research ./research \
+  --capture ./capture \
   --design-system ./design-system \
-  --hyperframes ./hyperframes \
-  --out ./group_spec.json
+  --hyperframes . \
+  --sfx-lib <SKILL_DIR>/assets/sfx \
+  --out ./group_spec.json)
 ```
 
-The script:
+脚本做什么：
 
-1. Scaffolds `hyperframes/` via `npx hyperframes init … --example blank --non-interactive --skip-skills` if the dir is missing.
-2. Recursively copies `research/**/*.{png,jpg,jpeg,webp,svg}` into `hyperframes/public/` with first-wins semantics (collisions skipped, reported). Asset basenames must match the `assetCandidates[].path` values that story-design wrote into `narrator_scripts.json`.
-3. Copies `design-system/fonts/*.{woff2,woff,ttf,otf}` into `hyperframes/public/fonts/` (if any — Phase 1b's `download-fonts.mjs` writes them there). Phase 4b workers paste design.html's `@font-face` rules into each scene's scoped `<style>`; those rules reference these files.
-4. Parses each `## Scene N:` block's three anchors (`Effects` / `Duration` / `Continuity`) — missing or malformed anchor → exit 1.
-5. Resolves `effects` ids to `<rules-dir>/<id>.md` and `statSync`-verifies each — missing rule → exit 1.
-6. Merges `audio_meta.json` if present (`voiceDuration` wins over the section_plan duration; captures `voicePath` / `wordsPath` / `bgm_path`; drops paths that aren't on disk).
-7. Groups scenes by `Continuity` (`break` starts a new worker, `continue` extends the current one) with cap = 2 scenes/worker.
-8. Writes `./group_spec.json` and prints a stdout summary.
+1. 依赖 Step 0 已经把 `PROJECT_DIR` 初始化为 HyperFrames 项目；这里不再创建 `hyperframes/` 子目录
+2. 复制 `capture/assets/**/*.{png,jpg,jpeg,webp,svg,mp4,mov,webm}` + `capture/screenshots/*.png` 到 `public/`
+3. 复制 `design-system/fonts/*` 到 `public/fonts/`（v2 暂无 download-fonts 时静默跳过）
+4. 解析 `section_plan.md` 的 anchors：必选 Effects / Duration / Continuity，可选 Blueprint / Components / Surface / Motifs / **SFX**
+5. 校验每个 effect id 都对应 `hyperframes-animation/rules/<id>.md` 存在
+6. 解析 `design-system/chunks/index.json` —— 把 Components 锚点引用的 component id 解析为绝对路径；id 不在 index.json 中 → fatal 退出
+7. 合并 `audio_meta.json` —— `voiceDuration` 覆盖 section_plan duration（差 >10% 时）
+8. 按 `Continuity` 分组（`break` 开新 worker、`continue` 续到 cap=2）
+9. **SFX**：复制 `<sfxLibDir>/*.mp3` + `manifest.json` 到 `assets/sfx/`，校验每条 cue 文件存在于 manifest，把 scene-local `t` 加 `start_s` offset 转全局秒数，写入 `group_spec.sfx[]`（flat list 按 t 排序）
+10. 写 `./group_spec.json` + stdout summary（含每 scene 的 design_chunks 块、SFX 条数）
 
-**On exit 0**: read the stdout summary (scenes, groups, total duration, per-group breakdown, anomalies). Surface to user. Proceed to Phase 4b.
+退出码：
 
-**On exit 1**: stderr names the failing scene + anchor. The fix is upstream (Phase 3), not Phase 4. Re-dispatch Phase 3 with the validator's stderr in the Dispatch context — `validate-section-plan.mjs` also enforces these anchors, so a Phase 3 that passes the validator will never fail `prep.mjs` on anchor structure.
+- 0 → 读 stdout（scenes / groups / total duration / 每组 breakdown），追加到 `$PROJECT_DIR/context.log`
+- 1 → stderr 给出失败的 scene + anchor，回退到 Step 4 重派 visual-design
 
-Then append to `./context.log`:
+### Step 5.5 + Step 6 — Captions + scene workers 并行 fan-out（Phase 4a.5 + 4b）
 
-```
-## Phase 4a: prep [done <ISO timestamp>]
-Scenes: <N>, Groups: <G>, Total: <D>s
-```
+prep 退出 0 后，读 `group_spec.json.groups[]` 得 worker 数 N。**同一条 message** 里并行启动 **N+1 个 background subagent**：N 个 scene worker + 1 个 captions agent。captions agent 跟 scene worker 是不同物种的 sub-comp（一个全片字幕、一个单 scene 画面），但都只依赖 `group_spec.json` + `chunks/`，输出不同文件，可以无锁并行。
 
-### Phase 4b — spawn N scene-worker subagents to work simultaneously in parallel
+**Captions agent**（写 `compositions/captions.html`）：
 
-**Count before you dispatch**: `N = len(group_spec.json["groups"])`. Phase 4a sized N so each worker writes 1–2 scenes; for 8 scenes N is typically 4, for 4 scenes N is 2, etc.
+- `Agent`（`subagent_type: "general-purpose"`，`run_in_background: true`），prompt = `agents/captions.md` 内容 + `## Dispatch context`：
+  ```
+  SKILL_DIR: <绝对路径>
+  PROJECT_DIR: <视频项目根>
+  ```
 
-You MUST issue **exactly N `Agent` tool_use blocks in one assistant message**, every one with `run_in_background: true`. Anything less and the omitted groups' scenes never get written → Phase 4c will STOP on missing `compositions/scene_*.html`.
+退出条件：写出 `compositions/captions.html` 或汇报 `skipped` —— finalize 看文件存在性决定是否挂 track-12 clip。captions agent 自检 `npx hyperframes lint` 报错 → 它自己 STOP，captions.html 不写出，finalize 自动跳过。
 
-```
-For each group g in group_spec.json.groups:
-  Compose prompt = <agents/hyperframes-scene.md contents>
-                 + "\n\n## Dispatch context\n"
-                 + "Worker ID: " + g.worker_id + "\n"
-                 + "Design system: ./design-system/design.html  (Phase 1b output — copy :root tokens and component HTML+CSS verbatim into your scene's scoped <style>)\n"
-                 + "\nScenes you own:\n"
-  For each scene_id in g.scene_ids:
-    s = g.scenes[scene_id]
-    Compose += "\n### " + scene_id + "\n"
-            +  "effects: " + JSON(s.effects) + "\n"
-            +  "rule_paths:\n"
-    For each p in s.rule_paths:
-      Compose += "  - " + p + "\n"
-    Compose += "assetCandidates:\n"
-    For each c in s.assetCandidates:
-      Compose += "  - path: " + c.path + "\n"
-              +  "    description: " + c.description + "\n"
-    Compose += "estimatedDuration_s: " + s.estimatedDuration_s + "\n"
-            +  "creative_brief: |\n" + indent(s.creative_brief, 2) + "\n"
+**Scene workers**（每个写 `compositions/scene_<N>.html`）：
 
-  Agent(
-    subagent_type: "general-purpose",
-    description: "Phase 4b: scene worker " + g.worker_id + " (" + join(g.scene_ids, ", ") + ")",
-    prompt: <composed>,
-    run_in_background: true,    ← MANDATORY for parallelism
-  )
-```
+- N 个 `Agent`（`subagent_type: "general-purpose"`，每个 `run_in_background: true`），prompt = `agents/hyperframes-scene.md` 全文 + `## Dispatch context`：
 
-### Dispatch shape — concrete
+  ```
+  SKILL_DIR: <绝对路径>
+  PROJECT_DIR: <视频项目根>
+  Worker ID: <w1 / w2 / ...>
+  Design chunks dir: ./design-system/chunks/  # 若 design_chunks: null（chunks 缺失），回退到 ./design-system/design.html
+  Scenes:
+    - scene_id: scene_<N>
+      effects: [...]
+      rule_paths:
+        - <abs path 1>
+        - <abs path 2>
+      assetCandidates:
+        - { path: "public/...", description: "..." }
+      estimatedDuration_s: <float>
+      voicePath: assets/voice/scene_<N>.wav (空字符串就略)
+      blueprint: composed | based-on <id> | extended <id>
+      surface: <preset-declared-surface> | null   # 仅 surface-aware preset 非 null（值由 chunks/index.json.components[].surface 决定）
+      design_chunks:
+        tokens_file: <abs path to chunks/tokens.css>
+        easings_file: <abs path to chunks/easings.js>
+        voice_file: <abs path to chunks/voice.md>
+        hints_file: <abs path to chunks/composition-hints.md> | null    # surface contract / 60-30-10 / 互斥；preset 未声明 §H 时 null
+        type_roles_file: <abs path to chunks/type-roles.md> | null      # 命名 text role 目录；§6 组件之外的文字（hero / lede / pill / CTA）按需读
+        motifs_file: <abs path to chunks/motifs.md> | null              # 原子手势目录；plan agent 的 **Motifs:** 锚点 cite 后 worker 按需读
+        components:
+          - <abs path to chunks/components/<id>.html>
+          - ...      # 0-N 个，Phase 3 的 **Components:** 锚点决定；为空时 worker 仍拿 tokens + easings + voice
+      creative_brief: |
+        <Phase 3 该 scene 的 prose body verbatim>
+  ```
 
-The assistant turn that fires after Phase 4a returns MUST look like this (for N=4, generalize for any N):
+  每个 worker 的 Scenes 列表只放 group_spec.groups[i].scene_ids 对应的 scene（1-2 个）；字段从 `group_spec.json.groups[i].scenes[<sid>]` verbatim 抄。`design_chunks` 也是 verbatim 拷贝 —— prep.mjs 已经把 Phase 3 的 `**Components:**` 锚点解析为绝对路径放到 group_spec.json 里。
 
-```
-<one sentence text: "Spawning N scene-worker subagents in parallel for groups w1, w2, w3, w4.">
-<tool_use block 1: Agent(... worker w1 ..., run_in_background: true)>
-<tool_use block 2: Agent(... worker w2 ..., run_in_background: true)>
-<tool_use block 3: Agent(... worker w3 ..., run_in_background: true)>
-<tool_use block 4: Agent(... worker w4 ..., run_in_background: true)>
-```
+  **`design_chunks: null`** 表示 Phase 1b 的 `emit-chunks.mjs` 没跑（或 `chunks/index.json` 缺失）—— prep.mjs 已在 anomalies 里报；worker 在 dispatch 里看到 null 时回退到 `./design-system/design.html` 通读模式（每个 worker 多 ~30-90s）。正常流程不应该走到 fallback。
 
-Then **stop emitting tool calls in that turn**. The next turn is when worker results come back.
+所有 N+1 个 subagent（scene workers + captions）都返回后，跑预飞 harness（`check-compositions.mjs` 自动扫所有 `compositions/*.html`，captions.html 跟 scene 一起被检）：
 
-**Self-check before you hit "send"**: count the `Agent` blocks in your draft assistant message. If `count(Agent) < N`, you're about to silently drop groups. STOP and add the missing blocks before sending. Do NOT plan to "dispatch the rest next turn" — that's the serial anti-pattern.
-
-> ❌ **The observed real failure mode** (from prior runs): orchestrator dispatched `w1`, waited 4 min for it to return, then dispatched `w2`, waited 4 min, then **stopped** without ever dispatching `w3` / `w4`. Result: `compositions/scene_5.html` through `scene_8.html` never written, Phase 4c blocked, full pipeline stalled. This MUST NOT recur.
-
-### After ALL N workers return
-
-You will be auto-notified per worker. Once all N have returned:
-
-- For each scene id across all groups: `[ -s hyperframes/compositions/<scene-id>.html ]`
-- If any is missing or empty, re-dispatch ONLY the affected worker — **issue all re-dispatches in the same message** if more than one is missing, again `run_in_background: true`.
-- Do NOT proceed to 4c with a hole.
-
-### Phase 4c — dispatch hyperframes-finalize (assemble + gates + render)
-
-Phase 4c owns the final mp4 end-to-end: assembles `index.html`, runs `lint → validate → inspect → snapshot`, then renders and verifies. The orchestrator does NOT load `/hyperframes-cli` knowledge — all render flags / failure handling live inside the finalize wrapper.
-
-```
-1. Read product-launch-video/agents/hyperframes-finalize.md
-2. Compose prompt = <its contents>
-                  + "\n\n## Dispatch context\n"
-                  + "Phase 4b summary: <scene count> scenes written by <worker count> workers\n"
-                  + "Render quality: high\n"   ← default; pass "draft" during iteration loops, "standard" for review
-3. Agent(
-     subagent_type: "general-purpose",
-     description: "Phase 4c: assemble + gates + render",
-     prompt: <composed>,
-   )
+```bash
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/check-compositions.mjs \
+  --hyperframes . \
+  --group-spec ./group_spec.json)
 ```
 
-After it returns: read finalize's report for the mp4 path, byte size, and ffprobe duration. Present to the user and ask "What would you like to change?".
+退出码：
 
-If finalize STOPped before producing the mp4, its report names which gate failed and whether it's structural (re-dispatch a 4b worker) or render-flag related (re-dispatch 4c with a different `Render quality:` or `--strict`).
+- 0 → 所有 composition 过检（blueprint anomaly 不阻塞），继续 Step 7
+- 1 → stderr 给出违规 scene + rule 类别，**回退到 Step 6 重派受影响的 worker**（不要在主 agent 里 Edit 修 —— 修在上游）
 
-## Done — present the mp4
+### Step 7 — finalize 拼装 + 渲染（Phase 4c）
 
-There is no Phase 5. The finalize subagent (4c) renders and verifies `hyperframes/renders/video.mp4` itself; the orchestrator just relays the result.
+预飞 0 后，启动 finalize subagent：
 
-Surface to the user: mp4 path + byte size + ffprobe duration (all reported by finalize). Then ask: **"What would you like to change?"**
+- `Agent`（`subagent_type: "general-purpose"`），prompt = `agents/hyperframes-finalize.md` 全文 + `## Dispatch context`：
+  ```
+  SKILL_DIR: <绝对路径>
+  PROJECT_DIR: <视频项目根>
+  Step 6 summary: <scene 数> scenes / <worker 数> workers
+  Preflight harness: check-compositions.mjs 已在编排器侧通过（这**不代替** Step 3 的 npx hyperframes lint / validate / inspect — 覆盖面不同，三个 gate 必须完整跑）
+  Render quality: high  # 或编排器决定 draft / standard
+  ```
 
-If finalize reported a render failure or a structural gate failure, follow its STOP message:
+退出码 / 行为：
 
-- Structural error (missing `data-composition-id`, broken sub-comp ref, unregistered timeline, async timeline build) → re-dispatch the affected Phase 4b worker, then 4c again
-- Render-flag issue (e.g. wants `--strict`, wants a different `--quality`) → re-dispatch 4c with the updated `Render quality:` value in Dispatch context
-- Environment issue (FFmpeg missing, Chrome unreachable) → finalize should have flagged this; ask the user to run `npx hyperframes doctor` outside the pipeline
+- finalize 报告 mp4 路径 + size + duration + quality + lint/validate/inspect/snapshot 各 gate 状态 → 完成
+- finalize STOP（预飞 OK 但 lint/validate/inspect/snapshot/render 失败）→ 按 finalize 报告里的根因决定：
+  - lint/validate/inspect 结构性 → 重派对应 worker（Step 6 单 scene 重跑）
+  - snapshot 显错 scene / 空白 → 改 `index.html` 播放顺序或 worker 资源引用
+  - render stderr → 看是否 quality 设错 / asset 缺，必要时再跑
 
-Detailed render failure-mode tables live in `/hyperframes-cli` — finalize already loads that skill, so the orchestrator does not need to.
+### 完成报告
 
-## Interactive mode (after first autopilot pass)
+汇总给用户：
 
-When `context.log` shows a full pipeline already ran, **don't redispatch everything for a small request**:
+- capture：Final URL、page title、section 数、asset 数、fonts、动画/shader/Lottie/video manifest（如有）
+- design-system：build-design.mjs stdout（palette、fonts、preset、components 数）
+- story-design：archetype、scene 数、total duration、per-scene 一行摘要
+- audio：TTS provider、voice id、BGM enabled/pending、total_duration_s
+- visual-design：scene 数、total duration、per-scene 一行摘要
+- prep（Phase 4a）：scenes、groups（worker 数）、total_duration_s、每组 scene_ids、assets 复制数、anomalies
+- captions（Phase 4a.5）：captions.html 是否生成、groups 数、跨 scene split 数、ALL-CAPS / numeric span 数；或 skipped 原因
+- scene workers（Step 6）：worker 数、每个 worker 写的 scene_ids + effects + blueprint 标签、check-compositions 通过/违规/anomaly 计数
+- finalize（Step 7）：mp4 路径、字节数、ffprobe duration、quality、lint/validate/inspect/snapshot 状态、任何 `Edit` 修过的 worker 文件
 
-- **Small fix in worker-authored scene file** (font color, typo, swap an image) → Edit the scene HTML directly, then dispatch Phase 4c (re-gates + re-renders)
-- **Single scene rebuild** (re-author scene N's animation) → dispatch ONE Phase 4b worker with that scene's slice of `group_spec.json` in the Dispatch context, then 4c
-- **Multi-scene rebuild** → re-run Phase 4b fan-out (multiple `Agent` calls in one message), then 4c
-- **Visual plan change** (new effect choice, restructured scene) → Phase 3 → 4a (refresh `group_spec.json`) → 4b fan-out → 4c
-- **Narration text change** (different script for one or more scenes) → Phase 2 (rewrite narrator_scripts.json) → **(3 ‖ 2.5)** parallel → 4a → 4b → 4c
-- **Voice / BGM change only** (same script, swap voice id or BGM mood) → re-run `audio.mjs` (Phase 2.5) with `--voice <id>` and/or `--bgm-prompt "..."` → 4a (re-merge audio_meta.json into group_spec.json) → 4c. Phase 3 / 4b unchanged.
-- **Drop audio entirely** → delete `audio_meta.json` + `hyperframes/assets/voice/` + `hyperframes/assets/bgm.wav` → dispatch 4a → 4c (no `<audio>` elements emitted; everything falls back to `estimatedDuration`)
-- **Narrative change** (reorder scenes, new archetype) → Phase 2 → (3 ‖ 2.5) → 4a → 4b → 4c
-- **More assets needed** → re-run **(Phase 1 ‖ Phase 1b)** with a scoped URL/scope hint in the Dispatch context, then cascade through 2 → (3 ‖ 2.5) → 4a → 4b → 4c
-- **Brand styling change only** (same URL, want different palette/fonts after iterating on extracted tokens) → re-run **Phase 1b only** (or edit the design-system JSON tokens by hand, then re-run only the build script per `phases/design-system/guide.md` "Re-build pattern"), then cascade through 3 → 4a → 4b → 4c
-- **Faster iteration** → pass `Render quality: draft` in the 4c dispatch context to cut render time roughly in half; switch back to `high` for the final pass
+---
 
-## `context.log` format
+## Resume 表
 
-Each phase appends a markdown section. Read it before doing anything; it's how you know what's already done. The subagent prompt files instruct each subagent to append its own line; you don't write to it during dispatch.
+读 `$PROJECT_DIR/context.log`，按以下状态决定从哪里继续：
 
-```
-## Phase N: <name> [done 2026-05-20T10:42:11Z]
-<one line summary>
-```
+| 状态                                                                                                        | 从这里继续                                                                                       |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| log 不存在或为空                                                                                            | 完整 pipeline                                                                                    |
+| `capture/extracted/tokens.json` 缺失                                                                        | 重跑 Step 1 (capture)                                                                            |
+| capture 有，`design-system/design.html` 缺失                                                                | Step 1b (design-system)                                                                          |
+| 两个都有，`narrator_scripts.json` 缺失                                                                      | Step 2（story-design）                                                                           |
+| `narrator_scripts.json` 有，`audio_meta.json` 缺失                                                          | Step 3（audio）                                                                                  |
+| `audio_meta.json` 有，`section_plan.md` 缺失                                                                | Step 4（visual-design）                                                                          |
+| `section_plan.md` 有，`group_spec.json` 缺失                                                                | Step 5（prep）                                                                                   |
+| `group_spec.json` 有，`compositions/scene_*.html` 缺 / `captions.html` 缺（且 ≥1 scene 有 `wordsPath`）     | Step 5.5+6（同条 message 并行：缺哪个 scene 派 worker，captions.html 缺就同时派 captions agent） |
+| 所有 `compositions/scene_*.html` 齐 + captions 状态确定（文件存在或确认 skipped），`renders/video.mp4` 缺失 | Step 7（finalize）                                                                               |
+| `renders/video.mp4` 有                                                                                      | 报告已完成，停止                                                                                 |
 
-If a phase fails or you abort mid-run, mark `[interrupted]` instead of `[done]`. Resume from that phase on next invocation.
+---
 
-## See also
+> ❌ Step 5.5+6 的 N+1 个 subagent（N scene worker + 1 captions agent）必须同一条 message 里 fan-out，每个 `run_in_background: true`。先起一个等完成再起另一个 = 串行化反模式（GitHub issue #29181 的默认行为，请刻意对抗）。Step 1 现在是单条 capture（design-system 直接吃 capture 产物，不再并行抓两次）。
 
-- `/hyperframes-animation` — atomic rules + blueprints + per-runtime adapters (Phase 4's main motion reference)
-- `/hyperframes-core` + `/hyperframes-cli` — composition contract + dev loop (Phase 4's other Skill-tool loads)
-- `phases/web-research/`, `phases/design-system/`, `phases/story-design/`, `phases/audio/`, `phases/visual-design/` — workflow-internal phase guides + scripts for all pre-build phases
-- `/video-workflows` (router) — the cross-workflow router that hands off to this orchestrator
+---
+
+## 跨阶段 invariant
+
+上游一次写对，下游 gate 不返工。触发了下游 gate 报错就回上游修，不要在 finalize 里 patch。
+
+| 上游               | invariant                                                                                                                                                                                     | 错了下游怎么炸                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| worker（Step 6）   | timeline 注册用字面 scene id：`window.__timelines["scene_1"] = tl;`，不要 `SID` 变量绕一层                                                                                                    | `check-compositions.mjs` 正则扫不出 → 预飞 fatal · 见 `agents/hyperframes-scene.md` #9                                            |
+| worker（Step 6）   | macro-camera scene（effects 含 `coordinate-target-zoom` / `multi-phase-camera` / `camera-cursor-tracking` / `viewport-change`）最外层 zoom/pan wrapper 挂 `data-layout-allow-overflow="true"` | `npx hyperframes inspect` 必报 overflow → finalize 返工 ~60s · 见 `agents/hyperframes-scene.md` #10                               |
+| finalize（Step 7） | scene start 直接读 `group_spec.json.groups[].scenes[<sid>].start_s`，不在 agent 里 `S += dur`                                                                                                 | 浮点累积 `2.24 + 6.357 = 8.597000000000001` → lint 报 `overlapping_clips_same_track` · 见 `agents/hyperframes-finalize.md` Step 2 |
+| prep（Step 5）     | `ASSET_EXTS` 含 `mp4` / `mov` / `webm`（已就绪）                                                                                                                                              | 否则 Phase 3 引的视频落不到 `public/`，worker 被迫降级到 poster.webp 丢动效                                                       |

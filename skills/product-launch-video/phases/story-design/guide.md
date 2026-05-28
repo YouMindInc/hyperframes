@@ -1,94 +1,86 @@
-# Story Design
+# 故事设计（Story Design）
 
-The story layer of a promotional video. Pick a storytelling archetype, design the scene sequence, define each scene's narrative intent, choose a transition for each seam, and write narrator scripts. Output: `narrator_scripts.json`.
+宣传视频的故事层。选择一个 storytelling archetype，设计 scene sequence，定义每个 scene 的 narrative intent，为每个 seam 选择 transition，并编写 narrator scripts。输出：`narrator_scripts.json`。
 
-## Procedure at a glance
+## 核心原则
 
-1. Read `research/context_pack.md` end-to-end + skim `screenshot_full.png` + `ls research/assets/`
-2. Pick **one** archetype (5 options below) — read **only that one's** `archetypes/<name>/overview.md`. Optionally read 0-2 of its `<sample>.md` files for modeling, never all of them
-3. Pick hook strategy + design scene sequence + assign 5 narrative fields + transition + assetCandidates + script + estimatedDuration per scene
-4. Write `narrator_scripts.json` using the canonical schema (at the bottom of this guide)
-5. Run `node <validator> ./narrator_scripts.json` until exit 0
+视频叙事独立于网页结构。网页是信息布局；视频是情绪旅程。
 
-## Core principle
+- Scene sequence 来自 narrative design，而不是原网页 section 的顺序。
+- 网页可能按 `hero → features → pricing → CTA` 流动；视频则可能按 `hook → pain → hope → proof → action`，或 `vision → bridge → proof → action`，或 `question → demo → demo → trust → action` 流动，具体取决于 archetype。
+- 根据需要重新排序、合并、省略或重构网页内容。
+- Extraction data 是信息和素材来源，不是 story template。
 
-Video narrative is independent from webpage structure. A webpage is an information layout; a video is an emotional journey.
+计划的标准：**在 structural type 旁边写出 emotional beat**，**写出具体的 persuasion technique**（不要只写 “show benefits”），并且 **为每一个 seam 指定 transition**。什么把观众视线从 scene N 带到 scene N+1，本身就是故事的一部分，不是后续视觉阶段才处理的问题。
 
-- The scene sequence comes from narrative design, not the original order of webpage sections.
-- A webpage flows `hero → features → pricing → CTA`; a video flows `hook → pain → hope → proof → action`, or `vision → bridge → proof → action`, or `question → demo → demo → trust → action` — depending on the archetype.
-- Reorder, combine, omit, or reframe webpage content as needed.
-- Extraction data is the source of information and assets, not the story template.
+## 叙事原型（Narrative archetypes）
 
-The bar for the plan: **name the emotional beat alongside the structural type**, **name the specific persuasion technique** (not "show benefits"), and **prescribe a transition for every seam** — what carries the eye from scene N to N+1 is part of the story, not a downstream visual concern.
-
-## Narrative archetypes
-
-Before designing scenes, pick **one** storytelling archetype (or a hybrid named explicitly — see "Compound archetypes" below). Read its overview for guidance and study its golden samples; don't mix sections from different archetypes — each is a coherent emotional journey.
+在设计 scenes 之前，选择 **一个** storytelling archetype（或显式命名一个 hybrid，见下方 “Compound archetypes”）。阅读它的 overview 获取指导，并研究它的 golden samples；不要混用不同 archetype 的章节，因为每一个都是完整连贯的情绪旅程。
 
 <archetypes>
 <pain-agitate-solve path="archetypes/pain-agitate-solve/overview.md">
-**Pain → Agitate → Solve (PAS)** — Build painful recognition, then reveal the remedy. Best for: products solving a known frustration, B2B tools, audiences who already feel the pain. Late product reveal (33-50% through) maximizes relief contrast. Samples: alpha (culture/identity-driven crypto PAS), madison (character-driven PAS + Feature-Benefit Cascade compound).
+**Pain → Agitate → Solve (PAS)** — 先建立痛点识别，再揭示解决方案。最适合：解决已知挫败感的产品、B2B tools、已经感受到痛点的受众。较晚的 product reveal（全片 33-50% 处）能最大化 relief contrast。Samples: alpha（culture/identity-driven crypto PAS），madison（character-driven PAS + Feature-Benefit Cascade compound）。
 </pain-agitate-solve>
 
 <future-pacing path="archetypes/future-pacing/overview.md">
-**Future Pacing — Vision → Proof** — Paint a beautiful future, then prove it's achievable. Best for: AI/tech products with novel capabilities, new category products. Product named very early (4-10%) to anchor the vision. Samples: agentgpt (BAB / Feature-Benefit Cascade compound — the "Imagine" hook makes it Future-Pacing-flavored). Future Pacing and BAB share the visionary-opening DNA; pick BAB when the proof is a workflow walkthrough rather than capability demonstrations.
+**Future Pacing — Vision → Proof** — 先描绘美好的未来，再证明它可以实现。最适合：具备新能力的 AI/tech products、新品类产品。Product 要很早被命名（4-10% 处），用来锚定 vision。Samples: agentgpt（BAB / Feature-Benefit Cascade compound，“Imagine” hook 让它带有 Future-Pacing 的味道）。Future Pacing 和 BAB 都有 visionary-opening DNA；当 proof 是 workflow walkthrough 而不是 capability demonstrations 时，选择 BAB。
 </future-pacing>
 
 <demo-loop path="archetypes/demo-loop/overview.md">
-**Demo Loop — Question → Instant Answer** — Minimal narrative around repeated product demos. Best for: UI-centric products, data tools, "seeing is believing". Often realized as the "Problem-Solution-Benefit Cascade" variant (skip agitation, go straight from problem to solution to layered benefits). Samples: gwi.
+**Demo Loop — Question → Instant Answer** — 围绕重复 product demos 的极简叙事。最适合：UI-centric products、data tools、“seeing is believing”。常见形态是 “Problem-Solution-Benefit Cascade” 变体（跳过 agitation，直接从 problem 到 solution，再到 layered benefits）。Samples: gwi。
 </demo-loop>
 
 <before-after-bridge path="archetypes/before-after-bridge/overview.md">
-**Before-After-Bridge (BAB)** — Show the friction state, contrast with the desired state, walk the bridge that gets you there. Best for: workflow products where the *process improvement* is the headline (not the pain or the vision alone). Mid product reveal (15-35%). Samples: kyvos, desklog, plus agentgpt (hybrid with Future Pacing).
+**Before-After-Bridge (BAB)** — 展示 friction state，对比 desired state，再走过抵达那里的 bridge。最适合：headline 是 *process improvement* 的 workflow products（不是单独强调 pain 或 vision）。中段 product reveal（15-35%）。Samples: kyvos、desklog，以及 agentgpt（与 Future Pacing 的 hybrid）。
 </before-after-bridge>
 
 <feature-benefit-cascade path="archetypes/feature-benefit-cascade/overview.md">
-**Feature-Benefit Cascade** — Rapid sequential feature reveals building momentum toward CTA. No agitation phase. Best for: feature-rich SaaS, NFT collections / marketplaces, products where desire-escalation (not pain-relief) drives the buy. Product named early (0-22%) or shown visually from scene 1. Samples: vibe-co, elemental-soul. Often appears as the *internal rhythm* inside other archetypes — Madison runs PAS+Cascade, AgentGPT runs BAB+Cascade.
+**Feature-Benefit Cascade** — 快速连续展示 feature，推动 momentum 走向 CTA。没有 agitation phase。最适合：feature-rich SaaS、NFT collections / marketplaces，以及购买动机来自 desire-escalation（而不是 pain-relief）的产品。Product 要早出现（0-22%）或从 scene 1 就视觉露出。Samples: vibe-co、elemental-soul。它经常作为其他 archetype 内部的 *internal rhythm* 出现：Madison 是 PAS+Cascade，AgentGPT 是 BAB+Cascade。
 </feature-benefit-cascade>
 </archetypes>
 
-### Compound archetypes
+### 复合叙事原型（Compound archetypes）
 
-Real videos often _layer_ archetypes. The reverse-engineered samples explicitly compound names — `"PAS with Feature-Benefit progression"` (Madison), `"Before-After-Bridge / Feature-Benefit Cascade"` (AgentGPT), `"Problem-Solution-Benefit Cascade"` (GWI). The pattern is:
+真实视频经常会 _layer_ 多个 archetype。Reverse-engineered samples 会明确写出 compound 名称，例如 `"PAS with Feature-Benefit progression"`（Madison）、`"Before-After-Bridge / Feature-Benefit Cascade"`（AgentGPT）、`"Problem-Solution-Benefit Cascade"`（GWI）。模式是：
 
-- **Outer archetype** = the macro emotional arc (PAS / Future Pacing / BAB / Demo Loop)
-- **Inner rhythm** = the tactical pattern inside the showcase phase (Feature-Benefit Cascade is the most common inner rhythm — alternating `feature_showcase` ↔ `benefit_highlight` for 6+ consecutive scenes)
+- **Outer archetype** = 宏观情绪弧线（PAS / Future Pacing / BAB / Demo Loop）
+- **Inner rhythm** = showcase phase 内部的战术节奏（Feature-Benefit Cascade 是最常见的 inner rhythm，会连续 6+ 个 scenes 交替 `feature_showcase` ↔ `benefit_highlight`）
 
-Write the compound as `"<outer> with <inner>"` in `narrativeArchetype`. The downstream visual-design phase reads this to plan pacing — a Cascade inner rhythm means tight `ui_morphing` transitions and shorter scenes.
+在 `narrativeArchetype` 中写成 `"<outer> with <inner>"`。下游 visual-design phase 会读取它来规划 pacing；Cascade inner rhythm 意味着更紧的 `ui_morphing` transitions 和更短的 scenes。
 
-## Narrative architecture
+## 叙事架构（Narrative architecture）
 
-Define the role of each scene in the story. Each scene needs five narrative fields, plus a transition spec:
+定义每个 scene 在故事里的作用。每个 scene 有五个 narrative fields（type · narrativeRole · keyMessage · persuasion · emotionalBeat），加上一个独立的 transition spec：
 
-- **Type** — one of: `hook` / `pain_point` / `product_intro` / `feature_showcase` / `benefit_highlight` / `social_proof` / `branding` / `cta`. `branding` is a _philosophical_ product positioning scene (consolidates the value statement, tagline, or category claim — distinct from `product_intro` which names the product, and `cta` which asks for action).
-- **Narrative Role** — what this scene does in the story (the _job_, e.g., "Highlights the massive financial loss when linking data to decisions" — not "Shows the dashboard").
-- **Key Message** — what the viewer should take away (one sentence).
-- **Persuasion** — the _named_ persuasion mechanism (see Persuasion catalog below). "Show benefits" is the failure mode; "Visual Proof of automation mechanics" / "Authority by association with logos (AWS, GCP, Snowflake)" / "Anchoring bias via explicit pricing combined with premium card design" are the bar.
-- **Emotional Beat** — the target feeling (see Emotional beat vocabulary below). Single word or compound ("Intrigue and awe"). Avoid generic "positive" / "interested".
-- **Transition** — `{ type, description }` defining how this scene arrives from the previous one. Required for every scene including scene 1 (which uses `none_first_scene`).
+- **Type** — 以下之一：`hook` / `pain_point` / `product_intro` / `feature_showcase` / `benefit_highlight` / `social_proof` / `branding` / `cta`。`branding` 是一种 _philosophical_ 产品定位 scene（整合 value statement、tagline 或 category claim），不同于命名产品的 `product_intro`，也不同于要求行动的 `cta`。
+- **Narrative Role** — 这个 scene 在故事里做什么（它的 _job_，例如 “Highlights the massive financial loss when linking data to decisions”，而不是 “Shows the dashboard”）。
+- **Key Message** — 观众应该带走的信息（一句话）。
+- **Persuasion** — _具名的_ persuasion mechanism（见下方 Persuasion catalog）。“Show benefits” 是失败模式；标准应是 “Visual Proof of automation mechanics” / “Authority by association with logos (AWS, GCP, Snowflake)” / “Anchoring bias via explicit pricing combined with premium card design”。
+- **Emotional Beat** — 目标感受（见下方 Emotional beat vocabulary）。单个词或复合短语（如 “Intrigue and awe”）。避免泛泛的 “positive” / “interested”。
+- **Transition** — `{ type, description }`，定义这个 scene 如何从前一个 scene 抵达。每个 scene 都必须有，包括 scene 1（使用 `none_first_scene`）。
 
-### Hook strategy taxonomy
+### Hook strategy taxonomy（开场策略分类）
 
-Pick one. Hook is the highest-leverage 3-5 seconds. The reverse-engineered samples deploy these:
+选择一个。Hook 是最高杠杆的 3-5 秒。Reverse-engineered samples 使用了这些策略：
 
-| Strategy                              | When to use                                                   | Example (sample)                                                                                              |
-| ------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Shocking statistic**                | You have a credible data point quantifying industry-wide pain | "50% of companies still rely on paper checks" (PayCloud), Fosfor opens with industry-trend validation         |
-| **Imagine / future-pacing**           | Product creates a new category or paradigm                    | "Imagine next generation AI for the enterprise" (AgentGPT)                                                    |
-| **Direct address / character hail**   | Audience is well-defined and tribal                           | "Hey, sales pro." (JustCall), "Sales teams, listen up!" (JustCall IQ)                                         |
-| **Pain validation**                   | Audience already knows the pain — name it back to them        | "Tired of clueless conversations?" (JustCall), "Responding to all of your online reviews..." (ResponseScribe) |
-| **Visceral metaphor**                 | Pain is abstract — make it physical                           | "Goodbye to long airport queues, goodbye to dinosaurs of the past" (HRS)                                      |
-| **Rhetorical question**               | Create instant cognitive gap → drive curiosity                | "Need answers about your audience, now?" (GWI)                                                                |
-| **Category announcement**             | Product _is_ the category — make the category memorable       | "Cloud BI Acceleration" (Kyvos), "Vibe.co. All-in-one TV Ad Platform" (Vibe.co)                               |
-| **Visual spectacle / world-building** | Aesthetic IS the pitch (crypto, NFT, lifestyle)               | "Welcome to the Ultraverse" (NFT Marketplace), "Fire" (Elemental Soul)                                        |
-| **Question / invitation**             | Creator-tool / democratization narrative                      | "Got something to create?" (Artinals)                                                                         |
-| **Trend positioning**                 | Ride a cultural wave; novelty alone is the hook               | "Introducing the future of influencer marketing" (Skye)                                                       |
+| Strategy（策略）                      | 何时使用                                      | 示例（sample）                                                                                                |
+| ------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Shocking statistic**                | 你有可信的数据点量化行业级痛点                | "50% of companies still rely on paper checks" (PayCloud), Fosfor opens with industry-trend validation         |
+| **Imagine / future-pacing**           | 产品创造了新的 category 或 paradigm           | "Imagine next generation AI for the enterprise" (AgentGPT)                                                    |
+| **Direct address / character hail**   | 受众定义清晰且带有 tribe 属性                 | "Hey, sales pro." (JustCall), "Sales teams, listen up!" (JustCall IQ)                                         |
+| **Pain validation**                   | 受众已经知道痛点，要把它说回给他们            | "Tired of clueless conversations?" (JustCall), "Responding to all of your online reviews..." (ResponseScribe) |
+| **Visceral metaphor**                 | 痛点很抽象，需要把它变得具象、有身体感        | "Goodbye to long airport queues, goodbye to dinosaurs of the past" (HRS)                                      |
+| **Rhetorical question**               | 立刻制造 cognitive gap，驱动好奇心            | "Need answers about your audience, now?" (GWI)                                                                |
+| **Category announcement**             | 产品本身就是 category，要让 category 变得好记 | "Cloud BI Acceleration" (Kyvos), "Vibe.co. All-in-one TV Ad Platform" (Vibe.co)                               |
+| **Visual spectacle / world-building** | 美学本身就是 pitch（crypto、NFT、lifestyle）  | "Welcome to the Ultraverse" (NFT Marketplace), "Fire" (Elemental Soul)                                        |
+| **Question / invitation**             | Creator-tool / democratization narrative      | "Got something to create?" (Artinals)                                                                         |
+| **Trend positioning**                 | 借势文化浪潮；新鲜感本身就是 hook             | "Introducing the future of influencer marketing" (Skye)                                                       |
 
-### Persuasion technique catalog
+### Persuasion technique catalog（说服技巧目录）
 
-Every scene's `persuasion` field should be a _named technique_, not a vague benefit. Pick from this catalog (extracted from the 22 reverse-engineered samples). Combine techniques if multiple are operating ("Social proof + Authority via logos").
+每个 scene 的 `persuasion` 字段都应该是一个 _named technique_，而不是模糊的 benefit。请从这个 catalog 中选择（提取自 22 个 reverse-engineered samples）。如果同时有多种机制在起作用，可以组合写（如 “Social proof + Authority via logos”）。
 
-| Family                       | Techniques                                                                                                                                                                                       |
+| Family（类别）               | Techniques（技巧）                                                                                                                                                                               |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Pain/Friction**            | Pain agitation • Cognitive overload representation • Negative framing & contrast • Agitation by visual clutter • Contrast (chaos vs clean)                                                       |
 | **Authority**                | Authority bias • Authority by association with logos • Expert authority • Statistical proof / hard metrics • Brand authority                                                                     |
@@ -102,73 +94,73 @@ Every scene's `persuasion` field should be a _named technique_, not a vague bene
 | **Structure**                | Rule of three (triplet structure) • Direct address / audience segmentation • Audience filtering                                                                                                  |
 | **Personality**              | Humor / personality injection • Cultural reference / insider beat • Familiar web2-style patterns applied to web3                                                                                 |
 
-When a scene's persuasion does not map to anything in the catalog, name a new technique inline — but explain the _mechanism_ ("Subtractive proof: removing the chaos visually instead of explaining why the new UI is clean"). Don't write generic "show benefits".
+当某个 scene 的 persuasion 无法映射到 catalog 中任何一项时，可以 inline 命名一种新 technique，但必须解释其 _mechanism_（例如 “Subtractive proof: removing the chaos visually instead of explaining why the new UI is clean”）。不要写泛泛的 “show benefits”。
 
-### Emotional beat vocabulary (constrained)
+### Emotional beat vocabulary（受限情绪词表）
 
-`emotionalBeat` should be one word, or a short compound ("Intrigue and awe", "Relief and assurance"). Avoid generic "positive" / "happy" / "interested". The reverse-engineered samples draw from this catalog:
+`emotionalBeat` 应该是一个词，或一个短复合词组（如 “Intrigue and awe”、“Relief and assurance”）。避免泛泛的 “positive” / “happy” / “interested”。Reverse-engineered samples 使用了这个 catalog：
 
-**Negative valley** (hook / pain_point scenes): anxiety • frustration • overwhelm • tension • urgency • skepticism • cognitive overload • FOMO
+**Negative valley**（hook / pain_point scenes）：anxiety • frustration • overwhelm • tension • urgency • skepticism • cognitive overload • FOMO
 
-**Pivot** (product_intro / branding scenes): relief • curiosity • intrigue • aspiration • clarity
+**Pivot**（product_intro / branding scenes）：relief • curiosity • intrigue • aspiration • clarity
 
-**Build** (feature_showcase / benefit_highlight scenes): trust • confidence • control • power • awe • empowerment • foresight • excitement • playfulness • ease • prestige • desire • belonging • reassurance
+**Build**（feature_showcase / benefit_highlight scenes）：trust • confidence • control • power • awe • empowerment • foresight • excitement • playfulness • ease • prestige • desire • belonging • reassurance
 
-**Resolution** (cta / final beats): triumph • motivation • urgency (to act) • peace of mind • inevitability
+**Resolution**（cta / final beats）：triumph • motivation • urgency (to act) • peace of mind • inevitability
 
-A scene with compound beats is often the strongest — "Excitement _and_ foresight" (DeskLog Vision AI), "Intrigue _and_ awe" (JustCall IQ real-time AI), "Relief _and_ assurance" (NFT Marketplace wallet) — name both feelings when both are operating.
+带有复合 beats 的 scene 往往最强，例如 “Excitement _and_ foresight”（DeskLog Vision AI）、“Intrigue _and_ awe”（JustCall IQ real-time AI）、“Relief _and_ assurance”（NFT Marketplace wallet）。当两个感受都在起作用时，要把它们都写出来。
 
-### Transition taxonomy
+### Transition taxonomy（转场分类）
 
-Every scene needs a `transition` field. Pick from this taxonomy (the 7 types that appear across all 22 reverse-engineered samples). Each downstream scene-builder reads `transition.type` to decide _how_ one scene hands off to the next.
+每个 scene 都需要一个 `transition` 字段。从这个 taxonomy 中选择（22 个 reverse-engineered samples 中出现过的 7 种类型）。每个下游 scene-builder 会读取 `transition.type` 来决定一个 scene _如何_ 交接到下一个 scene。
 
-| Type                 | When to use                                                                                                                          | Example description                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `none_first_scene`   | Scene 1 only — video starts here, no prior scene to transition from                                                                  | "Minimalist opening frame with bold black typography on a clean white background."                                           |
-| `kinetic_typography` | Text-led handoff — word reveals, type wipes, animated lettering punctuates the seam                                                  | "Bold text transitions into a rounded orange container to unveil the product name."                                          |
-| `ui_morphing`        | UI element morphs into the next UI element (most common transition inside a UI demo sequence — appears 30+ times across the archive) | "The audio waveform panel shifts smoothly into an active search interface."                                                  |
-| `camera_zoom_pan`    | Camera dollies / zooms into the next scene's focal area                                                                              | "Pan down and zoom into the actual app buy checkout screen."                                                                 |
-| `fade_color_bleed`   | Color-led dissolve, often into ambient/atmospheric scenes                                                                            | "The UI transitions into an abstract space of floating purple balls before focusing in on a single interactive pill button." |
-| `vector_shape_wipe`  | Geometric shape slides/wipes across the frame                                                                                        | "Triangle zooms into a simplified database search UI."                                                                       |
-| `match_cut`          | Hard cut where the two scenes share a shape, color, or silhouette                                                                    | "Fades into a dramatic aerial view of a Porsche dealership with red computer-vision targeting rings."                        |
+| Type（类型）         | 何时使用                                                                                               | 示例 description                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `none_first_scene`   | 仅用于 Scene 1；视频从这里开始，没有前一个 scene 需要 transition                                       | "Minimalist opening frame with bold black typography on a clean white background."                                           |
+| `kinetic_typography` | 以文字驱动的 handoff：word reveals、type wipes、animated lettering 用来强调 seam                       | "Bold text transitions into a rounded orange container to unveil the product name."                                          |
+| `ui_morphing`        | UI element 变形为下一个 UI element（UI demo sequence 内最常见的 transition，在 archive 中出现 30+ 次） | "The audio waveform panel shifts smoothly into an active search interface."                                                  |
+| `camera_zoom_pan`    | Camera dolly / zoom 进入下一个 scene 的 focal area                                                     | "Pan down and zoom into the actual app buy checkout screen."                                                                 |
+| `fade_color_bleed`   | 由颜色驱动的 dissolve，常进入 ambient/atmospheric scenes                                               | "The UI transitions into an abstract space of floating purple balls before focusing in on a single interactive pill button." |
+| `vector_shape_wipe`  | 几何形状在画面中 slide/wipe                                                                            | "Triangle zooms into a simplified database search UI."                                                                       |
+| `match_cut`          | 两个 scenes 共享形状、颜色或轮廓时的 hard cut                                                          | "Fades into a dramatic aerial view of a Porsche dealership with red computer-vision targeting rings."                        |
 
-Both `transition.type` (enum) and `transition.description` (prose 10-30 words) are required. The description is _visual direction_ the downstream visual-design phase consumes — it should be concrete enough that a builder can choreograph it (name what's morphing, where the eye lands, what color/shape leads).
+`transition.type`（enum）和 `transition.description`（10-30 词 prose）都必须存在。Description 是下游 visual-design phase 会消费的 _visual direction_，需要足够具体，让 builder 可以编排它（写清楚什么在 morph、视线落到哪里、由什么颜色/形状引导）。
 
-### Script voice quality bar
+### Script voice quality bar（旁白文案质量标准）
 
-Strong scripts share these traits — failure mode is bullet-point prose. Both examples are from the reverse-engineered archive:
+强脚本具有这些特征。失败模式是 bullet-point prose。以下两个类别中的例子都来自 reverse-engineered archive：
 
-**Strong (memorable, sharp, in-voice):**
+**Strong（好记、锋利、有 voice）：**
 
-- _Anaphora_: "It is time to say goodbye to long airport queues, goodbye to customer frustration, goodbye to chaos, goodbye to dinosaurs of the past." (HRS) — escalates from concrete to abstract to metaphor.
-- _Specificity_: "Just ask for what you need, like moms who post about dog treats, and get instant recommendations." (Skye) — concrete user story grounds abstract AI capability.
-- _Imperative verbs in triplet_: "Advertise on TV. Target. Deliver. Measure." (Vibe.co) — Rule of Three with monosyllables.
-- _Humor / personality_: "It reads emotions, sentiments, buying patterns — everything but minds. Maybe in the next update?" (JustCall IQ) — joke is a confidence signal.
-- _Cultural signaling_: "Presenting: the GM button." (Alpha) — "GM" is crypto-Twitter morning greeting; insider reference proves the brand is in the audience's tribe.
-- _Disarming specificity_: "For Non-Designers, Entrepreneurs, Designers, Agencies, Grandma." (ZapBG) — "Grandma" breaks formality, signals extreme accessibility.
+- _Anaphora_: "It is time to say goodbye to long airport queues, goodbye to customer frustration, goodbye to chaos, goodbye to dinosaurs of the past." (HRS) — 从具象升级到抽象，再到 metaphor。
+- _Specificity_: "Just ask for what you need, like moms who post about dog treats, and get instant recommendations." (Skye) — 具体 user story 让抽象 AI capability 落地。
+- _Imperative verbs in triplet_: "Advertise on TV. Target. Deliver. Measure." (Vibe.co) — 使用单音节词形成 Rule of Three。
+- _Humor / personality_: "It reads emotions, sentiments, buying patterns — everything but minds. Maybe in the next update?" (JustCall IQ) — 笑点是一种 confidence signal。
+- _Cultural signaling_: "Presenting: the GM button." (Alpha) — "GM" 是 crypto-Twitter 早安问候；insider reference 证明品牌属于受众的 tribe。
+- _Disarming specificity_: "For Non-Designers, Entrepreneurs, Designers, Agencies, Grandma." (ZapBG) — "Grandma" 打破正式感，传达极高 accessibility。
 
-**Weak (failure modes to avoid):**
+**Weak（需要避免的失败模式）：**
 
-- _Noun-phrase bullet lists_: "For crew. Seamless experience. Real-time communication. Crews always informed." — reads like slide bullets, not dialogue.
-- _Generic single-word bridges_ (unless deliberate): "Or...", "And..." — fine as breath beats inside a stronger arc; bad as the only content of a 5-second scene.
-- _Vague capability claims_: "Streamline your workflow." — every SaaS says this; means nothing.
-- _Marketing-speak without grounding_: "Unlock the power of next-generation AI." — say what it does for a _person_, not the abstract category.
+- _Noun-phrase bullet lists_: "For crew. Seamless experience. Real-time communication. Crews always informed." — 听起来像 slide bullets，不像 dialogue。
+- _Generic single-word bridges_（除非刻意为之）: "Or...", "And..." — 可以作为更强 arc 内的 breath beats；但如果是一个 5 秒 scene 的唯一内容，就很弱。
+- _Vague capability claims_: "Streamline your workflow." — 每个 SaaS 都会这么说，等于没说。
+- _Marketing-speak without grounding_: "Unlock the power of next-generation AI." — 说清楚它为一个 _person_ 做了什么，而不是谈抽象 category。
 
-### Empty / silent scripts are allowed
+### 允许 empty / silent scripts
 
-When the visual carries the message, set `script: ""` and let the scene be silent. The reverse-engineered samples do this deliberately:
+当视觉本身承载信息时，设置 `script: ""`，让 scene 保持 silent。Reverse-engineered samples 有意这样做：
 
-- ZapBG scenes 8-9 (drag-and-drop demo): empty script — the UI interaction _is_ the message
-- JustCall IQ scene 7 (leaderboard): empty script — the visual gamification carries the persuasion
-- Skye scenes 4, 7 (feature pivots): empty script — narrator pauses while the dashboard updates
+- ZapBG scenes 8-9（drag-and-drop demo）：empty script，因为 UI interaction _就是_ message
+- JustCall IQ scene 7（leaderboard）：empty script，因为 visual gamification 承载 persuasion
+- Skye scenes 4、7（feature pivots）：empty script，因为 narrator 在 dashboard 更新时暂停
 
-If you set empty script, the `narrativeIntent` must be especially strong — `narrativeRole` and `persuasion` carry what the script doesn't.
+如果你设置 empty script，`narrativeIntent` 必须尤其强，因为 `narrativeRole` 和 `persuasion` 要承载 script 没有说出的内容。
 
-## UI demo as a sequence, not a single scene
+## UI demo 应该是 sequence，不是单个 scene
 
-The phase 2 archive overwhelmingly treats the UI demo as a **sequence of 3-15 consecutive scenes**, each focusing on one feature area, glued together with `ui_morphing` transitions:
+Phase 2 archive 绝大多数都把 UI demo 当作 **3-15 个连续 scenes 组成的 sequence**，每个 scene 聚焦一个 feature area，并用 `ui_morphing` transitions 粘合：
 
-| Sample          | UI demo span | % of runtime       | Pattern                                                                                                               |
+| Sample（样例）  | UI demo span | Runtime 占比       | Pattern（模式）                                                                                                       |
 | --------------- | ------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | Madison         | scenes 6-14  | 53%                | 9 consecutive feature_showcase scenes (integrations → SEO → reviews → social → campaign → reporting → chat assistant) |
 | GWI             | scenes 3-6   | 45%                | 3 feature_showcase queries (NBA fans, APAC fashion, US parents) + value cascade                                       |
@@ -176,120 +168,120 @@ The phase 2 archive overwhelmingly treats the UI demo as a **sequence of 3-15 co
 | JustCall        | scenes 4-13  | 60%                | Contact import → 3 dialer modes → analytics → team perf → AI insights → outcomes                                      |
 | NFT Marketplace | scenes 13-27 | 38% (of 39 scenes) | 15-scene purchase + sell workflow walkthrough                                                                         |
 
-This means the requirement "at least one UI demo scene" should be re-read as: **at least one UI demo sequence (3+ consecutive feature/benefit scenes on the same product surface, with `ui_morphing` or `camera_zoom_pan` transitions between them).** A single demo scene in isolation rarely lands.
+这意味着 “at least one UI demo scene” 这个要求应该被重新理解为：**至少一个 UI demo sequence（3+ 个连续 feature/benefit scenes，位于同一 product surface 上，并且 scenes 之间使用 `ui_morphing` 或 `camera_zoom_pan` transitions）。** 单个孤立 demo scene 很少能真正打动人。
 
-How a planner identifies a UI demo sequence:
+Planner 识别 UI demo sequence 的方式：
 
-- Scene type is `feature_showcase` or `benefit_highlight`
-- `narrativeRole` contains words like "Demonstrates," "Highlights," "Shows," "Illustrates," "Walks through"
-- `script` references dashboard, interface, modal, workflow, profile, or specific UI element names
-- Transition type is `ui_morphing` or `camera_zoom_pan`
-- Preceding scene is `product_intro`; following scenes continue the showcase or pivot to `social_proof` / `cta`
+- Scene type 是 `feature_showcase` 或 `benefit_highlight`
+- `narrativeRole` 包含 “Demonstrates,” “Highlights,” “Shows,” “Illustrates,” “Walks through” 这类词
+- `script` 引用了 dashboard、interface、modal、workflow、profile，或具体 UI element names
+- Transition type 是 `ui_morphing` 或 `camera_zoom_pan`
+- 前一个 scene 是 `product_intro`；后续 scenes 继续 showcase，或 pivot 到 `social_proof` / `cta`
 
-## Inputs from Phase 1 — web-research
+## 工作流程
 
-Phase 1 writes `./research/`. You read: `context_pack.md` (read first — compact digest), `extraction.json` (drill-down for asset URLs / section rects / colors), `screenshot_full.png` (visual judgment), `research/assets/` (your asset pool — every `assetCandidates[].path` must be `public/<basename>` where `<basename>` is a file here; Phase 4a's `prep.mjs` copies these into `hyperframes/public/`).
+1. **Review capture data**：从头到尾阅读 `context_pack.md`。列出 `capture/assets/` 下已下载的 assets，确认你的 asset pool。
+2. **Choose an archetype**：选择适合产品和受众的 archetype（阅读相关 `archetypes/<name>/overview.md`）。如果两个 archetypes 都在起作用，命名 compound（如 `"PAS with Feature-Benefit Cascade"`）。
+3. **Pick the hook strategy**：从上面的 taxonomy 中选择 hook strategy。用你全片会使用的 _voice_ 写开场句。
+4. **Design the scene sequence**：纯粹从 narrative 出发，而不是按网页顺序。规划一个 UI demo _sequence_（3+ scenes），而不是一个单独 demo scene。
+5. **Define the Narrative Intent**：为每个 scene 定义全部 5 个字段，persuasion 从 catalog 中选择，emotional beat 从 constrained vocab 中选择。
+6. **Pick a transition**：为每个 scene 从 taxonomy 中选择 transition。每个 transition description 写 10-30 词，说明什么在 morph/wipe/zoom，以及视线落点在哪里。
+7. **List per-scene `assetCandidates`**：见下方”每个 scene 的 asset candidates”章节的规则。
+8. **Write narrator scripts**：为每个 scene 写 narrator script（纯文本，无 markdown）。使用 script voice quality bar：anaphora、specificity、imperative verbs、humor、cultural signaling。当视觉承载信息时设置 `script: ""`，并强化 `narrativeIntent` 字段来补偿。
+9. **Set a realistic `estimatedDuration`**：为每个 scene 设置现实的 `estimatedDuration`（如 `"5-6s"` 或 `"5.5"`）。下游 tooling 会把它当作 timing contract。
+10. **Write `narrator_scripts.json`**：使用下方 canonical schema 编写。
 
-## Workflow
+## 每个 scene 的 asset candidates
 
-1. **Review research data**: read `context_pack.md` end-to-end. Skim `screenshot_full.png`. Drill into `extraction.json` only when you need exact asset URLs or color tokens. List the downloaded assets under `research/assets/` so you know your asset pool.
-2. **Choose an archetype** that fits the product and audience (read the relevant `archetypes/<name>/overview.md`). If two archetypes are operating, name the compound (e.g., `"PAS with Feature-Benefit Cascade"`).
-3. **Pick the hook strategy** from the taxonomy above. Write the opening line in the _voice_ you'll use throughout.
-4. **Design the scene sequence** — purely narrative, not webpage order. Plan for one UI demo _sequence_ (3+ scenes), not one demo scene.
-5. **Define the Narrative Intent** for each scene (all 5 fields, drawing persuasion from the catalog and emotional beat from the constrained vocab).
-6. **Pick a transition** for every scene from the taxonomy. Write a 10-30 word description per transition that names what's morphing/wiping/zooming and where the eye lands.
-7. **List per-scene `assetCandidates`** — one or more `{path, description}` entries (see "Asset candidates per scene" below). This is the bridge from research → visual-design: downstream Phase 3 reads only `narrator_scripts.json`, never `research/`, so the asset pool for each scene must be named here.
-8. **Write narrator scripts** for each scene (plain text, no markdown). Use the script voice quality bar — anaphora, specificity, imperative verbs, humor, cultural signaling. Set `script: ""` when the visual carries the message (and strengthen the `narrativeIntent` fields to compensate).
-9. **Set a realistic `estimatedDuration`** per scene (e.g. `"5-6s"` or `"5.5"`). Downstream tooling treats this as the timing contract.
-10. **Write `narrator_scripts.json`** using the canonical schema below.
+Phase 3（visual-design）和 Phase 4b（scene workers）**绝不会读取 `capture/`**，它们只消费 `narrator_scripts.json` 和 `section_plan.md`。这意味着下游 scene 可能用到的每个视觉素材，都必须在 `narrator_scripts.json` 的对应 scene 上命名。
 
-## Asset candidates per scene
-
-Phase 3 (visual-design) and Phase 4b (scene workers) **never read `research/`** — they consume `narrator_scripts.json` and `section_plan.md` only. That means every visual asset a downstream scene might use must be named on the scene in `narrator_scripts.json`.
-
-For each scene, list one or more `assetCandidates` — visual assets that fit the scene's narrative intent. The full list is forwarded verbatim to the Phase 4b scene worker (via Phase 4a's `prep.mjs`); visual-design references the candidates in its prose brief, and the worker decides which to make focal vs. supporting based on that brief.
+对每个 scene，列出一个或多个 `assetCandidates`，也就是适合该 scene narrative intent 的视觉素材。完整列表会逐字转发给 Phase 4b scene worker（通过 Phase 4a 的 `prep.mjs`）；visual-design 会在 prose brief 中引用这些 candidates，worker 则根据 brief 决定哪些作为 focal、哪些作为 supporting。
 
 ```jsonc
 "assetCandidates": [
   {
     "path": "public/dashboard-hero.png",
-    "description": "main product UI showing the feature timeline, 1920x1080, dark theme"
+    "description": "展示 feature timeline 的主产品 UI，1920x1080，dark theme"
   },
   {
     "path": "public/dashboard-detail.svg",
-    "description": "isolated icon of the timeline component, suitable as a supporting motif"
+    "description": "timeline component 的独立 icon，适合作为 supporting motif"
   }
 ]
 ```
 
-Rules:
+规则：
 
-- **`path`** — exactly `public/<basename>`. The `<basename>` must correspond to a file in `research/assets/` (Phase 4a copies that union into `hyperframes/public/`).
-- **`description`** — short prose (≤25 words) that names what's in the asset, rough dimensions if you know them, and any visual notes (dark/light, dominant color, photo vs. UI vs. icon). visual-design uses this to decide how each asset fits the scene's composition; the worker uses it to lay the assets out without opening the files.
-- **At least 1 candidate per scene that has a visual hero.** Title-only / pure-typography scenes may use an empty array `[]` — visual-design and the Phase 4b worker treat that as a deliberately text-only scene.
-- **Order matters when there's ambiguity** — put the most narratively-aligned asset first. Downstream picks tend to favor the first entry when the description otherwise leaves the choice open.
-- **Pick from what was actually downloaded.** Cross-reference `research/extraction.json` → asset list or `ls research/assets/`. Inventing a basename that doesn't exist is a Phase 4a fatal error.
-- **A single asset MAY appear across multiple scenes** when narratively the same hero carries through (e.g., scenes 3–7 all showcase the same dashboard).
+- **`path`** — 必须精确为 `public/<basename>`。`<basename>` 直接从 Asset Inventory 条目中读取（格式为 `assets/001-xxx.png`），去掉 `assets/` 前缀，加 `public/` 前缀。例如 `assets/022-2f1c0ba7-1260x944.png` → `"public/022-2f1c0ba7-1260x944.png"`。Phase 4a 会把 `capture/assets/` 复制到视频项目根的 `public/`。
+- **`description`** — 简短 prose（≤25 words），说明 asset 里有什么、已知的大致尺寸，以及视觉备注（dark/light、dominant color、photo vs. UI vs. icon）。visual-design 会用它判断每个 asset 如何适配 scene composition；worker 会用它在不打开文件的情况下安排 assets。
+- **每个有 visual hero 的 scene 至少 1 个 candidate。** 纯标题 / pure-typography scenes 可以使用空数组 `[]`；visual-design 和 Phase 4b worker 会把它视为刻意的 text-only scene。
+- **有歧义时顺序很重要** — 把最符合叙事的 asset 放在第一位。下游在 description 仍留有选择空间时，往往偏向第一项。
+- **只从实际下载的内容中选择。** 对照 `capture/extraction.json` 的 asset list 或 `ls capture/assets/`。编造不存在的 basename 会导致 Phase 4a fatal error。
+- **同一个 asset 可以出现在多个 scenes 中**，只要叙事上同一个 hero 贯穿即可（例如 scenes 3-7 都 showcase 同一个 dashboard）。
 
-## Validation checklist
+## 验证清单
 
-- Does every scene have a complete Narrative Intent (all 5 fields)?
-- Does every scene have a `transition` with `type` (from taxonomy) and `description` (10-30 words)?
-- Does every scene have `assetCandidates` (array, may be empty for text-only scenes)? For visual scenes, does each candidate's `path` correspond to a real file in `research/assets/`?
-- Does the emotional arc rise and fall meaningfully (not monotone)? Does it match the archetype's pattern (PAS = negative valley → relief; Cascade = steady positive climb)?
-- Is the sequence narrative-driven, not webpage-ordered?
-- Is there at least one UI demo _sequence_ (3+ consecutive feature/benefit scenes with ui_morphing or camera_zoom_pan transitions)?
-- Are persuasion fields named techniques from the catalog, not vague benefits?
-- Are emotional beats specific (single word or short compound), not generic ("positive")?
-- Does the hook use a named strategy from the taxonomy?
-- Only one outer archetype used (no mixing top-level frameworks)? Inner-rhythm compounds are fine if named explicitly.
+- 每个 scene 是否都有完整的 Narrative Intent（全部 5 个字段）？
+- 每个 scene 是否都有 `transition`，并包含 `type`（来自 taxonomy）和 `description`（10-30 words）？
+- 每个 scene 是否都有 `assetCandidates`（array；text-only scenes 可以为空）？对于视觉 scenes，每个 candidate 的 `path` 是否对应 `capture/assets/` 中的真实文件？
+- 情绪弧线是否有有意义的起伏（不是单调的）？它是否匹配 archetype 的 pattern（PAS = negative valley → relief；Cascade = steady positive climb）？
+- Sequence 是否由 narrative 驱动，而不是按网页顺序？
+- 是否至少有一个 UI demo _sequence_（3+ 个连续 feature/benefit scenes，使用 `ui_morphing` 或 `camera_zoom_pan` transitions）？
+- Persuasion fields 是否是 catalog 中的具名 techniques，而不是模糊 benefits？
+- Emotional beats 是否具体（单词或短复合词组），而不是泛泛的 “positive”？
+- Hook 是否使用了 taxonomy 中的具名 strategy？
+- 是否只使用了一个 outer archetype（没有混用顶层 frameworks）？如果明确命名，inner-rhythm compounds 是可以的。
 
-## `narrator_scripts.json` — canonical schema
+## `narrator_scripts.json`：canonical schema
 
-The frontend (and downstream agents) expect these **exact** field names. Wrong names (`scene_id` instead of `sceneNumber`, `narration` instead of `script`, flattened intent fields) will cause display + parsing issues.
+Frontend（以及下游 agents）期望这些 **精确** 字段名。错误命名（如用 `scene_id` 代替 `sceneNumber`、用 `narration` 代替 `script`、把 intent fields 平铺）会导致展示和解析问题。
 
 ```json
 {
-  "project": "project name",
-  "narrativeArchetype": "selected archetype (or compound: \"<outer> with <inner>\")",
-  "emotionalArc": "description of the emotional journey (e.g. 'Frustration with manual processes shifting to relief and excitement through smart calling automation.')",
+  "project": "项目名称",
+  "narrativeArchetype": "选择的 archetype（或 compound：\"<outer> with <inner>\"）",
+  "emotionalArc": "情绪旅程描述（例如：'Frustration with manual processes shifting to relief and excitement through smart calling automation.'）",
   "scenes": [
     {
       "sceneNumber": 1,
-      "sceneName": "scene name",
+      "sceneName": "scene 名称",
       "transition": {
         "type": "none_first_scene|kinetic_typography|ui_morphing|camera_zoom_pan|fade_color_bleed|vector_shape_wipe|match_cut",
-        "description": "10-30 word concrete visual direction — name what's morphing/wiping/zooming and where the eye lands"
+        "description": "10-30 词的具体 visual direction，说明什么在 morph/wipe/zoom，以及视线落点在哪里"
       },
       "narrativeIntent": {
         "type": "hook|pain_point|product_intro|feature_showcase|benefit_highlight|social_proof|branding|cta",
-        "narrativeRole": "what job this scene does in the story (not what's on screen)",
-        "keyMessage": "what the viewer should remember (one sentence)",
-        "persuasion": "named technique from the catalog (combine if multiple operate)",
-        "emotionalBeat": "single word or short compound from the vocabulary"
+        "narrativeRole": "这个 scene 在故事中的 job（不是屏幕上有什么）",
+        "keyMessage": "观众应该记住的信息（一句话）",
+        "persuasion": "catalog 中的具名 technique（如果多种机制同时起作用，可以组合）",
+        "emotionalBeat": "vocabulary 中的单词或短复合词组"
       },
       "assetCandidates": [
         {
-          "path": "public/<basename-from-research-assets>",
-          "description": "short prose: what's in the asset + rough dims + visual notes"
+          "path": "public/<basename-from-capture-assets>",
+          "description": "简短 prose：asset 里有什么 + 大致尺寸 + 视觉备注"
         }
       ],
-      "script": "plain text narration, no markdown. May be empty string when the visual carries the message.",
+      "script": "纯文本旁白。可以嵌入 <em>/<brand>/<emph>/<cta> 标签作为创作期的注释（TTS 会自动 strip，不会读出来）。当视觉承载信息时可以是空字符串。",
       "estimatedDuration": "5-6s"
     }
   ]
 }
 ```
 
-Field rules:
+字段规则：
 
-- Use `sceneNumber` (not `scene_id`), `sceneName` (not `scene_name`), `script` (not `narration`), and nest intent fields inside `narrativeIntent` (not flat on the scene object).
-- The `transition` field is required for every scene including scene 1 (use `none_first_scene`).
-- `assetCandidates` is **required** and must be an array. Use `[]` for genuinely text-only scenes (title cards, pure typography). For any scene with a visual hero, include at least one `{path, description}` entry.
-- Each `assetCandidates[].path` must be `public/<basename>` where the basename exists in `research/assets/`. Phase 4a's `prep.mjs` will fail on missing files.
+- 使用 `sceneNumber`（不是 `scene_id`）、`sceneName`（不是 `scene_name`）、`script`（不是 `narration`），并把 intent fields 嵌套在 `narrativeIntent` 内（不要平铺到 scene object 上）。
+- 每个 scene 都必须有 `transition` 字段，包括 scene 1（使用 `none_first_scene`）。
+- `assetCandidates` 是 **必需** 字段，且必须是 array。真正 text-only 的 scenes（title cards、pure typography）使用 `[]`。任何有 visual hero 的 scene，都要至少包含一个 `{path, description}` 条目。
+- 每个 `assetCandidates[].path` 都必须是 `public/<basename>`，且 basename 存在于 `capture/assets/` 中。Phase 4a 的 `prep.mjs` 会在文件缺失时失败。
 
-## See also
+### 字幕（不归 story-design 管）
 
-- `phases/visual-design/guide.md` — visual treatment for each scene (downstream; consumes `narrator_scripts.json` only — `transition`, `narrativeIntent`, and `assetCandidates` — never reads `research/`).
-- `phases/web-research/guide.md` — upstream Phase 1. Owns the capture script and writes `research/`.
-- `/product-launch-video` (this skill's `SKILL.md`) — orchestrator that calls this guide as Phase 2 of the website-to-launch-video pipeline.
+不写 `captions: string[]` 字段。`script` 里 `<em>/<brand>/<emph>/<cta>` 标签会被 TTS 端 strip，写不写都不驱动下游视觉。
+
+## 另请参阅
+
+- `phases/visual-design/guide.md` — 每个 scene 的 visual treatment（下游；只消费 `narrator_scripts.json` 中的 `transition`、`narrativeIntent` 和 `assetCandidates`，绝不读取 `capture/`）。
+- `phases/web-capture/guide.md` — 上游 Phase 1。负责 capture script 并写入 `capture/`。
+- `/launch-video-v2`（本 skill 的 `SKILL.md`）— orchestrator，会在 website-to-launch-video pipeline 的 Phase 2 调用本指南。

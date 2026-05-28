@@ -2,8 +2,9 @@
 // Phase 2.5 — audio (deterministic replacement for the audio subagent).
 //
 // Reads:  narrator_scripts.json (Phase 2).
-// Writes: hyperframes/assets/voice/scene_*.wav, hyperframes/assets/voice/scene_*_words.json,
-//         ./audio_meta.json, and (eventually) hyperframes/assets/bgm.wav.
+// Writes: assets/voice/scene_*.wav, assets/voice/scene_*_words.json,
+//         ./audio_meta.json, and (eventually) assets/bgm.wav inside the
+//         HyperFrames project root passed via --hyperframes.
 //
 // Performance contract:
 //   * Per-scene TTS is chained into per-scene transcribe (a scene's whisper run
@@ -15,18 +16,18 @@
 //
 // BGM prompt inference: the script reads concatenated `script` + `keyMessage`
 // fields from narrator_scripts.json (no tokens.json side file — Phase 1
-// web-research writes asset/section data into research/extraction.json which
-// this script doesn't need). Override with --bgm-prompt "..." if the
+// hyperframes capture writes asset/section data into capture/extracted/
+// which this script doesn't need). Override with --bgm-prompt "..." if the
 // auto-inferred mood is wrong.
 //
 // Usage:
 //   node audio.mjs \
 //     --narrator-scripts ./narrator_scripts.json \
-//     --hyperframes ./hyperframes \
+//     --hyperframes . \
 //     --out ./audio_meta.json \
 //     [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
 //     [--voice <id>] [--lang en] \
-//     [--provider kokoro|elevenlabs] \
+//     [--provider heygen|elevenlabs|kokoro] \
 //     [--no-bgm] [--bgm-prompt "<custom prompt>"]
 
 import { spawn, spawnSync } from "node:child_process";
@@ -59,19 +60,52 @@ function die(msg) {
 }
 
 const narratorPath = resolve(flag("narrator-scripts", "./narrator_scripts.json"));
-const hyperframesDir = resolve(flag("hyperframes", "./hyperframes"));
+const hyperframesDir = resolve(flag("hyperframes", "."));
 const outPath = resolve(flag("out", "./audio_meta.json"));
 const lyriaRecipe = flag("lyria-recipe") ? resolve(flag("lyria-recipe")) : null;
 const userVoice = typeof flag("voice") === "string" ? flag("voice") : null;
 const userBgmPrompt = typeof flag("bgm-prompt") === "string" ? flag("bgm-prompt") : null;
 const noBgm = flag("no-bgm") === true;
-const userProvider =
-  typeof flag("provider") === "string" ? flag("provider") : null;
+const userProvider = typeof flag("provider") === "string" ? flag("provider") : null;
 const lang = typeof flag("lang") === "string" ? flag("lang") : "en";
 
-// ---------- Step 1: bootstrap hyperframes/ ----------
+// ---------- load .env ----------
+// Mirrors the CLI's loadEnvFile (packages/cli/src/capture/scaffolding.ts):
+// walk up from hyperframesDir ≤ 5 dirs, first .env wins, shell env always
+// takes priority (we never override an already-set key).
+function loadEnvFromDir(startDir) {
+  let dir = resolve(startDir);
+  for (let i = 0; i < 5; i++) {
+    const envPath = join(dir, ".env");
+    if (existsSync(envPath)) {
+      const txt = readFileSync(envPath, "utf8");
+      for (const raw of txt.split("\n")) {
+        const line = raw.trim();
+        if (!line || line.startsWith("#")) continue;
+        const eq = line.indexOf("=");
+        if (eq < 0) continue;
+        const key = line.slice(0, eq).trim();
+        let val = line.slice(eq + 1).trim();
+        if (
+          (val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))
+        ) {
+          val = val.slice(1, -1);
+        }
+        if (key && !(key in process.env)) process.env[key] = val;
+      }
+      return;
+    }
+    const parent = resolve(dir, "..");
+    if (parent === dir) return;
+    dir = parent;
+  }
+}
+loadEnvFromDir(hyperframesDir);
+
+// ---------- Step 1: bootstrap HyperFrames project root ----------
 if (!existsSync(hyperframesDir)) {
-  console.log(`hyperframes/ missing → npx hyperframes init ${hyperframesDir}`);
+  console.log(`HyperFrames project root missing → npx hyperframes init ${hyperframesDir}`);
   const r = spawnSync(
     "npx",
     [
@@ -86,28 +120,40 @@ if (!existsSync(hyperframesDir)) {
     { stdio: "inherit" },
   );
   if (r.status !== 0) die("npx hyperframes init failed");
+  rmSync(join(hyperframesDir, "AGENTS.md"), { force: true });
+  rmSync(join(hyperframesDir, "CLAUDE.md"), { force: true });
 }
 const voiceDir = join(hyperframesDir, "assets", "voice");
 mkdirSync(voiceDir, { recursive: true });
 
 // ---------- Step 2: read inputs ----------
-if (!existsSync(narratorPath))
-  die(`narrator_scripts.json not found at ${narratorPath}`);
+if (!existsSync(narratorPath)) die(`narrator_scripts.json not found at ${narratorPath}`);
 const narrator = JSON.parse(readFileSync(narratorPath, "utf8"));
+
+// story-design agents may embed inline tags in the script field: <em>...</em>,
+// <brand>...</brand>, <emph>...</emph>, <cta>...</cta>. These are creative-time
+// annotations only — the Phase 4a.5 captions agent does NOT consume them
+// (captions are derived directly from whisper word JSON). audio.mjs strips
+// them before TTS so the provider doesn't speak the tag names. The strip is
+// conservative: only known tag names; unknown markup is passed through (the
+// agent would have to face the TTS pronouncing it).
+const CAPTION_TAG_RE = /<\/?(em|brand|emph|cta)\b[^>]*>/gi;
+function stripCaptionTags(s) {
+  return String(s).replace(CAPTION_TAG_RE, "");
+}
 
 const scenes = (narrator.scenes || []).map((s) => {
   const dm = String(s.estimatedDuration ?? "0").match(/[\d.]+/);
   return {
     sceneNumber: s.sceneNumber,
     sceneId: `scene_${s.sceneNumber}`,
-    script: typeof s.script === "string" ? s.script : "",
+    script: stripCaptionTags(typeof s.script === "string" ? s.script : ""),
     estimatedDuration: dm ? parseFloat(dm[0]) : 0,
   };
 });
 if (scenes.length === 0) die("no scenes in narrator_scripts.json");
 for (const s of scenes) {
-  if (!s.script.trim())
-    die(`${s.sceneId}: empty "script" field in narrator_scripts.json`);
+  if (!s.script.trim()) die(`${s.sceneId}: empty "script" field in narrator_scripts.json`);
 }
 
 // BGM-inference corpus: concatenate every scene's narrative metadata so we can
@@ -121,7 +167,7 @@ const bgmInferenceBlob = (() => {
   ];
   for (const s of narrator.scenes || []) {
     parts.push(s.sceneName || "");
-    parts.push(s.script || "");
+    parts.push(stripCaptionTags(s.script || ""));
     if (s.narrativeIntent) {
       parts.push(s.narrativeIntent.narrativeRole || "");
       parts.push(s.narrativeIntent.keyMessage || "");
@@ -131,6 +177,13 @@ const bgmInferenceBlob = (() => {
 })();
 
 // ---------- Step 3: provider detection ----------
+// Chain mirrors the CLI's `hyperframes tts` selectProvider() (cli/src/tts/providers/index.ts):
+//   heygen     ← $HEYGEN_API_KEY        (cloud, returns word timestamps)
+//   elevenlabs ← $ELEVENLABS_API_KEY + `pip install elevenlabs`
+//   kokoro     ← always (local, no key)
+function heygenAvailable() {
+  return !!process.env.HEYGEN_API_KEY;
+}
 function elevenlabsAvailable() {
   if (!process.env.ELEVENLABS_API_KEY) return false;
   const r = spawnSync("python3", ["-c", "import elevenlabs"], {
@@ -138,99 +191,135 @@ function elevenlabsAvailable() {
   });
   return r.status === 0;
 }
+// Lyria accepts either GEMINI_API_KEY or GOOGLE_API_KEY (CLI parity:
+// packages/cli/src/bgm/lyria.ts uses the same OR-fallback).
+function lyriaKey() {
+  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+}
 
 let provider = userProvider;
-if (!provider) provider = elevenlabsAvailable() ? "elevenlabs" : "kokoro";
-if (provider !== "kokoro" && provider !== "elevenlabs")
-  die(`invalid --provider "${provider}" (must be kokoro or elevenlabs)`);
+if (!provider) {
+  provider = heygenAvailable() ? "heygen" : elevenlabsAvailable() ? "elevenlabs" : "kokoro";
+}
+if (!["heygen", "elevenlabs", "kokoro"].includes(provider))
+  die(`invalid --provider "${provider}" (must be heygen | elevenlabs | kokoro)`);
+if (provider === "heygen" && !process.env.HEYGEN_API_KEY)
+  die("provider=heygen but $HEYGEN_API_KEY is not set");
 if (provider === "elevenlabs" && !process.env.ELEVENLABS_API_KEY)
   die("provider=elevenlabs but $ELEVENLABS_API_KEY is not set");
 
 const voiceId =
   userVoice ||
-  (provider === "elevenlabs"
-    ? "21m00Tcm4TlvDq8ikWAM" // Rachel (ElevenLabs default)
-    : lang === "en"
-      ? "am_michael"
-      : die(
-          "Kokoro non-English path requires explicit --voice (see /hyperframes-media references/tts.md)",
-        ));
+  (provider === "heygen"
+    ? "1bd001e7e50f421d891986aad5158bc8" // HeyGen default (mirrors CLI heygen.ts DEFAULT_VOICE)
+    : provider === "elevenlabs"
+      ? "21m00Tcm4TlvDq8ikWAM" // Rachel (ElevenLabs default)
+      : lang === "en"
+        ? "am_michael"
+        : die(
+            "Kokoro non-English path requires explicit --voice (see /hyperframes-media references/tts.md)",
+          ));
 
 // ---------- Step 4: write narration → /tmp/scene_<N>.txt ----------
 for (const s of scenes) {
   writeFileSync(`/tmp/${s.sceneId}.txt`, s.script);
 }
 
-// ---------- Step 5: spawn BGM detached (does NOT block voice work) ----------
+// ---------- Step 4b: pre-flight BGM-deps install (parallel with TTS) ----------
+// MusicGen via HuggingFace transformers (no audiocraft / xformers / PyAV — those
+// don't build cleanly on Apple Silicon). If Lyria won't be used and deps are
+// missing, kick off pip install now so it runs in the background while TTS is
+// generating. We await the result in Step 5b before deciding whether to spawn BGM.
+const BGM_PY_DEPS = ["transformers", "torch", "soundfile"];
+const BGM_PY_PROBE =
+  "import transformers, soundfile, torch; from transformers import MusicgenForConditionalGeneration";
+let bgmDepsInstallPromise = null;
+if (!noBgm && !(lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe))) {
+  const probe = spawnSync("python3", ["-c", BGM_PY_PROBE], { stdio: "ignore" });
+  if (probe.status !== 0) {
+    console.log(
+      `BGM: deps missing → pip install ${BGM_PY_DEPS.join(" ")} (background, parallel with TTS)…`,
+    );
+    bgmDepsInstallPromise = new Promise((resolve) => {
+      const proc = spawn("pip", ["install", "-q", ...BGM_PY_DEPS], { stdio: "ignore" });
+      proc.on("exit", (code) => {
+        if (code === 0) console.log("BGM: deps install complete ✓");
+        else console.log(`BGM: deps install failed (exit ${code}) — BGM will be skipped`);
+        resolve(code === 0);
+      });
+      proc.on("error", () => resolve(false));
+    });
+  }
+}
+
+// ---------- Step 5: BGM variables + helpers ----------
 const bgmRelPath = "assets/bgm.wav";
 const bgmAbsPath = join(hyperframesDir, bgmRelPath);
 let bgmEnabled = false;
 let bgmReason = "";
 let bgmPid = null;
 
-if (noBgm) {
-  bgmReason = "disabled by --no-bgm";
-} else if (!process.env.GOOGLE_API_KEY) {
-  bgmReason = "$GOOGLE_API_KEY not set";
-} else if (!lyriaRecipe) {
-  bgmReason = "--lyria-recipe not provided";
-} else if (!existsSync(lyriaRecipe)) {
-  bgmReason = `lyria-recipe not found at ${lyriaRecipe}`;
-} else {
-  const totalS = scenes.reduce((sum, s) => sum + s.estimatedDuration, 0);
-  const prompt = inferBgmPrompt();
-  const log = `/tmp/bgm-${Date.now()}.log`;
-  console.log(`BGM: launching Lyria (detached) — prompt: "${prompt.slice(0, 70)}…"`);
-  console.log(`     log: ${log}`);
-  const fd = openSync(log, "w");
-  const bgm = spawn(
-    "python3",
-    [
-      lyriaRecipe,
-      "--output",
-      bgmAbsPath,
-      "--duration",
-      String(Math.max(1, totalS)),
-      "--prompt",
-      prompt,
-    ],
-    {
-      detached: true,
-      stdio: ["ignore", fd, fd],
-    },
-  );
-  bgm.unref();
-  closeSync(fd);
-  bgmEnabled = true;
-  bgmPid = bgm.pid;
+function bgmPyDepsAvailable() {
+  const r = spawnSync("python3", ["-c", BGM_PY_PROBE], { stdio: "ignore" });
+  return r.status === 0;
 }
 
 function inferBgmPrompt() {
   if (userBgmPrompt) return userBgmPrompt;
   const blob = bgmInferenceBlob;
-  if (
-    /\b(saas|api|cloud|developer|platform|workspace|dashboard|infra|devtool|sdk)\b/.test(
-      blob,
-    )
-  ) {
-    return "Uplifting corporate tech, bright and modern, gentle piano with synth pads, BPM 110, MAJOR";
-  }
+
+  // --- Industry base ---
+  let base, bpm;
   if (/\b(crypto|nft|web3|defi|token|blockchain|exchange|wallet|dao)\b/.test(blob)) {
-    return "Atmospheric electronic, deep bass, futuristic synths, restrained percussion, BPM 100";
+    base = "atmospheric electronic, deep bass, futuristic synths, restrained percussion";
+    bpm = 100;
+  } else if (/\b(finance|fintech|bank|payment|invest|wealth|insurance|treasury)\b/.test(blob)) {
+    base = "calm cinematic, soft strings, subtle piano, restrained percussion";
+    bpm = 92;
+  } else if (/\b(creative|agency|design|studio|art|brand|marketing|content)\b/.test(blob)) {
+    base = "playful electronic, warm pads, light percussion";
+    bpm = 115;
+  } else {
+    // default: SaaS / tech / platform
+    base = "uplifting corporate tech, bright modern piano with synth pads";
+    bpm = 108;
   }
-  if (
-    /\b(creative|agency|design|studio|art|brand|marketing|content)\b/.test(blob)
-  ) {
-    return "Playful electronic, warm pads, light percussion, BPM 115, MAJOR";
+
+  // --- Archetype adjusts arc shape ---
+  const archetype = (narrator.narrativeArchetype || "").toLowerCase();
+  const arc = (narrator.emotionalArc || "").toLowerCase();
+
+  // PAS: starts tense, resolves → build from minor to major feel
+  if (/\bpas\b|pain.agitate|pain.+solve/.test(archetype)) {
+    return `${base}, starts with subtle tension then builds to resolution, BPM ${bpm}, transitions from MINOR to MAJOR`;
   }
-  if (
-    /\b(finance|fintech|bank|payment|invest|wealth|insurance|treasury)\b/.test(
-      blob,
-    )
-  ) {
-    return "Calm cinematic, soft strings, restrained percussion, BPM 95";
+  // BAB / Future Pacing: visionary, ascending energy
+  if (/\bbab\b|before.after|future.pac|vision/.test(archetype)) {
+    return `${base}, cinematic and aspirational, steady build with rising energy, BPM ${bpm}, MAJOR`;
   }
-  return "Uplifting corporate tech, bright and modern, gentle piano with synth pads, BPM 110, MAJOR";
+  // Feature Cascade: fast momentum, no dip
+  if (/cascade|feature.benefit/.test(archetype)) {
+    bpm = Math.min(bpm + 10, 128);
+    return `${base}, energetic and driving, consistent momentum without slowdown, BPM ${bpm}, MAJOR`;
+  }
+  // Demo Loop: focused, clean, not distracting
+  if (/demo.loop|question.+answer/.test(archetype)) {
+    bpm = Math.max(bpm - 8, 88);
+    return `${base}, clean and focused, minimal arrangement to not distract from UI demo, BPM ${bpm}`;
+  }
+
+  // --- Emotional arc as tiebreaker ---
+  if (/frustrat|anxiety|overwhelm|tension/.test(arc) && /relief|excite|triumph/.test(arc)) {
+    return `${base}, builds from understated tension to uplifting resolution, BPM ${bpm}, MINOR to MAJOR`;
+  }
+  if (/excit|awe|power|triumph/.test(arc)) {
+    return `${base}, energetic and confident, uplifting throughout, BPM ${bpm}, MAJOR`;
+  }
+  if (/trust|ease|clarity|reassur/.test(arc)) {
+    return `${base}, warm and reassuring, gentle momentum, BPM ${Math.max(bpm - 5, 85)}`;
+  }
+
+  return `${base}, BPM ${bpm}, MAJOR`;
 }
 
 // ---------- Step 6: per-scene chained TTS → transcribe (parallel across scenes) ----------
@@ -260,41 +349,40 @@ save(audio, sys.argv[3])
 async function ttsScene(s) {
   const txt = `/tmp/${s.sceneId}.txt`;
   const wavRel = `assets/voice/${s.sceneId}.wav`;
-  if (provider === "kokoro") {
-    const args = [
-      "hyperframes",
-      "tts",
-      txt,
-      "--voice",
-      voiceId,
-      "--output",
-      wavRel,
-    ];
-    if (lang !== "en") args.push("--lang", lang);
-    return spawnP("npx", args, { cwd: hyperframesDir });
-  } else {
+
+  // ElevenLabs: direct python SDK (no CLI dependency — keeps Kokoro/HeyGen and ElevenLabs paths isolated).
+  if (provider === "elevenlabs") {
     const wavAbs = join(hyperframesDir, wavRel);
     return spawnP("python3", ["-c", ELEVENLABS_PY, txt, voiceId, wavAbs], {});
   }
+
+  // heygen + kokoro: delegate to CLI. Pass --provider explicitly so CLI's
+  // selectProvider() doesn't disagree with this script's choice when multiple
+  // API keys are present (e.g. HEYGEN_API_KEY set but user forced --provider kokoro).
+  const args = [
+    "hyperframes",
+    "tts",
+    txt,
+    "--provider",
+    provider,
+    "--voice",
+    voiceId,
+    "--output",
+    wavRel,
+  ];
+  if (lang !== "en") args.push("--lang", lang);
+  return spawnP("npx", args, { cwd: hyperframesDir });
 }
 
 async function transcribeScene(s) {
   // `npx hyperframes transcribe` writes a fixed `transcript.json` into its
   // --dir. Parallel scenes would collide if they all wrote into
-  // hyperframes/assets/voice/transcript.json, so give each scene its own
+  // assets/voice/transcript.json, so give each scene its own
   // throwaway --dir and move the result into the canonical name afterwards.
   const wavRel = `assets/voice/${s.sceneId}.wav`;
   const model = lang === "en" ? "small.en" : "small";
   const td = mkdtempSync(join(tmpdir(), `hf-trans-${s.sceneId}-`));
-  const args = [
-    "hyperframes",
-    "transcribe",
-    wavRel,
-    "--model",
-    model,
-    "--dir",
-    td,
-  ];
+  const args = ["hyperframes", "transcribe", wavRel, "--model", model, "--dir", td];
   if (lang !== "en") args.push("--language", lang);
   const r = await spawnP("npx", args, { cwd: hyperframesDir });
   if (r.status === 0) {
@@ -348,19 +436,81 @@ const results = await Promise.all(scenes.map(runScene));
 const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 console.log(`voice work done in ${elapsed}s`);
 
+// ---------- Step 5b: spawn BGM (after TTS — deps install may now be done) ----------
+if (bgmDepsInstallPromise) {
+  console.log("BGM: waiting for deps install to finish…");
+  await bgmDepsInstallPromise;
+}
+
+if (noBgm) {
+  bgmReason = "disabled by --no-bgm";
+} else if (lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe)) {
+  // Path A: Lyria (cloud)
+  const totalS = scenes.reduce((sum, s) => sum + s.estimatedDuration, 0);
+  const prompt = inferBgmPrompt();
+  const log = `/tmp/bgm-${Date.now()}.log`;
+  console.log(`BGM: launching Lyria (detached) — prompt: "${prompt.slice(0, 70)}…"`);
+  console.log(`     log: ${log}`);
+  const fd = openSync(log, "w");
+  const bgm = spawn(
+    "python3",
+    [
+      lyriaRecipe,
+      "--output",
+      bgmAbsPath,
+      "--duration",
+      String(Math.max(1, totalS)),
+      "--prompt",
+      prompt,
+    ],
+    { detached: true, stdio: ["ignore", fd, fd] },
+  );
+  bgm.unref();
+  closeSync(fd);
+  bgmEnabled = true;
+  bgmPid = bgm.pid;
+} else if (bgmPyDepsAvailable()) {
+  // Path B: MusicGen via HuggingFace transformers (local, free, no API key).
+  // pip install transformers torch soundfile  →  facebook/musicgen-small (~300MB).
+  // MusicGen emits ~50 codec frames per second, so max_new_tokens ≈ duration_s × 50.
+  const totalS = scenes.reduce((sum, s) => sum + s.estimatedDuration, 0);
+  const prompt = inferBgmPrompt();
+  const log = `/tmp/bgm-${Date.now()}.log`;
+  console.log(
+    `BGM: launching MusicGen via transformers (detached, local) — prompt: "${prompt.slice(0, 70)}…"`,
+  );
+  console.log(`     log: ${log}`);
+  const fd = openSync(log, "w");
+  const script = [
+    "from transformers import MusicgenForConditionalGeneration, AutoProcessor",
+    "import soundfile as sf",
+    "processor = AutoProcessor.from_pretrained('facebook/musicgen-small')",
+    "model = MusicgenForConditionalGeneration.from_pretrained('facebook/musicgen-small')",
+    `inputs = processor(text=[${JSON.stringify(prompt)}], padding=True, return_tensors='pt')`,
+    `audio = model.generate(**inputs, max_new_tokens=int(${Math.max(1, totalS)} * 50))`,
+    "sr = model.config.audio_encoder.sampling_rate",
+    `sf.write(${JSON.stringify(bgmAbsPath)}, audio[0, 0].cpu().numpy(), sr)`,
+  ].join("; ");
+  const bgm = spawn("python3", ["-c", script], {
+    detached: true,
+    stdio: ["ignore", fd, fd],
+  });
+  bgm.unref();
+  closeSync(fd);
+  bgmEnabled = true;
+  bgmPid = bgm.pid;
+} else {
+  const depsHint = `pip install ${BGM_PY_DEPS.join(" ")}`;
+  bgmReason = !lyriaKey()
+    ? `$GEMINI_API_KEY/$GOOGLE_API_KEY not set; BGM deps not installed (${depsHint})`
+    : `--lyria-recipe not provided; BGM deps not installed (${depsHint})`;
+}
+
 // ---------- Step 7: ffprobe durations + assemble audio_meta.json ----------
 function ffprobeDuration(path) {
   const r = spawnSync(
     "ffprobe",
-    [
-      "-v",
-      "error",
-      "-show_entries",
-      "format=duration",
-      "-of",
-      "default=nw=1:nk=1",
-      path,
-    ],
+    ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", path],
     { encoding: "utf8" },
   );
   if (r.status !== 0) return NaN;
@@ -410,20 +560,18 @@ if (Object.keys(scenesMap).length === 0) {
 // ---------- Step 8: summary ----------
 console.log(`\n✓ wrote ${outPath}`);
 console.log(`  provider: ${provider}  voice: ${voiceId}`);
-console.log(
-  `  scenes voiced: ${Object.keys(scenesMap).length}/${scenes.length}`,
-);
+console.log(`  scenes voiced: ${Object.keys(scenesMap).length}/${scenes.length}`);
 const transcribed = Object.values(scenesMap).filter((s) => s.wordsPath).length;
-console.log(
-  `  scenes transcribed: ${transcribed}/${Object.keys(scenesMap).length}`,
-);
+console.log(`  scenes transcribed: ${transcribed}/${Object.keys(scenesMap).length}`);
 console.log(`  total voice duration: ${audioMeta.total_duration_s}s`);
 if (bgmEnabled) {
-  console.log(`  bgm: launched pid=${bgmPid} (detached, → ${bgmRelPath})`);
+  const bgmBackend =
+    lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe)
+      ? "Lyria"
+      : "MusicGen via transformers (local)";
+  console.log(`  bgm: launched via ${bgmBackend} pid=${bgmPid} (detached, → ${bgmRelPath})`);
   if (audioMeta.bgm_pending) {
-    console.log(
-      `       bgm_pending=true; downstream phases re-check disk before emitting <audio>`,
-    );
+    console.log(`       bgm_pending=true; downstream phases re-check disk before emitting <audio>`);
   } else {
     console.log(`       bgm.wav already on disk`);
   }
@@ -431,6 +579,8 @@ if (bgmEnabled) {
   console.log(`  bgm: disabled (${bgmReason})`);
 }
 if (failedScenes.length) {
-  console.log(`\nfailed scenes (omitted from audio_meta — Phase 4a falls back to estimatedDuration):`);
+  console.log(
+    `\nfailed scenes (omitted from audio_meta — Phase 4a falls back to estimatedDuration):`,
+  );
   for (const id of failedScenes) console.log(`  - ${id}`);
 }
