@@ -458,6 +458,221 @@ The `motifs` JSON block above is the SOLE source of truth. build-design.mjs read
 
 - triple-stamp · cream-frame · script-em · star-ribbon · diamond-bullet · round-stamp · pill-chip · track-dot · grain-tooth
 
+## §C Captions (peoples-stamped karaoke overlay)
+
+Captions ride a dedicated full-bleed sub-composition (`compositions/captions.html`) overlaid on every scene via track 12. They are a **support layer** — primary scene motion still governs the cut. What captions DO carry: the peoples register (stamp-slam entrance, single red drop, blue/orange voice rotation), shrunken to caption scale.
+
+Caption type uses a **single 5-6px red drop**, not the heavy §M triple — the triple is reserved for §T hero / mega-stamp roles (120-200px). At caption scale (72-128px in a 2-3-word line) stacked triple drops clip neighbours; the §T `stamp-statement` recipe applies here instead.
+
+The active word IS the only thing on screen with a shadow. Passed words drop the shadow and fade to ink-55. Upcoming words sit at ink-22 — visible enough to anchor the line, faint enough to never compete with the active stamp.
+
+**Active variant by underlying surface** — caption groups inherit no surface of their own, but the active word's hue depends on what's underneath:
+
+| Scene underneath | Active word color | Drop         |
+| ---------------- | ----------------- | ------------ |
+| `paper`          | `var(--blue)`     | `var(--red)` |
+| `orange`         | `var(--blue)`     | `var(--red)` |
+| `blue`           | `var(--orange)`   | `var(--red)` |
+
+When `captions.mjs` cannot sample the per-window surface (default case), it ships the **paper variant** (blue word). Mixed-surface video → pick majority. Blue-heavy video → switch globally to the orange variant by adding `class="surface-blue"` on every `.cap-line` wrapper.
+
+**Cadence**: ONE group on screen at a time. Hard cut between groups — peoples never crossfades plates, captions are no exception. The within-group transition (active → passed) IS gradual via class toggle, but the line itself snaps off at `group.end` via `tl.set` hard kill.
+
+**Group sizing**: 2-3 words per group. Hard cap. The stamp must LAND; long caption lines dilute the slam. Break on: sentence boundary (`.` `,` `?` `!`) · 150ms+ inter-word silence · 3-word cap.
+
+**Script-flick emphasis** (opt-in, ≤ 1 per group): wrap a word in `<em>` in the source transcript and the captions builder renders it as motif:script-flick — Caveat Brush, `var(--red)`, `-3deg` rotation, no shadow. Use it like §A's "human aside" — once per stamp, never twice. Two script-flicks in one group breaks the register.
+
+**Diverges from §E in one specific way**: captions allow a 350ms `power4.in` opacity drift on group exit. Primary motion in scenes still obeys §E (no ease-in-out on primary motion; hard cut between cuts). Captions are the support layer — soft within-group exit prevents flicker without weakening the brand register.
+
+### Caption config (machine-readable defaults)
+
+```caption-config
+{
+  "position_landscape":   { "bottom": "100px", "anchor": "center" },
+  "position_portrait":    { "bottom": "700px", "anchor": "center" },
+  "font_size_clamp":      "clamp(72px, 8vw, 128px)",
+  "group_words_min":      2,
+  "group_words_max":      3,
+  "group_split_on":       ["sentence_boundary", "silence_150ms", "max_words"],
+  "ease_line_enter":      "back.out(2.4)",
+  "ease_line_exit":       "power4.in",
+  "ease_word_stamp":      "back.out(2.4)",
+  "dur_line_enter":       0.45,
+  "dur_line_exit":        0.35,
+  "dur_word_stamp":       0.18,
+  "dur_word_settle":      0.12,
+  "default_hold_s":       0.42,
+  "active_variants": {
+    "paper":  { "color": "var(--blue)",   "drop": "5px 5px 0 var(--red)" },
+    "orange": { "color": "var(--blue)",   "drop": "5px 5px 0 var(--red)" },
+    "blue":   { "color": "var(--orange)", "drop": "5px 5px 0 var(--red)" }
+  },
+  "default_variant":      "paper",
+  "sound_hooks": {
+    "per_active_word":    "kick + snare double-hit (matches §H stamp-slam cue) — track 20+",
+    "per_emphasis":       "soft pluck or pen-stroke (script-flick)",
+    "per_line_entry":     "low whoosh-short, optional (skip if SFX budget tight)"
+  }
+}
+```
+
+### Caption CSS (paste into `compositions/captions.html` `<style>`)
+
+```caption-css
+/* peoples-platform · captions · single red drop, stamp-slam, ink fade ladder */
+
+.cap-line {
+  position: absolute;
+  left: 50%;
+  bottom: 100px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.32em;
+  align-items: baseline;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(72px, 8vw, 128px);
+  line-height: 0.95;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  z-index: 10;
+}
+
+/* Upcoming — line is on, this word hasn't stamped yet. Faint ink. */
+.cap-word {
+  display: inline-block;
+  color: var(--ink);
+  opacity: 0.22;
+  text-shadow: none;
+  will-change: transform, opacity;
+}
+
+/* Active — THE stamp. Default = paper / orange surface variant (blue word). */
+.cap-word.active {
+  color: var(--blue);
+  opacity: 1;
+  text-shadow: 5px 5px 0 var(--red);
+}
+
+/* Passed — already stamped, fading. No shadow. */
+.cap-word.passed {
+  color: var(--ink);
+  opacity: 0.55;
+  text-shadow: none;
+}
+
+/* Surface-blue override — line over a blue-surface scene swaps the active hue. */
+.cap-line.surface-blue .cap-word.active {
+  color: var(--orange);
+}
+
+/* Script-flick emphasis (transcript-tagged via <em>). Caveat Brush, red, tilted. */
+.cap-word.emphasis,
+.cap-line em.cap-word {
+  font-family: var(--font-script);
+  font-weight: 400;
+  color: var(--red);
+  text-shadow: none;
+  transform: rotate(-3deg);
+  opacity: 1;
+}
+
+/* Portrait variant — lower-third position, smaller cap. */
+@media (max-aspect-ratio: 9/16) {
+  .cap-line {
+    bottom: 700px;
+    font-size: clamp(56px, 7vw, 92px);
+  }
+}
+```
+
+### HTML template (one per group, captions.mjs emits N groups)
+
+```caption-template
+<div class="cap-line" id="cap-g-{N}">
+  <span class="cap-word" id="cap-g-{N}-w-0">{WORD_0}</span>
+  <span class="cap-word" id="cap-g-{N}-w-1">{WORD_1}</span>
+  <!-- 2-3 words per group · wrap one in <em class="cap-word"> for script-flick -->
+  <!-- Add `class="cap-line surface-blue"` when the underlying scene is blue -->
+</div>
+```
+
+### Animation pattern (GSAP recipe captions.mjs emits per group)
+
+```js
+// 1) Line enter at group.start
+tl.fromTo(
+  line,
+  { opacity: 0, y: 16, visibility: "visible" },
+  { opacity: 1, y: 0, duration: 0.45, ease: "back.out(2.4)" },
+  group.start,
+);
+
+// 2) Per word at word.start — class toggle + stamp-slam
+words.forEach((word, i) => {
+  tl.call(
+    () => {
+      word.classList.add("active");
+      if (i > 0) {
+        words[i - 1].classList.remove("active");
+        words[i - 1].classList.add("passed");
+      }
+    },
+    null,
+    word.start,
+  );
+
+  tl.fromTo(
+    word,
+    { y: -16, scale: 0.92 },
+    {
+      y: 0,
+      scale: 1.0,
+      duration: Math.min(0.18, word.dur * 0.9), // never overruns next word
+      ease: "back.out(2.4)",
+    },
+    word.start,
+  );
+});
+
+// 3) Last word passes 0.1s after its end (so it doesn't stay glowing under silence)
+tl.call(
+  () => {
+    last.classList.remove("active");
+    last.classList.add("passed");
+  },
+  null,
+  lastWord.end + 0.1,
+);
+
+// 4) Line exit at group.end - 0.35
+tl.to(line, { opacity: 0, y: -12, duration: 0.35, ease: "power4.in" }, group.end - 0.35);
+
+// 5) Hard kill at group.end — required by hyperframes-core (deterministic seek)
+//    and by captions.md (no two groups visible simultaneously).
+tl.set(line, { opacity: 0, visibility: "hidden" }, group.end);
+```
+
+### Sound hooks (wired by hyperframes-finalize on track 20+)
+
+Captions inherit the peoples percussive register declared in §H — they don't introduce a new audio voice.
+
+- **Per active stamp** → `kick + snare` double-hit at `word.start`. Same gesture as headline stamp-slams in primary scenes.
+- **Per script-flick** → optional `pluck` or `pen-stroke` at the emphasis word's `start`. Skip if the same beat already has a primary-scene SFX (don't double-trigger).
+- **Per line entry** → optional `whoosh-short` at `group.start - 0.05`. Skip if SFX budget is tight; the per-word stamp hits carry the rhythm alone.
+
+### Edge cases & lints (captions.mjs enforces)
+
+- **Word duration < `dur_word_stamp` (0.18s)** — clamp the stamp animation to `min(0.18, word.dur * 0.9)` so it always finishes before the next class toggle. (Recipe already does this.)
+- **Two `<em>` in one group** — drop the second; one script voice per stamp (§A: "two voices alternate; nothing else"). Lint at group-build time.
+- **Gap between groups** — leave it. Don't pad with extended exit. Empty space between groups IS the brand's silence beat (peoples is poster-paced, not continuous chatter).
+- **Source transcript has no `<em>`** — fine. Default groups have no script-flick; emphasis is opt-in.
+- **All-blue-surface video** — pass `default_variant: "blue"` to `captions.mjs`; the builder applies `class="surface-blue"` on every `.cap-line` and the active hue swaps to orange globally.
+- **Caption fits in viewport** — the builder MUST call `fitTextFontSize()` (per `hyperframes-media/captions/authoring.md`) against `maxWidth: 1600` landscape / `900` portrait, baseline 96px, min 56px. A 3-word group with a long word (e.g. "INFRASTRUCTURE.") would otherwise clip the line.
+
 ## §I Page-level CSS (makes design.html itself read as peoples)
 
 ```css

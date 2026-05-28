@@ -1876,6 +1876,263 @@ ${esc(motifsMd)}
 </section>`;
 }
 
+// ═══════════════════ Render: §C captions ════════════════
+// Two artifacts:
+//   1. Live preview — two stages (paper + blue) looping a karaoke demo so the
+//      reviewer SEES both surface variants in motion in design.html.
+//   2. <pre class="ds-code"><!-- CAPTIONS-START --> ... <!-- CAPTIONS-END --></pre>
+//      — paste-ready block emit-chunks.mjs extracts to chunks/captions.md.
+//      Phase 6.5 captions.mjs consumes this when assembling compositions/captions.html.
+//      Presets without §C → renderCaptions returns "", emit-chunks leaves the chunk
+//      absent, index.json's captions_file = null. captions.mjs then falls back to a
+//      registry caption block (caption-highlight, etc.).
+//
+// §C expects four fenced blocks (parseCaptions logs which are missing):
+//   ```caption-config   — JSON: position, timings, surface variants, sound hooks
+//   ```caption-css      — CSS: .cap-line / .cap-word{,.active,.passed,.emphasis}
+//   ```caption-template — HTML: one group's DOM with {N} / {WORD_*} placeholders
+//   ```js               — GSAP recipe (line enter → per-word stamp → exit → hard kill)
+function parseCaptions() {
+  const sect = preset.sections?.C?.content;
+  if (!sect) return null;
+
+  const configFenced = sect.match(/```caption-config\n([\s\S]+?)\n```/);
+  const cssFenced = sect.match(/```caption-css\n([\s\S]+?)\n```/);
+  const templateFenced = sect.match(/```caption-template\n([\s\S]+?)\n```/);
+  const jsFenced = sect.match(/```js\n([\s\S]+?)\n```/);
+
+  if (!configFenced || !cssFenced || !templateFenced || !jsFenced) {
+    if (!configFenced) console.error(`! ${preset.name}: §C missing caption-config fenced block — skipping captions chunk`);
+    if (!cssFenced) console.error(`! ${preset.name}: §C missing caption-css fenced block — skipping captions chunk`);
+    if (!templateFenced) console.error(`! ${preset.name}: §C missing caption-template fenced block — skipping captions chunk`);
+    if (!jsFenced) console.error(`! ${preset.name}: §C missing js (animation pattern) fenced block — skipping captions chunk`);
+    return null;
+  }
+
+  let config = null;
+  try {
+    config = JSON.parse(configFenced[1]);
+  } catch (e) {
+    console.error(`✗ ${preset.name}: §C caption-config JSON failed to parse — ${e.message}`);
+    return null;
+  }
+
+  return {
+    config,
+    css: cssFenced[1].trim(),
+    template: templateFenced[1].trim(),
+    animationJs: jsFenced[1].trim(),
+  };
+}
+
+// Build chunks/captions.md content. captions.mjs (Phase 6.5) consumes this when
+// building compositions/captions.html. Returns "" when preset declares no §C.
+function buildCaptionsMd() {
+  const c = parseCaptions();
+  if (!c) return "";
+  return `# Captions — ${preset.label}
+
+Phase 6.5 \`captions.mjs\` consumes this when assembling \`compositions/captions.html\`. The CSS, template, and animation pattern are paste-ready; the config below is machine-readable defaults.
+
+## Config
+
+\`\`\`json
+${JSON.stringify(c.config, null, 2)}
+\`\`\`
+
+## CSS (paste into compositions/captions.html <style>)
+
+\`\`\`css
+${c.css}
+\`\`\`
+
+## Group template (one per group, captions.mjs emits N groups)
+
+\`\`\`html
+${c.template}
+\`\`\`
+
+## Animation pattern (GSAP recipe per group)
+
+\`\`\`js
+${c.animationJs}
+\`\`\`
+`;
+}
+
+function renderCaptions() {
+  const c = parseCaptions();
+  if (!c) return "";
+
+  const captionsMd = buildCaptionsMd();
+  const pasteReady = `
+  <details class="ds-paste-ready" style="margin-top: 32px;">
+    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/captions.md</code> (captions.mjs reads this)</summary>
+    <pre class="ds-code"><!-- CAPTIONS-START -->
+${esc(captionsMd)}
+<!-- CAPTIONS-END --></pre>
+  </details>`;
+
+  // Live demo — two stages side by side. Documentation-only loop; the real
+  // compositions/captions.html (built by captions.mjs) obeys the hard-kill +
+  // single-group-visible + no-repeat(-1) rules. GSAP CDN loads here once;
+  // browsers cache it for the rest of design.html if any other section uses it.
+  //
+  // Prose (variant table, edge cases, sound hooks) is intentionally NOT rendered
+  // here — captions.mjs (Phase 6.5) reads chunks/captions.md (the paste-ready
+  // block below); humans wanting the full rules read preset.md §C. Duplicating
+  // prose in design.html bloated the page without serving either reader.
+  //
+  // Demo grid is wrapped in .preset-native-scope so var(--font-display) and
+  // var(--font-script) resolve to --f-disp-native / --f-script-native — strong
+  // system fallback chains (Alfa Slab → Archivo Black → Anton → Impact → …)
+  // so the demo never collapses to thin system-ui sans when Google Fonts is
+  // slow or the brand font @font-face hasn't resolved yet. Same convention as
+  // §6 component previews and §M motifs grid. The paste-ready CSS in
+  // chunks/captions.md is untouched — it keeps var(--font-display) so the
+  // production compositions/captions.html renders in the brand DNA face.
+  return `
+<section id="captions" class="ds-section">
+  <div class="eyebrow">§C · Captions (paste-ready overlay)</div>
+  <h2>Word <em>by word.</em></h2>
+
+  <div class="ds-cap-grid preset-native-scope">
+    <div class="ds-cap-stage ds-cap-stage-paper">
+      <span class="ds-cap-label">paper / orange surface · default</span>
+      <div class="cap-line" id="ds-cap-line-a">
+        <span class="cap-word">MAKE</span>
+        <span class="cap-word">BIG</span>
+        <span class="cap-word">VIDEOS.</span>
+      </div>
+    </div>
+    <div class="ds-cap-stage ds-cap-stage-blue">
+      <span class="ds-cap-label">blue surface · surface-blue variant</span>
+      <div class="cap-line surface-blue" id="ds-cap-line-b">
+        <span class="cap-word">AI</span>
+        <em class="cap-word">moves</em>
+        <span class="cap-word">FAST.</span>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    /* §C CSS verbatim — applies to .cap-line / .cap-word inside both stages */
+    ${c.css}
+
+    /* Stage chrome (design.html docs only; not in chunks/captions.md) */
+    .ds-cap-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin: 32px 0;
+    }
+    .ds-cap-stage {
+      position: relative;
+      min-height: 360px;
+      border: 4px solid var(--ink);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .ds-cap-stage-paper {
+      background: var(--paper);
+      background-image: var(--grain-image);
+      background-size: var(--grain-size);
+      background-position: var(--grain-offset);
+      background-blend-mode: multiply;
+    }
+    .ds-cap-stage-blue {
+      background: var(--blue);
+    }
+    .ds-cap-stage-blue::after {
+      /* Simulated cream-frame on blue surface (peoples §H requires it) */
+      content: "";
+      position: absolute;
+      inset: 18px 24px;
+      border: 4px solid var(--cream);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .ds-cap-label {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      font-family: var(--f-mono-native);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--ink);
+      opacity: 0.55;
+      z-index: 2;
+    }
+    .ds-cap-stage-blue .ds-cap-label { color: var(--cream); opacity: 0.85; }
+
+    /* Tighten .cap-line position for the doc stage (360px tall, not 1080) */
+    .ds-cap-stage .cap-line {
+      top: 50%;
+      bottom: auto;
+      transform: translate(-50%, -50%);
+      font-size: clamp(40px, 4.6vw, 72px);
+      z-index: 1;
+    }
+    .ds-cap-stage .cap-line em.cap-word { font-size: 1.1em; }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      if (typeof gsap === 'undefined') return;
+      function playLine(lineId) {
+        const line = document.getElementById(lineId);
+        if (!line) return null;
+        const words = line.querySelectorAll('.cap-word');
+        const tl = gsap.timeline();
+        tl.call(() => {
+          words.forEach(w => { w.classList.remove('active', 'passed'); });
+          gsap.set(words, { y: 0, scale: 1 });
+        }, null, 0);
+        tl.fromTo(line,
+          { opacity: 0, y: 16, visibility: 'visible' },
+          { opacity: 1, y: 0, duration: 0.45, ease: 'back.out(2.4)' },
+          0
+        );
+        const ENTER = 0.45, HOLD = 0.42;
+        words.forEach((w, i) => {
+          const at = ENTER + i * HOLD;
+          tl.call(() => {
+            w.classList.add('active');
+            if (i > 0) {
+              words[i - 1].classList.remove('active');
+              words[i - 1].classList.add('passed');
+              gsap.set(words[i - 1], { y: 0, scale: 1 });
+            }
+          }, null, at);
+          tl.fromTo(w,
+            { y: -16, scale: 0.92 },
+            { y: 0, scale: 1, duration: 0.18, ease: 'back.out(2.4)' },
+            at
+          );
+        });
+        const lineEnd = ENTER + words.length * HOLD + 0.4;
+        tl.call(() => {
+          const last = words[words.length - 1];
+          last.classList.remove('active');
+          last.classList.add('passed');
+        }, null, lineEnd - 0.3);
+        tl.to(line,
+          { opacity: 0, y: -12, duration: 0.35, ease: 'power4.in' },
+          lineEnd
+        );
+        return tl;
+      }
+      // Documentation-only loops. real captions.html does NOT repeat(-1).
+      gsap.timeline({ repeat: -1, repeatDelay: 0.2 }).add(playLine('ds-cap-line-a'));
+      gsap.timeline({ repeat: -1, repeatDelay: 0.2, delay: 1.2 }).add(playLine('ds-cap-line-b'));
+    })();
+  </script>
+${pasteReady}
+</section>`;
+}
+
 function renderComponents() {
   if (!preset.components.length) return "";
   // When the preset declares chromeFonts, render the live preview inside
@@ -2159,6 +2416,7 @@ ${renderVoice()}
 ${renderHints()}
 ${renderComponents()}
 ${renderMotifs()}
+${renderCaptions()}
 </main>
 
 </body>

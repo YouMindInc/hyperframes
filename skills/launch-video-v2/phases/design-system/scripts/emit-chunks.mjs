@@ -161,6 +161,23 @@ if (motifsMatch) {
   motifsBytes = Buffer.byteLength(motifsMd);
 }
 
+// ─── 3.8 captions.md ──────────────────────────────────────────────
+// §C caption preset (optional). Phase 6.5 captions.mjs reads this to assemble
+// compositions/captions.html (a sub-comp on track 12 the finalize agent hoists
+// when present). Presets without §C → no file written, index.json's
+// captions_file = null, captions.mjs falls back to a registry caption block.
+const captionsMatch = html.match(
+  new RegExp(`${PRE_OPEN}<!--\\s*CAPTIONS-START\\s*-->([\\s\\S]*?)<!--\\s*CAPTIONS-END\\s*-->`),
+);
+let captionsFile = null;
+let captionsBytes = 0;
+if (captionsMatch) {
+  const captionsMd = htmlDecode(captionsMatch[1]).trim();
+  fs.writeFileSync(path.join(chunksDir, "captions.md"), captionsMd + "\n");
+  captionsFile = "chunks/captions.md";
+  captionsBytes = Buffer.byteLength(captionsMd);
+}
+
 // ─── 4. components ────────────────────────────────────────────────
 // Component blocks live inside <pre class="ds-code">...</pre> with HTML-entity-
 // escaped markers (so design.html renders the markers as visible text for human
@@ -239,6 +256,10 @@ const index = {
   // also reads motifs.md when validating the Motifs anchor.
   type_roles_file: typeRolesFile,
   motifs_file: motifsFile,
+  // captions_file is null when preset declares no §C. captions.mjs (Phase 6.5)
+  // branches on this: present → assemble from preset chunk; null → fall back to
+  // registry caption block (caption-highlight, etc.).
+  captions_file: captionsFile,
   components: components.map(({ id, file, meta }) =>
     // Spread frontmatter (surface / composes / role / avoids_same_scene / slots)
     // alongside id+file. Plan agent reads these without opening component .html.
@@ -256,7 +277,14 @@ const hintsBytes = hintsFile ? Buffer.byteLength(htmlDecode(hintsMatch[1]).trim(
 const compBytes = components.reduce((sum, c) => sum + c.size, 0);
 const designBytes = Buffer.byteLength(html);
 const chunksBytes =
-  tokenBytes + easingBytes + voiceBytes + hintsBytes + typeRolesBytes + motifsBytes + compBytes;
+  tokenBytes +
+  easingBytes +
+  voiceBytes +
+  hintsBytes +
+  typeRolesBytes +
+  motifsBytes +
+  captionsBytes +
+  compBytes;
 
 console.log(`✓ ${path.relative(process.cwd(), chunksDir)}/`);
 console.log(`  tokens.css         ${fmt(tokenBytes)} KB`);
@@ -265,6 +293,7 @@ console.log(`  voice.md           ${fmt(voiceBytes)} KB`);
 if (hintsFile) console.log(`  composition-hints.md  ${fmt(hintsBytes)} KB`);
 if (typeRolesFile) console.log(`  type-roles.md      ${fmt(typeRolesBytes)} KB`);
 if (motifsFile) console.log(`  motifs.md          ${fmt(motifsBytes)} KB`);
+if (captionsFile) console.log(`  captions.md        ${fmt(captionsBytes)} KB`);
 console.log(`  components/        ${components.length} files`);
 for (const c of components) {
   console.log(`    ${c.id}.html  (${fmt(c.size)} KB)`);
