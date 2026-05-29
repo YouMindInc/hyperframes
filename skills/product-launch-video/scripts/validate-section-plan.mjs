@@ -93,11 +93,32 @@ if (chunksIndex?.motifs_file) {
   }
 }
 
+// SFX manifest (self-located relative to this script, like the default rules dir
+// above). Used to validate that each cited `<file>.mp3` actually exists in the
+// library — turning what used to be a silent Phase-4a drop (prep.mjs only pushed
+// an anomaly) into a loud, in-loop Phase-3 error. SFX itself stays optional: a
+// scene with no anchor is fine; only a *cited* file that doesn't exist fails.
+// Best-effort: an unreadable manifest downgrades to syntax-only validation
+// (prep.mjs still drops unknown files as a backstop).
+let sfxKnownFiles = null;
+try {
+  const sfxManifestPath = resolve(here, "../assets/sfx/manifest.json");
+  const sfxManifest = JSON.parse(readFileSync(sfxManifestPath, "utf8"));
+  sfxKnownFiles = new Set(
+    Object.values(sfxManifest)
+      .map((e) => e?.file)
+      .filter(Boolean),
+  );
+} catch {
+  // manifest absent/unreadable — skip membership check.
+}
+
 const errors = [];
 let totalEffectsCited = 0;
 let totalComponentsCited = 0;
 let totalSurfaceCommitments = 0;
 let totalMotifsCited = 0;
+let totalSfxCited = 0;
 
 // ---- Per-scene anchor validation (Phase 4a contract) ----
 // Every "## Scene N:" block must have all three required anchors. Phase 4a's
@@ -221,18 +242,16 @@ for (let i = 0; i < heads.length; i++) {
     }
   }
 
-  // SFX anchor (required, may be empty): every scene must make an explicit
-  // audio decision. Either `**SFX:** none` (zero cues) or `**SFX:**` followed
-  // by `- `<file>.mp3` at <T>s ...` bullets. Soft-optional status was removed
-  // after a silent-drop incident where story-design planned a cue but
-  // visual-design omitted the anchor, dropping the cue without warning.
+  // SFX anchor (OPTIONAL / soft): a scene with no sound effects simply omits the
+  // anchor — absence is a valid "no SFX" decision, not an error. When the anchor
+  // IS present we validate its shape AND that every cited `<file>.mp3` exists in
+  // the SFX manifest. That membership check is what lets the anchor stay optional
+  // safely: a typo'd filename surfaces here (Phase 3, fixable in-loop) instead of
+  // being silently dropped by prep.mjs at Phase 4a. `**SFX:** none` is still
+  // accepted (explicit zero-cue), just no longer required.
   const sfxLineRe = /^\*\*SFX:\*\*[ \t]*(.*)$/m;
   const sfxLineM = body.match(sfxLineRe);
-  if (!sfxLineM) {
-    errors.push(
-      `${sceneId}: missing **SFX:** anchor — write \`**SFX:** none\` for zero cues, or \`**SFX:**\` followed by bullet lines`,
-    );
-  } else {
+  if (sfxLineM) {
     const trailer = sfxLineM[1].trim();
     if (trailer.toLowerCase() === "none") {
       // explicit zero-cue decision — OK
@@ -242,17 +261,30 @@ for (let i = 0; i < heads.length; i++) {
       );
     } else {
       const after = body.slice(sfxLineM.index + sfxLineM[0].length).split("\n");
-      let foundBullet = false;
+      const citedFiles = [];
       for (const line of after) {
         const t = line.trim();
         if (t === "") continue;
-        if (t.startsWith("-") && /`[^`]+\.mp3`/.test(t)) foundBullet = true;
-        break;
+        if (!t.startsWith("-")) break; // next anchor / prose / scene heading
+        const fm = t.match(/`([^`]+\.mp3)`/);
+        if (fm) citedFiles.push(fm[1]);
       }
-      if (!foundBullet) {
+      if (citedFiles.length === 0) {
         errors.push(
-          `${sceneId}: **SFX:** header present but no \`<file>.mp3\` bullet follows — add cues or write \`**SFX:** none\``,
+          `${sceneId}: **SFX:** header present but no \`<file>.mp3\` bullet follows — add cue bullets or remove the anchor`,
         );
+      } else if (sfxKnownFiles) {
+        for (const f of citedFiles) {
+          if (!sfxKnownFiles.has(f)) {
+            errors.push(
+              `${sceneId}: **SFX:** cites "${f}" not in the SFX manifest (known: ${[...sfxKnownFiles].sort().join(", ")})`,
+            );
+          } else {
+            totalSfxCited++;
+          }
+        }
+      } else {
+        totalSfxCited += citedFiles.length;
       }
     }
   }
@@ -425,6 +457,7 @@ const componentsNote =
 const surfaceNote =
   totalSurfaceCommitments > 0 ? `, ${totalSurfaceCommitments} surface commitment(s)` : "";
 const motifsNote = totalMotifsCited > 0 ? `, ${totalMotifsCited} motif citation(s)` : "";
+const sfxNote = totalSfxCited > 0 ? `, ${totalSfxCited} SFX cue(s)` : "";
 console.log(
-  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote}${surfaceNote}${motifsNote} — OK`,
+  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote}${surfaceNote}${motifsNote}${sfxNote} — OK`,
 );

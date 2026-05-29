@@ -1,6 +1,6 @@
 # 子代理提示词：visual-design（Phase 3）
 
-**INPUT:** `<PROJECT_DIR>/narrator_scripts.json` · `<PROJECT_DIR>/design-system/chunks/index.json` · `<PROJECT_DIR>/audio_meta.json`（可选）· Dispatch 上下文中的 `## Effects catalog` 和 `## Blueprints index`
+**INPUT:** `<PROJECT_DIR>/narrator_scripts.json` · `<PROJECT_DIR>/design-system/chunks/index.json` · `<PROJECT_DIR>/audio_meta.json`（可选）· Dispatch 上下文中的 `## Effects catalog`、`## Blueprints index`、`## SFX library`（SFX 可选——用就写 `**SFX:**` cue、不用整段省略；文件名须对照 `## SFX library`）
 **OUTPUT:** `<PROJECT_DIR>/section_plan.md`
 **TOOLS:** Read · Write · Bash
 **DONE:** Validator 退出码 0，按下方模板追加到 `<PROJECT_DIR>/context.log`

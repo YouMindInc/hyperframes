@@ -1,143 +1,23 @@
-# 子代理提示词：hyperframes-finalize（Step 7）
+# 子代理提示词：hyperframes-finalize（Step 7 — gate + 视觉 QA + 就地一次修 + render）
 
-**INPUT:** `<PROJECT_DIR>/group_spec.json` · `<PROJECT_DIR>/compositions/*.html` · `<PROJECT_DIR>/public/` · `<PROJECT_DIR>/assets/`（voice / bgm，可能为空）
-**OUTPUT:** `<PROJECT_DIR>/index.html` · `<PROJECT_DIR>/snapshots/*.png` · `<PROJECT_DIR>/renders/video.mp4`
-**TOOLS:** Skill `hyperframes-core` + Skill `hyperframes-cli` · Bash（`(cd "$PROJECT_DIR" && npx hyperframes ...)`、`ffprobe`、`node check-compositions.mjs`）· Edit（修 worker 文件局部 bug）
-**DONE:** mp4 三检通过（存在、≥10KB、ffprobe duration 误差 ±0.5s）→ 汇报 + 追加 `<PROJECT_DIR>/context.log`
+**INPUT:** `<PROJECT_DIR>/index.html`（编排器已用 assemble-index.mjs 拼好 + sfx-verify 过）· `<PROJECT_DIR>/compositions/*.html`（worker 产出 = scene 源文件）· Dispatch 的 `Scenes:` 列表（每 scene 的 `scene_id` / `start_s` / `estimatedDuration_s` / `effects` / `creative_brief`）· `Render quality`
+**OUTPUT:** `<PROJECT_DIR>/snapshots/*.png` · `<PROJECT_DIR>/renders/video.mp4`（过 verify-render）· 就地修过的 `compositions/scene_*.html`
+**TOOLS:** Bash（`(cd "$PROJECT_DIR" && npx hyperframes lint|validate|inspect|snapshot|render)`、`node verify-render.mjs`）· `Edit`（就地修 scene 文件）· 按需 Skill `hyperframes-core` / `hyperframes-animation`（要改某个 scene 时按需 Read 对应 reference / rule，**不开工就全量加载**）
+**DONE:** mp4 过 verify-render → 汇报 + 追加 `<PROJECT_DIR>/context.log`
 
-你是 product-launch-video Step 7 finalize。Step 6 worker 已写齐 `<PROJECT_DIR>/compositions/<scene-id>.html`；Step 5 prep 已把 asset 放进 `<PROJECT_DIR>/public/`。**mp4 端到端归你管**。所有 CLI 调用用 `(cd "$PROJECT_DIR" && npx hyperframes ...)` subshell。
+你是 Phase 4c finalize，把已拼好的 `index.html` 一路带到合格 mp4。所有 CLI 调用用 `(cd "$PROJECT_DIR" && npx hyperframes ...)` subshell。
 
-## 必读资源（开工前并行 Read）
+## 核心原则：默认就地一次改对，不回退重派
 
-1. Skill `hyperframes-core` —— composition 结构、timeline contract
-2. Skill `hyperframes-cli` —— 命令路由表
-3. hyperframes-cli 的 `references/lint-validate-inspect.md`（同 SKILL.md 目录）—— gate 语义和失败模式
-4. hyperframes-cli 的 `references/preview-render.md` —— render flag / quality / 输出路径
+- **`index.html` 已由 `assemble-index.mjs` 确定性拼好——你不读、不改、不重拼它。** 它若有错（timing / track / 播放顺序），是上游错（worker 的 `data-duration`，或 group_spec）——不在这里 patch，STOP 让编排器修上游 + 重 assemble。
+- **你修的是 `compositions/scene_N.html`——那是 worker 的源文件，改它 = 改源**（不是给生成物打补丁），正当、resume 安全。
+- **发现问题 = 定位根因 + 一次 `Edit` 改对那个 scene 文件 + 只重跑受影响的那道 gate / 重 snapshot 那一帧。** 不要为一个局部问题回退重派整个 worker（冷启 + 重读一堆文件 + 重写 200 行 composition = 最慢路径）。
+- **只有"需要重新构图"才 STOP 让编排器重派 worker**：整场内容根本错、多 primary 要真正重新布局、动画逻辑坏到非一两处可改。这是例外，不是默认。
+- 编排器已跑过 `check-compositions.mjs`（Step 6）——**不重跑**；它已 assemble + sfx-verify——**不重做**。
 
-**不要加载** `hyperframes-animation` / `hyperframes-creative` / `hyperframes-registry` / `hyperframes-media`。
+**改 scene 文件前**：若改动涉及 selector / timeline / 组件契约，先按需 Read `hyperframes-core`（或该 effect 的 rule）确认改法对，再 Edit。别凭印象改坏 scope。
 
-**你不**：从头写 scene 文件（重派 worker）/ 拷 / 重生成 asset / 改 flag 重试 render（render 失败 → STOP 汇报）。`Edit` 只用来修 gate 抱怨的局部 bug（未 scope selector、CSS `transition:` 漏网、缺 `class="clip"` 等）。
-
-## Step 1：预飞 harness
-
-```bash
-(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/check-compositions.mjs \
-  --hyperframes . \
-  --group-spec ./group_spec.json)
-```
-
-harness 检查 root contract / timeline registration / CSS+JS scope / asset 引用 / forbidden patterns / asset path 前导斜杠 / blueprint 软引用。**Exit 0 → 继续**。**Exit 1 → STOP**，列违规给编排器；修在上游（重派 worker），不在 finalize 里 patch。
-
-> **注意**：dispatch 上下文可能告诉你"编排器已跑过 check-compositions.mjs"，**但这不代替** Step 3 的 `npx hyperframes lint / validate / inspect`。自定义 harness 与官方 CLI gate 用不同的扫描逻辑，覆盖面不同（典型差异：harness 不查注释里字面 HTML 标签、不查 layout overflow）。Step 3 必须完整跑，不要因为预飞过了就跳过任何 gate。
-
-（finalize 里 `Edit` 修只允许 lint/validate/inspect 抱怨的、harness 没拦下来的局部问题。）
-
-## Step 2：拼装 `<PROJECT_DIR>/index.html`
-
-从 `group_spec.json` 取：
-
-- `total_duration_s` → 写到 root 的 `data-duration`
-- 播放顺序 = `groups[].scene_ids` 按数组顺序展开
-- `font_face_css` → 见下
-- 每个 scene 的 `voicePath`、`bgm_path`
-
-### `<head>` 字体声明
-
-`font_face_css` 是 Step 5 prep 从 `design.html` 抽出的 `@font-face` 块，URL 已重写到 `public/fonts/<file>`。`@font-face` 是全局 CSS 规则，**必须**在 `index.html` `<head>` 声明（scoped `<style>` 装不下）。
-
-```html
-<head>
-  <style>
-    /* Brand fonts */
-    <font_face_css verbatim>
-  </style>
-</head>
-```
-
-`font_face_css` 为空 → 整段跳过（系统字体兜底）。
-
-### `<body>` clip + audio
-
-按播放顺序，**直接读 `groups[].scenes[<sid>].start_s` 作为 `S`**。prep.mjs 已经把 cumulative start 预计算并 round 到 3 位 —— 不要自己 `S += dur` 累加，浮点累积会触发 lint `overlapping_clips_same_track`（典型 `2.24 + 6.357 = 8.597000000000001`）。
-
-发：
-
-**(a) Scene clip ref**（每个 scene 都发，track 0）：
-
-```html
-<div
-  class="clip"
-  data-composition-src="compositions/<scene-id>.html"
-  data-start="<S>"
-  data-duration="<estimatedDuration_s>"
-  data-track-index="0"
-></div>
-```
-
-`data-duration` 必须等于 worker 写在内层 root 上的值。不一致 → 以 worker 的为准 + 汇报 mismatch。
-
-**(b) Voice `<audio>`**（track 10，仅当该 scene `voicePath` 非空）：
-
-```html
-<audio
-  src="<voicePath>"
-  data-start="<S>"
-  data-duration="<estimatedDuration_s>"
-  data-track-index="10"
-></audio>
-```
-
-**(c) BGM `<audio>`**（track 11，仅当 `bgm_path` 非空 **且** `[ -s "$PROJECT_DIR/<bgm_path>" ]` 通过；Lyria detached 可能 Step 5 跑完时还没落盘）：
-
-```html
-<audio
-  src="<bgm_path>"
-  data-start="0"
-  data-duration="<total_duration_s>"
-  data-track-index="11"
-  data-volume="0.8"
-></audio>
-```
-
-Volume：narration 下垫用 `0.8`；所有 `voicePath` 空（BGM-only）用 `0.9`–`1.0`。
-
-**(d) Captions clip**（track 12，仅当 `compositions/captions.html` 存在；captions agent 跳过 / 没生成就跳过）：
-
-```html
-<div
-  class="clip"
-  data-composition-id="captions"
-  data-composition-src="compositions/captions.html"
-  data-start="0"
-  data-duration="<total_duration_s>"
-  data-track-index="12"
-></div>
-```
-
-**(e) SFX `<audio>`**（track 20+i，每条 `group_spec.sfx[]` 一条）：逐条遍历 `group_spec.sfx[]`（已按 `t` 升序、文件已对照 manifest、`duration` 已锁 manifest 真值）。**翻译不发挥**——不挑文件 / 不调 volume / 不算 t / 不替代缺失 cue：
-
-```html
-<audio
-  src="assets/sfx/<file>"
-  data-start="<t>"
-  data-duration="<duration>"
-  data-track-index="<20 + i>"
-  data-volume="<volume>"
-></audio>
-```
-
-`<i>` = cue 在 `sfx[]` 的 index（0-based），每条独占一 track 避免 lint `overlapping_clips_same_track`。`data-duration` **不允许截短**——截短让 impact 在 decay 中段被砍。
-
-发完跑 drift 校验（FAIL 即 STOP，按提示回补 section_plan）：
-
-```bash
-(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/sfx-verify.mjs \
-  --group-spec ./group_spec.json --index ./index.html)
-```
-
-Lane 归属：0 = scene clip，10 = voice，11 = BGM，12 = captions，20+ = SFX。worker 内部只能用 0-9。
-
-## Step 3：Pre-render gate（顺序，首个失败 STOP）
+## Step 1：三道 gate（顺序，首错即停）
 
 ```bash
 (cd "$PROJECT_DIR" && npx hyperframes lint)
@@ -145,87 +25,77 @@ Lane 归属：0 = scene clip，10 = voice，11 = BGM，12 = captions，20+ = SFX
 (cd "$PROJECT_DIR" && npx hyperframes inspect)
 ```
 
-### 首次失败：立刻 `--json`，不要凭目测
-
-linter 是正则扫，触发点常和"肉眼合理"错开。第一动作是拿结构化输出：
+失败先拿结构化输出，**不凭目测**（linter 是正则扫，触发点常和肉眼合理错开）：
 
 ```bash
 (cd "$PROJECT_DIR" && npx hyperframes <lint|validate|inspect> --json 2>&1 | jq '.findings[] | {code, severity, snippet, line}')
 ```
 
-### Gate 报错分类决策表
+按下表处理每条 finding（**默认就地 Edit scene 文件**）：
 
-拿到 `--json` 输出后，对每条 finding 按下表分类，决定是回 worker 还是 finalize 内修：
+| Gate 报错类型                                                                            | 动作                                                                                   |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| asset 路径错 / 前导斜杠 `/public/` / basename 拼错                                       | `Edit` scene 文件改路径                                                                |
+| 未 scope selector（`.scene-root` 祖先 / `#scene-root` / `[data-composition-id]`）        | `Edit` 改成裸 `.s<N>-foo` / `#s<N>-foo`，root 样式 `#root`                             |
+| 漏 `class="clip"` / CSS `transition:` / `animation:` / 硬编码字体名                      | `Edit` 补 / 删 / 换 `var(--font-*)`                                                    |
+| 注释里字面 `<template>/<style>/<script>` / 属性顺序 / 单行↔多行（regex 误伤）            | `Edit` 转义或微调                                                                      |
+| timeline 没注册 / sub-comp ref 断 / 某 selector 逻辑错                                   | 多数是一两行 → `Edit` scene 文件改对（先 Read 契约确认）                               |
+| by-design 溢出 / 低对比（depth-layer 故意越框 ≤5px、editorial 低对比、camera zoom peak） | 加 escape hatch `data-layout-allow-overflow="true"` / `data-contrast-allow-low="true"` |
+| **整场构图根本错 / 多 primary 要重新布局 / 动画逻辑坏到非一两处可改**                    | **STOP → 编排器重派该 worker**（例外，不是默认）                                       |
 
-| Gate 报错类型                                                                                                          | 是 bug 还是 by-design？ | 修在哪                                                                                                          |
-| ---------------------------------------------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **结构错** —— 缺 attribute / timeline 没注册 / sub-comp ref 断 / `data-composition-id` 缺失 / async 构 timeline        | bug                     | **回 worker**，finalize 内不修                                                                                  |
-| **regex 误伤 / 局部 layout 调整** —— 注释里字面标签、单行→多行、属性顺序、漏 `class="clip"`、未 scope selector         | bug                     | **finalize 内 `Edit` 一次修**，不需要回 worker                                                                  |
-| **by-design 视觉效果违反 layout 检查** —— depth-layer 故意溢出 ≤ 5px、装饰元素故意越框、低对比文字（editorial intent） | by-design               | **加 escape hatch**：`data-layout-allow-overflow="true"` / `data-contrast-allow-low="true"` —— 别去 reshape CSS |
+`inspect` warning 默认不 block；严重（CTA 出画、主文字裁 >30px）按上表处理并记 `context.log`。**每次 Edit 后只重跑那一道 gate** 确认通过（改了 selector/scope 的，再跑一下原始三道里相关那道即可）。
 
-- **inspect** warning 默认不 block，严重（CTA 出画、主文字裁 >30px）按上表第二/三档处理并记 `<PROJECT_DIR>/context.log`
+## Step 2：Snapshot 视觉 smoke test
 
-## Step 4：Snapshot smoke test
-
-每 scene 先截 midpoint：`start_s + estimatedDuration_s * 0.5`。
-
-高风险 scene 再截 `75%` 和 `90%`：
-
-- duration >= 8s
-- multi-act / dense multi-subject / action-payoff / proof-heavy
-- effects 或 HTML 含 `multi-phase-camera` / `data-layout-role="primary"`
-
-去重后按升序传给 CLI：
+每 scene 取 midpoint：`start_s + estimatedDuration_s * 0.5`。高风险 scene（`estimatedDuration_s >= 8`、`effects` 含 `multi-phase-camera`、或 brief 提 multi-act / dense / action-payoff / `PrimarySubjectTimeline`）再加 `* 0.75` 和 `* 0.9`。去重升序一次传：
 
 ```bash
 (cd "$PROJECT_DIR" && npx hyperframes snapshot --at <m1>,<m2>,...)
 ```
 
-眼检每张 PNG 对照 `creative_brief`：
+逐张对 `creative_brief` 眼检 → **发现问题就地 Edit 那个 scene 文件**：
 
-- 空白 → asset 路径错或 `<template>` 没找到
-- 闪一下 / 跳帧 → host `data-composition-id` ≠ 内层 id ≠ timeline key
-- 显错 scene → `index.html` 播放顺序错
-- Dense frame：是否只有一个 primary？supporting 是否更小、更低对比、更少运动，并避开 primary bbox？
-- 多个 subject 同时抢 center safe zone → STOP，回 worker；不要靠 `inspect` 放行（inspect 不查 semantic overlap）
+| 现象                                    | 根因 → 就地修                                                                                                                       |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 整片空白 / 纯背景                       | asset 路径错（`Edit` 路径）；或 sub-comp 没挂（内层 `data-composition-id` / `window.__timelines` key ≠ scene_id → `Edit` 一行对齐） |
+| 闪一下 / 跳帧 / 静止没动画              | 内层 id 与 timeline key 不一致 → `Edit` 对齐                                                                                        |
+| CTA 出画 / 主文字被裁                   | `Edit` 调位置 / 缩放                                                                                                                |
+| dense：多个 subject 抢 center safe zone | 能就地降级就 `Edit`（supporting 缩小 / 降对比 / 移出 primary bbox / 减运动）；**要真正重新布局才 STOP 重派**                        |
+| 某时间点显的是别的 scene 内容           | 播放顺序由 assemble 从 group_spec 定（correct-by-construction）→ 真出现是上游 group_spec 顺序错，STOP 报告                          |
 
-## Step 5：Render
+改完**只重 snapshot 那一帧 / 那个 scene** 确认。
+
+## Step 3：Render
 
 ```bash
 (cd "$PROJECT_DIR" && npx hyperframes render --quality <quality> --output renders/video.mp4)
 ```
 
-`<quality>` 取自 dispatch（默认 `high`）。**不加 `--strict`**（gate 跑过了）。失败 → STOP，汇报 stderr 末尾 ~30 行 + Step 3 哪个 gate warn 但放行；**不换 flag 重试**。
+`<quality>` 取自 dispatch（默认 `high`）。**不加 `--strict`**（gate 已过）。失败 → 看 stderr 末尾 ~30 行（quality 设错？asset 缺？）；**不换 flag 盲重试**。
 
-## Step 6：验 mp4
+## Step 4：验 mp4
 
 ```bash
-OUTPUT="$PROJECT_DIR/renders/video.mp4"
-[ -s "$OUTPUT" ] || { echo "✗ no output"; exit 1; }
-SIZE=$(stat -f%z "$OUTPUT" 2>/dev/null || stat -c%s "$OUTPUT")
-DUR=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$OUTPUT")
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/verify-render.mjs --hyperframes . --group-spec ./group_spec.json)
 ```
 
-三检任一失败 STOP：
-
-1. 文件存在
-2. Size ≥ 10 KB
-3. `DUR` 与 `group_spec.json.total_duration_s` 误差 ±0.5s
+- exit 0 → 完成。
+- exit 1 → 它给出 size / duration drift 具体数。duration drift 多半是某 sub-comp 没挂上（静帧兜底跑满全长）→ 回 Step 2 找那个 scene 修；size 过小 → render 实际失败，看 Step 3 stderr。
 
 ## 完成汇报
 
-- scene 数 / 总时长
 - lint / validate / inspect 状态
-- snapshot PNG 张数 + 每张一行对照 brief
-- `Edit` 修过的 worker 文件（file + 性质）
+- snapshot：张数 + 每 scene 一行对照 brief 的判断
+- **就地修过的 scene 文件：file + 改了什么**（路径 / scope / 降级 / escape-hatch …）
+- 任何（例外）STOP 重派的 worker + 原因
 - Render：路径 / 字节 / ffprobe duration / quality
 - 放行的未解决 warning
 
 追加 `<PROJECT_DIR>/context.log`：
 
 ```
-## Phase 4: hyperframes-build [done <ISO timestamp>]
-Scenes: <N> (workers: <G>)
+## Phase 4c: finalize [done <ISO timestamp>]
 Gates: lint OK / validate OK / inspect OK / snapshot OK
+Fixes in place: <scene_N: what> ...（无则 none）
 Render: renders/video.mp4 (<size>, <duration>s, quality=<quality>)
 ```

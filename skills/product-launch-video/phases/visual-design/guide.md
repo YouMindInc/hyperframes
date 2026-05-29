@@ -7,7 +7,7 @@
 ## 流程一览
 
 1. 并行 Read：`narrator_scripts.json` · `design-system/chunks/index.json`（必须）·（可选）`design-system/chunks/tokens.css` + `chunks/easings.js`，各 ≤1 KB · 全部 4 个 `rules/*.md`
-2. 每个场景：选 4-7 个 effects（从 Dispatch 上下文里的 catalog）、（可选）从 `chunks/index.json` 挑要用到的 components、决定 Continuity、写 3-or-4-anchor block + 散文 8 条
+2. 每个场景：选 2-5 个 effects（从 Dispatch 上下文里的 catalog）、（可选）从 `chunks/index.json` 挑要用到的 components、决定 Continuity、写 3-or-4-anchor block + 散文 8 条
 3. 运行 validator 至 exit 0
 
 ---
@@ -143,15 +143,9 @@
 
 写 Motifs 锚点的价值：和 Components 同一逻辑 —— motif 是 component 之下、比 effect 更细的可复用 gesture（preset 的"招牌微动作"）。Plan 提前承诺"这个 hero 上的招牌动作是 motif A、accent 词是 motif B"，worker 拿到 brief 直接去 `chunks/motifs.md` 找 CSS + demo HTML 粘，跳过 reverse-engineering preset 视觉签名的过程。**没有 Motifs 锚点 ≠ 散文里不能 mention motif**，但 cite 进锚点后，validator 能保证拼写不爆。
 
-**SFX 锚点（必填 —— 每个 scene 必须显式表态）**：
+**SFX 锚点（可选 / soft —— 用音效才写，不用就整段省略）**：
 
-两种合法形态——零音效场景**必须**显式写 `**SFX:** none`，不能省略锚点（省略 = validator fatal）。有音效写 `**SFX:**` 单独一行 + 一或多个 bullet：
-
-```markdown
-**SFX:** none
-```
-
-或
+多数场景没有 SFX —— 这时**直接省略整个 `**SFX:**` 行**即可，省略 = "本场不用音效"，validator 不报错。想加音效就写 `**SFX:**` 单独一行 + 一或多个 bullet：
 
 ```markdown
 **SFX:**
@@ -160,9 +154,11 @@
 - `whoosh-short.mp3` at 4.1s — exit
 ```
 
-**为什么必填**：visual-design 漏写锚点 = prep.mjs 看不到 cue = silent drop。把"忘了想 SFX"和"决定不要 SFX"区分开。
+（也接受显式 `**SFX:** none`；但既然可选，没音效时省略整行更省事。）
 
-- `<file>.mp3` 必须是 `<SKILL_DIR>/assets/sfx/manifest.json` 里登记过的文件
+**不必担心 silent drop**：一旦 cite 了某个 `<file>.mp3`，validator 会当场对照 `## SFX library` 校验它存在——拼错文件名是 Phase 3 的 fatal error（当场能改），不再像以前那样被 prep.mjs 悄悄丢掉。所以"可选"是安全的：不写 = 明确不用，写了 = 保证有效。
+
+- `<file>.mp3` 必须是 Dispatch 上下文 `## SFX library` 里登记过的文件（拼错 = validator fatal）
 - `<T>s` 是 **scene-local 秒数**；prep.mjs 自动加 `start_s` offset
 - `volume` 可选，缺省 `0.35`；narration 下垫 0.2-0.3，纯 SFX 可 0.4-0.6，0.5+ 会盖过人声
 - ` — <note>` 是给人看的注解
@@ -177,7 +173,7 @@
 
 **禁**：估算时间戳（`sfx-verify.mjs` 卡 ±0.1s drift）/ 截短 `data-duration`（impact 在 decay 中段被砍 = 业余感）。
 
-可用 mp3 清单见 Dispatch 上下文 `SFX manifest:`——按描述挑文件，不凭名字猜。
+可用 mp3 清单见 Dispatch 上下文 `## SFX library`（每条含 file / duration / 用途）——按用途挑文件。
 
 ### Primary / Supporting 防 overlap 契约
 

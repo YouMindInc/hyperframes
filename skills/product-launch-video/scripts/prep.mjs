@@ -26,6 +26,11 @@
 //                      becomes the absolute paths the Phase 4b worker reads.
 //                      Empty / absent → worker still gets tokens.css + easings.js
 //                      but no component paste-snippets.
+//   **SFX:**         — optional (soft), bullet list of "`<file>.mp3` at <T>s,
+//                      volume <V> — note" cues (T is scene-local). Resolved
+//                      against the SFX manifest; cues citing unknown files are
+//                      dropped with an anomaly (validate-section-plan.mjs catches
+//                      those typos earlier, in-loop). Omitted entirely → no SFX.
 //
 // Usage:
 //   node prep.mjs --section-plan <path> --narrator-scripts <path> \
@@ -264,17 +269,14 @@ function parseSceneBlock(body, sceneId, isFirst) {
   // composition-hints; validator enforces presence + allowed values upstream.
   const surface = raw.Surface ? raw.Surface.trim().toLowerCase() : null;
 
-  // SFX (required anchor; explicit "none" or bullet block):
-  //   **SFX:** none
-  // or
+  // SFX (optional / soft anchor; omitted entirely = no SFX for this scene):
   //   **SFX:**
   //   - `impact-bass-1.mp3` at 0.2s, volume 0.35 — hero snap
   //   - `whoosh-short.mp3` at 4.1s — exit
-  // The validator (validate-section-plan.mjs) enforces presence; this parser
-  // accepts either form. "none" means an explicit zero-cue decision and skips
-  // the bullet scan. Header-line trailer other than "none" is rejected by the
-  // validator before this runs, so we treat anything non-empty + non-"none"
-  // the same as "none" defensively (no cues, no parse).
+  // (or `**SFX:** none`, or no anchor at all). The validator
+  // (validate-section-plan.mjs) no longer requires the anchor; when present it
+  // checks each cited file against the manifest. This parser accepts either
+  // form. "none" / any non-empty trailer skips the bullet scan (no cues).
   // sfx_cues[].t is SCENE-LOCAL seconds (this function knows nothing about
   // global timing; we add s.start_s offset in Step 6).
   const sfxCues = [];
