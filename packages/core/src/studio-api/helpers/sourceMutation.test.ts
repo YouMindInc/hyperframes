@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { removeElementFromHtml, patchElementInHtml } from "./sourceMutation.js";
+import {
+  removeElementFromHtml,
+  patchElementInHtml,
+  probeElementInSource,
+} from "./sourceMutation.js";
 
 describe("removeElementFromHtml", () => {
   it("removes a self-closing element by id", () => {
@@ -64,6 +68,44 @@ describe("patchElementInHtml", () => {
     ]);
 
     expect(result).toContain('data-hf-studio-path-offset="true"');
+  });
+
+  it("does not double data- prefix when property already has it", () => {
+    const result = patchElementInHtml(FIXTURE, { id: "hero" }, [
+      { type: "attribute", property: "data-hf-studio-path-offset", value: "true" },
+    ]);
+
+    expect(result).toContain('data-hf-studio-path-offset="true"');
+    expect(result).not.toContain("data-data-hf-studio-path-offset");
+  });
+
+  it("does not double data- prefix for any studio attribute", () => {
+    const attrs = [
+      "data-hf-studio-path-offset",
+      "data-hf-studio-original-translate",
+      "data-hf-studio-original-inline-translate",
+      "data-hf-studio-box-size",
+      "data-hf-studio-rotation",
+    ];
+    for (const attr of attrs) {
+      const result = patchElementInHtml(FIXTURE, { id: "hero" }, [
+        { type: "attribute", property: attr, value: "true" },
+      ]);
+      expect(result).toContain(`${attr}="true"`);
+      expect(result).not.toContain(`data-${attr}`);
+    }
+  });
+
+  it("removes attribute with data- prefix already present", () => {
+    const withAttr = patchElementInHtml(FIXTURE, { id: "hero" }, [
+      { type: "attribute", property: "data-hf-studio-path-offset", value: "true" },
+    ]);
+    expect(withAttr).toContain('data-hf-studio-path-offset="true"');
+
+    const removed = patchElementInHtml(withAttr, { id: "hero" }, [
+      { type: "attribute", property: "data-hf-studio-path-offset", value: null },
+    ]);
+    expect(removed).not.toContain("hf-studio-path-offset");
   });
 
   it("patches html attribute", () => {
@@ -246,5 +288,70 @@ describe("patchElementInHtml", () => {
     expect(result).not.toContain("xmlns");
     expect(result).not.toContain("background=");
     expect(result).not.toContain("dynsrc");
+  });
+});
+
+describe("probeElementInSource", () => {
+  const FIXTURE = `<!doctype html><html><head></head><body>
+<div id="root" data-composition-id="main">
+  <div class="layer" data-composition-id="overlay" data-composition-src="compositions/overlay.html">
+    <div class="chrome">
+      <span class="brand">HyperFrames</span>
+    </div>
+  </div>
+  <div id="hero" class="hero-heading" style="font-size: 48px">Hello World</div>
+</div>
+</body></html>`;
+
+  it("returns true for an element found by id", () => {
+    expect(probeElementInSource(FIXTURE, { id: "hero" })).toBe(true);
+  });
+
+  it("returns true for an element found by class selector", () => {
+    expect(probeElementInSource(FIXTURE, { selector: ".hero-heading" })).toBe(true);
+  });
+
+  it("returns true for an element found by data-composition-id selector", () => {
+    expect(probeElementInSource(FIXTURE, { selector: '[data-composition-id="overlay"]' })).toBe(
+      true,
+    );
+  });
+
+  it("returns false for an id that does not exist in source", () => {
+    expect(probeElementInSource(FIXTURE, { id: "arrows-svg" })).toBe(false);
+  });
+
+  it("returns false for a class selector that does not exist", () => {
+    expect(probeElementInSource(FIXTURE, { selector: ".phone-frame" })).toBe(false);
+  });
+
+  it("returns false when target has neither id nor selector", () => {
+    expect(probeElementInSource(FIXTURE, {})).toBe(false);
+  });
+
+  it("returns true for class selector with valid selectorIndex", () => {
+    const html = `<div class="item">A</div><div class="item">B</div>`;
+    expect(probeElementInSource(html, { selector: ".item", selectorIndex: 1 })).toBe(true);
+  });
+
+  it("returns false for class selector with out-of-bounds selectorIndex", () => {
+    const html = `<div class="item">A</div><div class="item">B</div>`;
+    expect(probeElementInSource(html, { selector: ".item", selectorIndex: 5 })).toBe(false);
+  });
+
+  it("returns false for an element that would only exist after JS execution", () => {
+    const sourceHtml = `<!doctype html><html><head></head><body>
+<div id="root" data-composition-id="main">
+  <div id="canvas"></div>
+  <script>
+    const svg = document.createElement("div");
+    svg.id = "arrows-svg";
+    document.getElementById("canvas").appendChild(svg);
+  </script>
+</div>
+</body></html>`;
+
+    expect(probeElementInSource(sourceHtml, { id: "arrows-svg" })).toBe(false);
+    expect(probeElementInSource(sourceHtml, { id: "canvas" })).toBe(true);
   });
 });

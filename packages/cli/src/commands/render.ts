@@ -45,10 +45,12 @@ import { c } from "../ui/colors.js";
 import { formatBytes, formatDuration, errorBox } from "../ui/format.js";
 import { renderProgress } from "../ui/progress.js";
 import { trackRenderComplete, trackRenderError } from "../telemetry/events.js";
+import { maybePromptRenderFeedback } from "../telemetry/feedback.js";
 import { bytesToMb } from "../telemetry/system.js";
 import { VERSION } from "../version.js";
 import { isDevMode } from "../utils/env.js";
 import { buildDockerRunArgs } from "../utils/dockerRunArgs.js";
+import { normalizeErrorMessage } from "../utils/errorMessage.js";
 import type { RenderJob } from "@hyperframes/producer";
 import {
   normalizeResolutionFlag,
@@ -477,7 +479,7 @@ export default defineCommand({
 
     // ── Pre-render lint ──────────────────────────────────────────────────
     {
-      const lintResult = lintProject(project);
+      const lintResult = await lintProject(project);
       if (!quiet && (lintResult.totalErrors > 0 || lintResult.totalWarnings > 0)) {
         console.log("");
         for (const line of formatLintFindings(lintResult, { errorsFirst: true })) console.log(line);
@@ -826,6 +828,10 @@ export async function renderLocal(
   const elapsed = Date.now() - startTime;
   trackRenderMetrics(job, elapsed, options, false);
   printRenderComplete(outputPath, elapsed, options.quiet);
+  await maybePromptRenderFeedback({
+    renderDurationMs: elapsed,
+    quiet: options.quiet,
+  });
   if (options.exitAfterComplete) scheduleRenderProcessExit();
 }
 
@@ -863,7 +869,7 @@ function handleRenderError(
   docker: boolean,
   hint: string,
 ): never {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = normalizeErrorMessage(error);
   trackRenderError({
     fps: fpsToNumber(options.fps),
     quality: options.quality,

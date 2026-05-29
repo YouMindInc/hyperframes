@@ -13,12 +13,13 @@ import {
 import { MetricField, Section } from "./propertyPanelPrimitives";
 import { isMediaElement, MediaSection } from "./propertyPanelMediaSection";
 import { TextSection, StyleSections } from "./propertyPanelSections";
+import { GsapAnimationSection } from "./GsapAnimationSection";
+import { STUDIO_GSAP_PANEL_ENABLED } from "./manualEditingAvailability";
 
 // Re-export helpers that external consumers import from this module
 export {
   buildStrokeStyleUpdates,
   buildStrokeWidthStyleUpdates,
-  clampPanelNumber,
   getCssFilterFunctionPx,
   getClipPathInsetPx,
   inferBoxShadowPreset,
@@ -49,6 +50,18 @@ interface PropertyPanelProps {
   onImportAssets?: (files: FileList) => Promise<string[]>;
   fontAssets?: ImportedFontAsset[];
   onImportFonts?: (files: FileList | File[]) => Promise<ImportedFontAsset[]>;
+  gsapAnimations?: import("@hyperframes/core/gsap-parser").GsapAnimation[];
+  gsapMultipleTimelines?: boolean;
+  gsapUnsupportedTimelinePattern?: boolean;
+  onUpdateGsapProperty?: (animId: string, prop: string, value: number | string) => void;
+  onUpdateGsapMeta?: (
+    animId: string,
+    updates: { duration?: number; ease?: string; position?: number },
+  ) => void;
+  onDeleteGsapAnimation?: (animId: string) => void;
+  onAddGsapProperty?: (animId: string, prop: string) => void;
+  onRemoveGsapProperty?: (animId: string, prop: string) => void;
+  onAddGsapAnimation?: (method: "to" | "from" | "set") => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -141,6 +154,15 @@ export const PropertyPanel = memo(function PropertyPanel({
   onImportAssets,
   fontAssets = [],
   onImportFonts,
+  gsapAnimations = [],
+  gsapMultipleTimelines,
+  gsapUnsupportedTimelinePattern,
+  onUpdateGsapProperty,
+  onUpdateGsapMeta,
+  onDeleteGsapAnimation,
+  onAddGsapProperty,
+  onRemoveGsapProperty,
+  onAddGsapAnimation,
 }: PropertyPanelProps) {
   const styles = element?.computedStyles ?? EMPTY_STYLES;
 
@@ -330,6 +352,25 @@ export const PropertyPanel = memo(function PropertyPanel({
             />
           </div>
         </Section>
+
+        {STUDIO_GSAP_PANEL_ENABLED &&
+          onUpdateGsapProperty &&
+          onUpdateGsapMeta &&
+          onDeleteGsapAnimation &&
+          onAddGsapProperty &&
+          onAddGsapAnimation && (
+            <GsapAnimationSection
+              animations={gsapAnimations}
+              multipleTimelines={gsapMultipleTimelines}
+              unsupportedTimelinePattern={gsapUnsupportedTimelinePattern}
+              onUpdateProperty={onUpdateGsapProperty}
+              onUpdateMeta={onUpdateGsapMeta}
+              onDeleteAnimation={onDeleteGsapAnimation}
+              onAddProperty={onAddGsapProperty}
+              onRemoveProperty={onRemoveGsapProperty ?? (() => {})}
+              onAddAnimation={onAddGsapAnimation}
+            />
+          )}
 
         {showEditableSections && (
           <StyleSections

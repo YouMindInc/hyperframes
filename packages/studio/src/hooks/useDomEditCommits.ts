@@ -81,7 +81,7 @@ export interface UseDomEditCommitsParams {
   buildDomSelectionFromTarget: (
     target: HTMLElement,
     options?: { preferClipAncestor?: boolean },
-  ) => DomEditSelection | null;
+  ) => Promise<DomEditSelection | null>;
 }
 
 // ── Hook ──
@@ -128,6 +128,7 @@ export function useDomEditCommits({
     [fileTree, projectId, importedFontAssetsRef],
   );
 
+  // fallow-ignore-next-line complexity
   const persistDomEditOperations: PersistDomEditOperations = useCallback(
     async (selection, operations, options) => {
       const pid = projectIdRef.current;
@@ -153,6 +154,11 @@ export function useDomEditCommits({
         selector: selection.selector,
         selectorIndex: selection.selectorIndex,
       };
+
+      // Mark the save timestamp before the file write so the SSE file-change
+      // handler suppresses the reload even if the event arrives before the
+      // response (the server writes the file and emits SSE during the fetch).
+      domEditSaveTimestampRef.current = Date.now();
 
       const patchResponse = await fetch(
         `/api/projects/${pid}/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
@@ -192,9 +198,7 @@ export function useDomEditCommits({
         files: { [targetPath]: { before: originalContent, after: finalContent } },
       });
 
-      if (options?.skipRefresh) {
-        domEditSaveTimestampRef.current = Date.now();
-      } else {
+      if (!options?.skipRefresh) {
         reloadPreview();
       }
     },
@@ -232,6 +236,7 @@ export function useDomEditCommits({
 
   // ── Position patch helper ──
 
+  // fallow-ignore-next-line complexity
   const commitPositionPatchToHtml = useCallback(
     (
       selection: DomEditSelection,
@@ -244,6 +249,7 @@ export function useDomEditCommits({
           coalesceKey: options.coalesceKey,
           skipRefresh: options.skipRefresh ?? true,
         });
+        // fallow-ignore-next-line complexity
       }).catch((error) => {
         const message = error instanceof Error ? error.message : "Failed to save position";
         showToast(message);
@@ -251,6 +257,9 @@ export function useDomEditCommits({
           source: "dom_edit",
           label: options.label,
           error_message: message,
+          target_id: selection.id ?? undefined,
+          target_selector: selection.selector ?? undefined,
+          target_source_file: selection.sourceFile ?? undefined,
         });
       });
     },
@@ -333,6 +342,7 @@ export function useDomEditCommits({
 
   // ── Motion commits (HTML-attribute–backed) ──
 
+  // fallow-ignore-next-line complexity
   const handleDomMotionCommit = useCallback(
     (
       selection: DomEditSelection,
@@ -359,6 +369,7 @@ export function useDomEditCommits({
     [commitPositionPatchToHtml, previewIframeRef, refreshDomEditSelectionFromPreview],
   );
 
+  // fallow-ignore-next-line complexity
   const handleDomMotionClear = useCallback(
     (selection: DomEditSelection) => {
       const clearPatches = buildClearMotionPatches(selection.element);
@@ -387,6 +398,7 @@ export function useDomEditCommits({
     [commitPositionPatchToHtml, previewIframeRef, refreshDomEditSelectionFromPreview],
   );
 
+  // fallow-ignore-next-line complexity
   const handleDomEditElementDelete = useCallback(
     async (selection: DomEditSelection) => {
       const pid = projectIdRef.current;
@@ -418,6 +430,7 @@ export function useDomEditCommits({
           throw new Error("Selected element has no patchable target");
         }
 
+        domEditSaveTimestampRef.current = Date.now();
         const removeResponse = await fetch(
           `/api/projects/${pid}/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
           {
@@ -431,8 +444,6 @@ export function useDomEditCommits({
         const removeData = (await removeResponse.json()) as { changed?: boolean; content?: string };
         const patchedContent =
           typeof removeData.content === "string" ? removeData.content : originalContent;
-
-        domEditSaveTimestampRef.current = Date.now();
         await saveProjectFilesWithHistory({
           projectId: pid,
           label: "Delete element",
