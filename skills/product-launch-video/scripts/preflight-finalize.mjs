@@ -34,8 +34,10 @@
 //      no search, no geometry math. Result lands in `caption_keepout`.
 //
 //   6. Write everything to `finalize_brief.json` for the agent to consume in
-//      one Read. `preflight_clean = gates_clean && caption_keepout has 0
-//      violations` — the agent uses this for fast-path decision.
+//      one Read. Includes bgm_status.json (written by wait-bgm.mjs before
+//      assemble) so the agent does not need to probe ps / ls / /tmp logs.
+//      `preflight_clean = gates_clean && caption_keepout has 0 violations`
+//      — the agent uses this for fast-path decision.
 //
 // Always exits 0. Gate failures are surfaced via brief.gates[].ok=false so
 // the agent can decide; this script doesn't gate the pipeline.
@@ -86,10 +88,7 @@ if (existsSync(pkgPath)) {
   const raw = readFileSync(pkgPath, "utf8");
   try {
     const pkg = JSON.parse(raw);
-    const declared =
-      pkg.dependencies?.hyperframes ||
-      pkg.devDependencies?.hyperframes ||
-      null;
+    const declared = pkg.dependencies?.hyperframes || pkg.devDependencies?.hyperframes || null;
     if (declared && typeof declared === "string") {
       pinnedVersion = declared.replace(/^[\^~>=<\s]+/, "").trim() || "latest";
     }
@@ -201,9 +200,7 @@ for (const group of groupSpec.groups || []) {
     const effects = Array.isArray(s.effects) ? s.effects : [];
     const brief = String(s.creative_brief || "");
     const highRisk =
-      dur >= 8 ||
-      effects.some((e) => MULTI_ACT_EFFECTS.has(e)) ||
-      HIGH_RISK_BRIEF_RX.test(brief);
+      dur >= 8 || effects.some((e) => MULTI_ACT_EFFECTS.has(e)) || HIGH_RISK_BRIEF_RX.test(brief);
     const extras = [];
     if (highRisk) {
       const t075 = start + dur * 0.75;
@@ -235,6 +232,45 @@ const captionKeepout = checkCaptionKeepout({ groupSpec, hyperframesDir });
 const keepoutClean = captionKeepout.violations.length === 0;
 const preflightClean = gatesClean && keepoutClean;
 
+// ---------- 5b. BGM status ----------
+// wait-bgm.mjs runs before assemble-index.mjs. Surface its verdict here so the
+// finalize agent never has to do ad hoc `ls assets/bgm.wav`, `ps`, or
+// `/tmp/bgm-*.log` checks.
+function readJson(path) {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+const bgmStatusPath = join(hyperframesDir, "bgm_status.json");
+const bgmStatus = readJson(bgmStatusPath);
+const bgmPath = groupSpec.bgm_path || "";
+const bgmReady = Boolean(bgmPath && existsSync(join(hyperframesDir, bgmPath)));
+const bgm = {
+  enabled: Boolean(bgmPath),
+  path: bgmPath || null,
+  ready: bgmReady,
+  status_file: existsSync(bgmStatusPath) ? "bgm_status.json" : null,
+  status: bgmStatus?.status || (bgmReady ? "ready" : bgmPath ? "missing" : "disabled"),
+  provider: bgmStatus?.provider || null,
+  mode: bgmStatus?.mode || null,
+  log: bgmStatus?.log || null,
+  pid: bgmStatus?.pid || null,
+  target_duration_s: bgmStatus?.target_duration_s || null,
+  segment_duration_s: bgmStatus?.segment_duration_s || null,
+  segment_count: bgmStatus?.segment_count || null,
+  message:
+    bgmStatus?.message ||
+    (bgmReady
+      ? `BGM ready at ${bgmPath}.`
+      : bgmPath
+        ? "BGM path declared but file missing."
+        : "No BGM path."),
+};
+
 // ---------- 6. Write brief ----------
 const brief = {
   version: 2,
@@ -244,6 +280,7 @@ const brief = {
   npx_prefix: npxPrefix,
   gates_clean: gatesClean,
   gates,
+  bgm,
   caption_keepout: captionKeepout,
   preflight_clean: preflightClean,
   deterministic_fixes_applied: deterministicFixes,
@@ -258,26 +295,44 @@ writeFileSync(outPath, JSON.stringify(brief, null, 2) + "\n");
 console.log(`✓ wrote ${outPath}`);
 console.log(`  hyperframes:    ${pinnedVersion} (${cliVersionLine || "version unknown"})`);
 console.log(`  preflight_clean: ${preflightClean ? "yes (gates + caption keep-out)" : "no"}`);
-console.log(`    lint:     ${gates.lint.ok ? "✓" : "✗"} (${gates.lint.duration_s}s, exit ${gates.lint.exit_code})`);
-console.log(`    validate: ${gates.validate.ok ? "✓" : "✗"} (${gates.validate.duration_s}s, exit ${gates.validate.exit_code})`);
-console.log(`    inspect:  ${gates.inspect.ok ? "✓" : "✗"} (${gates.inspect.duration_s}s, exit ${gates.inspect.exit_code})`);
+console.log(
+  `    lint:     ${gates.lint.ok ? "✓" : "✗"} (${gates.lint.duration_s}s, exit ${gates.lint.exit_code})`,
+);
+console.log(
+  `    validate: ${gates.validate.ok ? "✓" : "✗"} (${gates.validate.duration_s}s, exit ${gates.validate.exit_code})`,
+);
+console.log(
+  `    inspect:  ${gates.inspect.ok ? "✓" : "✗"} (${gates.inspect.duration_s}s, exit ${gates.inspect.exit_code})`,
+);
 if (!captionKeepout.enabled) {
   console.log(`    caption-keepout: skipped (captions_enabled=false)`);
 } else if (keepoutClean) {
-  console.log(`    caption-keepout: ✓ (${captionKeepout.scenes_scanned} scene(s) scanned, 0 violations)`);
+  console.log(
+    `    caption-keepout: ✓ (${captionKeepout.scenes_scanned} scene(s) scanned, 0 violations)`,
+  );
 } else {
-  console.log(`    caption-keepout: ✗ (${captionKeepout.violations.length} violation(s) across ${new Set(captionKeepout.violations.map(v => v.scene_id)).size} scene(s)) — see brief.caption_keepout.violations[] for Edit-ready strings`);
+  console.log(
+    `    caption-keepout: ✗ (${captionKeepout.violations.length} violation(s) across ${new Set(captionKeepout.violations.map((v) => v.scene_id)).size} scene(s)) — see brief.caption_keepout.violations[] for Edit-ready strings`,
+  );
   for (const v of captionKeepout.violations) {
-    console.log(`      [${v.scene_id}] ${v.selector} (${v.pattern}): element bottom at y=${v.element_bottom_y} → Edit \`${v.edit_old}\` → \`${v.edit_new}\``);
+    console.log(
+      `      [${v.scene_id}] ${v.selector} (${v.pattern}): element bottom at y=${v.element_bottom_y} → Edit \`${v.edit_old}\` → \`${v.edit_new}\``,
+    );
   }
 }
 console.log(`  snapshot_times: ${snapshotTimes.length} timestamp(s)`);
-console.log(`  deterministic_fixes: ${deterministicFixes.length === 0 ? "none" : deterministicFixes.join("; ")}`);
+console.log(
+  `  deterministic_fixes: ${deterministicFixes.length === 0 ? "none" : deterministicFixes.join("; ")}`,
+);
 if (!preflightClean) {
   if (!gatesClean) {
-    console.log(`\n  ⚠ at least one CLI gate failed — finalize agent will diagnose from brief.gates[].output_tail`);
+    console.log(
+      `\n  ⚠ at least one CLI gate failed — finalize agent will diagnose from brief.gates[].output_tail`,
+    );
   }
   if (!keepoutClean) {
-    console.log(`  ⚠ caption-keepout violations — finalize agent applies brief.caption_keepout.violations[].edit_old → edit_new in each file (one Edit per violation, no Read needed)`);
+    console.log(
+      `  ⚠ caption-keepout violations — finalize agent applies brief.caption_keepout.violations[].edit_old → edit_new in each file (one Edit per violation, no Read needed)`,
+    );
   }
 }

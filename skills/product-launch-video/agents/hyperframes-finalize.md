@@ -7,6 +7,8 @@
 
 你是 Phase 4c finalize，把已拼好的 `index.html` 一路带到合格 mp4。**第一件事：Read `finalize_brief.json`** —— 它告诉你 gate 是否已 pre-pass、snapshot 时刻表、用哪个 `npx_prefix` 跑 CLI。所有 CLI 调用用 `(cd "$PROJECT_DIR" && <npx_prefix> ...)` subshell（**brief.npx_prefix 是 pinned `npx --yes hyperframes@<version>`，缓存已 warm**；不要换成裸 `npx hyperframes`，会让 cache 抖动）。
 
+**BGM 状态已由编排器在 assemble 前跑 `wait-bgm.mjs` 处理，并写进 `bgm_status.json` / `finalize_brief.bgm`。** 你只读 brief 里的 `bgm` 字段；不要再 `ls assets/bgm.wav`、`ps`、或 `tail /tmp/bgm-*.log`。`bgm.ready=false` 不是视觉修复任务，render 可继续（assemble 已按落盘状态决定是否挂 track 11）。
+
 ## 核心原则：默认就地一次改对，不回退重派
 
 - **`index.html` 已由 `assemble-index.mjs` 确定性拼好——你不读、不改、不重拼它。** 它若有错（timing / track / 播放顺序），是上游错（worker 的 `data-duration`，或 group_spec）——不在这里 patch，STOP 让编排器修上游 + 重 assemble。
@@ -30,6 +32,8 @@ Read `<PROJECT_DIR>/finalize_brief.json`。看这些字段：
 | `preflight_clean`                                 | true → 全绿（gates + caption keep-out），跳过 Step 2 + Step 2.5，直接 Step 3 snapshot                                  |
 | `gates_clean`                                     | 三道 CLI gate（lint/validate/inspect）全过 = true                                                                      |
 | `gates.{lint,validate,inspect}.ok / .output_tail` | gate 失败时的诊断面（不重跑同 gate；60 行 tail 已够定位）                                                              |
+| `bgm.status / bgm.ready / bgm.message`            | `wait-bgm.mjs` 的结构化结论。只用于报告；不要手动查进程/日志，BGM 不 ready 时继续 render                               |
+| `bgm.provider / bgm.mode / bgm.segment_count`     | BGM 元信息。需要汇报时直接复述 brief；不要再读 `audio_meta.json` 或 `bgm_status.json`                                  |
 | `caption_keepout.violations[]`                    | 静态扫出的字幕带覆盖违规，**每条带 `edit_old` / `edit_new` 两个准 Edit 字符串**——见 Step 2.5，一行 Edit 改对，不读不算 |
 | `snapshot_times_s[]`                              | Step 3 一次性传 `--at`，**不要重新算 midpoint / 加 0.75 / dedup**                                                      |
 | `npx_prefix`                                      | 所有 CLI 调用复用这个 prefix（cache 已 warm，pinned 版本）                                                             |
@@ -144,6 +148,7 @@ TIMES=$(jq -r '.snapshot_times_s | join(",")' "$PROJECT_DIR/finalize_brief.json"
 ## 完成汇报
 
 - brief 摘要：`gates_clean` / 任何 `deterministic_fixes_applied` / `pinned_hyperframes_version`
+- BGM：`brief.bgm.status` / `brief.bgm.ready` / `brief.bgm.message`
 - gate 状态（直接复述 brief；若 Step 2 重跑过某一道，注明改后通过）
 - snapshot：张数 + 每 scene 一行对照 brief 的判断
 - **就地修过的 scene 文件：file + 改了什么**（路径 / scope / 降级 / escape-hatch …）
@@ -157,5 +162,6 @@ TIMES=$(jq -r '.snapshot_times_s | join(",")' "$PROJECT_DIR/finalize_brief.json"
 ## Phase 4c: finalize [done <ISO timestamp>]
 Gates: lint <status> / validate <status> / inspect <status> / snapshot OK
 Fixes in place: <scene_N: what> ...（无则 none）
+BGM: <brief.bgm.status> (<brief.bgm.message>)
 Render: renders/video.mp4 (<size>, <duration>s, quality=<quality>)
 ```

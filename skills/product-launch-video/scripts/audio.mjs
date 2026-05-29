@@ -12,7 +12,10 @@
 //   * BGM (Lyria) is spawned **detached** in parallel with voice work. This
 //     script exits as soon as voice + transcribe are done; BGM keeps rendering
 //     in the background. audio_meta.json sets `bgm_pending: true` so prep.mjs
-//     trusts the path and Phase 4c does the final on-disk check before render.
+//     trusts the path and Phase 4c runs wait-bgm.mjs before assemble/render.
+//   * Local MusicGen fallback renders in short segments and concatenates them
+//     into one assets/bgm.wav. This avoids the model's positional limit when
+//     a 30-60s promo asks for too many tokens in a single generate() call.
 //
 // BGM prompt inference: the script reads concatenated `script` + `keyMessage`
 // fields from narrator_scripts.json (no tokens.json side file — Phase 1
@@ -28,7 +31,8 @@
 //     [--lyria-recipe <SKILL_DIR>/phases/audio/lyria-recipe.py] \
 //     [--voice <id>] [--lang en] \
 //     [--provider heygen|elevenlabs|kokoro] \
-//     [--no-bgm] [--bgm-prompt "<custom prompt>"]
+//     [--no-bgm] [--bgm-prompt "<custom prompt>"] \
+//     [--bgm-segment-seconds 8]
 
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -68,6 +72,12 @@ const userBgmPrompt = typeof flag("bgm-prompt") === "string" ? flag("bgm-prompt"
 const noBgm = flag("no-bgm") === true;
 const userProvider = typeof flag("provider") === "string" ? flag("provider") : null;
 const lang = typeof flag("lang") === "string" ? flag("lang") : "en";
+const bgmSegmentSecondsRaw =
+  typeof flag("bgm-segment-seconds") === "string" ? Number(flag("bgm-segment-seconds")) : 8;
+const bgmSegmentSeconds =
+  isFinite(bgmSegmentSecondsRaw) && bgmSegmentSecondsRaw > 0
+    ? Math.min(Math.max(bgmSegmentSecondsRaw, 2), 12)
+    : 8;
 
 // ---------- load .env ----------
 // Mirrors the CLI's loadEnvFile (packages/cli/src/capture/scaffolding.ts):
@@ -229,9 +239,9 @@ for (const s of scenes) {
 // don't build cleanly on Apple Silicon). If Lyria won't be used and deps are
 // missing, kick off pip install now so it runs in the background while TTS is
 // generating. We await the result in Step 5b before deciding whether to spawn BGM.
-const BGM_PY_DEPS = ["transformers", "torch", "soundfile"];
+const BGM_PY_DEPS = ["transformers", "torch", "soundfile", "numpy"];
 const BGM_PY_PROBE =
-  "import transformers, soundfile, torch; from transformers import MusicgenForConditionalGeneration";
+  "import transformers, soundfile, torch, numpy; from transformers import MusicgenForConditionalGeneration";
 let bgmDepsInstallPromise = null;
 if (!noBgm && !(lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe))) {
   const probe = spawnSync("python3", ["-c", BGM_PY_PROBE], { stdio: "ignore" });
@@ -257,6 +267,7 @@ const bgmAbsPath = join(hyperframesDir, bgmRelPath);
 let bgmEnabled = false;
 let bgmReason = "";
 let bgmPid = null;
+let bgmMeta = null;
 
 function bgmPyDepsAvailable() {
   const r = spawnSync("python3", ["-c", BGM_PY_PROBE], { stdio: "ignore" });
@@ -487,77 +498,7 @@ const results = await Promise.all(scenes.map(runScene));
 const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 console.log(`voice work done in ${elapsed}s`);
 
-// ---------- Step 5b: spawn BGM (after TTS — deps install may now be done) ----------
-if (bgmDepsInstallPromise) {
-  console.log("BGM: waiting for deps install to finish…");
-  await bgmDepsInstallPromise;
-}
-
-if (noBgm) {
-  bgmReason = "disabled by --no-bgm";
-} else if (lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe)) {
-  // Path A: Lyria (cloud)
-  const totalS = scenes.reduce((sum, s) => sum + s.estimatedDuration, 0);
-  const prompt = inferBgmPrompt();
-  const log = `/tmp/bgm-${Date.now()}.log`;
-  console.log(`BGM: launching Lyria (detached) — prompt: "${prompt.slice(0, 70)}…"`);
-  console.log(`     log: ${log}`);
-  const fd = openSync(log, "w");
-  const bgm = spawn(
-    "python3",
-    [
-      lyriaRecipe,
-      "--output",
-      bgmAbsPath,
-      "--duration",
-      String(Math.max(1, totalS)),
-      "--prompt",
-      prompt,
-    ],
-    { detached: true, stdio: ["ignore", fd, fd] },
-  );
-  bgm.unref();
-  closeSync(fd);
-  bgmEnabled = true;
-  bgmPid = bgm.pid;
-} else if (bgmPyDepsAvailable()) {
-  // Path B: MusicGen via HuggingFace transformers (local, free, no API key).
-  // pip install transformers torch soundfile  →  facebook/musicgen-small (~300MB).
-  // MusicGen emits ~50 codec frames per second, so max_new_tokens ≈ duration_s × 50.
-  const totalS = scenes.reduce((sum, s) => sum + s.estimatedDuration, 0);
-  const prompt = inferBgmPrompt();
-  const log = `/tmp/bgm-${Date.now()}.log`;
-  console.log(
-    `BGM: launching MusicGen via transformers (detached, local) — prompt: "${prompt.slice(0, 70)}…"`,
-  );
-  console.log(`     log: ${log}`);
-  const fd = openSync(log, "w");
-  const script = [
-    "from transformers import MusicgenForConditionalGeneration, AutoProcessor",
-    "import soundfile as sf",
-    "processor = AutoProcessor.from_pretrained('facebook/musicgen-small')",
-    "model = MusicgenForConditionalGeneration.from_pretrained('facebook/musicgen-small')",
-    `inputs = processor(text=[${JSON.stringify(prompt)}], padding=True, return_tensors='pt')`,
-    `audio = model.generate(**inputs, max_new_tokens=int(${Math.max(1, totalS)} * 50))`,
-    "sr = model.config.audio_encoder.sampling_rate",
-    `sf.write(${JSON.stringify(bgmAbsPath)}, audio[0, 0].cpu().numpy(), sr)`,
-  ].join("; ");
-  const bgm = spawn("python3", ["-c", script], {
-    detached: true,
-    stdio: ["ignore", fd, fd],
-  });
-  bgm.unref();
-  closeSync(fd);
-  bgmEnabled = true;
-  bgmPid = bgm.pid;
-} else {
-  const depsHint = `pip install ${BGM_PY_DEPS.join(" ")}`;
-  bgmReason = !lyriaKey()
-    ? `$GEMINI_API_KEY/$GOOGLE_API_KEY not set; BGM deps not installed (${depsHint})`
-    : `--lyria-recipe not provided; BGM deps not installed (${depsHint})`;
-}
-
-// ---------- Step 7: ffprobe durations + assemble audio_meta.json ----------
+// ---------- Step 5a: ffprobe voice durations ----------
 function ffprobeDuration(path) {
   const r = spawnSync(
     "ffprobe",
@@ -589,24 +530,189 @@ for (const r of results) {
   totalDuration += dur;
 }
 
-const audioMeta = {
-  tts_provider: provider,
-  voice_id: voiceId,
-  bgm_enabled: bgmEnabled,
-  bgm_path: bgmEnabled ? bgmRelPath : null,
-  bgm_pending: bgmEnabled && !existsSync(bgmAbsPath),
-  total_duration_s: parseFloat(totalDuration.toFixed(3)),
-  scenes: scenesMap,
-};
-
-writeFileSync(outPath, JSON.stringify(audioMeta, null, 2));
-
 if (Object.keys(scenesMap).length === 0) {
+  const emptyAudioMeta = {
+    tts_provider: provider,
+    voice_id: voiceId,
+    bgm_provider: null,
+    bgm_enabled: false,
+    bgm_path: null,
+    bgm_pending: false,
+    bgm_log: null,
+    bgm_pid: null,
+    bgm_mode: null,
+    bgm_target_duration_s: null,
+    bgm_segment_duration_s: null,
+    bgm_segment_count: null,
+    total_duration_s: 0,
+    scenes: scenesMap,
+  };
+  writeFileSync(outPath, JSON.stringify(emptyAudioMeta, null, 2));
   console.error(
     `✗ audio.mjs: zero scenes got voice — wrote audio_meta.json with empty scenes map for orchestrator to decide`,
   );
   process.exit(1);
 }
+
+const bgmTargetDurationS = Math.max(1, totalDuration);
+
+// ---------- Step 5b: spawn BGM (after TTS — deps install may now be done) ----------
+if (bgmDepsInstallPromise) {
+  console.log("BGM: waiting for deps install to finish…");
+  await bgmDepsInstallPromise;
+}
+
+if (noBgm) {
+  bgmReason = "disabled by --no-bgm";
+} else if (lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe)) {
+  // Path A: Lyria (cloud)
+  const totalS = bgmTargetDurationS;
+  const prompt = inferBgmPrompt();
+  const log = `/tmp/bgm-${Date.now()}.log`;
+  console.log(`BGM: launching Lyria (detached) — prompt: "${prompt.slice(0, 70)}…"`);
+  console.log(`     log: ${log}`);
+  const fd = openSync(log, "w");
+  const bgm = spawn(
+    "python3",
+    [
+      lyriaRecipe,
+      "--output",
+      bgmAbsPath,
+      "--duration",
+      String(Math.max(1, totalS)),
+      "--prompt",
+      prompt,
+    ],
+    { detached: true, stdio: ["ignore", fd, fd] },
+  );
+  bgm.unref();
+  closeSync(fd);
+  bgmEnabled = true;
+  bgmPid = bgm.pid;
+  bgmMeta = {
+    provider: "lyria",
+    mode: "detached-single",
+    pid: bgmPid,
+    log,
+    target_duration_s: Math.max(1, totalS),
+  };
+} else if (bgmPyDepsAvailable()) {
+  // Path B: MusicGen via HuggingFace transformers (local, free, no API key).
+  // pip install transformers torch soundfile numpy → facebook/musicgen-small (~300MB).
+  // MusicGen emits ~50 codec frames per second, so max_new_tokens ≈ duration_s × 50.
+  // Generate in short chunks because one 30-60s generate() can exceed the
+  // decoder's positional embeddings and fail with `IndexError: index out of range`.
+  const totalS = bgmTargetDurationS;
+  const prompt = inferBgmPrompt();
+  const log = `/tmp/bgm-${Date.now()}.log`;
+  const targetS = Math.max(1, totalS);
+  const segmentCount = Math.ceil(targetS / bgmSegmentSeconds);
+  console.log(
+    `BGM: launching MusicGen via transformers (detached, local, segmented ${segmentCount}×≤${bgmSegmentSeconds}s) — prompt: "${prompt.slice(0, 70)}…"`,
+  );
+  console.log(`     log: ${log}`);
+  const fd = openSync(log, "w");
+  const script = `
+import math
+import os
+import sys
+import traceback
+from pathlib import Path
+
+import numpy as np
+import soundfile as sf
+from transformers import MusicgenForConditionalGeneration, AutoProcessor
+
+prompt = ${JSON.stringify(prompt)}
+out_path = ${JSON.stringify(bgmAbsPath)}
+target_s = float(${targetS.toFixed(3)})
+segment_s = float(${bgmSegmentSeconds.toFixed(3)})
+token_rate = 50
+
+try:
+    Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
+    print(f"[musicgen] segmented render target={target_s:.3f}s segment={segment_s:.3f}s", flush=True)
+    processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
+    model = MusicgenForConditionalGeneration.from_pretrained("facebook/musicgen-small")
+    model.eval()
+    sr = int(model.config.audio_encoder.sampling_rate)
+    chunks = []
+    remaining = target_s
+    i = 0
+    while remaining > 0.001:
+        dur = min(segment_s, remaining)
+        tokens = max(1, int(math.ceil(dur * token_rate)))
+        print(f"[musicgen] segment {i + 1}: dur={dur:.3f}s tokens={tokens}", flush=True)
+        inputs = processor(text=[prompt], padding=True, return_tensors="pt")
+        audio = model.generate(**inputs, max_new_tokens=tokens)
+        arr = audio[0, 0].detach().cpu().numpy().astype("float32")
+        want = max(1, int(round(dur * sr)))
+        if arr.shape[0] < want:
+            arr = np.pad(arr, (0, want - arr.shape[0]))
+        else:
+            arr = arr[:want]
+        fade = min(int(round(0.08 * sr)), max(0, arr.shape[0] // 4))
+        if fade > 1:
+            arr[:fade] *= np.linspace(0.0, 1.0, fade, dtype="float32")
+            arr[-fade:] *= np.linspace(1.0, 0.0, fade, dtype="float32")
+        chunks.append(arr)
+        remaining -= dur
+        i += 1
+    final = np.concatenate(chunks) if chunks else np.zeros(1, dtype="float32")
+    want_total = max(1, int(round(target_s * sr)))
+    if final.shape[0] < want_total:
+        final = np.pad(final, (0, want_total - final.shape[0]))
+    else:
+        final = final[:want_total]
+    sf.write(out_path, final, sr)
+    print(f"[musicgen] wrote {out_path} samples={final.shape[0]} sr={sr}", flush=True)
+except Exception:
+    traceback.print_exc()
+    sys.exit(1)
+`;
+  const bgm = spawn("python3", ["-c", script], {
+    detached: true,
+    stdio: ["ignore", fd, fd],
+  });
+  bgm.unref();
+  closeSync(fd);
+  bgmEnabled = true;
+  bgmPid = bgm.pid;
+  bgmMeta = {
+    provider: "musicgen",
+    mode: "detached-segmented",
+    pid: bgmPid,
+    log,
+    target_duration_s: Number(targetS.toFixed(3)),
+    segment_duration_s: bgmSegmentSeconds,
+    segment_count: segmentCount,
+  };
+} else {
+  const depsHint = `pip install ${BGM_PY_DEPS.join(" ")}`;
+  bgmReason = !lyriaKey()
+    ? `$GEMINI_API_KEY/$GOOGLE_API_KEY not set; BGM deps not installed (${depsHint})`
+    : `--lyria-recipe not provided; BGM deps not installed (${depsHint})`;
+}
+
+// ---------- Step 7: assemble audio_meta.json ----------
+const audioMeta = {
+  tts_provider: provider,
+  voice_id: voiceId,
+  bgm_provider: bgmMeta?.provider || null,
+  bgm_enabled: bgmEnabled,
+  bgm_path: bgmEnabled ? bgmRelPath : null,
+  bgm_pending: bgmEnabled && !existsSync(bgmAbsPath),
+  bgm_log: bgmMeta?.log || null,
+  bgm_pid: bgmMeta?.pid || null,
+  bgm_mode: bgmMeta?.mode || null,
+  bgm_target_duration_s: bgmMeta?.target_duration_s || null,
+  bgm_segment_duration_s: bgmMeta?.segment_duration_s || null,
+  bgm_segment_count: bgmMeta?.segment_count || null,
+  total_duration_s: parseFloat(totalDuration.toFixed(3)),
+  scenes: scenesMap,
+};
+
+writeFileSync(outPath, JSON.stringify(audioMeta, null, 2));
 
 // ---------- Step 8: summary ----------
 console.log(`\n✓ wrote ${outPath}`);
@@ -619,10 +725,11 @@ if (bgmEnabled) {
   const bgmBackend =
     lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe)
       ? "Lyria"
-      : "MusicGen via transformers (local)";
+      : `MusicGen via transformers (local, segmented ${bgmMeta?.segment_count || "?"}×≤${bgmMeta?.segment_duration_s || "?"}s)`;
   console.log(`  bgm: launched via ${bgmBackend} pid=${bgmPid} (detached, → ${bgmRelPath})`);
+  if (bgmMeta?.log) console.log(`       log: ${bgmMeta.log}`);
   if (audioMeta.bgm_pending) {
-    console.log(`       bgm_pending=true; downstream phases re-check disk before emitting <audio>`);
+    console.log(`       bgm_pending=true; Phase 4c wait-bgm.mjs waits/checks before assemble`);
   } else {
     console.log(`       bgm.wav already on disk`);
   }
