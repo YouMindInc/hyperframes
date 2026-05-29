@@ -45,7 +45,7 @@
   .sb-stat-counter-label {
     display: block;
     font-family: "Caveat", cursive;
-    font-size: 0.9rem;
+    font-size: 1.5rem;
     font-weight: 400;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -57,24 +57,24 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem 0;
-    border-bottom: 1px dashed rgba(45, 42, 38, 0.2);
+    border-bottom: 1px dashed var(--ink-hairline);
   }
   .sb-stat-counter-row-label {
     font-family: "Zilla Slab", serif;
-    font-size: 1.1rem;
+    font-size: 1.5rem;
     font-weight: 400;
     color: var(--ink-warm-light);
   }
   .sb-stat-counter-num {
     font-family: "Shrikhand", cursive;
     font-weight: 400;
-    font-size: 1.8rem;
+    font-size: 2rem;
     line-height: 1.1;
     color: var(--ink-warm);
   }
   .sb-stat-counter-quip {
     font-family: "Caveat", cursive;
-    font-size: 1.3rem;
+    font-size: 1.5rem;
     font-weight: 500;
     line-height: 1.3;
     color: var(--ink-warm);

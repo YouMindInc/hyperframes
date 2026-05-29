@@ -430,7 +430,7 @@ for (const s of scenes) {
   if (!existsSync(voiceAbs))
     die(`design_chunks: voice_file "${voiceAbs}" referenced by index.json but missing on disk`);
 
-  // Optional chunks (null when preset declared no §H / §T / §M). Worker reads
+  // Optional chunks (null when preset declared no §H / §T). Worker reads
   // these on demand — paths are passed through dispatch verbatim. We only check
   // file existence when index.json references one (consistency guard); the
   // worker then opens it lazily without re-checking.
@@ -444,9 +444,6 @@ for (const s of scenes) {
     die(
       `design_chunks: type_roles_file "${typeRolesAbs}" referenced by index.json but missing on disk`,
     );
-  const motifsAbs = chunksIndex.motifs_file ? join(designSystemDir, chunksIndex.motifs_file) : null;
-  if (motifsAbs && !existsSync(motifsAbs))
-    die(`design_chunks: motifs_file "${motifsAbs}" referenced by index.json but missing on disk`);
 
   const componentPaths = [];
   for (const cid of s.componentIds) {
@@ -465,7 +462,6 @@ for (const s of scenes) {
     voice_file: voiceAbs,
     hints_file: hintsAbs,
     type_roles_file: typeRolesAbs,
-    motifs_file: motifsAbs,
     components: componentPaths,
   };
 }

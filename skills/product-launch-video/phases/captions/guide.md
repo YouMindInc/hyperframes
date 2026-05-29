@@ -14,11 +14,12 @@ assemble-index.mjs       → 文件存在则挂 track-12 clip(data-composition-i
 
 ## 0. 输入
 
-| 文件                                 | 用途                                                                                                                                                                          |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `caption_groups.json`                | **唯一词数据源**:`groups[]`(`id`/`scene_id`/`surface`/`start`/`end`/`text`/`words[]`,全局秒、已清洗、已打 class)、`total_duration_s`、`stats`。由 `build-captions.mjs` 产出。 |
-| `design-system/chunks/tokens.css`    | brand DNA(`--font-display`/`--font-body`/`--brand-primary`/`--canvas`/`--ink` + surface 别名)。整段被 inline 进 captions.html 的 `<style data-brand-tokens>`。                |
-| `design-system/inference.json`(可选) | 皮肤评分用(site DNA / 选中 preset vibe)。缺了按品牌色明暗回退。                                                                                                               |
+| 文件                                           | 用途                                                                                                                                                                                                     |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `caption_groups.json`                          | **唯一词数据源**:`groups[]`(`id`/`scene_id`/`surface`/`start`/`end`/`text`/`words[]`,全局秒、已清洗、已打 class)、`total_duration_s`、`stats`。由 `build-captions.mjs` 产出。                            |
+| `design-system/chunks/tokens.css`              | brand DNA(`--font-display`/`--font-body`/`--brand-primary`/`--canvas`/`--ink` + surface 别名)。整段被 inline 进 captions.html 的 `<style data-brand-tokens>`。                                           |
+| `design-system/inference.json`(可选)           | 皮肤评分用(site DNA / 选中 preset vibe)。缺了按品牌色明暗回退。                                                                                                                                          |
+| `design-system/chunks/caption-skin.html`(可选) | **preset 自带字幕皮肤(第一来源)** —— 选中的 preset 在 `style-presets/<preset>/` 放了 `caption-skin.html` 时,`emit-chunks` 拷到此。**在 → 优先用它**(预烤、已 token 化,见 §2);不在 → 回退 registry 评分。 |
 
 ---
 
@@ -42,11 +43,20 @@ assemble-index.mjs       → 文件存在则挂 track-12 clip(data-composition-i
 
 ---
 
-## 2. 受支持皮肤集(closed set)
+## 2. 来源优先级 + 受支持皮肤集
 
-**Phase 1 只支持 `caption-pill-karaoke`** —— 6 个 registry `caption-*` 里唯一与本 skill 约束**全兼容**的:自带不透明 pill(底带可读、无需 scrim)、canonical `.caption-group/.caption-word` 类名(studio + captionOverrides 认)、可绕过的运行期 makeGroups、底部位置、CSS 内配色(可 token 化)。
+**第一来源 —— preset 自带**:选中的 preset 若带 `chunks/caption-skin.html`(由 `emit-chunks` 从 `style-presets/<preset>/caption-skin.html` 拷来),`build-captions-html.mjs` **优先用它** —— 它是预烤、已 brand-token 化的皮肤,脚本只做**通用填充**(注 `var GROUPS` / `var DURATION` / `data-duration` + inline `tokens.css`),无 per-preset 代码。`--no-preset-skin` 禁用、`--skin <registry>` 仍可强制 registry 皮肤。design.html 也会把它内嵌成 **§C 实时预览**(见 design-system/guide.md)。**没有 caption-skin.html 时**才回退到下面的 registry 闭集评分。
 
-其余皮肤各有专属阻碍,需**逐个**按 descriptor 审入(见脚本里 `SKINS` 表 + `applyTransform`),**不要**假定即插即用:
+**第二来源 —— registry 闭集。已审入两个皮肤**(脚本 `SKINS` 表 `supported: true`):
+
+| 皮肤                   | 可读性                                | 选中条件(`scoreSkins`)                                                          |
+| ---------------------- | ------------------------------------- | ------------------------------------------------------------------------------- |
+| `caption-pill-karaoke` | 自带不透明 pill(无需 scrim)           | **安全默认**。`voice_tone` = warm/neutral/缺失 时胜出;任何平局都回退到它        |
+| `caption-highlight`    | 透明 → 变换注入 brand-strict scrim 带 | `voice_tone` = **direct** 时胜出(+2);loud preset(neo-brutalism/raw-grid/…)再 +1 |
+
+两者都满足:canonical `.caption-group/.caption-word`(studio + captionOverrides 认;highlight 用自带 `.hl-*` 类**并排**加 canonical 类)、CSS 内配色(可 token 化)、底部位置、可绕过的运行期分组。`scoreSkins` 用 `inference.json` 的 `site_dna.voice_tone` + `selected.name` 打分,**确定性**、平局永远回 pill-karaoke。`--skin <name>` 强制覆盖评分。
+
+其余皮肤各有专属阻碍,需**逐个**按 descriptor 审入(见脚本里 `SKINS` 表 + 对应 transform 分支),**不要**假定即插即用:
 
 | 皮肤                    | 阻碍                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -73,7 +83,22 @@ assemble-index.mjs       → 文件存在则挂 track-12 clip(data-composition-i
 8. 全片尾锚 `tl.to({}, { duration: DURATION }, 0)`,让子合成 timeline 时长 == host clip 时长。
 9. inline `tokens.css` 到 `<style data-brand-tokens>`;CSS 内硬编码色/字 token 化:pill bg `#e7e5e7` → `var(--canvas)`、阴影 `rgba(0,0,0,.12)` → `color-mix(in srgb, var(--ink) 14%, transparent)`、字体 `"Poppins"` → `var(--font-display)`(JS 里 measureText 的 `FONT_FAMILY` 用 tokens.css 提取出的真实族名,canvas 量字不能用 `var()`)。
 
-**可读性(本 skill = vito-A keep-out + 带)**:pill-karaoke 自带**不透明 pill**(`background: var(--canvas)` + active 文字 `var(--ink)` → 恒对比),**无需** scrim、**无需**渲染期对比探针。透明类皮肤(Phase 2)才需在 caption root 第一个子元素加一条 brand-strict 渐变 scrim 带(`color-mix(var(--ink) …)`,z-index 在 `.caption-group` 之下)。scene 前景留上 ~83% 的 keep-out 由 `hyperframes-scene.md` 约束 #13 + visual-design 在 brief 里强制(见那两处),不在本脚本。
+**可读性(本 skill = vito-A keep-out + 带)**:pill-karaoke 自带**不透明 pill**(`background: var(--canvas)` + active 文字 `var(--ink)` → 恒对比),**无需** scrim、**无需**渲染期对比探针。透明类皮肤(如 caption-highlight)才需在 caption root 第一个子元素加一条 brand-strict 渐变 scrim 带(`color-mix(var(--ink) …)`,z-index 在 `.caption-group` 之下)。scene 前景留上 ~83% 的 keep-out 由 `hyperframes-scene.md` 约束 #13 + visual-design 在 brief 里强制(见那两处),不在本脚本。
+
+### 3b. caption-highlight 的不同/额外改造
+
+highlight(TikTok 式逐词红底扫光)与 pill 走**独立 transform 分支**,差异点:
+
+1. **无 demo `<video>` 元素**(只有死的 `#hl-video` CSS)→ 不删元素,只删那条死 CSS 规则。
+2. **分组数据形状不同**:它的 build/timeline 循环吃**扁平全局 `WORDS` 数组** + `GROUPS` 的 `{wordStart,wordEnd,start,end}` 索引区间(词 el id = `wordStart+i`)。变换把引擎 groups 摊平成这两个结构,**同时**干掉 demo `TRANSCRIPT` 和**按索引硬编码的 `RAW_GROUPS`**(就是 clip-wipe 同款阻碍 —— 这里被新分支结构性解决)。
+3. **类名并排**:`.hl-group`/`.hl-word` 旁边**加** canonical `.caption-group`/`.caption-word`(保留自带动画的同时让 studio/captionOverrides 认出)。
+4. **scrim 带**:它透明,所以把满屏第一子元素 `.hl-overlay`(z-index 1,在词 z-index 10 之下)tokenize 成一条底部 brand-strict 渐变带(`color-mix(var(--ink) …)`)。
+5. **自适应对比(关键)**:active 词压在 `var(--brand-primary)` 满填充上,而**主色明暗在构建期未知**(确定性脚本不能量色,也不赌 `contrast-color()`)——所以**没有任何单一文字色**对它恒安全(canvas 在浅主色上糊、ink 在深主色上糊)。解法:文字 `var(--canvas)` 填充 **+ 8 向 `var(--ink)` 描边**(外加一层柔 ink 投影)。可读性不再依赖主色亮度,而是骑在**保证对比的 `canvas↔ink` 对**上:浅主色→ink 描边勾边,深主色→canvas 填充跳出,任意主色都清。inactive 词在 scrim 上同理(描边定形)。
+6. **配色 token 化**:红渐变 `#ff1745→#df1238` → `var(--brand-primary)`(深端 `color-mix(... var(--ink))`)满填充保留;红阴影 → `color-mix`;文字阴影 → 上面的 ink 描边;`"Montserrat"` → `var(--font-display)`(canvas measureText 用 tokens 提取的真实族名)。
+7. **几何**:80px 大写 @ `bottom:140px` 顶到 ~y845(高于保留带)→ 缩到 46px @ `bottom:36px`,1-2 行都落进 keep-out 带(y900–1080)。
+8. 双改名 → `"captions"` + 全片尾锚(同 pill 的 7/8 步)。
+
+**self-lint 分皮肤**:公共门(composition-id / timeline key / `.caption-group` / `.caption-word` / 无 Google Fonts / 无 `window.<native>()` / host data-duration 改写 / brand-strict 零裸色)+ 皮肤专属门(pill:无 `#avatar-video`、`var DURATION` 改写;highlight:无 `RAW_GROUPS` 残留、无 `<video>`、全片尾锚在)。
 
 ---
 
@@ -97,6 +122,6 @@ assemble-index.mjs       → 文件存在则挂 track-12 clip(data-composition-i
 
 ---
 
-## 6. 验收(Phase 1)
+## 6. 验收
 
-渲一条 60-90s 带字幕视频,核对:① 8s 后字幕正常(DURATION);② 逐词高亮 + 不跨 scene 重叠(引擎分组);③ 暗/亮主题下都可读(pill 自带对比);④ scene 前景在上 ~83%、背景满铺(keep-out);⑤ studio 能识别 `.caption-group`;⑥ node 自检零失败;⑦ `--no-emit` 选皮肤可复核。
+渲一条 60-90s 带字幕视频,核对:① 8s 后字幕正常(DURATION/全片尾锚);② 逐词高亮 + 不跨 scene 重叠(引擎分组);③ 暗/亮主题下都可读(pill 自带对比 / highlight 的 scrim 带);④ scene 前景在上 ~83%、背景满铺(keep-out);⑤ studio 能识别 `.caption-group`;⑥ node 自检零失败;⑦ `--no-emit` 选皮肤可复核(neutral→pill、direct→highlight);⑧ `--skin caption-highlight` 强制可出。

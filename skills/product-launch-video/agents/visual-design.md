@@ -1,6 +1,6 @@
 # 子代理提示词：visual-design（Phase 3）
 
-**INPUT（全部已内联在 dispatch，正常不必从盘 Read）：** `## Effects catalog`、`## Blueprints index`、`## SFX library`（SFX 可选——用就写 `**SFX:**` cue、不用整段省略；文件名须对照 `## SFX library`）、`## Design rules`（4 个 rule 全文）、`## Design chunks`（`chunks/index.json` + 实际存在的 hints/voice/motifs/tokens/easings）、`## Narrator scripts`、`## Audio meta`（可选）
+**INPUT（全部已内联在 dispatch，正常不必从盘 Read）：** `## Effects catalog`、`## Blueprints index`、`## SFX library`（SFX 可选——用就写 `**SFX:**` cue、不用整段省略；文件名须对照 `## SFX library`）、`## Design rules`（4 个 rule 全文）、`## Design chunks`（`chunks/index.json` + 实际存在的 hints/voice/tokens/easings）、`## Narrator scripts`、`## Audio meta`（可选）
 **OUTPUT:** `<PROJECT_DIR>/section_plan.md`
 **TOOLS:** Read · Write · Bash（**Read 仅作兜底** —— 所需输入全在 dispatch；只有内联意外缺了某项才去盘上 Read 对应文件）
 **DONE:** Validator 退出码 0，按下方模板追加到 `<PROJECT_DIR>/context.log`

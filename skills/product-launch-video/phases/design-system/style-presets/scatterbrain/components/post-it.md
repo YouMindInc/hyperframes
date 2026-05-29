@@ -134,9 +134,9 @@
     transform: translateX(-50%) rotate(var(--tape-rot));
     width: var(--tape-w);
     height: var(--tape-h);
-    background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: var(--tape-fill);
+    border: 1px solid var(--tape-edge);
+    box-shadow: var(--tape-shadow);
     z-index: 10;
   }
 
@@ -144,7 +144,7 @@
   .sb-label {
     display: block;
     font-family: "Caveat", cursive;
-    font-size: 0.9rem;
+    font-size: 1.5rem;
     font-weight: 400;
     line-height: 1.2;
     letter-spacing: 0.15em;
@@ -155,7 +155,7 @@
   .sb-title {
     font-family: "Shrikhand", cursive;
     font-weight: 400;
-    font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+    font-size: clamp(1.75rem, 2.5vw, 2.2rem);
     line-height: 1.1;
     letter-spacing: 0.02em;
     color: var(--ink-warm);
@@ -163,7 +163,7 @@
   }
   .sb-body {
     font-family: "Zilla Slab", serif;
-    font-size: clamp(1rem, 1.5vw, 1.25rem);
+    font-size: clamp(1.5rem, 1.6vw, 1.6rem);
     font-weight: 400;
     line-height: 1.7;
     color: var(--ink-warm-light);

@@ -40,7 +40,7 @@
     padding: 6px 16px;
     margin-bottom: 24px;
     font-family: "Space Grotesk", monospace;
-    font-size: 13px;
+    font-size: 24px;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -58,7 +58,7 @@
   }
   .bf-hero-subhead {
     font-family: "Space Grotesk", monospace;
-    font-size: 1.1vw;
+    font-size: clamp(24px, 1.6vw, 30px);
     font-weight: 500;
     line-height: 1.5;
     color: var(--ink);
@@ -75,7 +75,7 @@
     box-shadow: var(--bf-shadow-sm);
     transform: rotate(-3deg);
     font-family: "Space Grotesk", monospace;
-    font-size: 13px;
+    font-size: 24px;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;

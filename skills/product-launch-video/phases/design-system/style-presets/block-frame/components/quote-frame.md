@@ -39,7 +39,7 @@
   }
   .bf-quote-author {
     font-family: "Space Grotesk", monospace;
-    font-size: 15px;
+    font-size: 24px;
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;

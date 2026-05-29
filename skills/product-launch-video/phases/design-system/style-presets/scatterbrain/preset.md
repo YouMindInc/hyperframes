@@ -27,7 +27,7 @@
 }
 ```
 
-> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Shrikhand + Zilla Slab + Caveat — instead of the brand DNA fonts. Scatterbrain has no machine-mono moment, so the `mono` slot also points at Caveat (the system's hand-script doubles for any mono role per §D's three-slot contract). The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Shrikhand + Zilla Slab + Caveat — instead of the brand DNA fonts. Scatterbrain has no machine-mono moment, so the `mono` slot also points at Caveat (the system's hand-script doubles for any mono role per §D's three-slot contract). The brand fonts still apply to §6 component code (paste-ready for Phase 4b). The §6 component preview and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -97,6 +97,11 @@ The cream paper base (`--paper-cream`) and warm ink (`--ink-warm`) are technical
 --photo-placeholder-1: #e9ecef;
 --photo-placeholder-2: #dee2e6;
 --photo-placeholder-3: #ced4da;
+/* Background-texture tones — cork glow ellipses + paper graph-grid line.
+   Declared as tokens so bg-cork / bg-paper reference them instead of bare rgba. */
+--cork-glow-warm: rgba(210, 170, 120, 0.3);
+--cork-glow-deep: rgba(190, 150, 100, 0.2);
+--paper-grid-line: rgba(200, 190, 175, 0.08);
 
 /* Sticky surface mixes — 70% brand-tinted anchor + 30% brand-primary lifts the
    anchor toward the brand without overwhelming it. Components reference these
@@ -116,6 +121,19 @@ The cream paper base (`--paper-cream`) and warm ink (`--ink-warm`) are technical
 --shadow-paper-deep: rgba(45, 42, 38, 0.25);
 --shadow-sticky: 2px 3px 15px var(--shadow-paper), 0 1px 3px var(--shadow-paper-deep);
 --shadow-pin: 0 2px 4px var(--shadow-paper-deep), inset -2px -2px 4px rgba(0, 0, 0, 0.2);
+
+/* §8.2 tactile-prop anchors — translucent masking-tape strip (a physical prop
+   the brand DNA does not own, like the thumbtacks above). Declared once so the
+   hero / post-it / photo-frame tape ::after references read as tokens, never
+   bare rgba. */
+--tape-fill: rgba(255, 255, 255, 0.4);
+--tape-edge: rgba(255, 255, 255, 0.3);
+--tape-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+/* Dashed-ink hairlines — warm ink at low alpha for sticky dividers / dashed
+   rules. Tokenized so components and §I chrome share one value (no bare rgba). */
+--ink-hairline: rgba(45, 42, 38, 0.2);
+--ink-hairline-soft: rgba(45, 42, 38, 0.1);
 
 /* Tilt presets — apply via transform on the sticky element. Hero / statement:
    small (±1-3°). Accent / floating / closing: larger (±5-15°). */
@@ -190,7 +208,7 @@ The atlas is the **sole authoring source** for non-component text. If a scene ne
     "id": "title",
     "family": "display",
     "purpose": "sub-region or feature-card title",
-    "px_min": 20, "px_max": 28, "weight": 400, "leading": "1.1", "tracking": "0.02em", "case": "sentence",
+    "px_min": 24, "px_max": 32, "weight": 400, "leading": "1.1", "tracking": "0.02em", "case": "sentence",
     "sample_html": "<div class=\"t-trole-title\">Feature title</div>"
   },
   {
@@ -201,31 +219,17 @@ The atlas is the **sole authoring source** for non-component text. If a scene ne
     "sample_html": "<div class=\"t-trole-stat-value\">128K USERS</div>"
   },
   {
-    "id": "caption-subtitle",
-    "family": "body",
-    "purpose": "slide subtitle below a hero headline (Zilla Slab)",
-    "px_min": 18, "px_max": 22, "weight": 400, "leading": "1.6", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-caption-subtitle\">A short subtitle in friendly slab serif.</p>"
-  },
-  {
-    "id": "body",
-    "family": "body",
-    "purpose": "standard paragraph body on a sticky",
-    "px_min": 16, "px_max": 20, "weight": 400, "leading": "1.7", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-body\">Body sits in Zilla Slab at conversational length — like a designer explaining their notes to a peer.</p>"
-  },
-  {
     "id": "list-item",
     "family": "body",
     "purpose": "bullet / check-marked list row inside a sticky",
-    "px_min": 16, "px_max": 18, "weight": 400, "leading": "1.6", "tracking": "0", "case": "sentence",
+    "px_min": 24, "px_max": 26, "weight": 400, "leading": "1.6", "tracking": "0", "case": "sentence",
     "sample_html": "<ul class=\"t-trole-list-item\"><li>One sticky per idea.</li><li>Pin it. Tape it.</li><li>Step back. Look.</li></ul>"
   },
   {
     "id": "handwritten",
     "family": "script",
     "purpose": "casual side quip / decorative annotation (Caveat 400)",
-    "px_min": 20, "px_max": 28, "weight": 400, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "px_min": 24, "px_max": 30, "weight": 400, "leading": "1.4", "tracking": "0", "case": "sentence",
     "sample_html": "<div class=\"t-trole-handwritten\">jot it down before you forget :)</div>"
   },
   {
@@ -236,37 +240,30 @@ The atlas is the **sole authoring source** for non-component text. If a scene ne
     "sample_html": "<div class=\"t-trole-handwritten-lg\">like a whiteboard, but online</div>"
   },
   {
-    "id": "handwritten-sm",
-    "family": "script",
-    "purpose": "small accent label / stat-row personal note (Caveat 500)",
-    "px_min": 18, "px_max": 22, "weight": 500, "leading": "1.3", "tracking": "0", "case": "sentence",
-    "sample_html": "<div class=\"t-trole-handwritten-sm\">ok!</div>"
-  },
-  {
     "id": "label-script",
     "family": "script",
     "purpose": "tracked-caps eyebrow above a card headline (Caveat uppercase, 0.15em)",
-    "px_min": 13, "px_max": 16, "weight": 400, "leading": "1.2", "tracking": "0.15em", "case": "upper",
+    "px_min": 24, "px_max": 26, "weight": 400, "leading": "1.2", "tracking": "0.15em", "case": "upper",
     "sample_html": "<div class=\"t-trole-label-script\">The brief — chapter one</div>"
   },
   {
     "id": "feature-icon-glyph",
     "family": "display",
     "purpose": "single-character glyph inside a 60px round ink-bordered feature icon",
-    "px_min": 22, "px_max": 28, "weight": 400, "leading": "1", "tracking": "0", "case": "upper",
+    "px_min": 24, "px_max": 30, "weight": 400, "leading": "1", "tracking": "0", "case": "upper",
     "sample_html": "<div><span class=\"t-trole-feature-icon-glyph\">A</span></div>"
   },
   {
     "id": "versus-mark",
     "family": "display",
     "purpose": "compare-circle connector text (cream on ink, Shrikhand)",
-    "px_min": 18, "px_max": 22, "weight": 400, "leading": "1", "tracking": "0.02em", "case": "lower",
+    "px_min": 24, "px_max": 28, "weight": 400, "leading": "1", "tracking": "0.02em", "case": "lower",
     "sample_html": "<div><span class=\"t-trole-versus-mark\">vs</span></div>"
   }
 ]
 ```
 
-The atlas omits `grain-overlay` (it's a texture, declared in §B decoration tokens) and post-it / pin / tape geometry (depth motifs, declared in §M atomic motifs).
+The atlas omits `grain-overlay` (it's a texture, declared in §B decoration tokens) and post-it / pin / tape geometry (depth props, declared as §B decoration tokens and realized in §6 components).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -381,82 +378,12 @@ Take the brand's product description / value prop. Transform with:
 - Doodle drift on `sine.inOut`, ±2° around center, ~3s loop. Doodles only — never the stickies.
 - Caveat handwritten lines may sway ±1° on the same drift. One per scene maximum.
 
-## §M Atomic motifs (gestures the plan agent can reference)
-
-Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:pinned-sticky on the headline card" without specifying which pattern the card sits in.
-
-```motifs
-[
-  {
-    "id": "pinned-sticky",
-    "label": "Pinned sticky",
-    "role": "anchor-card",
-    "surface_safe": ["paper", "cork", "warm"],
-    "description": "Anchor-mixed pastel sticky (butter / sky / blush / mint) with the soft paper-lift shadow stack, fixed rotation, and a red thumbtack via ::before. The system's foundational card — every primary headline lives inside one. Pinless headline stickies read as floating and undefined.",
-    "wide": true,
-    "demo": "<div class=\"sb-motif-sticky\">Pin it. Share it.</div>",
-    "css": ".sb-motif-sticky{position:relative;display:inline-block;background:var(--sticky-butter);padding:28px 36px;box-shadow:var(--shadow-sticky);transform:rotate(-1.5deg);font-family:var(--f-disp-native);font-weight:400;font-size:clamp(24px,3vw,40px);line-height:1.1;letter-spacing:.02em;color:var(--ink-warm);max-width:18ch}.sb-motif-sticky::before{content:\"\";position:absolute;top:-12px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 30% 30%,var(--pin-red-light),var(--pin-red-deep));box-shadow:var(--shadow-pin)}"
-  },
-  {
-    "id": "tape-strip",
-    "label": "Tape strip",
-    "role": "officially-posted",
-    "surface_safe": ["paper", "cork", "warm"],
-    "description": "Translucent white masking-tape strip via ::after across the top-center of a sticky, rotated -2deg. Combined with motif:pinned-sticky on hero / statement / closing cards as the 'officially posted' treatment. One per scene maximum.",
-    "demo": "<div class=\"sb-motif-tape\">Officially posted.</div>",
-    "css": ".sb-motif-tape{position:relative;display:inline-block;background:var(--sticky-sky);padding:28px 36px;box-shadow:var(--shadow-sticky);transform:rotate(1.5deg);font-family:var(--f-disp-native);font-weight:400;font-size:clamp(24px,3vw,40px);line-height:1.1;letter-spacing:.02em;color:var(--ink-warm);max-width:18ch}.sb-motif-tape::after{content:\"\";position:absolute;top:-15px;left:50%;transform:translateX(-50%) rotate(-2deg);width:80px;height:25px;background:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.3)}"
-  },
-  {
-    "id": "feature-icon",
-    "label": "Feature icon",
-    "role": "category-marker",
-    "surface_safe": ["paper", "cork", "warm"],
-    "description": "60px round ink-bordered circle with a single Shrikhand glyph inside (letter / number / symbol). Sits at the top of feature post-its as a category marker. The 3px ink border + display glyph is non-negotiable — variations break the icon signature.",
-    "demo": "<div class=\"sb-motif-icon\">A</div>",
-    "css": ".sb-motif-icon{display:inline-flex;align-items:center;justify-content:center;width:60px;height:60px;border:3px solid var(--ink-warm);border-radius:50%;font-family:var(--f-disp-native);font-weight:400;font-size:clamp(20px,2vw,28px);line-height:1;color:var(--ink-warm);background:transparent}"
-  },
-  {
-    "id": "hand-script-quip",
-    "label": "Hand-script quip",
-    "role": "personal-voice",
-    "surface_safe": ["paper", "cork", "warm"],
-    "description": "Caveat handwritten side-note in 2-6 words, lowercase, with personality ('jot it down before you forget', 'pin this somewhere safe', 'ok :)'). One per scene maximum. May sway ±1° on the ambient drift — never tween rotation between fixed values.",
-    "demo": "<div class=\"sb-motif-quip\">like a whiteboard, but online :)</div>",
-    "css": ".sb-motif-quip{display:inline-block;font-family:var(--f-script-native);font-weight:600;font-size:clamp(22px,2.4vw,32px);line-height:1.3;color:var(--ink-warm);transform:rotate(-3deg)}"
-  },
-  {
-    "id": "eyebrow-label",
-    "label": "Eyebrow label",
-    "role": "categorical-kicker",
-    "surface_safe": ["paper", "cork", "warm"],
-    "description": "Caveat at 0.9rem, UPPERCASE, 0.15em tracking — the only place uppercase appears in the system. Sits above a card headline as a categorical kicker ('THE BRIEF', 'CHAPTER ONE', '01 / DISCOVERY'). Caveat at normal tracking reads as a body cursive; the uppercase + tracking turns it into a label.",
-    "demo": "<div class=\"sb-motif-eyebrow\">The brief — chapter one</div>",
-    "css": ".sb-motif-eyebrow{display:inline-block;font-family:var(--f-script-native);font-weight:400;font-size:clamp(13px,1.1vw,16px);line-height:1.2;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-warm-light)}"
-  },
-  {
-    "id": "doodle-mark",
-    "label": "Doodle mark",
-    "role": "margin-decoration",
-    "surface_safe": ["paper", "cork", "warm"],
-    "description": "Decorative SVG mark — circle, squiggle, triangle, line, X+ pair — placed in 1-2 unoccupied slide corners. 3px ink stroke at 0.15 opacity. Drifts on sine.inOut ±2° around its center, ~3s loop. Three or more doodles per scene clutters the margin.",
-    "demo": "<div class=\"sb-motif-doodle\"><svg viewBox=\"0 0 80 80\" width=\"72\" height=\"72\" aria-hidden=\"true\"><circle cx=\"40\" cy=\"40\" r=\"28\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"/><path d=\"M20 56 Q40 36 60 56\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/></svg></div>",
-    "css": ".sb-motif-doodle{display:inline-flex;color:var(--ink-warm);opacity:.35}"
-  }
-]
-```
-
-The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
-
-**Materials lexicon** (informational — these are the composition atoms behind the patterns):
-
-- pinned-sticky · tape-strip · feature-icon · hand-script-quip · eyebrow-label · doodle-mark · versus-circle · photo-frame · stat-row · grain-overlay
-
 ## §I Page-level CSS (overrides design.html's neutral chrome — makes the doc itself read as scatterbrain)
 
 ```css
 /* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
  * These let the doc chrome render in Shrikhand / Zilla Slab / Caveat regardless
- * of brand DNA. The §6 component preview, §M motifs grid, and §T type-role atlas
+ * of brand DNA. The §6 component preview and §T type-role atlas
  * also read these via .preset-native-scope.
  *
  * Scatterbrain has no machine-mono moment — the mono slot falls back to Caveat
@@ -472,7 +399,7 @@ The `motifs` JSON block above is the SOLE source of truth. build-design.mjs read
 }
 
 /* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
- * Wraps §6 component previews, §M motif demos, and §T type-role atlas so
+ * Wraps §6 component previews and §T type-role atlas so
  * var(--font-*) resolves to Shrikhand / Zilla Slab / Caveat regardless of the
  * brand DNA tokens emitted in :root. The paste-ready component source is
  * untouched — Phase 4b still grep + paste original var(--font-display) tokens,
@@ -520,7 +447,7 @@ body::before {
   font-weight: 400;
 }
 .ds-section {
-  border-top: 1px dashed rgba(45, 42, 38, 0.2);
+  border-top: 1px dashed var(--ink-hairline);
   padding: 80px 0;
 }
 h2 {
@@ -563,7 +490,7 @@ h2 {
 .comp-head {
   background: transparent !important;
   color: var(--ink-warm) !important;
-  border-bottom: 1px dashed rgba(45, 42, 38, 0.2) !important;
+  border-bottom: 1px dashed var(--ink-hairline) !important;
   font-family: "Shrikhand", cursive;
 }
 .ds-code {
@@ -573,100 +500,6 @@ h2 {
   box-shadow: var(--shadow-sticky);
   color: var(--ink-warm) !important;
   font-family: "Caveat", "Courier New", monospace;
-}
-
-/* ── §M Motifs grid: atomic gestures.
- * Mirrors the scatterbrain workshop register — each card is a small sticky-like
- * surface teaching ONE reusable gesture. Cards may declare a surface
- * (paper / cork / warm) to demonstrate the gesture against its native bg. */
-.ds-motif-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 20px;
-}
-.ds-motif {
-  grid-column: span 4;
-  min-height: 280px;
-  padding: 28px;
-  border: none;
-  border-radius: 0;
-  background: var(--sticky-butter);
-  box-shadow: var(--shadow-sticky);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 16px;
-  position: relative;
-  overflow: hidden;
-  transform: rotate(-0.8deg);
-}
-.ds-motif:nth-child(even) {
-  background: var(--sticky-sky);
-  transform: rotate(1deg);
-}
-.ds-motif:nth-child(3n) {
-  background: var(--sticky-blush);
-  transform: rotate(-1.4deg);
-}
-.ds-motif:nth-child(5n) {
-  background: var(--sticky-mint);
-  transform: rotate(0.6deg);
-}
-.ds-motif.ds-motif-wide {
-  grid-column: span 8;
-}
-.ds-motif.ds-motif-surface-paper {
-  background: var(--paper-cream-deep);
-}
-.ds-motif.ds-motif-surface-cork {
-  background: var(--cork-mid);
-}
-.ds-motif.ds-motif-surface-warm {
-  background: var(--anchor-peach);
-}
-.ds-motif-h {
-  margin: 0;
-  font-family: var(--f-disp-native);
-  font-weight: 400;
-  font-size: clamp(22px, 2.4vw, 34px);
-  line-height: 1.1;
-  letter-spacing: 0.02em;
-  color: var(--ink-warm);
-}
-.ds-motif-desc {
-  margin: 0;
-  font-family: var(--f-body-native);
-  font-weight: 400;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ink-warm-light);
-  max-width: 30ch;
-}
-.ds-motif-demo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 96px;
-}
-.ds-motif-id {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  font-family: var(--f-script-native);
-  font-size: 12px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--ink-warm-light);
-  opacity: 0.65;
-}
-@media (max-width: 880px) {
-  .ds-motif-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .ds-motif,
-  .ds-motif.ds-motif-wide {
-    grid-column: auto;
-  }
 }
 
 /* ── §T Type-role atlas. Container = cream sticky-card. Each .t-trole-* class
@@ -690,7 +523,7 @@ h2 {
   padding: 28px 32px;
 }
 .ds-trole-row:not(:last-child) {
-  border-bottom: 1px dashed rgba(45, 42, 38, 0.2);
+  border-bottom: 1px dashed var(--ink-hairline);
 }
 .ds-trole-sample {
   min-width: 0;
@@ -732,7 +565,7 @@ h2 {
 .t-trole-title {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(20px, 2.5vw, 28px);
+  font-size: clamp(24px, 2.5vw, 32px);
   line-height: 1.1;
   letter-spacing: 0.02em;
   color: var(--ink-warm);
@@ -746,24 +579,6 @@ h2 {
   text-transform: uppercase;
   color: var(--ink-warm);
 }
-.t-trole-caption-subtitle {
-  font-family: var(--font-body);
-  font-weight: 400;
-  font-size: clamp(18px, 1.6vw, 22px);
-  line-height: 1.6;
-  color: var(--ink-warm-light);
-  max-width: 50ch;
-  margin: 0;
-}
-.t-trole-body {
-  font-family: var(--font-body);
-  font-weight: 400;
-  font-size: clamp(16px, 1.4vw, 20px);
-  line-height: 1.7;
-  color: var(--ink-warm-light);
-  max-width: 60ch;
-  margin: 0;
-}
 .t-trole-list-item {
   list-style: none;
   padding: 0;
@@ -775,7 +590,7 @@ h2 {
 .t-trole-list-item li {
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: clamp(16px, 1.3vw, 18px);
+  font-size: clamp(24px, 1.4vw, 26px);
   line-height: 1.6;
   color: var(--ink-warm);
   padding-left: 1.3em;
@@ -791,7 +606,7 @@ h2 {
 .t-trole-handwritten {
   font-family: var(--font-script);
   font-weight: 400;
-  font-size: clamp(20px, 2vw, 28px);
+  font-size: clamp(24px, 2vw, 30px);
   line-height: 1.4;
   color: var(--ink-warm);
 }
@@ -802,18 +617,11 @@ h2 {
   line-height: 1.3;
   color: var(--ink-warm);
 }
-.t-trole-handwritten-sm {
-  font-family: var(--font-script);
-  font-weight: 500;
-  font-size: clamp(18px, 1.5vw, 22px);
-  line-height: 1.3;
-  color: var(--ink-warm);
-}
 .t-trole-label-script {
   display: inline-block;
   font-family: var(--font-script);
   font-weight: 400;
-  font-size: clamp(13px, 1.1vw, 16px);
+  font-size: clamp(24px, 1.4vw, 26px);
   line-height: 1.2;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -829,7 +637,7 @@ h2 {
   border-radius: 50%;
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(22px, 2vw, 28px);
+  font-size: clamp(24px, 2vw, 30px);
   line-height: 1;
   color: var(--ink-warm);
   background: transparent;
@@ -843,7 +651,7 @@ h2 {
   border-radius: 50%;
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(18px, 1.6vw, 22px);
+  font-size: clamp(24px, 1.6vw, 28px);
   line-height: 1;
   letter-spacing: 0.02em;
   background: var(--ink-warm);

@@ -10,7 +10,7 @@
     padding: 14px 32px;
     font-family: "Inter", sans-serif;
     font-weight: 700;
-    font-size: 16px;
+    font-size: 24px;
     text-transform: uppercase;
     letter-spacing: 0.02em;
     box-shadow: var(--bf-shadow-sm);

@@ -78,7 +78,7 @@
   .sb-compare-card-title {
     font-family: "Shrikhand", cursive;
     font-weight: 400;
-    font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+    font-size: clamp(1.75rem, 2.5vw, 2.2rem);
     line-height: 1.1;
     letter-spacing: 0.02em;
     text-align: center;
@@ -94,12 +94,12 @@
   }
   .sb-compare-card-list li {
     font-family: "Zilla Slab", serif;
-    font-size: 1.1rem;
+    font-size: 1.5rem;
     font-weight: 400;
     line-height: 1.5;
     color: var(--ink-warm-light);
     padding: 0.8rem 0;
-    border-bottom: 1px solid rgba(45, 42, 38, 0.1);
+    border-bottom: 1px solid var(--ink-hairline-soft);
   }
   .sb-compare-card-list li:last-child {
     border-bottom: none;
@@ -120,7 +120,7 @@
     justify-content: center;
     font-family: "Shrikhand", cursive;
     font-weight: 400;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     box-shadow: 0 2px 8px var(--shadow-paper-deep);
     z-index: 10;
   }

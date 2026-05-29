@@ -45,15 +45,13 @@ try {
 }
 
 // Load design-system/chunks/index.json (best-effort, relative to plan dir).
-// Drives three preset-conditional checks:
+// Drives two preset-conditional checks:
 //   1. Surface anchor is REQUIRED when any component declares a `surface` field
 //      (surface-aware presets). Legacy presets ship components with no `surface`
 //      field → check is skipped.
 //   2. `avoids_same_scene` cross-check between cited components — preset
 //      invariants like "single signature element per plate" live there. Missing
 //      index.json → cross-check is skipped (prep.mjs still validates existence).
-//   3. Motifs anchor id validation when index.json.motifs_file is set — every
-//      cited motif id must appear as a `## motif: <id>` heading in motifs.md.
 const chunksIndexPath = resolve(dirname(planPath), "design-system/chunks/index.json");
 let chunksIndex = null;
 try {
@@ -75,23 +73,6 @@ if (chunksIndex?.components) {
   }
 }
 
-// Load chunks/motifs.md and extract known motif ids from `## motif: <id>` headings.
-// Skipped when preset declares no §M (motifs_file null in index.json). The check
-// is best-effort: motifs.md unreadable → log inside the loop the first time we
-// hit a Motifs anchor and downgrade to syntax-only validation.
-const knownMotifIds = new Set();
-let motifsLoadError = null;
-if (chunksIndex?.motifs_file) {
-  const motifsPath = resolve(dirname(planPath), "design-system", chunksIndex.motifs_file);
-  try {
-    const motifsMd = readFileSync(motifsPath, "utf8");
-    for (const m of motifsMd.matchAll(/^##\s+motif:\s+([a-z0-9-]+)\s*$/gm)) {
-      knownMotifIds.add(m[1]);
-    }
-  } catch (e) {
-    motifsLoadError = `motifs.md referenced by index.json (${chunksIndex.motifs_file}) but unreadable: ${e.message}`;
-  }
-}
 
 // SFX manifest (self-located relative to this script, like the default rules dir
 // above). Used to validate that each cited `<file>.mp3` actually exists in the
@@ -117,7 +98,6 @@ const errors = [];
 let totalEffectsCited = 0;
 let totalComponentsCited = 0;
 let totalSurfaceCommitments = 0;
-let totalMotifsCited = 0;
 let totalSfxCited = 0;
 
 // ---- Per-scene anchor validation (Phase 4a contract) ----
@@ -130,7 +110,7 @@ let totalSfxCited = 0;
 const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
 const heads = [...plan.matchAll(sceneHeadRe)];
 const ANCHORS = ["Effects", "Duration", "Continuity"];
-const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Motifs"];
+const OPTIONAL_ANCHORS = ["Blueprint", "Components"];
 
 const hasAnchor = (body, name) => {
   const re = new RegExp(`^\\*\\*${name}:\\*\\*`, "mi");
@@ -338,12 +318,6 @@ for (let i = 0; i < heads.length; i++) {
   // design-system/chunks/components/<id>.html. Existence is enforced by
   // prep.mjs (which has filesystem access to chunks/index.json); here we only
   // require well-formed syntax if the anchor is present.
-  //
-  // Optional **Motifs:** anchor — preset-conditional: when index.json.motifs_file
-  // is set we cross-check each backticked id against the `## motif: <id>` headings
-  // in motifs.md. When the preset declared no §M (motifs_file null) we still
-  // syntax-validate the anchor but skip the id existence check (motif unknown is
-  // accepted as a soft cite).
   let pickedIds = [];
   for (const a of OPTIONAL_ANCHORS) {
     const re = new RegExp(`^\\*\\*${a}:\\*\\*\\s*(.*)$`, "m");
@@ -365,32 +339,6 @@ for (let i = 0; i < heads.length; i++) {
         } else {
           totalComponentsCited++;
           pickedIds.push(id);
-        }
-      }
-    } else if (a === "Motifs") {
-      const ids = [...raw.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-      if (raw && ids.length === 0) {
-        errors.push(
-          `${sceneId}: **Motifs:** present but has no backtick-wrapped ids (got "${raw}")`,
-        );
-      }
-      for (const id of ids) {
-        if (!/^[a-z0-9-]+$/.test(id)) {
-          errors.push(
-            `${sceneId}: **Motifs:** id "${id}" — must be lowercase + digits + dashes`,
-          );
-          continue;
-        }
-        totalMotifsCited++;
-        if (chunksIndex?.motifs_file) {
-          if (motifsLoadError) {
-            errors.push(`${sceneId}: ${motifsLoadError}`);
-            motifsLoadError = null; // report once
-          } else if (!knownMotifIds.has(id)) {
-            errors.push(
-              `${sceneId}: **Motifs:** id "${id}" not in chunks/motifs.md (known: ${[...knownMotifIds].sort().join(", ") || "(empty)"})`,
-            );
-          }
         }
       }
     }
@@ -456,8 +404,7 @@ const componentsNote =
   totalComponentsCited > 0 ? `, ${totalComponentsCited} component citation(s)` : "";
 const surfaceNote =
   totalSurfaceCommitments > 0 ? `, ${totalSurfaceCommitments} surface commitment(s)` : "";
-const motifsNote = totalMotifsCited > 0 ? `, ${totalMotifsCited} motif citation(s)` : "";
 const sfxNote = totalSfxCited > 0 ? `, ${totalSfxCited} SFX cue(s)` : "";
 console.log(
-  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote}${surfaceNote}${motifsNote}${sfxNote} — OK`,
+  `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote}${surfaceNote}${sfxNote} — OK`,
 );

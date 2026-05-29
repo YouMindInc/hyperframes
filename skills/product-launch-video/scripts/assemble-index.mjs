@@ -318,6 +318,19 @@ ${body.join("\n")}
 
 writeFileSync(outPath, html);
 
+// ---------- caption-overrides.json shim ----------
+// The captions runtime fetches this file at validate time; absence yields a
+// noisy validate ✗ that previously sent finalize on a ~30s debug chase. An
+// empty array is a no-op override list — semantically identical to absent —
+// but the file existing silences validate. preflight-finalize.mjs writes the
+// same shim defensively in case this engine is bypassed on a resume path.
+const captionOverridesPath = join(hyperframesDir, "caption-overrides.json");
+let captionOverridesCreated = false;
+if (!existsSync(captionOverridesPath)) {
+  writeFileSync(captionOverridesPath, "[]\n");
+  captionOverridesCreated = true;
+}
+
 // ---------- summary ----------
 console.log(`✓ wrote ${outPath}`);
 console.log(`  scenes (track 0):   ${playOrder.length}`);
@@ -327,6 +340,7 @@ console.log(`  captions (track 12): ${captionsEmitted ? "yes" : "no"}`);
 console.log(`  sfx    (track 20+):  ${sfxEmitted}${sfx.length !== sfxEmitted ? ` (${sfx.length - sfxEmitted} skipped)` : ""}`);
 console.log(`  total duration:     ${totalDuration}s`);
 console.log(`  @font-face:         ${fontFaceCss ? `${fontFaceCss.length}B injected` : "none"}`);
+if (captionOverridesCreated) console.log(`  caption-overrides.json: created empty [] shim`);
 if (anomalies.length) {
   console.log(`\nanomalies (non-fatal):`);
   for (const a of anomalies) console.log(`  - ${a}`);

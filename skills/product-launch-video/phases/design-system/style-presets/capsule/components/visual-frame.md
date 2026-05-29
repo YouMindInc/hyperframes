@@ -21,7 +21,7 @@
     );
     position: relative;
     overflow: hidden;
-    box-shadow: var(--cap-shadow-xl, 12px 12px 0 rgba(26, 26, 26, 0.08));
+    box-shadow: var(--cap-shadow-xl, 12px 12px 0 color-mix(in srgb, var(--ink) 8%, transparent));
   }
   .cap-vframe-pattern {
     position: absolute;
@@ -43,7 +43,7 @@
   }
   .cap-vframe-label {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.8rem;
+    font-size: 24px;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.1em;

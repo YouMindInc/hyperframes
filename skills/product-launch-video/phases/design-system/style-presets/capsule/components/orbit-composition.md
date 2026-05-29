@@ -39,66 +39,55 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    /* auto-size to the label via padding — NOT a fixed width. A fixed width clips longer
+       labels ("GET STARTED") past the rounded pill ends; padding lets any verb fit. */
+    padding: var(--cap-pad-pill-sm, 0.4rem 1.2rem);
     border-radius: var(--cap-radius-pill, 9999px);
     border: var(--cap-outline-w, 2px) solid var(--ink);
     background: var(--canvas);
     color: var(--ink);
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.75rem;
+    font-size: 24px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    box-shadow: var(--cap-shadow-md, 6px 6px 0 rgba(26, 26, 26, 0.08));
+    box-shadow: var(--cap-shadow-md, 6px 6px 0 color-mix(in srgb, var(--ink) 8%, transparent));
     white-space: nowrap;
   }
   .cap-orbit-sat-1 {
-    width: 90px;
-    height: 42px;
     top: 10%;
     left: 20%;
     transform: rotate(-20deg);
     background: var(--brand-primary);
   }
   .cap-orbit-sat-2 {
-    width: 100px;
-    height: 45px;
     top: 5%;
     right: 15%;
     transform: rotate(15deg);
     background: var(--brand-secondary);
   }
   .cap-orbit-sat-3 {
-    width: 95px;
-    height: 42px;
     bottom: 15%;
     left: 10%;
     transform: rotate(10deg);
     background: var(--brand-accent);
   }
   .cap-orbit-sat-4 {
-    width: 110px;
-    height: 48px;
     bottom: 10%;
     right: 10%;
     transform: rotate(-12deg);
     background: var(--brand-primary);
   }
   .cap-orbit-sat-5 {
-    width: 80px;
-    height: 38px;
     top: 40%;
     left: 0%;
     transform: rotate(25deg);
-    font-size: 0.65rem;
     background: var(--brand-secondary);
   }
   .cap-orbit-sat-6 {
-    width: 85px;
-    height: 40px;
     top: 45%;
     right: 0%;
     transform: rotate(-18deg);
-    font-size: 0.65rem;
     background: var(--brand-accent);
   }
 </style>

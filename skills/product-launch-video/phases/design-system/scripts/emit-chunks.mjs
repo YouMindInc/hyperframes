@@ -26,6 +26,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const outDir = path.resolve(process.argv[2] || "./design-system");
 const designHtmlPath = path.join(outDir, "design.html");
@@ -144,23 +147,6 @@ if (typeRolesMatch) {
   typeRolesBytes = Buffer.byteLength(typeRolesMd);
 }
 
-// ─── 3.7 motifs.md ────────────────────────────────────────────────
-// §M atomic motifs (optional). Plan agent cites motif ids in the **Motifs:**
-// anchor; scene worker reads on demand to plant a cited motif. Font vars are
-// rewritten from preset-native (--f-disp-native) to brand DNA (--font-display)
-// in build-design before the marker block is emitted, so paste is one step.
-const motifsMatch = html.match(
-  new RegExp(`${PRE_OPEN}<!--\\s*MOTIFS-START\\s*-->([\\s\\S]*?)<!--\\s*MOTIFS-END\\s*-->`),
-);
-let motifsFile = null;
-let motifsBytes = 0;
-if (motifsMatch) {
-  const motifsMd = htmlDecode(motifsMatch[1]).trim();
-  fs.writeFileSync(path.join(chunksDir, "motifs.md"), motifsMd + "\n");
-  motifsFile = "chunks/motifs.md";
-  motifsBytes = Buffer.byteLength(motifsMd);
-}
-
 // ─── 4. components ────────────────────────────────────────────────
 // Component blocks live inside <pre class="ds-code">...</pre> with HTML-entity-
 // escaped markers (so design.html renders the markers as visible text for human
@@ -224,6 +210,20 @@ if (agentNote) {
   if (su) source_url = su[1].trim();
 }
 
+// ─── 4.6 caption-skin.html (optional preset-local caption skin) ───
+// A preset MAY ship its own pre-baked, brand-tokenized caption skin at
+// style-presets/<preset>/caption-skin.html. When present, copy it into chunks/ so
+// build-captions-html.mjs can use it as the project's caption SOURCE (a second source
+// alongside the registry caption-* skins). Absent → registry skins, exactly as before.
+let captionSkinFile = null;
+if (preset) {
+  const skinSrc = path.resolve(__dirname, "..", "style-presets", preset, "caption-skin.html");
+  if (fs.existsSync(skinSrc)) {
+    fs.copyFileSync(skinSrc, path.join(chunksDir, "caption-skin.html"));
+    captionSkinFile = "chunks/caption-skin.html";
+  }
+}
+
 const index = {
   generated_at: new Date().toISOString(),
   source_url,
@@ -234,11 +234,13 @@ const index = {
   // hints_file is null when the preset doesn't declare §H. Plan agent treats null
   // as "no preset-level composition contract — pick by component id only".
   hints_file: hintsFile,
-  // type_roles_file / motifs_file are null when preset declares no §T / §M.
-  // Worker reads on demand (paths flow through prep.mjs → dispatch). Plan agent
-  // also reads motifs.md when validating the Motifs anchor.
+  // type_roles_file is null when preset declares no §T. Worker reads on demand
+  // (paths flow through prep.mjs → dispatch).
   type_roles_file: typeRolesFile,
-  motifs_file: motifsFile,
+  // caption_skin_file is null unless the preset ships style-presets/<preset>/caption-skin.html.
+  // When set, build-captions-html.mjs uses it as the caption source (preferred over registry
+  // caption-* skins); null → registry skin scoring, as before.
+  caption_skin_file: captionSkinFile,
   components: components.map(({ id, file, meta }) =>
     // Spread frontmatter (surface / composes / role / avoids_same_scene / slots)
     // alongside id+file. Plan agent reads these without opening component .html.
@@ -255,14 +257,7 @@ const voiceBytes = Buffer.byteLength(voiceMd);
 const hintsBytes = hintsFile ? Buffer.byteLength(htmlDecode(hintsMatch[1]).trim()) : 0;
 const compBytes = components.reduce((sum, c) => sum + c.size, 0);
 const designBytes = Buffer.byteLength(html);
-const chunksBytes =
-  tokenBytes +
-  easingBytes +
-  voiceBytes +
-  hintsBytes +
-  typeRolesBytes +
-  motifsBytes +
-  compBytes;
+const chunksBytes = tokenBytes + easingBytes + voiceBytes + hintsBytes + typeRolesBytes + compBytes;
 
 console.log(`✓ ${path.relative(process.cwd(), chunksDir)}/`);
 console.log(`  tokens.css         ${fmt(tokenBytes)} KB`);
@@ -270,7 +265,7 @@ console.log(`  easings.js         ${fmt(easingBytes)} KB`);
 console.log(`  voice.md           ${fmt(voiceBytes)} KB`);
 if (hintsFile) console.log(`  composition-hints.md  ${fmt(hintsBytes)} KB`);
 if (typeRolesFile) console.log(`  type-roles.md      ${fmt(typeRolesBytes)} KB`);
-if (motifsFile) console.log(`  motifs.md          ${fmt(motifsBytes)} KB`);
+if (captionSkinFile) console.log(`  caption-skin.html  (preset-local caption source)`);
 console.log(`  components/        ${components.length} files`);
 for (const c of components) {
   console.log(`    ${c.id}.html  (${fmt(c.size)} KB)`);

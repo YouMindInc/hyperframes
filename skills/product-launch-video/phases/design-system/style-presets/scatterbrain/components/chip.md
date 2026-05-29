@@ -12,7 +12,7 @@
   .sb-chip {
     display: inline-block;
     font-family: "Caveat", cursive;
-    font-size: 0.9rem;
+    font-size: 1.5rem;
     font-weight: 400;
     line-height: 1.2;
     letter-spacing: 0.15em;

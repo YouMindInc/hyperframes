@@ -23,7 +23,7 @@
     border-radius: var(--cap-radius-pill, 9999px);
     font-family: "Space Grotesk", sans-serif;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 24px;
     letter-spacing: var(--cap-track-pill, 0.12em);
     text-transform: uppercase;
   }
@@ -38,7 +38,7 @@
   }
   .cap-hero-sub {
     font-family: "Space Grotesk", sans-serif;
-    font-size: clamp(0.8rem, 1.5vw, 1.1rem);
+    font-size: clamp(24px, 1.5vw, 28px);
     font-weight: 400;
     letter-spacing: 0.15em;
     text-transform: uppercase;

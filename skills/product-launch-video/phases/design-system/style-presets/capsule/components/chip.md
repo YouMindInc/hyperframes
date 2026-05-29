@@ -12,7 +12,7 @@
     border: var(--cap-outline-w, 2px) solid var(--ink);
     border-radius: var(--cap-radius-pill, 9999px);
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.7rem;
+    font-size: 24px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: var(--cap-track-loose, 0.1em);

@@ -51,7 +51,7 @@
   .bf-step-title {
     font-family: "Inter", sans-serif;
     font-weight: 700;
-    font-size: 20px;
+    font-size: 28px;
     line-height: 1.2;
     letter-spacing: -0.01em;
     text-transform: uppercase;
@@ -61,7 +61,7 @@
   .bf-step-desc {
     font-family: "Inter", sans-serif;
     font-weight: 500;
-    font-size: 14px;
+    font-size: 24px;
     line-height: 1.5;
     color: var(--ink);
   }

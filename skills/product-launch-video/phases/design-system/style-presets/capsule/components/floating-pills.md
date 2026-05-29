@@ -27,7 +27,7 @@
     color: var(--ink);
     font-family: "Space Grotesk", sans-serif;
     font-weight: 700;
-    font-size: 0.75rem;
+    font-size: 24px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }

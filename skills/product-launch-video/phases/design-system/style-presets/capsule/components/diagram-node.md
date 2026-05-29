@@ -24,10 +24,10 @@
     text-align: center;
     font-family: "Space Grotesk", sans-serif;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 24px;
     line-height: 1.3;
     padding: 1rem 2rem;
-    box-shadow: var(--cap-shadow-md, 6px 6px 0 rgba(26, 26, 26, 0.08));
+    box-shadow: var(--cap-shadow-md, 6px 6px 0 color-mix(in srgb, var(--ink) 8%, transparent));
     min-width: 140px;
     min-height: 60px;
     z-index: 2;

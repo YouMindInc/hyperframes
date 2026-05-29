@@ -22,7 +22,6 @@
    - `voice_file` —— 绝对路径，必读，~0.5 KB。DOM 里**所有可见文字**（headline / chip / button / stat label）按这份 register 写：照 recipe（strip articles、UPPERCASE、句号断行等）改写 creative_brief 里出现的英文短句。**不要**改 `<audio>` 关联的 narrator script（Phase 2 已把它定型给 TTS，大写会毁掉语音节奏）
    - `hints_file` —— 绝对路径 \| null。非 null 时必读，~1-3 KB。preset 的 surface contract / 60-30-10 / sound 钩子，**plus** "Surface `#root` CSS" 段（surface-aware preset）。§12 配色 + §3 60-30-10 都来自这里
    - `type_roles_file` —— 绝对路径 \| null。**按需读**：creative_brief 里要的文字超出 `components[]` 提供的范围时（hero display / 单行 lede / pill row / CTA button / closing end mark / 等），按 id 在这份目录里找 `t-trole-<id>` 类的 CSS 整段粘进 scene `<style>`（加 `s<N>-` 前缀重写 class 名）。**不用就别读**（catalog 几 KB，多份 scene 同时读浪费 token）
-   - `motifs_file` —— 绝对路径 \| null。**按需读**：creative_brief 在 `**Motifs:**` 锚点 cite 了 motif id 时，按 id 在这份目录里找对应 CSS（已经 rewrite 成 brand DNA 字体 var，可直接粘）+ demo HTML。没 cite motif 就别读
    - `components[]` —— 0-N 个绝对路径（Phase 3 给本 scene 挑选的 design-system 组件 HTML 片段）。**全部 Read**（每份 0.3-1.5 KB），按 §3 token + §5 effect→asset 映射在 DOM 中粘贴并把所有 class 加 `s<N>-` 前缀避免 sibling 串扰
    - **不要读** `./design-system/design.html` —— 已被 chunks 取代；如果 `design_chunks` 为 null（chunks 缺失），回退去读 `./design-system/design.html` 并自报一个 anomaly
 
@@ -117,13 +116,47 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
     - `surface: null` 或非 surface-aware preset —— 继续用 `background: var(--canvas)` 默认行为，不读 composition-hints 的 Surface #root CSS 段。
     - 选错 surface 或漏装饰 → mp4 渲出来"普通 SaaS 配色"而不是 preset 的视觉签名，丢掉 preset 一半的辨识度。
 12. **`data-duration` 必须 = dispatch 给的 `estimatedDuration_s`（一字不差）** —— Step 7 的 `assemble-index.mjs` 用 group_spec 的 `start_s` 排好全片时间轴，再逐个核对 scene root 的 `data-duration`；不符直接 **fatal**、整个 Step 7 卡住回来重派你。别用 `creative_brief` 里的约数、别自己 round。`voicePath` 非空时尤其照抄（voice / SFX / captions 的全局时刻都按这个值算）。
-13. **底部字幕带 keep-out（HARD 约束 —— 仅当 dispatch `Captions: enabled`）**
-    - `Captions: enabled` 时：finalize 在底部贴一条全片逐词 karaoke 字幕带，占画布高度底部 **~17%**（本 skill 固定 1920×1080 → 底部 **180px**，y 900→1080）。**所有 scene FOREGROUND 内容**——headline / cards / CTA buttons / stats / brand marks / 关键文本——必须留在画布 **上 ~83%**（content bottom 在 **y ≤ 900**）。
-    - 布局自然下探到底部时（full-bleed cards、oversized hero text、large CTA）→ **shrink it or shift up**，让字幕永不被盖。把底部 ~17% 当**保留区**。
-    - **垂直居中锚在 y ≈ 454（0.42 × 1080）**，不是 540 —— 居中针对"上 83% 区"，不是整画布。
-    - **BACKGROUND 例外（本 skill 明确，与单纯几何缩放不同）**：`#root` 背景 / surface 装饰 / `::after` frame / ambient mesh / 全幅截图底层 **保持 full-bleed**，照常铺满 1920×1080 —— keep-out 只约束 foreground 可读内容，**不做 canvas scale、不 pillarbox**。约束 #9 的 macro-camera overflow 包装层（`data-layout-allow-overflow`）同样豁免（zoom 本就会超框）。
-    - `Captions: disabled` 时：full-canvas，center 540，content 可到 y=1080。
-    - 无机器 lint 强制此项（同 vito：靠 worker 自觉 + Phase 4c snapshot 眼检）。被字幕盖住的关键内容 = 眼检 `broken` → 回来重派。
+13. **底部字幕带 keep-out（HARD 约束 —— 仅当 dispatch `Captions: enabled`，preflight 机器校验）**
+
+    **原则一句话**：`Captions: enabled` 时，finalize 在底部贴一条全片逐词 karaoke pill，占画布底部 **180px**（y 900 → 1080，约 17%）。**任何 FOREGROUND 元素的渲染下沿 y 必须 ≤ 900**（加 20px 安全：实际目标 **bottom edge ≤ y=880**）。Foreground = headline / cards / CTA / button / chip / stat / hero text / quote / 关键 logo / 任何可读内容。
+
+    几何（写每个 absolute 前先口算一次，下沿 y 一旦算出 > 880 就是 bug）：
+
+    | 这个 CSS 形态                              | element 下沿 y 算法           | 合法条件           |
+    | ------------------------------------------ | ----------------------------- | ------------------ |
+    | `bottom: <B>px`（无 `top` / `height`）     | `1080 − B`                    | `B ≥ 200`          |
+    | `top: <T>px` + `height: <H>px`             | `T + H`                       | `T + H ≤ 880`      |
+    | `top: <T>px` + 自然高度（看内容估）        | `T + 内容高`                  | `T ≤ 880 − 内容高` |
+    | `top: <T>px` + `bottom: <B>px`（拉伸条带） | `1080 − B`（bottom 决定下沿） | `B ≥ 200`          |
+    | flex/grid 子项 + `align-self: end`         | 父容器底部                    | 父容器下沿 ≤ 880   |
+
+    **常见元素的安全锚定 cheat-sheet**（不用算，照抄）：
+
+    | 元素                                                    | 推荐定位                                                     | 备注                       |
+    | ------------------------------------------------------- | ------------------------------------------------------------ | -------------------------- |
+    | chip / tag / pill (font 18–28, padding 10×20)           | `bottom: 200px`（高 ≤ 60）                                   | 下沿 y ≤ 880               |
+    | small button (font 18–24, padding 14×32)                | `bottom: 200px`                                              | 同上                       |
+    | medium CTA button (font 28–36, padding 20×64)           | `bottom: 220px`                                              | 留 element 高 ≤ 80 的余量  |
+    | large CTA / hero close button (font 40+, padding 28×72) | `bottom: 260px`                                              | 留 element 高 ≤ 120 的余量 |
+    | feature-card 整张                                       | `top: 100–148px`，`height` 留到 ≤ 720                        | top + height ≤ 880         |
+    | vertical ticker / 拉伸条带                              | `top: 80px; bottom: 200px`                                   | 下沿固定在 y=880           |
+    | 居中 hero 文字                                          | 用 flex `justify-content: center`，垂直锚在 y ≈ 454 而非 540 | 居中针对"上 83% 区"        |
+
+    **BACKGROUND 例外（豁免，可全幅 full-bleed 到底部 17%）**：
+    - `#root` 背景 / surface 装饰 / `::before` / `::after` frame / ambient mesh / 全幅截图底层。
+    - 装饰类 leaf class 名 —— preflight 自动跳过这些 selector，含以下任一关键词（hyphen/underscore 切词）即识别为装饰：`bg` / `background` / `dot-grid` / `mesh` / `gradient` / `swell` / `ambient` / `texture` / `noise` / `scanline` / `surface` / `overlay` / `halo` / `glow` / `frame` / `pin` / `corner-pin` / `deco` / `star-burst` / `burst` / `ring` / `stripe` / `rect` / `shadow` / `pulse` / `ripple` / `measure` / `probe` / `hidden` / `scrim` / `backdrop` / `veil` / `fog` / `grain`。
+    - 约束 #9 的 macro-camera overflow 包装层（带 `data-layout-allow-overflow="true"`）—— zoom peak 本就会超框。
+
+    **`Captions: disabled` 时**：full-canvas、垂直居中锚 y=540、content 可一直到 y=1080。所有上述约束失效，定位自由。
+
+    **Preflight 机器校验**（Step 7 (2) `check-caption-keepout.mjs`）会捕住的三种形态：
+    1. `position: absolute` + `bottom: <X>px`、X < 180 且非装饰
+    2. `position: absolute` + `top: <X>px`、X ≥ 900 且非装饰
+    3. `position: absolute` + `top + height` 静态可加和 > 900 且非装饰
+
+    每条违规生成准 Edit 字符串（`edit_old` / `edit_new`）写进 `finalize_brief.json.caption_keepout.violations[]`，finalize agent 直接 `Edit(file, edit_old, edit_new)` 改对。**所以契约写错不靠 snapshot 眼检发现，preflight 当场抓 —— 但每条违规都让 finalize 多花一次 Edit + 重 snapshot，最省事的办法就是写之前照表查值。**
+
+    **静态查不到的形态**（GSAP 运行时 `translateY`、`transform: translate(...)`、`margin-top:`、flex 自然布局把内容挤到 y > 900 等）—— 这些靠 finalize 的 snapshot 眼检兜底，但**写代码时还是按"元素下沿 y ≤ 880"这条原则定位**，别故意贴边。
 
 ## 范围
 
@@ -254,6 +287,24 @@ grep -nE "font-family:[[:space:]]*['\"]" "$F" | grep -vE "var\\(--font-(display|
   echo "FAIL: 字体名硬编码 — 改用 var(--font-display/body/mono)，让 index.html @font-face 生效"
 # 6) 资产路径禁前导斜杠 —— /public/… 是 check-compositions Rule 6 fatal（自检不补就只能等 gate 才发现，浪费 round-trip）
 grep -nE '["(]/public/' "$F" && echo "FAIL: 资产路径有前导斜杠 — 写 public/…（不是 /public/…）"
+# 7) 字幕带 keep-out（约束 #13）—— foreground 元素下沿 y > 900 = preflight 当场抓
+#    三种 CSS 形态各对应一条 grep；命中也意味着 preflight 命中，写之前按 cheat-sheet 改对，省一次 round-trip。
+#    白名单关键词跟 scripts/check-caption-keepout.mjs 一致；命中后人眼复核 selector 是不是装饰类。
+DECO_RX='(bg|background|dot-?grid|mesh|gradient|swell|ambient|texture|noise|scanline|surface|overlay|halo|glow|frame|pin|corner-?pin|deco|star-?burst|burst|ring|stripe|rect|shadow|pulse|ripple|measure|probe|hidden|scrim|backdrop|veil|fog|grain)[-_ {]'
+
+# 7a) `bottom: 0–179px;`（不含 180/200+）+ 装饰过滤
+grep -nB3 -E "bottom:[[:space:]]*([0-9]|[1-9][0-9]|1[0-7][0-9])([.][0-9]+)?px[[:space:]]*;" "$F" 2>/dev/null \
+  | grep -vE "$DECO_RX" | grep -E "bottom:" && \
+  echo "WARN: 上面这些 \`bottom: <X>px;\` (X<180) 大概率落在字幕带 — chip/small btn 改 bottom:200px / med CTA 220 / large CTA 260。装饰类忽略。"
+
+# 7b) `top: 900–1079px;` 已直接落在字幕带里
+grep -nB3 -E "top:[[:space:]]*(9[0-9]{2}|10[0-7][0-9])([.][0-9]+)?px[[:space:]]*;" "$F" 2>/dev/null \
+  | grep -vE "$DECO_RX" | grep -E "top:" && \
+  echo "WARN: 上面这些 \`top: <X>px;\` (X≥900) 把元素顶起点直接放进字幕带 — top 调到 ≤ 880 − element_height。"
+
+# 7c) 拉伸条带 `top: <T> + height: <H>` 且 T+H>900 —— shell 不好算和，交给 preflight 的 check-caption-keepout.mjs 处理
+#     （它 import 进 preflight-finalize.mjs，无须 worker 这里自检；提示仅用于人工肉眼快查）
+echo "info: 拉伸条带（top:+height: 同时给）的 T+H>900 形态由 preflight 静态算和检查；写之前如果用了 top + height 拉伸，确认 top + height ≤ 880。"
 
 # 必 ≥ 1 —— 结构证据
 grep -c "class=\"${SID}-root\"" "$F"                                   # root div 仍带 class，方便 dev 时看

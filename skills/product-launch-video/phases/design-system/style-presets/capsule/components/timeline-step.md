@@ -26,15 +26,15 @@
     align-items: center;
     justify-content: center;
     font-family: "Bodoni Moda", serif;
-    font-size: 1.3rem;
+    font-size: 28px;
     font-weight: 700;
     flex-shrink: 0;
-    box-shadow: var(--cap-shadow-sm, 4px 4px 0 rgba(26, 26, 26, 0.08));
+    box-shadow: var(--cap-shadow-sm, 4px 4px 0 color-mix(in srgb, var(--ink) 8%, transparent));
   }
   .cap-step-label {
     text-align: center;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.8rem;
+    font-size: 24px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -44,7 +44,7 @@
   .cap-step-desc {
     text-align: center;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.8rem;
+    font-size: 24px;
     line-height: 1.4;
     color: var(--ink);
     opacity: 0.55;

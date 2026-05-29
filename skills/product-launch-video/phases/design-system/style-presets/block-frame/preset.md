@@ -27,7 +27,7 @@
 }
 ```
 
-> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Inter + Space Grotesk — instead of the brand DNA fonts. Block Frame is a two-face system: heavy uppercase Inter does display + body, wide-tracked Space Grotesk carries chrome / mono / labels. The `script` slot also points at Inter because Block Frame refuses a third face. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid and §T type-role atlas use `.preset-native-scope` so `var(--font-display/body/script/mono)` re-resolves to these native families for the live preview.
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Inter + Space Grotesk — instead of the brand DNA fonts. Block Frame is a two-face system: heavy uppercase Inter does display + body, wide-tracked Space Grotesk carries chrome / mono / labels. The `script` slot also points at Inter because Block Frame refuses a third face. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §T type-role atlas uses `.preset-native-scope` so `var(--font-display/body/script/mono)` re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -149,7 +149,7 @@ The atlas is the **sole authoring source** for non-component text. If a scene ne
     "id": "card-title",
     "family": "display",
     "purpose": "feature / intro / team card title — Inter 700 uppercase",
-    "px_min": 20, "px_max": 22, "weight": 700, "leading": "1.2", "tracking": "0", "case": "upper",
+    "px_min": 24, "px_max": 28, "weight": 700, "leading": "1.2", "tracking": "0", "case": "upper",
     "sample_html": "<div class=\"t-trole-card-title\">Modular layouts</div>"
   },
   {
@@ -160,51 +160,30 @@ The atlas is the **sole authoring source** for non-component text. If a scene ne
     "sample_html": "<div class=\"t-trole-step-num\">01</div>"
   },
   {
-    "id": "body",
-    "family": "body",
-    "purpose": "standard paragraph body — Inter 500, sentence case, line-height 1.6",
-    "px_min": 16, "px_max": 20, "weight": 500, "leading": "1.6", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-body\">Body holds at 16-20px clamp, sentence case, weight 500. Body in uppercase or with tight line-height reads as broken.</p>"
-  },
-  {
-    "id": "body-card",
-    "family": "body",
-    "purpose": "compact card body (intro / feature / stat / team) — Inter 500 / 15px",
-    "px_min": 15, "px_max": 15, "weight": 500, "leading": "1.6", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-body-card\">Card body sits at 15px weight 500 with line-height 1.6 — calmer than full-bleed body, never tighter.</p>"
-  },
-  {
     "id": "label-pill",
     "family": "mono",
     "purpose": "universal eyebrow inside a bordered + shadowed pastel pill — Space Grotesk 600, 13px, 0.08em tracked, uppercase",
-    "px_min": 13, "px_max": 13, "weight": 600, "leading": "1", "tracking": "0.08em", "case": "upper",
+    "px_min": 24, "px_max": 24, "weight": 600, "leading": "1", "tracking": "0.08em", "case": "upper",
     "sample_html": "<div><span class=\"t-trole-label-pill\">Overview</span></div>"
   },
   {
     "id": "mono-tag",
     "family": "mono",
     "purpose": "mono tag / badge — Space Grotesk 600, 14px, 0.05em tracked, uppercase",
-    "px_min": 14, "px_max": 14, "weight": 600, "leading": "1", "tracking": "0.05em", "case": "upper",
+    "px_min": 24, "px_max": 24, "weight": 600, "leading": "1", "tracking": "0.05em", "case": "upper",
     "sample_html": "<div class=\"t-trole-mono-tag\">12+ years</div>"
-  },
-  {
-    "id": "subtitle-mono",
-    "family": "mono",
-    "purpose": "hero / close subtitle — Space Grotesk 500, 18px sentence case",
-    "px_min": 18, "px_max": 18, "weight": 500, "leading": "1.5", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-subtitle-mono\">A bold, high-contrast template designed for maximum visual impact.</p>"
   },
   {
     "id": "counter",
     "family": "mono",
     "purpose": "persistent slide counter — Space Grotesk 700, 14px, 0.1em tracked, uppercase (NN / NN)",
-    "px_min": 14, "px_max": 14, "weight": 700, "leading": "1", "tracking": "0.1em", "case": "upper",
+    "px_min": 24, "px_max": 24, "weight": 700, "leading": "1", "tracking": "0.1em", "case": "upper",
     "sample_html": "<div class=\"t-trole-counter\">01 / 10</div>"
   }
 ]
 ```
 
-The atlas omits `nav-btn` / `slide-counter` chrome shells (declared in §B / template chrome) and the decorative `star-burst` / `stripe-block` / `dot-grid` patterns (they're §M atomic motifs, not text roles).
+The atlas omits `nav-btn` / `slide-counter` chrome shells (declared in §B / template chrome) and the decorative `star-burst` / `stripe-block` / `dot-grid` patterns (decorative patterns, not text roles).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -305,93 +284,13 @@ const DUR = {
   canvas-bordered close-frame, and `--bf-shadow-close` (12px offset in
   brand-secondary). This is the loudest depth statement in the deck.
 
-## §M Atomic motifs (gestures the plan agent can reference)
-
-Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:offset-shadow on the hero card" without specifying which pattern the card sits in.
-
-```motifs
-[
-  {
-    "id": "offset-shadow",
-    "label": "Hard offset shadow",
-    "role": "card-depth",
-    "surface_safe": ["pastel", "canvas"],
-    "description": "Solid-ink 8px offset shadow (zero blur, bottom-right) behind a 4px ink-bordered card. The signature depth move — never blurred, never colored on default surfaces. Border weight (4px) and shadow size (8px) are tightly coupled; 3px borders pair with 4px shadows.",
-    "wide": true,
-    "demo": "<div class=\"bf-motif-shadow\"><div class=\"bf-motif-shadow-card\">Block Frame card</div></div>",
-    "css": ".bf-motif-shadow{display:inline-block;padding:0 8px 8px 0}.bf-motif-shadow-card{background:var(--canvas,#fffdf5);border:4px solid var(--ink);box-shadow:8px 8px 0 var(--ink);padding:28px 36px;font-family:var(--f-disp-native);font-weight:800;font-size:clamp(20px,2vw,28px);line-height:1;letter-spacing:-.02em;text-transform:uppercase;color:var(--ink)}"
-  },
-  {
-    "id": "label-pill",
-    "label": "Label pill eyebrow",
-    "role": "section-eyebrow",
-    "surface_safe": ["pastel", "canvas", "ink"],
-    "description": "Universal eyebrow: 3px ink border + 4px ink offset shadow + pastel fill + Space Grotesk 13px weight 600 uppercase with 0.08em tracking. Without all three properties (border, shadow, tracked uppercase) it is not a pill — it is a stray text element.",
-    "demo": "<span class=\"bf-motif-pill\">Overview</span>",
-    "css": ".bf-motif-pill{display:inline-block;background:var(--brand-primary);color:var(--ink);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:6px 16px;font-family:var(--f-mono-native);font-weight:600;font-size:13px;line-height:1;letter-spacing:.08em;text-transform:uppercase}"
-  },
-  {
-    "id": "tilted-decoration",
-    "label": "Tilted decoration",
-    "role": "grid-disruption",
-    "surface_safe": ["pastel", "canvas"],
-    "description": "Pastel rectangle / square with 3-4px ink border, rotated ±8° to ±12°. Pinned absolutely to puncture a card or surface edge. Never centered, never axis-aligned — the intentional misalignment is the system's playful signature.",
-    "demo": "<div class=\"bf-motif-tilt-wrap\"><div class=\"bf-motif-tilt\"></div></div>",
-    "css": ".bf-motif-tilt-wrap{position:relative;width:140px;height:120px;display:flex;align-items:center;justify-content:center}.bf-motif-tilt{width:80px;height:80px;background:var(--brand-primary);border:4px solid var(--ink);box-shadow:4px 4px 0 var(--ink);transform:rotate(12deg)}"
-  },
-  {
-    "id": "star-burst",
-    "label": "Star burst",
-    "role": "attention-mark",
-    "surface_safe": ["pastel", "canvas", "ink"],
-    "description": "10-point star clipped via CSS clip-path with a 3px ink border (or 3px canvas border on the ink close-surface), pastel fill. Decorative attention-grabber pinned to corners of close-frames and feature cards. The only non-rectangular decoration in the system.",
-    "demo": "<div class=\"bf-motif-star\"></div>",
-    "css": ".bf-motif-star{width:64px;height:64px;background:var(--brand-primary);border:3px solid var(--ink);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}"
-  },
-  {
-    "id": "stripe-block",
-    "label": "Diagonal stripe block",
-    "role": "poster-accent",
-    "surface_safe": ["pastel", "canvas"],
-    "description": "Black-and-color diagonal repeating stripe (4px on, 8px off) framed with a 3px ink border. Reserved for poster-class surfaces and quote scenes — never inside dense card grids where the stripe pattern competes with body type.",
-    "demo": "<div class=\"bf-motif-stripe\"></div>",
-    "css": ".bf-motif-stripe{width:96px;height:96px;background:repeating-linear-gradient(45deg,var(--ink),var(--ink) 4px,var(--brand-primary) 4px,var(--brand-primary) 12px);border:3px solid var(--ink)}"
-  },
-  {
-    "id": "dot-grid",
-    "label": "Dot-grid overlay",
-    "role": "texture-corner",
-    "surface_safe": ["pastel", "canvas", "ink"],
-    "description": "1.2px radial-gradient dot pattern at 24×24 spacing, 30-40% opacity. Used as a faint decorative overlay in corners of slides and as a soft texture inside dense scenes. On the ink close-surface, dots flip to canvas color.",
-    "wide": true,
-    "demo": "<div class=\"bf-motif-dots\"></div>",
-    "css": ".bf-motif-dots{width:100%;max-width:240px;height:96px;background-image:radial-gradient(circle,var(--ink) 1.2px,transparent 1.2px);background-size:24px 24px;opacity:.4}"
-  },
-  {
-    "id": "list-number",
-    "label": "Numbered square bullet",
-    "role": "list-marker",
-    "surface_safe": ["pastel", "canvas"],
-    "description": "36×36 brand-accent square with 3px ink border holding a Space Grotesk 14px weight 700 numeral. The system's only numeric bullet — never dots, never dashes. Pinned flush-left at the start of every list item.",
-    "demo": "<ul class=\"bf-motif-list\"><li><span>01</span>Discovery and stakeholder alignment.</li><li><span>02</span>Iterative wireframing with rapid feedback.</li><li><span>03</span>Production handoff with style guide.</li></ul>",
-    "css": ".bf-motif-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:14px}.bf-motif-list li{display:flex;align-items:flex-start;gap:14px;font-family:var(--f-body-native);font-weight:500;font-size:15px;line-height:1.5;color:var(--ink)}.bf-motif-list li span{flex-shrink:0;width:36px;height:36px;background:var(--brand-accent,var(--brand-primary));border:3px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:var(--f-mono-native);font-weight:700;font-size:14px}"
-  }
-]
-```
-
-The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
-
-**Materials lexicon** (informational — these are the composition atoms behind the patterns):
-
-- offset-shadow · label-pill · tilted-decoration · star-burst · stripe-block · dot-grid · list-number · corner-bracket · feature-deco-notch · stat-deco-dot
-
 ## §I Page-level CSS
 
 ```css
 /* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
  * These let the doc chrome render in Inter + Space Grotesk regardless of
- * brand DNA. The §6 component preview, §M motifs grid, and §T type-role atlas
- * also read these via .preset-native-scope.
+ * brand DNA. The §6 component preview and §T type-role atlas also read
+ * these via .preset-native-scope.
  *
  * Block Frame has no script face — the script slot points at Inter because the
  * preset refuses a third face. The fallback chain ends in a heavy grotesque
@@ -412,7 +311,7 @@ The `motifs` JSON block above is the SOLE source of truth. build-design.mjs read
 }
 
 /* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
- * Wraps §6 component previews, §M motif demos, and §T type-role atlas so
+ * Wraps §6 component previews and §T type-role atlas so
  * var(--font-*) resolves to Inter / Space Grotesk regardless of brand DNA.
  * Paste-ready component source is untouched — Phase 4b still grep + paste the
  * original `var(--font-display)` tokens, which resolve to brand DNA at
@@ -457,93 +356,6 @@ pre {
 pre {
   padding: 1em;
   box-shadow: var(--bf-shadow-sm, 4px 4px 0 #000);
-}
-
-/* ── §M Motifs grid: atomic gestures.
- * Mirrors the template's bordered + shadowed card grid — a 12-col grid of
- * small cards each teaching ONE reusable gesture. Cards may declare a surface
- * (pastel / canvas / ink) to demonstrate the gesture against its native bg. */
-.ds-motif-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 24px;
-}
-.ds-motif {
-  grid-column: span 4;
-  min-height: 280px;
-  padding: 28px;
-  border: var(--bf-border-bold, 4px solid var(--ink));
-  border-radius: 0;
-  background: var(--canvas, #fffdf5);
-  color: var(--ink);
-  box-shadow: var(--bf-shadow, 8px 8px 0 var(--ink));
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 16px;
-  position: relative;
-  overflow: hidden;
-}
-.ds-motif.ds-motif-wide {
-  grid-column: span 8;
-}
-.ds-motif.ds-motif-surface-pastel {
-  background: var(--brand-primary);
-  color: var(--ink);
-}
-.ds-motif.ds-motif-surface-canvas {
-  background: var(--canvas, #fffdf5);
-  color: var(--ink);
-}
-.ds-motif.ds-motif-surface-ink {
-  background: var(--ink);
-  color: var(--canvas, #fffdf5);
-  border-color: var(--canvas, #fffdf5);
-  box-shadow: 12px 12px 0 var(--brand-secondary, var(--brand-primary));
-}
-.ds-motif-h {
-  margin: 0;
-  font-family: var(--f-disp-native);
-  font-weight: 900;
-  font-size: clamp(22px, 2.2vw, 32px);
-  line-height: 1;
-  letter-spacing: -0.02em;
-  text-transform: uppercase;
-  color: inherit;
-}
-.ds-motif-desc {
-  margin: 0;
-  font-family: var(--f-body-native);
-  font-weight: 500;
-  font-size: 14px;
-  line-height: 1.55;
-  color: color-mix(in srgb, currentColor 75%, transparent);
-  max-width: 32ch;
-}
-.ds-motif-demo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 96px;
-}
-.ds-motif-id {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  font-family: var(--f-mono-native);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, currentColor 55%, transparent);
-}
-@media (max-width: 880px) {
-  .ds-motif-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .ds-motif,
-  .ds-motif.ds-motif-wide {
-    grid-column: auto;
-  }
 }
 
 /* ── §T Type-role atlas. Container = bordered + shadowed canvas card.
@@ -647,7 +459,7 @@ pre {
 .t-trole-card-title {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 22px;
+  font-size: 28px;
   line-height: 1.2;
   text-transform: uppercase;
   color: var(--ink);
@@ -660,29 +472,11 @@ pre {
   color: var(--ink);
   opacity: 0.6;
 }
-.t-trole-body {
-  font-family: var(--font-body);
-  font-weight: 500;
-  font-size: clamp(16px, 1.2vw, 20px);
-  line-height: 1.6;
-  color: var(--ink);
-  max-width: 60ch;
-  margin: 0;
-}
-.t-trole-body-card {
-  font-family: var(--font-body);
-  font-weight: 500;
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--ink);
-  max-width: 48ch;
-  margin: 0;
-}
 .t-trole-label-pill {
   display: inline-block;
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -696,7 +490,7 @@ pre {
   display: inline-block;
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -705,20 +499,11 @@ pre {
   border: 3px solid var(--ink);
   padding: 10px 20px;
 }
-.t-trole-subtitle-mono {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 18px;
-  line-height: 1.5;
-  color: var(--ink);
-  max-width: 44ch;
-  margin: 0;
-}
 .t-trole-counter {
   display: inline-block;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: 0.1em;
   text-transform: uppercase;

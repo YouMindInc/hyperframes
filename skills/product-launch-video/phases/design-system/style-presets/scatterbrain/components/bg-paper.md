@@ -21,8 +21,8 @@
     position: absolute;
     inset: 0;
     background-image:
-      linear-gradient(rgba(200, 190, 175, 0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(200, 190, 175, 0.08) 1px, transparent 1px);
+      linear-gradient(var(--paper-grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--paper-grid-line) 1px, transparent 1px);
     background-size: 40px 40px;
   }
 </style>

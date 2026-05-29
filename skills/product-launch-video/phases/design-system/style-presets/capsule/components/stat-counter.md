@@ -16,7 +16,7 @@
     align-items: center;
     text-align: center;
     gap: 0.75rem;
-    box-shadow: var(--cap-shadow-md, 6px 6px 0 rgba(26, 26, 26, 0.08));
+    box-shadow: var(--cap-shadow-md, 6px 6px 0 color-mix(in srgb, var(--ink) 8%, transparent));
   }
   .cap-stat-num {
     font-family: "Bodoni Moda", serif;
@@ -28,7 +28,7 @@
   }
   .cap-stat-label {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.75rem;
+    font-size: 24px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;

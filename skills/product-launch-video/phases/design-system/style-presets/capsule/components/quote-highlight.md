@@ -12,7 +12,7 @@
     padding: 3rem;
     text-align: center;
     font-family: "Bodoni Moda", serif;
-    font-size: clamp(1.6rem, 3.5vw, 3rem);
+    font-size: clamp(26px, 3.5vw, 48px);
     font-weight: 600;
     line-height: 1.35;
     letter-spacing: -0.01em;
@@ -43,7 +43,7 @@
   .cap-quote-attr {
     margin-top: 2rem;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.85rem;
+    font-size: 24px;
     font-weight: 500;
     letter-spacing: 0.08em;
     text-transform: uppercase;

@@ -67,7 +67,7 @@
   .sb-timeline-step-node-title {
     font-family: "Shrikhand", cursive;
     font-weight: 400;
-    font-size: 1.4rem;
+    font-size: 1.75rem;
     line-height: 1.1;
     letter-spacing: 0.02em;
     color: var(--ink-warm);
@@ -75,7 +75,7 @@
   }
   .sb-timeline-step-node-phase {
     font-family: "Caveat", cursive;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     font-weight: 500;
     line-height: 1.3;
     color: var(--ink-warm-light);
@@ -92,7 +92,7 @@
   }
   .sb-timeline-step-body-text {
     font-family: "Zilla Slab", serif;
-    font-size: clamp(1rem, 1.5vw, 1.25rem);
+    font-size: clamp(1.5rem, 1.6vw, 1.6rem);
     font-weight: 400;
     line-height: 1.7;
     color: var(--ink-warm-light);

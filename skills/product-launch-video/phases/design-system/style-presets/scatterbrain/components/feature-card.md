@@ -70,7 +70,7 @@
   .sb-feature-title {
     font-family: "Shrikhand", cursive;
     font-weight: 400;
-    font-size: 1.4rem;
+    font-size: 1.75rem;
     line-height: 1.1;
     letter-spacing: 0.02em;
     color: var(--ink-warm);
@@ -78,7 +78,7 @@
   }
   .sb-feature-body {
     font-family: "Zilla Slab", serif;
-    font-size: clamp(1rem, 1.2vw, 1.1rem);
+    font-size: clamp(1.5rem, 1.6vw, 1.6rem);
     font-weight: 400;
     line-height: 1.6;
     color: var(--ink-warm-light);

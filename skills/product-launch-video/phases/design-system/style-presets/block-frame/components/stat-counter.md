@@ -37,7 +37,7 @@
   }
   .bf-stat-label {
     font-family: "Space Grotesk", monospace;
-    font-size: 13px;
+    font-size: 24px;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;

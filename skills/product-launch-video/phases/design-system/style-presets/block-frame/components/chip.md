@@ -9,7 +9,7 @@
     color: var(--ink);
     padding: 8px 18px;
     font-family: "Space Grotesk", monospace;
-    font-size: 14px;
+    font-size: 24px;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;

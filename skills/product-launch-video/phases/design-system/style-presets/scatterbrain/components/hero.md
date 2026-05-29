@@ -53,9 +53,9 @@
     transform: translateX(-50%) rotate(var(--tape-rot));
     width: var(--tape-w);
     height: var(--tape-h);
-    background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: var(--tape-fill);
+    border: 1px solid var(--tape-edge);
+    box-shadow: var(--tape-shadow);
     z-index: 10;
   }
   .sb-hero-display {
@@ -69,11 +69,11 @@
   }
   .sb-hero-tagline {
     font-family: "Zilla Slab", serif;
-    font-size: 1.3rem;
+    font-size: clamp(1.5rem, 1.6vw, 1.9rem);
     font-weight: 400;
     line-height: 1.6;
     color: var(--ink-warm-light);
-    max-width: 500px;
+    max-width: 520px;
     margin: 1rem 0 0;
   }
   /* Accent stickies — Caveat quips at wild tilts */
@@ -83,7 +83,7 @@
     box-shadow: var(--shadow-sticky);
     font-family: "Caveat", cursive;
     font-weight: 500;
-    font-size: 1.4rem;
+    font-size: clamp(1.5rem, 1.7vw, 2rem);
     line-height: 1.3;
     color: var(--ink-warm);
     z-index: 2;

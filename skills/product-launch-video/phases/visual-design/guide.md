@@ -6,7 +6,7 @@
 
 ## 流程一览
 
-1. **输入已全部内联在 dispatch**（`## Effects catalog` / `## Blueprints index` / `## SFX library` / `## Design rules`〔4 个 rule 全文〕/ `## Design chunks`〔`index.json` + 实际存在的 hints/voice/motifs/tokens/easings〕/ `## Narrator scripts` / `## Audio meta`）—— **直接用，不从盘 Read**
+1. **输入已全部内联在 dispatch**（`## Effects catalog` / `## Blueprints index` / `## SFX library` / `## Design rules`〔4 个 rule 全文〕/ `## Design chunks`〔`index.json` + 实际存在的 hints/voice/tokens/easings〕/ `## Narrator scripts` / `## Audio meta`）—— **直接用，不从盘 Read**
 2. 每个场景：从 `## Effects catalog` 选 effects（timeline 分层序，数量见 §2）、（按 preset）从 `## Design chunks` 的 `index.json.components[]` 挑 component、决定 Continuity、写锚点 block + 散文 8 条
 3. 运行 validator 至 exit 0
 
@@ -21,7 +21,7 @@
 
 ### `## Design chunks` —— 品牌输入（已内联，不读 `design.html`）
 
-chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `## Design chunks` 块**：`index.json` 全文 + 实际存在的 `composition-hints.md` / `voice.md` / `motifs.md` / `tokens.css` / `easings.js`（preset 没声明的 chunk `*_file=null`，不会出现在块里）。
+chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `## Design chunks` 块**：`index.json` 全文 + 实际存在的 `composition-hints.md` / `voice.md` / `tokens.css` / `easings.js`（preset 没声明的 chunk `*_file=null`，不会出现在块里）。
 
 **下面凡说"Read `chunks/X`"一律改为"在 `## Design chunks` 里找 X"——不从盘读**；plan 仍不碰 `design.html`、不碰组件 HTML 本体。Plan 对 chunks 做这几件事：
 
@@ -55,8 +55,6 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 5. （可选）Read `chunks/easings.js`（~0.5 KB）→ 看 `EASE.entry / emphasis / exit / drift` 角色键名齐全度，决定散文引用哪些 ease 意图
 
 6. **必读 `chunks/voice.md`**（~0.5 KB，仅当 `index.json.voice_file != null`）→ 本 preset 的 DOM 文字 register。散文第 4 条（品牌样式覆盖层）**必须**承诺该场可见文字走 voice.md 的 recipe（具体 recipe 由 preset 声明 —— strip / case / 断句 / inline `<em>` 等转换规则因 preset 而异）。具体英文改写是 Phase 4b worker 的事，**plan 不抄改写后的文案**。不承诺 = worker 接到的 brief 无引导 = DOM 文本走不到 preset 风格
-
-7. **必读 `chunks/motifs.md`**（~1-3 KB，仅当 `index.json.motifs_file != null`）→ preset 的原子手势目录。每个 motif 是单一可复用 gesture（id / 描述 / role / surface_safe / 默认 surface 全由 preset 自己声明）。**只 grep `## motif: <id>` 标题 + description + role + surface_safe**（每条 ~3-5 行），**不读 CSS / demo HTML**（worker 才读）。Plan 在 `**Motifs:**` 锚点 cite 选用的 motif id；散文第 6 条（持续 / 环境运动）可以按 motif 描述意图说"本场用 motif:<id> 标 hero"。
 
 **不必读** `chunks/type-roles.md`（仅当 `index.json.type_roles_file != null`）→ 命名 text role 目录（preset 自己声明的 inline 文字 role 集合，可能十几个）。这是 **worker 自己挑 inline 文字样式时**的查表，plan 不要 cite role id，只在散文里按角色名描述（"hero display"、"body lede"）。
 
@@ -97,7 +95,6 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 **Surface:** <preset-declared-surface> ← preset-conditional（surface-aware preset 必填；值见 chunks/index.json）
 **Blueprint:** based-on `<id>` | extended `<id>` | composed ← 可选（soft），见下方
 **Components:** [`<component-id>`, `<component-id>`, ...] ← 可选（soft），见下方
-**Motifs:** [`<motif-id>`, `<motif-id>`, ...] ← preset-conditional（preset 声明 §M / motifs_file != null 时推荐），见下方
 **PrimarySubjectTimeline:** <only for multi-act / dense multi-subject scenes>
 **Handoff:** <only for multi-act / dense multi-subject scenes>
 **SFX:** ← 可选（soft）；不用音效就整段省略，多行 bullet list 见下方
@@ -114,7 +111,6 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 - **Surface**（preset-conditional）：当 `chunks/index.json.components[]` 中**任一** component 声明 `surface` 字段（surface-aware preset），所有场景**必填** `**Surface:**` 锚点；值必须出现在该 preset 声明过的 surface 集合里（运行时由 chunks/index.json 决定）。其他 preset（无 surface 字段）此锚点可省。**同一 scene 内 cited 的 component 若有 `surface` 字段且与 Surface 不一致 → validator fatal**（视觉契约破坏，不同 surface 的元素不可同 scene）
 - **PrimarySubjectTimeline + Handoff**：multi-act scene、或 action/payoff + proof/supporting subject 同屏的 scene 必写。缺任一 → validator fatal
 - **avoids_same_scene 互斥**（Components 锚点存在时）：每对 cited component 检查 `chunks/index.json.components[].avoids_same_scene` 列表；命中任一对 → validator fatal（具体互斥关系由 preset 自己声明）
-- **Motifs**（preset-conditional）：当 `chunks/index.json.motifs_file != null` 时，Motifs 锚点的每个 id 必须出现在 `chunks/motifs.md` 的 `## motif: <id>` 标题里；拼写错 / id 不存在 → validator fatal。Motifs 锚点本身仍是 soft（preset 没声明 §M 时整行可省）
 
 **Blueprint 锚点（soft —— validator 不强制，但强烈建议写）**：
 
@@ -133,15 +129,6 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 - 列错 id（拼写错、组件不存在）→ 下游 fatal（重派 Phase 3）；validator 只校验语法
 
 写 Components 锚点的价值：让 plan agent 提前承诺"这个场景的中间层 = 哪个 component"，避免散文里说 "use the manifesto component palette logic" 但下游无法定位你指的是哪个组件。和 Blueprint 锚点一样，是 plan agent 对自己决策的明确承诺，而不是对下游怎么用的描述。
-
-**Motifs 锚点（soft / preset-conditional —— preset 声明 §M 时强烈推荐写）**：
-
-- 列出该场景**真的会用到**的 motif id（来自 `chunks/motifs.md` 的 `## motif: <id>` 标题），反引号包裹，方括号包围
-- 例：`**Motifs:** [\`signature-shadow\`, \`accent-flourish\`]`（id 来自 preset 的 `chunks/motifs.md`）
-- 不用任何 motif 时整行省略；preset 没声明 §M（`motifs_file: null`）时锚点不存在也无所谓
-- 列错 id（拼写错 / motif 不存在）→ validator fatal（chunks/index.json.motifs_file 存在时强制校验）
-
-写 Motifs 锚点的价值：和 Components 同一逻辑 —— motif 是 component 之下、比 effect 更细的可复用 gesture（preset 的"招牌微动作"）。Plan 提前承诺"这个 hero 上的招牌动作是 motif A、accent 词是 motif B"，worker 拿到 brief 直接去 `chunks/motifs.md` 找 CSS + demo HTML 粘，跳过 reverse-engineering preset 视觉签名的过程。**没有 Motifs 锚点 ≠ 散文里不能 mention motif**，但 cite 进锚点后，validator 能保证拼写不爆。
 
 **SFX 锚点（可选 / soft —— 用音效才写，不用就整段省略）**：
 
@@ -309,10 +296,9 @@ Beat 2b — the spiral (frustrated, slightly-off comma). Centered chat-app compo
 
 每个场景在核心内容之外都要有：
 
-1. **Camera drift** —— 整帧持续而微妙的 zoom + pan
-2. **Background swell** —— 品牌相近色相 dual-radial overlay；或工作区场景用建筑感网格
-3. **Ambient particles / scanline / halftone** —— 品牌色浮粒、低不透明度 scanline、或随节拍形变的 halftone field
-4. **Emphasis moment** —— 至少一个 impact 节拍（ripple / glow burst / impact lines / screen-shatter）
+1. **Background swell** —— 品牌相近色相 dual-radial overlay；或工作区场景用建筑感网格
+2. **Ambient particles / scanline / halftone** —— 品牌色浮粒、低不透明度 scanline、或随节拍形变的 halftone field
+3. **Emphasis moment** —— 至少一个 impact 节拍（ripple / glow burst / impact lines / screen-shatter）
 
 ### 多阶段编排
 

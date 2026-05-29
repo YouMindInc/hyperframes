@@ -22,6 +22,8 @@ node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system -
 node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
 ```
 
+> **Captions（自动，无需判断）**：选中的 preset 若带 `style-presets/<preset>/caption-skin.html`，`build-design` 会把它内嵌成 design.html 的 **§C 实时预览**（循环播放），`emit-chunks` 把它拷成 `chunks/caption-skin.html`（并记进 `index.json.caption_skin_file`）。Step 5.5 的 `build-captions-html.mjs` 便优先用它，否则回退 registry 皮肤。agent 不为此做任何决策。
+
 可选 flag：
 
 - `build-design --capture <dir>` — 覆盖默认 `<design-system-dir>/../capture/` 路径
@@ -150,10 +152,10 @@ brand review:
 
 ## 6. 排查
 
-| 现象                                  | 修法                                                                                                                                           |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 抓回非英语 hero                       | 已默认 `Accept-Language: en-US,en;q=0.9`；若仍是本地语言，重跑 Phase 1 capture                                                                 |
-| 抓回空 hero / 占位文字                | 给 capture 加 `--timeout 60000` 重跑；或确认 capture/BLOCKED.md 是否提示反爬                                                                   |
-| Step 4 报缺锚点                       | 重跑 Step 3，确认 design.html 含 ROOT-START / MOTION-START / VOICE-START / COMPONENT 注释；不要修 emit-chunks                                  |
-| `chunks/index.json` 缺 `components[]` | 看 build-design stdout `components: N paste-ready`；N=0 可接受（下游退化为 tokens + easings）                                                  |
+| 现象                                  | 修法                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 抓回非英语 hero                       | 已默认 `Accept-Language: en-US,en;q=0.9`；若仍是本地语言，重跑 Phase 1 capture                                                                                                                                                                                                                                                                              |
+| 抓回空 hero / 占位文字                | 给 capture 加 `--timeout 60000` 重跑；或确认 capture/BLOCKED.md 是否提示反爬                                                                                                                                                                                                                                                                                |
+| Step 4 报缺锚点                       | 重跑 Step 3，确认 design.html 含 ROOT-START / MOTION-START / VOICE-START / COMPONENT 注释；不要修 emit-chunks                                                                                                                                                                                                                                               |
+| `chunks/index.json` 缺 `components[]` | 看 build-design stdout `components: N paste-ready`；N=0 可接受（下游退化为 tokens + easings）                                                                                                                                                                                                                                                               |
 | 推断的 brand primary 颜色不对         | build-design 用 capture 的 `colorStats` 信号给品牌色打分（最常用作交互/重复填充的彩色 = primary，详见脚本注释）；多数情况已准确。若仍不对：① 品牌色只在 logo SVG 里（如 reddit/gitlab 的橙）→ capture 无法作为填充色捕获，目前无法自动取到；② 多色品牌（如 figma）primary 本就模糊。两种情况可手改 `--style` 强制 preset，品牌色由 design.html 退化路径处理 |

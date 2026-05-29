@@ -33,7 +33,7 @@
     border: var(--cap-outline-w, 2px) solid var(--ink);
     border-radius: var(--cap-radius-card, 2rem);
     padding: 3rem;
-    box-shadow: var(--cap-shadow-lg, 8px 8px 0 rgba(26, 26, 26, 0.08));
+    box-shadow: var(--cap-shadow-lg, 8px 8px 0 color-mix(in srgb, var(--ink) 8%, transparent));
   }
   .cap-chart-row {
     display: flex;
@@ -43,7 +43,7 @@
   .cap-chart-label {
     width: 140px;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.85rem;
+    font-size: 24px;
     font-weight: 500;
     text-align: right;
     color: var(--ink);
@@ -66,7 +66,7 @@
     justify-content: flex-end;
     padding-right: 1rem;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.75rem;
+    font-size: 24px;
     font-weight: 600;
     color: var(--ink);
     border-right: var(--cap-outline-w, 2px) solid var(--ink);
@@ -83,7 +83,7 @@
   .cap-chart-value {
     width: 60px;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.9rem;
+    font-size: 24px;
     font-weight: 600;
     color: var(--ink);
     flex-shrink: 0;

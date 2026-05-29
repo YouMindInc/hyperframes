@@ -44,9 +44,9 @@
     transform: translateX(-50%) rotate(var(--tape-rot));
     width: var(--tape-w);
     height: var(--tape-h);
-    background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: var(--tape-fill);
+    border: 1px solid var(--tape-edge);
+    box-shadow: var(--tape-shadow);
     z-index: 10;
   }
   .sb-photo-frame-inner {
@@ -84,7 +84,7 @@
   }
   .sb-photo-frame-caption {
     font-family: "Caveat", cursive;
-    font-size: 1.3rem;
+    font-size: 1.5rem;
     font-weight: 500;
     line-height: 1.3;
     color: var(--ink-warm);

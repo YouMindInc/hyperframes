@@ -16,7 +16,7 @@
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-    box-shadow: var(--cap-shadow-lg, 8px 8px 0 rgba(26, 26, 26, 0.08));
+    box-shadow: var(--cap-shadow-lg, 8px 8px 0 color-mix(in srgb, var(--ink) 8%, transparent));
   }
   .cap-pillar-icon {
     width: var(--cap-icon-size, 60px);
@@ -35,7 +35,7 @@
   }
   .cap-pillar-title {
     font-family: "Bodoni Moda", serif;
-    font-size: 1.5rem;
+    font-size: 28px;
     font-weight: 700;
     line-height: 1.1;
     color: var(--ink);
@@ -43,7 +43,7 @@
   }
   .cap-pillar-body {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.9rem;
+    font-size: 24px;
     line-height: 1.55;
     color: var(--ink);
     opacity: 0.65;

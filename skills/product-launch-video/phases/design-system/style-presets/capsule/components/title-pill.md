@@ -14,7 +14,7 @@
     border-radius: var(--cap-radius-pill, 9999px);
     font-family: "Space Grotesk", sans-serif;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 24px;
     text-transform: uppercase;
     letter-spacing: var(--cap-track-pill, 0.12em);
     white-space: nowrap;

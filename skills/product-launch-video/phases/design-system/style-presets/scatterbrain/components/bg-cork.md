@@ -14,8 +14,8 @@
     z-index: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse at 20% 30%, rgba(210, 170, 120, 0.3) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 70%, rgba(190, 150, 100, 0.2) 0%, transparent 40%),
+      radial-gradient(ellipse at 20% 30%, var(--cork-glow-warm) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 70%, var(--cork-glow-deep) 0%, transparent 40%),
       linear-gradient(135deg, var(--cork-light) 0%, var(--cork-mid) 50%, var(--cork-deep) 100%);
   }
   .sb-bg-cork::after {

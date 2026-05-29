@@ -1873,6 +1873,11 @@ function renderBrandDNA() {
 }
 
 // ═══════════════════ Render: §2 Color × Style ════════════
+// §2's :root token body, captured for the §C caption-skin preview iframe (a separate
+// document that can't inherit design.html's live :root). Set by renderColorAndTokens();
+// read by renderCaptions() — the assembly calls captions after color, so it is populated.
+let _captionTokensRoot = "";
+
 function renderColorAndTokens() {
   const decorationTokens = preset.sections.B?.content || "";
   // Extract CSS variable declarations. A declaration starts with a line whose
@@ -1948,6 +1953,7 @@ function renderColorAndTokens() {
   --font-body:       ${fontBodyStack};
   --font-mono:       ${fontMonoStack};
 ${fontScriptLine}${tokenLines.map((l) => "  " + l).join("\n")}`;
+  _captionTokensRoot = rootBody;
   return `
 <section id="color-tokens" class="ds-section">
   <div class="eyebrow">§2 · Color × Style overlay</div>
@@ -1969,6 +1975,91 @@ ${fontScriptLine}${tokenLines.map((l) => "  " + l).join("\n")}`;
 // size / weight / leading / tracking / case + decoration. The atlas renders in
 // brand DNA fonts (var(--font-*) tokens), so the role catalog is preset-declared
 // but the actual typeface is whatever the brand ships. Returns [] when no §T.
+// ─────────────────── Render: §C Captions (preview) ───────
+// Preview-only. When the preset ships its own caption-skin.html (style-presets/<preset>/),
+// embed it as a demo-filled, auto-looping iframe so design.html shows the real caption
+// skin running. That same file is what emit-chunks copies to chunks/caption-skin.html and
+// build-captions-html.mjs fills with the real word timings at Phase 4a.5 — so this preview
+// is the actual skin, not a re-implementation (zero drift). Presets without a caption-skin
+// emit nothing (uniform with non-captioned presets).
+function renderCaptions() {
+  const skinPath = path.join(PRESETS_DIR, preset.name, "caption-skin.html");
+  if (!fs.existsSync(skinPath)) return "";
+  let skin = fs.readFileSync(skinPath, "utf8");
+
+  // Demo fills — the same holes build-captions-html.mjs fills, with placeholder words +
+  // a short looping duration (plain replaces; preview-only, not the strict builder).
+  const demoGroups = [
+    {
+      start: 0.3,
+      end: 2.1,
+      words: [
+        { text: "WRITE", start: 0.3, end: 0.9 },
+        { text: "HTML,", start: 0.9, end: 1.4 },
+        { text: "RENDER", start: 1.4, end: 2.1 },
+      ],
+    },
+    {
+      start: 2.5,
+      end: 4.3,
+      words: [
+        { text: "VIDEO.", start: 2.5, end: 3.1 },
+        { text: "NO", start: 3.1, end: 3.5 },
+        { text: "TIMELINE.", start: 3.5, end: 4.3 },
+      ],
+    },
+    {
+      start: 4.7,
+      end: 6.2,
+      words: [
+        { text: "JUST", start: 4.7, end: 5.1 },
+        { text: "CODE.", start: 5.1, end: 5.9 },
+      ],
+    },
+  ];
+  const demoDur = 6.6;
+  skin = skin.replace("var GROUPS = [];", `var GROUPS = ${JSON.stringify(demoGroups)};`);
+  skin = skin.replace("var DURATION = 0;", `var DURATION = ${demoDur};`);
+  skin = skin.replace('data-duration="0"', `data-duration="${demoDur}"`);
+  // Inject @font-face + :root tokens. The iframe is a separate document, so it can't
+  // inherit design.html's <head> fonts/tokens; the @font-face url('fonts/…') paths are
+  // relative and resolve against design.html's own dir (which has fonts/), so the preview
+  // renders in the real brand display face, not a system fallback.
+  skin = skin.replace(
+    "<style data-brand-tokens></style>",
+    `<style data-brand-tokens>\n${localFontFaceBlock}\n:root {${_captionTokensRoot}\n}</style>`,
+  );
+  // The skin registers a PAUSED timeline (engine drives it at render time). For the doc
+  // preview, grab it and loop it.
+  skin = skin.replace(
+    "</body>",
+    `  <script>
+    (function () {
+      var t = window.__timelines && window.__timelines["captions"];
+      if (t && t.duration()) t.repeat(-1).repeatDelay(0.5).play();
+    })();
+  </script>
+</body>`,
+  );
+
+  // Fully HTML-escape for the srcdoc attribute (the browser decodes it back into the
+  // iframe document). Escape & first, then angle brackets and the quote delimiter.
+  const srcdoc = skin
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  return `
+<section id="captions" class="ds-section">
+  <div class="eyebrow">§C · Captions (preset-local skin)</div>
+  <h2>Word <em>by word.</em></h2>
+  <p class="ds-prose">Live preview of <code>caption-skin.html</code> — this preset's own caption look. The same file is copied to <code>chunks/caption-skin.html</code> and filled with real word timings by the caption builder (Phase 4a.5); the demo words and loop here are preview-only.</p>
+  <div style="position: relative; width: 100%; max-width: 960px; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #e5e5e5; border-radius: 8px; margin: 24px 0; background: #fff;">
+    <iframe title="caption-skin preview" loading="lazy" style="position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; border: 0; transform: scale(0.5); transform-origin: top left;" srcdoc="${srcdoc}"></iframe>
+  </div>
+</section>`;
+}
+
 function parseTypeRoles() {
   const sect = preset.sections?.T?.content;
   if (!sect) return [];
@@ -2312,122 +2403,6 @@ ${esc(hintsMd)}
 </section>`;
 }
 
-// Parse §M motifs JSON block. The preset declares a single fenced ```motifs ... ```
-// block inside §M; each entry is an atomic gesture the plan agent can reference.
-// Returns [] when the preset doesn't declare §M.
-function parseMotifs() {
-  const sect = preset.sections?.M?.content;
-  if (!sect) return [];
-  const fenced = sect.match(/```motifs\n([\s\S]+?)\n```/);
-  if (!fenced) return [];
-  try {
-    const arr = JSON.parse(fenced[1]);
-    return Array.isArray(arr) ? arr : [];
-  } catch (e) {
-    console.error(`✗ ${preset.name}: §M motifs JSON failed to parse — ${e.message}`);
-    return [];
-  }
-}
-
-// Map design.html-native font vars back to brand DNA tokens so motif CSS is
-// paste-ready inside a scene composition (where only --font-* tokens exist).
-// Preset §M motif CSS uses `--f-disp-native` etc. because the design.html doc
-// chrome renders motifs in preset-native typography; at scene-render time we
-// want the brand's actual typeface.
-function rewriteMotifVars(css) {
-  return String(css || "")
-    .replace(/--f-disp-native/g, "--font-display")
-    .replace(/--f-body-native/g, "--font-body")
-    .replace(/--f-mono-native/g, "--font-mono")
-    .replace(/--f-script-native/g, "--font-script");
-}
-
-// Build chunks/motifs.md content. Per motif: metadata + var-rewritten CSS +
-// demo HTML. Returns "" when preset declares no §M — emit-chunks then writes no
-// file and index.json's motifs_file = null.
-function buildMotifsMd() {
-  const motifs = parseMotifs();
-  if (!motifs.length) return "";
-  const sections = motifs.map((m) => {
-    const css = rewriteMotifVars(m.css || "");
-    const surfaceSafe = (m.surface_safe || []).join(", ") || "—";
-    const surfaceTag = m.surface ? ` · default-surface: ${m.surface}` : "";
-    const demo = String(m.demo || "").trim();
-    return `## motif: ${m.id}
-
-- role: ${m.role || "—"} · surface_safe: [${surfaceSafe}]${surfaceTag}
-- ${m.description || ""}
-
-\`\`\`css
-${css || "/* (preset §M did not declare CSS for this motif) */"}
-\`\`\`
-
-Demo:
-
-\`\`\`html
-${demo}
-\`\`\``;
-  });
-  return `# Motifs catalog — ${preset.label}
-
-Phase 3 plan agent may cite motifs by id in the \`**Motifs:**\` anchor ("this scene uses motif:triple-shadow + motif:script-flick"). Phase 4b worker reads this catalog when planting a cited motif: paste the CSS rule into scene \`<style>\` (add \`s<N>-\` prefix on class names → update selectors), then place the demo HTML in the DOM. Font vars are already rewritten from preset-native (\`--f-disp-native\`) to brand DNA (\`var(--font-display)\`).
-
-${sections.join("\n\n")}`;
-}
-
-function renderMotifs() {
-  const motifs = parseMotifs();
-  if (!motifs.length) return "";
-  const total = motifs.length;
-  const cards = motifs
-    .map((m, idx) => {
-      const num = String(idx + 1).padStart(2, "0");
-      const totalStr = String(total).padStart(2, "0");
-      const surface = m.surface ? ` ds-motif-surface-${esc(m.surface)}` : "";
-      const wide = m.wide ? " ds-motif-wide" : "";
-      // Pull the em-tagging from the label: "Triple shadow" → "Triple <em>shadow.</em>"
-      // (peoples-design pattern: last word becomes the em, plus a period). Falls back
-      // to the raw label when label has no space.
-      const label = String(m.label || m.id || "");
-      const parts = label.split(/\s+/);
-      const labelHtml =
-        parts.length >= 2
-          ? `${esc(parts.slice(0, -1).join(" "))} <em>${esc(parts[parts.length - 1])}.</em>`
-          : `${esc(label)}.`;
-      // Visual-only card: title + demo. id / description / numbering live in the
-      // <article data-*> attrs and in chunks/motifs.md (paste-ready source for the
-      // plan agent); rendering them on the page produced web-doc noise that
-      // downstream agents would copy into video copy. Keep design.html tight to
-      // the visual register video work should mirror.
-      return `
-    <article class="ds-motif${surface}${wide}" data-motif="${esc(m.id || "")}" data-role="${esc(m.role || "")}" data-num="${num}/${totalStr}" data-desc="${esc(m.description || "")}">
-      <h3 class="ds-motif-h">${labelHtml}</h3>
-      <div class="ds-motif-demo">
-        <style>${m.css || ""}</style>
-        ${m.demo || ""}
-      </div>
-    </article>`;
-    })
-    .join("");
-  const motifsMd = buildMotifsMd();
-  const pasteReady = motifsMd
-    ? `
-  <details class="ds-paste-ready" style="margin-top: 32px;">
-    <summary class="ds-summary">▸ Paste-ready source → <code>chunks/motifs.md</code> (plan agent + worker read this)</summary>
-    <pre class="ds-code"><!-- MOTIFS-START -->
-${esc(motifsMd)}
-<!-- MOTIFS-END --></pre>
-  </details>`
-    : "";
-  return `
-<section id="motifs" class="ds-section">
-  <div class="eyebrow">§M · Atomic motifs (preset-native gestures)</div>
-  <h2>Atomic <em>moves.</em></h2>
-  <div class="ds-motif-grid">${cards}
-  </div>${pasteReady}
-</section>`;
-}
-
 function renderComponents() {
   if (!preset.components.length) return "";
   // When the preset declares chromeFonts, render the live preview inside
@@ -2714,7 +2689,7 @@ ${renderMotion()}
 ${renderVoice()}
 ${renderHints()}
 ${renderComponents()}
-${renderMotifs()}
+${renderCaptions()}
 </main>
 
 </body>
