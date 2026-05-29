@@ -300,7 +300,8 @@ function parseSceneBlock(body, sceneId, isFirst) {
       }
       if (!trimmed.startsWith("-")) break; // next anchor / prose / scene heading
       // Parse: `<file>.mp3` at <T>s[, volume <V>][, — <note>]
-      const cueRe = /^[\s\-*]+`([^`]+\.mp3)`\s+at\s+([\d.]+)\s*s(?:[,\s]+volume\s+([\d.]+))?(?:\s*[—–-]\s*(.*))?$/;
+      const cueRe =
+        /^[\s\-*]+`([^`]+\.mp3)`\s+at\s+([\d.]+)\s*s(?:[,\s]+volume\s+([\d.]+))?(?:\s*[—–-]\s*(.*))?$/;
       const m = trimmed.match(cueRe);
       if (m) {
         const file = m[1];
@@ -433,19 +434,17 @@ for (const s of scenes) {
   // these on demand — paths are passed through dispatch verbatim. We only check
   // file existence when index.json references one (consistency guard); the
   // worker then opens it lazily without re-checking.
-  const hintsAbs = chunksIndex.hints_file
-    ? join(designSystemDir, chunksIndex.hints_file)
-    : null;
+  const hintsAbs = chunksIndex.hints_file ? join(designSystemDir, chunksIndex.hints_file) : null;
   if (hintsAbs && !existsSync(hintsAbs))
     die(`design_chunks: hints_file "${hintsAbs}" referenced by index.json but missing on disk`);
   const typeRolesAbs = chunksIndex.type_roles_file
     ? join(designSystemDir, chunksIndex.type_roles_file)
     : null;
   if (typeRolesAbs && !existsSync(typeRolesAbs))
-    die(`design_chunks: type_roles_file "${typeRolesAbs}" referenced by index.json but missing on disk`);
-  const motifsAbs = chunksIndex.motifs_file
-    ? join(designSystemDir, chunksIndex.motifs_file)
-    : null;
+    die(
+      `design_chunks: type_roles_file "${typeRolesAbs}" referenced by index.json but missing on disk`,
+    );
+  const motifsAbs = chunksIndex.motifs_file ? join(designSystemDir, chunksIndex.motifs_file) : null;
   if (motifsAbs && !existsSync(motifsAbs))
     die(`design_chunks: motifs_file "${motifsAbs}" referenced by index.json but missing on disk`);
 
@@ -694,7 +693,7 @@ if (sfxLibDir) {
 } else {
   // Surface plan cues that won't make it to the timeline because no lib was provided.
   let droppedCueCount = 0;
-  for (const s of scenes) droppedCueCount += (s.sfxCues?.length || 0);
+  for (const s of scenes) droppedCueCount += s.sfxCues?.length || 0;
   if (droppedCueCount > 0) {
     anomalies.push(
       `section_plan declares ${droppedCueCount} SFX cue(s) but --sfx-lib not passed — all cues dropped`,
@@ -723,9 +722,18 @@ if (audioMeta?.bgm_path) {
   }
 }
 
+// Single deterministic gate for the readability-A keep-out + caption band:
+// same condition build-captions.mjs uses to emit-vs-skip (≥1 scene has a usable
+// on-disk wordsPath). When true: build-captions(-html) emit captions, assemble
+// mounts track-12, AND every scene worker receives `Captions: enabled` so it
+// keeps foreground content in the upper ~83% and reserves the bottom ~17% band.
+// When false: no captions and scene workers use full-canvas layouts.
+const captions_enabled = scenes.some((s) => Boolean(s.wordsPath));
+
 const spec = {
   scenes_per_group_max: scenesPerGroupMax,
   total_scenes: scenes.length,
+  captions_enabled,
   total_duration_s: Number(total_duration_s.toFixed(3)),
   bgm_path,
   font_face_css: fontFaceCss,
@@ -735,17 +743,23 @@ const spec = {
 
 writeFileSync(outPath, JSON.stringify(spec, null, 2));
 
-// Captions: written by the Phase 4a.5 captions agent (agent-authored, brand-strict).
-// This script is no longer responsible for caption output — finalize-agent checks
-// for compositions/captions.html existence and emits the track-12 clip if present.
+// Captions: built deterministically in Phase 4a.5 (build-captions.mjs →
+// caption_groups.json, then build-captions-html.mjs → compositions/captions.html).
+// This script only emits the `captions_enabled` gate above; assemble-index.mjs
+// checks compositions/captions.html existence and emits the track-12 clip if present.
 
 // ---------- Step 8: summary ----------
 console.log(`✓ wrote ${outPath}`);
 console.log(
   `  scenes: ${spec.total_scenes}, groups: ${groups.length}, total: ${spec.total_duration_s}s`,
 );
+console.log(
+  `  captions: ${captions_enabled ? "enabled (scene keep-out + band reserved)" : "disabled (full-canvas scenes)"}`,
+);
 console.log(`  bgm: ${bgm_path || "(none)"}`);
-console.log(`  sfx cues:      ${sfx.length}${sfxLibDir ? "" : " (--sfx-lib not passed; cues dropped)"}`);
+console.log(
+  `  sfx cues:      ${sfx.length}${sfxLibDir ? "" : " (--sfx-lib not passed; cues dropped)"}`,
+);
 console.log(`  assets copied: ${copied} (collisions skipped: ${collisions.length})`);
 console.log(`  fonts copied:  ${fontsCopied}`);
 console.log(

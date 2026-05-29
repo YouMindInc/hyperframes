@@ -1,216 +1,102 @@
-# Captions (Phase 4a.5)
+# Captions (Phase 4a.5) — 确定性,无 subagent
 
-为 product-launch-video 写一个 **全片 full-bleed sub-composition** `compositions/captions.html`，由 hyperframes-finalize 在 `index.html` 以 track 12 clip 挂上去。
+字幕由**两个确定性脚本接力**产出 `compositions/captions.html`,由 `assemble-index.mjs` 在 `index.html` 以 **track-12 clip** 挂上去。**没有 captions LLM agent**(已删)——整条字幕路径零 LLM,因此旧版那一整类"agent 手写 captions.html"的渲染期 footgun(§6 Illegal invocation / timeline 没注册 / 裸色 / 两组同屏 / fitText 没接)**全部归零**。
 
-这是 **agent-authored**（不是 registry-patch）：你直接读 `group_spec.json` + 各 scene 的 whisper word JSON + `design-system/chunks/tokens.css`，写一个 HTML 出来。**没有** registry `caption-*` 组件、**没有** builder 脚本、**不读** `narrator_scripts.json` 的 `captions[]` 字段。
+```
+build-captions.mjs       → caption_groups.json          (词引擎:清洗/分组/打 class/全局计时/scene+surface)
+build-captions-html.mjs  → compositions/captions.html   (HTML 引擎:选皮肤 + 注词 + brand token 化 + 自检)
+assemble-index.mjs       → 文件存在则挂 track-12 clip(data-composition-id="captions", data-start=0, data-duration=total)
+```
+
+字幕仍是**独立文件 + 子合成**(不是 inline),所以 **studio caption 编辑器**(认 `.caption-group` + 可 fetch 的 caption 源文件)与运行期 `captionOverrides`(认 `.caption-group/.caption-word`)都继续可用。
+
+---
 
 ## 0. 输入
 
-| 文件                                      | 用途                                                                                       |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `group_spec.json`                         | `total_duration_s`；`groups[].scenes[<sid>].start_s` / `estimatedDuration_s` / `wordsPath` |
-| `assets/voice/scene_<N>_words.json`       | 单 scene whisper word array：`[{ text, start, end }]`，时间是 **scene-local**              |
-| `design-system/chunks/tokens.css`         | brand DNA：`var(--font-display)` / `var(--brand-primary)` / `var(--canvas)` / `--ink` ...  |
-| `design-system/chunks/easings.js`（可选） | 若有 `EASE.entry` / `EASE.exit` 等命名 ease，沿用；没有就用下方 defaults                   |
+| 文件                                 | 用途                                                                                                                                                                          |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `caption_groups.json`                | **唯一词数据源**:`groups[]`(`id`/`scene_id`/`surface`/`start`/`end`/`text`/`words[]`,全局秒、已清洗、已打 class)、`total_duration_s`、`stats`。由 `build-captions.mjs` 产出。 |
+| `design-system/chunks/tokens.css`    | brand DNA(`--font-display`/`--font-body`/`--brand-primary`/`--canvas`/`--ink` + surface 别名)。整段被 inline 进 captions.html 的 `<style data-brand-tokens>`。                |
+| `design-system/inference.json`(可选) | 皮肤评分用(site DNA / 选中 preset vibe)。缺了按品牌色明暗回退。                                                                                                               |
 
-**不要读** `narrator_scripts.json`。`narrator_scripts.captions[]` 已被废除——agent 模式自己分组。
+---
 
-**前置**：scene 至少有一个 `wordsPath` 文件存在。**所有** scene 都没 voice → 跳过整个 phase（finalize 不挂 track-12 clip）。
+## 1. 运行(orchestrator 在 Step 5.5、scene fan-out 之前 Bash 直跑)
 
-## 1. 装载词流
+```bash
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/build-captions.mjs \
+  --group-spec ./group_spec.json --hyperframes . \
+  --tokens design-system/chunks/tokens.css --out ./caption_groups.json)
 
-按 scene order（`groups[].scene_ids` 按数组顺序）依次读每个 `wordsPath`，把 scene-local 时间加上 `scenes[<sid>].start_s` 转成 **全局秒数**。结果是单一展平词列：
-
-```json
-[
-  { "text": "Imagine", "start": 0.06, "end": 0.32, "scene_id": "scene_1" },
-  { "text": "making",  "start": 0.32, "end": 0.97, "scene_id": "scene_1" },
-  …
-]
+(cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/build-captions-html.mjs \
+  --hyperframes . --groups ./caption_groups.json \
+  --tokens design-system/chunks/tokens.css \
+  --inference design-system/inference.json \
+  --out compositions/captions.html)
 ```
 
-带 `scene_id` 因为分组要在 scene 边界断开（见 §3）。
+**flags(build-captions-html.mjs)**:`--skin caption-<name>` 强制皮肤(仅限受支持集);`--no-emit` 只评分 + 写 `caption_skin_scores.json`、不安装/不生成;`--skin-file <path>` 用预下载皮肤(离线/CI,跳过 `npx hyperframes add`)。
 
-## 2. 清理词流
+**skip 码(退 0,不是错)**:`captions: skipped (<reason>)` —— 无 caption groups / 无 brand tokens。这种情况不生成 captions.html,assemble-index 不挂 track-12,视频照常出、只是没字幕。
 
-按顺序丢这些：
+---
 
-| 丢什么                                                     | 理由                       |
-| ---------------------------------------------------------- | -------------------------- |
-| `text` 是 `♪` / `�` / `♪-♯` 单符号                         | whisper 检到音乐，不是语音 |
-| `text` 全部非字母数字（纯标点）                            | 不能独立成词               |
-| `end - start < 0.05`                                       | 时间戳不可靠，会跟相邻词撞 |
-| `text` ∈ {uh, um, ah, oh, huh}（不区分大小写）且 dur <0.1s | filler hallucination       |
+## 2. 受支持皮肤集(closed set)
 
-不丢句末标点附着的词（"Figma." 留着，"." 单独不留）。
+**Phase 1 只支持 `caption-pill-karaoke`** —— 6 个 registry `caption-*` 里唯一与本 skill 约束**全兼容**的:自带不透明 pill(底带可读、无需 scrim)、canonical `.caption-group/.caption-word` 类名(studio + captionOverrides 认)、可绕过的运行期 makeGroups、底部位置、CSS 内配色(可 token 化)。
 
-## 3. 自动分组
+其余皮肤各有专属阻碍,需**逐个**按 descriptor 审入(见脚本里 `SKINS` 表 + `applyTransform`),**不要**假定即插即用:
 
-从清完的词流切组。**遵守的硬规则**：
+| 皮肤                    | 阻碍                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| neon-accent / emoji-pop | 颜色/辉光在 **JS 里 parseInt(hex) 算** → 无法机械 token 化;且关键词/emoji 是硬编码英文词表(换产品就动画变哑) |
+| weight-shift            | 无 `.caption-word` 类(动画作用在行上)→ studio 检测有缺口                                                     |
+| clip-wipe               | `.wp-*` 类名 + RAW_GROUPS/KEYWORDS **按索引硬编码**                                                          |
+| editorial-emphasis      | 字幕在 `top:580px` **画布中部** → 与底部字幕带模型不兼容                                                     |
 
-1. **不跨 scene 边界**：当前词的 `scene_id` ≠ 前一个 → 强制开新组（即使语义未完）
-2. **句末标点切组**：`.` `?` `!` `,` `—` `;` `:` 词尾 → 当前词收尾，下一词开新组
-3. **silence gap 切组**：当前 `start` − 前一 `end` > **0.18s** → 开新组
-4. **上限 4 词**：当前组到 4 词 → 强制收尾
+`--skin` 指到未支持皮肤 → 脚本退 1 并打印具体原因。
 
-**节奏软指南**（不是 lint 规则，影响可读性）：
+---
 
-- 高密度旁白（>2.5 词/秒）→ 倾向更短组（2-3 词）
-- 抒情段（<1.5 词/秒）→ 允许 3-4 词组
+## 3. build-captions-html.mjs 对皮肤做的确定性改造(以 pill-karaoke 为例)
 
-每组算 `group.start = words[0].start`、`group.end = words[words.length-1].end + 0.12`（多 120ms 让最后一个词看完）。
+脚本读下载到的皮肤文件,按 descriptor 做**有断言的字符串变换**(任一 handle 找不到 = registry 漂移 = 响亮退 1,绝不静默出空字幕):
 
-## 4. ALL CAPS / numeric 词自动加 class
+1. 删 Google Fonts `<link>`(品牌 @font-face 由 assemble-index 注入 index.html,子合成被 flatten 进该文档即可用)。
+2. 删 demo `<video>` 占位 + 其死 CSS。
+3. host `data-composition-id="caption-pill-karaoke"` → `"captions"`;`data-duration="8"` → `total_duration_s`。
+4. **`var DURATION = 8` → `total_duration_s`**。否则皮肤的 `normalizeWords` 把所有词 end 钳到 8s → 60-90s 视频 8 秒后字幕全废。
+5. **注入引擎分组**:`var GROUPS = <caption_groups 的 groups>`,绕过皮肤自带的 `normalizeWords` + scene 无关的 `makeGroups`。引擎分组已是全局秒、scene-aware、不重叠 —— 一步同时解决"词被钳到 8s"和"字幕跨 scene 切口"。
+6. 逐词 karaoke 从**改 color 值**改成**切 `.is-active` class**(颜色由 CSS token 给):`.caption-word { color: color-mix(--ink 45%, --canvas) }`、`.caption-word.is-active { color: var(--ink) }`。gsap 无法插值 `var()` 颜色,class flip 既 brand-strict 又可读。
+7. **双改名**:host `data-composition-id` 与 `window.__timelines["caption-pill-karaoke"]` **都**改成 `"captions"`(compositionScoping 仅在 timeline key === inner root 的 composition-id 时才重映射写入 —— 双改才落到 `__timelines["captions"]`)。
+8. 全片尾锚 `tl.to({}, { duration: DURATION }, 0)`,让子合成 timeline 时长 == host clip 时长。
+9. inline `tokens.css` 到 `<style data-brand-tokens>`;CSS 内硬编码色/字 token 化:pill bg `#e7e5e7` → `var(--canvas)`、阴影 `rgba(0,0,0,.12)` → `color-mix(in srgb, var(--ink) 14%, transparent)`、字体 `"Poppins"` → `var(--font-display)`(JS 里 measureText 的 `FONT_FAMILY` 用 tokens.css 提取出的真实族名,canvas 量字不能用 `var()`)。
 
-不读 narrator_scripts 标签，但词本身可推：
+**可读性(本 skill = vito-A keep-out + 带)**:pill-karaoke 自带**不透明 pill**(`background: var(--canvas)` + active 文字 `var(--ink)` → 恒对比),**无需** scrim、**无需**渲染期对比探针。透明类皮肤(Phase 2)才需在 caption root 第一个子元素加一条 brand-strict 渐变 scrim 带(`color-mix(var(--ink) …)`,z-index 在 `.caption-group` 之下)。scene 前景留上 ~83% 的 keep-out 由 `hyperframes-scene.md` 约束 #13 + visual-design 在 brief 里强制(见那两处),不在本脚本。
 
-- `text` 是 ≥2 字母**全大写** → 加 `is-allcaps` class（scale × 1.06）
-- `text` 第一个字符是数字（`/^[0-9]/`） → 加 `is-numeric` class（font-weight 加重一档）
+---
 
-这是免费的视觉强调，不依赖任何上游 tag。
+## 4. node 结构自检(取代旧浏览器 self-lint)
 
-## 5. CSS 契约：brand-strict
+`build-captions-html.mjs` 写文件前对产物断言(`check-compositions.mjs` 不扫 captions.html,这是唯一结构 gate):`data-composition-id="captions"` 在、字面 `window.__timelines["captions"]` 在、`.caption-group`/`.caption-word` 在、占位串 "Every great video starts" 没了、demo video 没了、无 Google Fonts link、**无 `window.getComputedStyle(`/`requestAnimationFrame(`/`matchMedia(`**、`DURATION === total_duration_s`、品牌严格(剥 `<style data-brand-tokens>` 后零裸 hex/rgb)。任一失败退 1。
 
-`compositions/captions.html` 的 `<style>` **只能用 token 变量**，**禁止**：
+---
 
-- 硬编码 HEX / RGB / named color（除 `transparent` / `currentColor` / `none`）
-- 硬编码字体名（`'Inter'` / `'Montserrat'` 等）—— 必须 `var(--font-display)` / `var(--font-body)`
-- 跨 `var(--*)` 的 fallback 链是 ok 的（`var(--font-display, system-ui)`）
+## 5. Failure modes
 
-**`<head>` 必须先 prepend `tokens.css`**：
+| 现象                                          | 根因                                       | 修法                                                                                         |
+| --------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `captions: skipped`                           | 无 caption_groups / 无 tokens.css          | 正常 —— 不挂 track-12,视频照常出                                                             |
+| `transform "...": expected literal not found` | registry 皮肤改版、handle 漂移             | 对照新皮肤源码更新脚本里该皮肤的 descriptor / 变换字符串                                     |
+| `self-lint: brand-strict violation`           | 有色/字没 token 化(扩皮肤时常见)           | 给该皮肤补 token 化映射;JS 里 parseInt(hex) 算色的皮肤(neon/emoji)无法机械 token 化 —— 见 §2 |
+| `--skin "..." not yet supported`              | 指到未审入皮肤                             | 用受支持集,或按 §2/§3 给该皮肤写 descriptor + 变换                                           |
+| `npx hyperframes add ... failed`              | 离线/无 registry                           | 传 `--skin-file <已下载皮肤>`                                                                |
+| 8 秒后字幕错乱                                | (回归)DURATION 没改写                      | 自检已断言 `DURATION === total`;确认变换步骤 4 命中                                          |
+| 字幕跨 scene 切口 / 两组同屏                  | (回归)用了皮肤自带 makeGroups 而非引擎分组 | 确认变换步骤 5 命中(注入引擎 GROUPS)                                                         |
 
-```html
-<head>
-  …
-  <style data-brand-tokens>
-    /* @file: design-system/chunks/tokens.css verbatim */
-    :root { --brand-primary: …; --font-display: …; … }
-  </style>
-  <style>
-    /* caption styles below, using only var(--*) */
-    …
-  </style>
-</head>
-```
+---
 
-把 tokens.css 的全文嵌进 `<style data-brand-tokens>`，**不要**用 `@import` / `<link>`（sub-comp 渲染时基 URL 不一定能找到外链）。
+## 6. 验收(Phase 1)
 
-## 6. 位置 / 字号 / 动效（landscape 1920×1080 default）
-
-```css
-.cap-root {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.cap-group {
-  position: absolute;
-  bottom: 120px; /* 抬高就改这里；不要 50/transform */
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 18px;
-  padding: 0 96px; /* 字溢出 1920 时由 fitTextFontSize 收 */
-  opacity: 0;
-  visibility: hidden;
-  will-change: opacity, transform;
-}
-.cap-word {
-  font-family: var(--font-display, system-ui);
-  font-weight: 800;
-  font-size: 84px;
-  line-height: 1.08;
-  letter-spacing: -0.01em;
-  color: var(--canvas, #fff);
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
-  transform-origin: 50% 60%;
-  will-change: transform, color;
-}
-.cap-word.is-allcaps {
-  transform: scale(1.06);
-}
-.cap-word.is-numeric {
-  font-weight: 900;
-}
-.cap-word.is-active {
-  color: var(--brand-primary, var(--canvas));
-}
-```
-
-**字号防溢出**：渲染前用 `window.__hyperframes.fitTextFontSize(group.text, { fontFamily, fontWeight: 800, baseFontSize: 84, maxWidth: 1700, minFontSize: 44 })` 收掉超宽组（应用到 group 整体，不分词）。
-
-**动效（缺省）**：
-
-- group 进场：`tl.fromTo(el, {y: 24, opacity: 0}, {y: 0, opacity: 1, duration: 0.22, ease: "back.out(1.04)"}, group.start)`
-- per-word karaoke：`tl.to("#word-<i>", {className: "+=is-active", duration: 0}, word.start)`（瞬切，颜色 transition 由 CSS 给）
-- group 离场：`tl.to(el, {opacity: 0, y: -8, duration: 0.14, ease: "power2.in"}, group.end - 0.14)`
-- **硬关**：`tl.set(el, {opacity: 0, visibility: "hidden"}, group.end)`
-
-ease 名字优先沿用 `chunks/easings.js` 里的命名（如 `EASE.entry`、`EASE.exit`）。
-
-## 7. Sub-composition root 契约
-
-```html
-<body>
-  <div
-    id="captions-root"
-    class="cap-root"
-    data-composition-id="captions"
-    data-start="0"
-    data-duration="<total_duration_s>"
-    data-width="1920"
-    data-height="1080"
-  >
-    <div class="cap-group" id="cap-grp-0">
-      <span class="cap-word" id="cap-w-0">Imagine</span>
-      <span class="cap-word" id="cap-w-1">making</span>
-    </div>
-    …
-  </div>
-
-  <script>
-    window.__timelines = window.__timelines || {};
-    const tl = gsap.timeline({ paused: true });
-    /* …per-group tl.fromTo / per-word className flip / tl.set kill… */
-    window.__timelines["captions"] = tl;
-  </script>
-</body>
-```
-
-- `data-composition-id="captions"` 必须等于 host clip 的 `data-composition-id`（finalize 写的就是 `captions`）
-- 时间线注册键名也是字面 `"captions"`（不要变量绕一层；`check-compositions.mjs` 正则扫）
-- 整个 sub-comp 用 GSAP（CDN 加载在 `<head>`，跟 scene 一致）
-
-## 8. 自检（写完后跑）
-
-在 timeline 注册前插一段 self-lint，单 group 可见性回归到 0：
-
-```js
-GROUPS.forEach(function (group, gi) {
-  var el = document.getElementById("cap-grp-" + gi);
-  if (!el) return;
-  tl.seek(group.end + 0.01);
-  var cs = window.getComputedStyle(el);
-  if (cs.opacity !== "0" && cs.visibility !== "hidden") {
-    console.warn(
-      "[caption-lint] group " + gi + " still visible at t=" + (group.end + 0.01).toFixed(2),
-    );
-  }
-});
-tl.seek(0);
-window.__timelines["captions"] = tl;
-```
-
-console.warn 触发就回 §6 检查 `tl.set(...group.end)` 是不是漏写或被后续 `tl.to` 覆盖（GSAP timeline 后写的覆盖先写的）。
-
-## 9. Failure modes
-
-| 现象                                      | 根因                                                       | 修法                                                                    |
-| ----------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `npx hyperframes lint` 报 timeline 没注册 | 注册键名不是字面 `"captions"`                              | §7 `window.__timelines["captions"]` 别变量绕                            |
-| 同时两组可见                              | 漏 `tl.set(el, ..., group.end)` 硬关                       | 跑 §8 self-lint 定位是哪一组                                            |
-| 字溢出画面                                | 没用 fitTextFontSize / maxWidth 太宽                       | §6 把 `maxWidth: 1700` 降到 `1500`，或减小 `baseFontSize`               |
-| 字幕跟旁白对不上                          | scene-local → 全局时间没加 `start_s`                       | §1 加 offset                                                            |
-| 字体退化到系统字                          | tokens.css 没 prepend，`@font-face` 在 index.html `<head>` | §5 必须 inline tokens.css；字体本身由 finalize 写在 index.html `<head>` |
+渲一条 60-90s 带字幕视频,核对:① 8s 后字幕正常(DURATION);② 逐词高亮 + 不跨 scene 重叠(引擎分组);③ 暗/亮主题下都可读(pill 自带对比);④ scene 前景在上 ~83%、背景满铺(keep-out);⑤ studio 能识别 `.caption-group`;⑥ node 自检零失败;⑦ `--no-emit` 选皮肤可复核。

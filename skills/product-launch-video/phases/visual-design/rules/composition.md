@@ -37,7 +37,7 @@ Composition 是 plan 含金量最高的领域 —— 选哪套布局、主元素
 |  |  |    (画面中心 65-75%)                   |  | |
 |  |  |                                        |  | |
 |  |  +----------------------------------------+  | |
-|  |  |   Caption / subtitle zone (底部 ~15%)  |  | |
+|  |  | Caption band (底部 ~17%, HARD when captions) | | |
 |  |  +----------------------------------------+  | |
 |  +----------------------------------------------+ |
 +--------------------------------------------------+
@@ -46,7 +46,7 @@ Composition 是 plan 含金量最高的领域 —— 选哪套布局、主元素
 - **Top chrome** —— 只在 workspace mockup 场景用；否则跳过
 - **Safe margin** —— 关键内容远离边缘；hero / 编辑类需要更大留白
 - **Primary content area** —— 画面中心 65-75% 是视线自然停留处；正文文本块**永远**不要顶到边
-- **Caption zone** —— 底部 ~15% 留给字幕；旁白段落不在这里放关键视觉
+- **Caption band（底部 ~17%，captions enabled 时为 HARD 保留）** —— 本片 captions enabled（`group_spec.captions_enabled`）时，底部 ~17%（1920×1080 → 底 180px，y 900–1080）是 **HARD 保留区**：primary content area 与所有关键视觉**必须封顶在 y ≤ 900**，vertical centering 锚在 **y ≈ 454（0.42 × height）**、不是画布正中。BACKGROUND / ambient / surface 装饰层不受限、照常 full-bleed。captions disabled 时此区可正常使用。Plan 引用样例："captions enabled — hero block centered in upper ~83%, stat card bottom edge sits at y≈880 just above the caption band; background mesh stays full-bleed."
 
 Plan 写"hero 词居中，留宽安全边距"；不写 `padding: 150px 120px 92px`。
 
