@@ -22,6 +22,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { discoverSourceUrl } from "./lib/capture-meta.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, def) => {
@@ -55,25 +56,13 @@ function readText(file) {
 
 const tokens = readJSON(path.join(captureDir, "extracted", "tokens.json"), null);
 if (!tokens) die("extracted/tokens.json missing — run 'npx hyperframes capture <url>' first");
-const _designStyles = readJSON(path.join(captureDir, "extracted", "design-styles.json"), {});
 const visibleText = readText(path.join(captureDir, "extracted", "visible-text.txt"));
 const assetDescriptions = readText(path.join(captureDir, "extracted", "asset-descriptions.md"));
 const meta = readJSON(path.join(captureDir, "meta.json"), {});
 
-// Discover source URL from CLAUDE.md / AGENTS.md scaffolding
-function sourceUrlFrom(captureDir) {
-  for (const f of ["CLAUDE.md", "AGENTS.md", ".cursorrules"]) {
-    const txt = readText(path.join(captureDir, f));
-    const m = txt.match(/https?:\/\/[\w.-]+(?:\/[^\s)"'`]*)?/);
-    if (m) return m[0];
-  }
-  if (meta?.id) {
-    const host = String(meta.id).replace(/-[a-z]+$/, "");
-    return `https://${host}/`;
-  }
-  return "";
-}
-const sourceUrl = sourceUrlFrom(captureDir);
+// Discover source URL from CLAUDE.md / AGENTS.md scaffolding (shared with
+// build-design.mjs via lib/capture-meta.mjs so the two stay in lockstep).
+const sourceUrl = discoverSourceUrl(captureDir, meta);
 
 // List local assets — each line in context_pack.md references `assets/<filename>`,
 // the same convention used by the legacy web-research output. prep.mjs will
@@ -104,7 +93,9 @@ for (const line of assetDescriptions.split(/\r?\n/)) {
 }
 
 function clean(text, limit = 400) {
-  const s = String(text || "").replace(/\s+/g, " ").trim();
+  const s = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (limit && s.length > limit) return s.slice(0, limit - 1).trim() + "…";
   return s;
 }
@@ -125,7 +116,12 @@ lines.push("");
 if (tokens.description) lines.push(`- description: ${clean(tokens.description, 300)}`);
 const ogVars = Object.entries(tokens.cssVariables || {}).filter(([k]) => /^--/.test(k));
 if (ogVars.length > 0) {
-  lines.push(`- CSS variables (${ogVars.length}): ${ogVars.slice(0, 6).map(([k, v]) => `${k}=${v}`).join(", ")}${ogVars.length > 6 ? ", …" : ""}`);
+  lines.push(
+    `- CSS variables (${ogVars.length}): ${ogVars
+      .slice(0, 6)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(", ")}${ogVars.length > 6 ? ", …" : ""}`,
+  );
 }
 const palette = (tokens.colors || []).slice(0, 8);
 if (palette.length > 0) lines.push(`- Palette (top 8): ${palette.join(", ")}`);
@@ -144,9 +140,7 @@ lines.push("## Section Candidates");
 lines.push("");
 for (let i = 0; i < (tokens.sections || []).length; i++) {
   const s = tokens.sections[i];
-  lines.push(
-    `### Section ${i} — ${s.selector || "?"} (type=${s.type}, y=${s.y}, h=${s.height})`,
-  );
+  lines.push(`### Section ${i} — ${s.selector || "?"} (type=${s.type}, y=${s.y}, h=${s.height})`);
   if (s.heading) lines.push(`- Heading: ${clean(s.heading, 180)}`);
   if (s.callsToAction && s.callsToAction.length > 0) {
     lines.push(`- CTAs: ${s.callsToAction.join(" · ")}`);

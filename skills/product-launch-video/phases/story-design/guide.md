@@ -13,6 +13,19 @@
 
 计划的标准：**在 structural type 旁边写出 emotional beat**，**写出具体的 persuasion technique**（不要只写 “show benefits”），并且 **为每一个 seam 指定 transition**。什么把观众视线从 scene N 带到 scene N+1，本身就是故事的一部分，不是后续视觉阶段才处理的问题。
 
+## 用 site_dna 定 register（开场读一次）
+
+`design-system/inference.json` 的 `site_dna` 是 Phase 1 **确定性**产出的站点气质摘要。开场读一次，用它把叙事「调」到与最终视觉同一频道（**只读 `site_dna` 这一段，不读 `design.html` / `chunks/` —— 那是 design-system subagent 的并行产物，读它会破坏 1b∥2 并行**）：
+
+| site_dna 字段                              | 怎么用                                                                                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `voice_tone`（neutral / warm / formal / …）| 定脚本语气：`formal` 收着写、远离玩笑；`warm` 放开用 disarming specificity（ZapBG「Grandma」那招）；`neutral` 走 sharp-but-plain                          |
+| `voice_heading_style` / `voice_heading_length` | hook 文案节奏：`UPPERCASE`/`tight` → 短三连（Vibe.co「Target. Deliver. Measure.」）；`loose` → 偏 anaphora 长句（HRS）                                |
+| `material` / `imagery`                     | 偏向 archetype + hook：spectacle/glass 美学 → Visual-spectacle hook + Feature-Benefit Cascade；flat B2B → PAS / BAB                                       |
+| `page_intent` / `section_role_counts`      | `feature-grid` 计数高 = 走 Feature-Benefit Cascade inner rhythm（更长的连续 demo 序列）；pricing-heavy → 加 Price-anchoring persuasion beat              |
+
+site_dna 是**软输入**：它收窄选择、让叙事与视觉预先对齐，但 archetype 的最终判断仍以 `context_pack.md` 的内容为准。
+
 ## 叙事原型（Narrative archetypes）
 
 在设计 scenes 之前，选择 **一个** storytelling archetype（或显式命名一个 hybrid，见下方 “Compound archetypes”）。阅读它的 overview 获取指导，并研究它的 golden samples；不要混用不同 archetype 的章节，因为每一个都是完整连贯的情绪旅程。
@@ -203,7 +216,7 @@ Phase 3（visual-design）和 Phase 4b（scene workers）**绝不会读取 `capt
 - **`description`** — 简短 prose（≤25 words），说明 asset 里有什么、已知的大致尺寸，以及视觉备注（dark/light、dominant color、photo vs. UI vs. icon）。visual-design 会用它判断每个 asset 如何适配 scene composition；worker 会用它在不打开文件的情况下安排 assets。
 - **每个有 visual hero 的 scene 至少 1 个 candidate。** 纯标题 / pure-typography scenes 可以使用空数组 `[]`；visual-design 和 Phase 4b worker 会把它视为刻意的 text-only scene。
 - **有歧义时顺序很重要** — 把最符合叙事的 asset 放在第一位。下游在 description 仍留有选择空间时，往往偏向第一项。
-- **只从实际下载的内容中选择。** 对照 `capture/extraction.json` 的 asset list 或 `ls capture/assets/`。编造不存在的 basename 会导致 Phase 4a fatal error。
+- **只从实际下载的内容中选择。** 资产以 context_pack 的 **Asset Inventory** 为准；需要复核 basename 时 `ls capture/assets/`（没有 `capture/extraction.json` 这个文件）。编造不存在的 basename 会导致 Phase 4a fatal error。
 - **同一个 asset 可以出现在多个 scenes 中**，只要叙事上同一个 hero 贯穿即可（例如 scenes 3-7 都 showcase 同一个 dashboard）。
 
 ## 验证清单

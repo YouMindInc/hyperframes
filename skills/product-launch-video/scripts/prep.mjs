@@ -12,7 +12,7 @@
 //         before calling prep.
 //
 // section_plan.md anchors recognised:
-//   **Effects:**     — required, 4-7 backtick-wrapped rule ids
+//   **Effects:**     — required, 2-5 backtick-wrapped rule ids
 //   **Duration:**    — required, positive float seconds
 //   **Continuity:**  — required, "break" | "continue" (scene 1 must be break)
 //   **Blueprint:**   — optional (soft), "based-on <id>" | "extended <id>" |

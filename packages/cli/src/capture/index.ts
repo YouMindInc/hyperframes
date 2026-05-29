@@ -506,6 +506,49 @@ export async function captureWebsite(
       assets = await downloadAssets(tokens, outputDir, catalogedAssets, faviconLinks);
     }
 
+    // Join in-section media URLs → downloaded local paths, then re-write
+    // tokens.json. Downstream page recreation MUST reference local files:
+    // remote URLs fail at render time (hotlink/CORS 403, no egress in
+    // Docker/Lambda, frame-timing blanks for not-yet-loaded images).
+    if (assets.length && Array.isArray(tokens.sections)) {
+      const base = (u: string): string => u.split(/[#?]/)[0] ?? u;
+      const localByUrl = new Map<string, string>();
+      for (const a of assets) {
+        if (!a.url || !a.localPath) continue;
+        localByUrl.set(a.url, a.localPath);
+        localByUrl.set(base(a.url), a.localPath);
+      }
+      for (const sec of tokens.sections) {
+        const local: string[] = [];
+        for (const u of sec.assetUrls || []) {
+          const hit = localByUrl.get(u) || localByUrl.get(base(u));
+          if (hit && !local.includes(hit)) local.push(hit);
+        }
+        if (local.length) sec.assets = local;
+      }
+      const tokensForDisk2 = {
+        ...tokens,
+        svgs: tokens.svgs.map(({ outerHTML: _, ...rest }) => rest),
+      };
+      writeFileSync(
+        join(outputDir, "extracted", "tokens.json"),
+        JSON.stringify(tokensForDisk2, null, 2),
+        "utf-8",
+      );
+    }
+
+    // Persist a self-contained page recreation (extracted/page.html) as the
+    // high-fidelity structural reference for the page-card rebuild. NOT a
+    // composition — kept under extracted/ so the producer (which discovers
+    // compositions by index.html) never picks it up. Images are already inlined
+    // as data URLs by extractHtml, so it renders standalone.
+    try {
+      const pageHtml = `<!doctype html>\n<html ${extracted.htmlAttrs || ""}>\n<head>\n${extracted.headHtml}\n</head>\n<body>\n${extracted.bodyHtml}\n</body>\n</html>\n`;
+      writeFileSync(join(outputDir, "extracted", "page.html"), pageHtml, "utf-8");
+    } catch (err) {
+      warnings.push(`page.html write failed: ${err}`);
+    }
+
     // Save visible text content for AI agent to use
     if (visibleTextContent) {
       writeFileSync(join(outputDir, "extracted", "visible-text.txt"), visibleTextContent, "utf-8");

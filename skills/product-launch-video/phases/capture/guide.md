@@ -19,14 +19,15 @@
 ```
 capture/
 ├── extracted/
-│   ├── tokens.json              # title / desc / cssVariables / fonts / colors / headings / ctas / svgs / sections[].{callsToAction,assetUrls}
+│   ├── tokens.json              # title / desc / cssVariables / fonts / colors / colorStats（品牌色分类信号）/ headings / ctas / svgs / page{width,height,viewport} / sections[].{type,rect(x,y,w,h),heading,text,callsToAction,layout,assetUrls(远程),assets(本地路径)}
 │   ├── design-styles.json       # typography roles / buttons / cards / nav / shadows / radius / spacing
 │   ├── animations.json          # CDP + Web Animations + CSS keyframes catalog（含 easing 字符串）
 │   ├── fonts-manifest.json      # OpenType name-table 反查的 family/weight/style
 │   ├── asset-descriptions.md    # 每张图一行（DOM 位置 + 可选 Gemini caption）
 │   ├── visible-text.txt         # 全文 plain text dump
 │   ├── video-manifest.json      # 每个 <video> 的截图 + 上下文（如有）
-│   └── shaders.json             # WebGL 源码（如有 canvas）
+│   ├── shaders.json             # WebGL 源码（如有 canvas）
+│   └── page.html                # 整页自包含再现（内联 CSS + data-URI 图）— page-card 重建的保真参照，不进渲染
 ├── assets/
 │   ├── *.svg / *.jpg / *.png / *.webp / *.mp4
 │   ├── fonts/                   # 站点字体 woff/woff2/otf

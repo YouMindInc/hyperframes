@@ -28,6 +28,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { discoverSourceUrl } from "../../../scripts/lib/capture-meta.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PRESETS_DIR = path.resolve(__dirname, "..", "style-presets");
@@ -39,13 +40,17 @@ let cliCaptureDir = null,
   cliOut = null,
   cliStyle = null,
   cliOutScores = null,
-  cliNoEmit = false;
+  cliNoEmit = false,
+  cliBrandPrimary = null;
 for (let i = 1; i < argv.length; i++) {
   if (argv[i] === "--capture" && argv[i + 1]) cliCaptureDir = argv[++i];
   else if (argv[i] === "--out" && argv[i + 1]) cliOut = argv[++i];
   else if (argv[i] === "--style" && argv[i + 1]) cliStyle = argv[++i];
   else if (argv[i] === "--out-scores" && argv[i + 1]) cliOutScores = argv[++i];
   else if (argv[i] === "--no-emit") cliNoEmit = true;
+  // --brand-primary <hex>: the design-system agent's screenshot-based override
+  // of the auto-classified brand primary (see inference.json.brand.candidates).
+  else if (argv[i] === "--brand-primary" && argv[i + 1]) cliBrandPrimary = argv[++i];
 }
 if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
@@ -103,21 +108,10 @@ const hfAnimations = readJSONAbs(path.join(captureDir, "extracted", "animations.
 const hfVisibleText = readTextAbs(path.join(captureDir, "extracted", "visible-text.txt"));
 const hfMeta = readJSONAbs(path.join(captureDir, "meta.json"), null);
 
-// Source URL discovery — capture writes the URL into the CLAUDE.md / AGENTS.md
-// scaffolding files. We grep those for the first URL. Fallback: reconstruct
-// from meta.id (which is a host slug like "heygen.com-video").
-const sourceUrl = (() => {
-  for (const f of ["CLAUDE.md", "AGENTS.md", ".cursorrules"]) {
-    const txt = readTextAbs(path.join(captureDir, f));
-    const m = txt.match(/https?:\/\/[\w.-]+(?:\/[^\s)"'`]*)?/);
-    if (m) return m[0];
-  }
-  if (hfMeta?.id) {
-    const host = String(hfMeta.id).replace(/-[a-z]+$/, "");
-    return `https://${host}/`;
-  }
-  return "";
-})();
+// Source URL discovery — shared with derive-context-pack.mjs via
+// lib/capture-meta.mjs (grep CLAUDE.md/AGENTS.md/.cursorrules, fall back to
+// reconstructing from meta.id host slug) so the two stay in lockstep.
+const sourceUrl = discoverSourceUrl(captureDir, hfMeta);
 
 // ═══════════════════ Color helpers ════════════════════════
 function _normalizeHex(c) {
@@ -133,8 +127,7 @@ function _normalizeHex(c) {
   const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
   if (!m) return "";
   return (
-    "#" +
-    [m[1], m[2], m[3]].map((n) => parseInt(n).toString(16).padStart(2, "0")).join("")
+    "#" + [m[1], m[2], m[3]].map((n) => parseInt(n).toString(16).padStart(2, "0")).join("")
   ).toUpperCase();
 }
 function _sat(hex) {
@@ -160,14 +153,126 @@ function _isGrayish(hex) {
     min = Math.min(r, g, b);
   return max - min < 18;
 }
+// HSL saturation + lightness (0..100). Used by the signal-based brand classifier.
+function _hslSL(hex) {
+  const m = String(hex).match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return { s: 0, l: 0 };
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  }
+  return { s: s * 100, l: l * 100 };
+}
+// Redmean perceptual color distance (0..~765) — used to keep secondary distinct.
+function _redmean(a, b) {
+  const x = String(a).match(/^#?([0-9a-f]{6})$/i);
+  const y = String(b).match(/^#?([0-9a-f]{6})$/i);
+  if (!x || !y) return 999;
+  const xr = [0, 2, 4].map((i) => parseInt(x[1].slice(i, i + 2), 16));
+  const yr = [0, 2, 4].map((i) => parseInt(y[1].slice(i, i + 2), 16));
+  const rm = (xr[0] + yr[0]) / 2;
+  const dr = xr[0] - yr[0],
+    dg = xr[1] - yr[1],
+    db = xr[2] - yr[2];
+  return Math.sqrt((2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db);
+}
 
 // ═══════════════════ Brand color derivation ═══════════════
-// Brand primary = first non-grayish button background. CTAs are the most
-// reliable brand signal — the site owner picked the color deliberately, and
-// it stands distinct from typography / surface colors. Falls back to
-// highest-saturation color from the palette when no CTA stands out.
+// Brand primary = the chromatic color most used as an interactive / repeated
+// FILL — validated against 17 real sites (signal-based classifier beats the
+// legacy "first button bg" by ~17pts). Scoring (per capture colorStats entry):
+//   score = bgCount*3 + interactiveBg*18 + areaBg*2 + sat*1.3 + log10(count)*4
+//   + 400 if the color is an actual non-nav CTA background (decisive)
+//   * 0.15 if a low-saturation light tint (section surface, not brand)
+//   * 0.30 if text/logo-only (never a fill — kills the default link blue)
+//   * 0.45 if near-black (dark surface/text, rarely the brand fill)
+// Falls back to the legacy heuristic when colorStats is absent (old captures).
+//
+// Ambiguous sites (multi-color brands, or a brand whose color lives only in a
+// logo / large section block) can't be resolved from CSS stats alone — the
+// scored candidate pool + a `confidence` are emitted to inference.json so the
+// design-system agent can look at the first-screen screenshot and override via
+// `--brand-primary <hex>` (see guide.md "brand review"). `_brandChrom` stashes
+// the ranked pool for that report.
+let _brandChrom = null;
+function _brandClassify(stats, buttons) {
+  const btnBg = new Set(buttons.map((b) => _normalizeHex(b.background || "")).filter(Boolean));
+  return stats
+    .map((v) => {
+      const hex = _normalizeHex(v.hex);
+      if (!/^#[0-9A-F]{6}$/.test(hex)) return null;
+      const { s: sat, l } = _hslSL(hex);
+      const chromatic = (sat > 25 && l > 5 && l < 95) || (sat > 40 && v.interactiveBg > 0);
+      if (!chromatic) return null;
+      let score =
+        v.bgCount * 3 +
+        v.interactiveBg * 18 +
+        v.areaBg * 2 +
+        sat * 1.3 +
+        Math.log10(Math.max(1, v.count)) * 4;
+      if (btnBg.has(hex)) score += 400;
+      if (l > 85 && sat < 40) score *= 0.15;
+      if (v.bgCount === 0) score *= 0.3;
+      if (l < 12) score *= 0.45;
+      return {
+        hex,
+        sat,
+        score: Number(score.toFixed(1)),
+        bgCount: v.bgCount,
+        interactiveBg: v.interactiveBg,
+        count: v.count,
+        onButton: btnBg.has(hex),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score);
+}
+// Build the {primary, secondary, accent} triplet from the ranked pool. An
+// explicit `primaryOverride` (the agent's screenshot pick) takes the top slot;
+// secondary/accent are then derived around it.
+function _tripletFromChrom(chrom, primaryOverride) {
+  if (!chrom.length) return null;
+  const primary =
+    primaryOverride && /^#[0-9A-F]{6}$/.test(primaryOverride) ? primaryOverride : chrom[0].hex;
+  const secondary = (
+    chrom.find((x) => x.hex !== primary && _redmean(x.hex, primary) > 100) ||
+    chrom.find((x) => x.hex !== primary) || { hex: primary }
+  ).hex;
+  const taken = new Set([primary, secondary]);
+  const accent = (
+    chrom.filter((x) => !taken.has(x.hex)).sort((a, b) => b.sat - a.sat)[0] || { hex: secondary }
+  ).hex;
+  return { primary, secondary, accent };
+}
+// confidence in the auto-pick: ratio of the top score to the runner-up. A clear
+// winner → high; a near-tie → low → the agent should review the screenshot.
+function brandConfidence(chrom) {
+  if (!chrom || chrom.length < 2) return { label: "high", ratio: 99 };
+  const top = chrom[0].score,
+    second = chrom[1].score || 0.01;
+  const ratio = second > 0 ? top / second : 99;
+  const label = ratio >= 1.8 ? "high" : ratio >= 1.25 ? "medium" : "low";
+  return { label, ratio: Number(ratio.toFixed(2)) };
+}
+
 function deriveBrandColors() {
   const buttons = hfDesignStyles.buttons || [];
+  const stats = hfTokens.colorStats || [];
+  if (stats.length) {
+    const chrom = _brandClassify(stats, buttons);
+    if (chrom.length) {
+      _brandChrom = chrom;
+      const override = cliBrandPrimary ? _normalizeHex(cliBrandPrimary) : null;
+      return _tripletFromChrom(chrom, override);
+    }
+  }
+
+  // ── legacy fallback: first non-gray button bg, else highest-sat palette ──
   const palette = (hfTokens.colors || [])
     .map(_normalizeHex)
     .filter((c) => /^#[0-9A-F]{6}$/.test(c));
@@ -256,9 +361,7 @@ function deriveMaterial() {
   }
   const maxBlur = blurs.length ? Math.max(...blurs) : 0;
   const palette = (hfTokens.colors || []).slice(0, 6).map(_normalizeHex).filter(Boolean);
-  const avgSat = palette.length
-    ? palette.map(_sat).reduce((a, b) => a + b, 0) / palette.length
-    : 0;
+  const avgSat = palette.length ? palette.map(_sat).reduce((a, b) => a + b, 0) / palette.length : 0;
   if (zeroBlurCount > 0 && totalSegs > 0 && zeroBlurCount / totalSegs >= 0.3) return "brutalist";
   if (hasPill && avgSat > 0.45) return "playful";
   if (maxBlur > 24) return "soft";
@@ -294,7 +397,10 @@ function deriveVoice() {
     if (!t) continue;
     if (t.length > 3 && t === t.toUpperCase() && /[A-Z]/.test(t)) upper++;
     else if (
-      t.split(/\s+/).slice(0, 6).filter((w) => /^[A-Z]/.test(w)).length >= 3
+      t
+        .split(/\s+/)
+        .slice(0, 6)
+        .filter((w) => /^[A-Z]/.test(w)).length >= 3
     )
       title++;
     else sentence++;
@@ -303,10 +409,8 @@ function deriveVoice() {
   if (upper >= Math.max(title, sentence) && upper > 0) headingStyle = "UPPERCASE";
   else if (title > sentence) headingStyle = "Title Case";
   const avgWords = headings.length
-    ? headings.reduce(
-        (s, h) => s + (h.text || "").split(/\s+/).filter(Boolean).length,
-        0,
-      ) / headings.length
+    ? headings.reduce((s, h) => s + (h.text || "").split(/\s+/).filter(Boolean).length, 0) /
+      headings.length
     : 0;
   const headingLengthClass = avgWords <= 5 ? "tight" : avgWords >= 9 ? "loose" : "medium";
   const counts = {};
@@ -470,8 +574,7 @@ const dna = {
           .map(_normalizeHex)
           .filter(Boolean)
           .map(_sat)
-          .reduce((a, b) => a + b, 0) /
-        Math.max(1, Math.min(5, (hfTokens.colors || []).length)),
+          .reduce((a, b) => a + b, 0) / Math.max(1, Math.min(5, (hfTokens.colors || []).length)),
       shadowProfile: (hfDesignStyles.shadows || []).length === 0 ? "none" : "soft",
       hasPill: (hfDesignStyles.radius || []).some((r) => /^(50%|9999px)$/.test(String(r))),
       gradientCount: Object.values(hfTokens.cssVariables || {}).filter((v) =>
@@ -876,9 +979,7 @@ function parsePreset(presetDir) {
     title: "Components (paste-ready, use brand vars from §B)",
     content: components
       .map((c) => {
-        const metaLine = c.meta
-          ? `<!-- COMPONENT-META: ${JSON.stringify(c.meta)} -->\n\n`
-          : "";
+        const metaLine = c.meta ? `<!-- COMPONENT-META: ${JSON.stringify(c.meta)} -->\n\n` : "";
         return `<!-- COMPONENT: ${c.name} -->\n\n${metaLine}${c.block}\n\n<!-- /COMPONENT -->`;
       })
       .join("\n\n"),
@@ -897,7 +998,9 @@ function parsePreset(presetDir) {
     // pickPreset() time; any missing requirement zeroes the preset's combined
     // score and surfaces a capabilities_missing[] list in inference.json so
     // the subagent can auto-install or report. See checkCapabilities() below.
-    requiresCapabilities: Array.isArray(meta.requires_capabilities) ? meta.requires_capabilities : [],
+    requiresCapabilities: Array.isArray(meta.requires_capabilities)
+      ? meta.requires_capabilities
+      : [],
     // Optional preset-native chrome fonts. When declared, build-design.mjs
     // injects an extra Google Fonts <link> and renderComponents() switches
     // §6 to dual-column (brand-applied | preset-native). See §I CSS for
@@ -930,10 +1033,9 @@ function checkCapabilities(preset) {
         missing.push({
           kind: req.kind,
           block: req.block,
-          missing_files: [
-            !fileOk ? req.verify_file : null,
-            !libOk ? req.verify_lib : null,
-          ].filter(Boolean),
+          missing_files: [!fileOk ? req.verify_file : null, !libOk ? req.verify_lib : null].filter(
+            Boolean,
+          ),
           auto_install: req.auto_install || null,
           alternates: req.alternates || [],
         });
@@ -1188,7 +1290,9 @@ const FINAL_FONT_FALLBACK = {
 //     is also stripped.
 const FONT_FILE_EXTS = new Set([".woff2", ".woff", ".otf", ".ttf"]);
 function normalizeFamily(s) {
-  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 // designlang sometimes emits a family name that has been mashed together
 // without separators (e.g. "GeistVF" → "Geistvf", "DM Serif Display" →
@@ -1224,9 +1328,7 @@ function splitCamelToWords(s) {
     .replace(/\s+/g, " ")
     .trim()
     .split(" ")
-    .map((w) =>
-      w.length <= 2 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1),
-    )
+    .map((w) => (w.length <= 2 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))
     .join(" ");
 }
 function fileBaseToFamily(fileName) {
@@ -1497,11 +1599,10 @@ const monoFromList = fontFamilies.find((f) => /mono|code/i.test(f));
 // usually only show up when a brand uses a brush face for accent words. Match
 // loosely against known display-script names so site-supplied "Caveat Brush"
 // gets routed to the script role instead of stealing display.
-const SCRIPT_FAMILY_RE = /\b(caveat|brush|script|cursive|kalam|pacifico|sacramento|allura|cookie|satisfy|marck|permanent\s*marker)\b/i;
+const SCRIPT_FAMILY_RE =
+  /\b(caveat|brush|script|cursive|kalam|pacifico|sacramento|allura|cookie|satisfy|marck|permanent\s*marker)\b/i;
 const scriptFromList = fontFamilies.find((f) => SCRIPT_FAMILY_RE.test(f));
-const nonMono = fontFamilies.filter(
-  (f) => !/mono|code/i.test(f) && !SCRIPT_FAMILY_RE.test(f),
-);
+const nonMono = fontFamilies.filter((f) => !/mono|code/i.test(f) && !SCRIPT_FAMILY_RE.test(f));
 const rawDisplay = nonMono[1] || nonMono[0] || "";
 const rawBody = nonMono[0] || "";
 const rawMono = monoFromList || "";
@@ -1515,9 +1616,10 @@ const mono = resolveFont(rawMono, "mono", presetFontFallback);
 // declared §D bullet. resolveFont returns a "preset" role when the bullet
 // resolves; we treat a null-name result (no site name AND no preset bullet)
 // as "this preset doesn't use a script role" and skip @font-face / :root emission.
-const script = (rawScript || presetFontFallback.script)
-  ? resolveFont(rawScript, "script", presetFontFallback)
-  : null;
+const script =
+  rawScript || presetFontFallback.script
+    ? resolveFont(rawScript, "script", presetFontFallback)
+    : null;
 
 function gfontsUrl() {
   // Only Google-Fonts and preset-fallback families go through fonts.googleapis.
@@ -1659,10 +1761,7 @@ function mdBlockToHtml(md) {
         const rows = lines.slice(2).map(splitCells);
         const thead = `<thead><tr>${header.map((c) => `<th>${mdInlineToHtml(c)}</th>`).join("")}</tr></thead>`;
         const tbody = `<tbody>${rows
-          .map(
-            (row) =>
-              `<tr>${row.map((c) => `<td>${mdInlineToHtml(c)}</td>`).join("")}</tr>`,
-          )
+          .map((row) => `<tr>${row.map((c) => `<td>${mdInlineToHtml(c)}</td>`).join("")}</tr>`)
           .join("")}</tbody>`;
         out.push(`<table class="ds-table">${thead}${tbody}</table>`);
         continue;
@@ -1670,10 +1769,18 @@ function mdBlockToHtml(md) {
     }
 
     // Bullet list — every non-empty line in the block must start with - or *
-    if (/^\s*[-*]\s/.test(block) && block.split("\n").every((l) => !l.trim() || /^\s*[-*]\s/.test(l))) {
+    if (
+      /^\s*[-*]\s/.test(block) &&
+      block.split("\n").every((l) => !l.trim() || /^\s*[-*]\s/.test(l))
+    ) {
       const items = block
         .split(/\n(?=\s*[-*]\s)/)
-        .map((line) => line.replace(/^\s*[-*]\s+/, "").replace(/\n\s+/g, " ").trim())
+        .map((line) =>
+          line
+            .replace(/^\s*[-*]\s+/, "")
+            .replace(/\n\s+/g, " ")
+            .trim(),
+        )
         .filter(Boolean)
         .map((line) => `<li>${mdInlineToHtml(line)}</li>`);
       out.push(`<ul class="ds-list">${items.join("")}</ul>`);
@@ -1681,10 +1788,18 @@ function mdBlockToHtml(md) {
     }
 
     // Numbered list — every non-empty line in the block must start with `\d+. `
-    if (/^\s*\d+\.\s/.test(block) && block.split("\n").every((l) => !l.trim() || /^\s*\d+\.\s/.test(l))) {
+    if (
+      /^\s*\d+\.\s/.test(block) &&
+      block.split("\n").every((l) => !l.trim() || /^\s*\d+\.\s/.test(l))
+    ) {
       const items = block
         .split(/\n(?=\s*\d+\.\s)/)
-        .map((line) => line.replace(/^\s*\d+\.\s+/, "").replace(/\n\s+/g, " ").trim())
+        .map((line) =>
+          line
+            .replace(/^\s*\d+\.\s+/, "")
+            .replace(/\n\s+/g, " ")
+            .trim(),
+        )
         .filter(Boolean)
         .map((line) => `<li>${mdInlineToHtml(line)}</li>`);
       out.push(`<ol class="ds-list">${items.join("")}</ol>`);
@@ -1815,9 +1930,7 @@ function renderColorAndTokens() {
   const fontScriptStack = script ? `'${script.name}', cursive` : "";
   // Script font role is optional — only emitted when preset declares a §D script bullet
   // OR when site exposes a script family. 3-role presets get a no-op blank line.
-  const fontScriptLine = script?.name
-    ? `  --font-script:     ${fontScriptStack};\n`
-    : "";
+  const fontScriptLine = script?.name ? `  --font-script:     ${fontScriptStack};\n` : "";
   const rootBody = `
   --brand-primary:   ${primaryHex};
   --brand-secondary: ${secondaryHex};
@@ -1927,7 +2040,9 @@ function renderTypography() {
   <div class="ds-trole-box">
     ${typeRoles
       .map((r) => {
-        const sample = String(r.sample_html || "").replace(/\{(\w+)\}/g, (_, k) => placeholderFor(k));
+        const sample = String(r.sample_html || "").replace(/\{(\w+)\}/g, (_, k) =>
+          placeholderFor(k),
+        );
         // Meta (id / family / px / weight / leading / tracking / case / purpose) is
         // kept in data-* attrs — machine-readable for the plan agent, invisible to
         // the reviewer. The rendered row is just the sample, so design.html shows
@@ -1958,29 +2073,55 @@ function renderTypography() {
   <p class="ds-prose">Font families resolved by 4-step lookup: site name on Google Fonts → self-host local woff2 → preset §D fallback → final hard-coded fallback. Each card shows which step landed.</p>
 
   <div class="type-grid">
-    ${[["Display", display, "serif", `font-size: 72px; font-weight: ${preset.name === "neo-brutalism" ? 800 : 400}; letter-spacing: ${preset.name === "neo-brutalism" ? "-0.04em" : "-0.02em"}; line-height: 1;`, brandName],
-       ["Body", body, "sans-serif", "font-size: 22px; line-height: 1.5;", "The quick brown fox jumps over the lazy dog."],
-       ["Mono", mono, "ui-monospace, monospace", "font-size: 18px;", `font: ${mono.name}`],
-       ...(script ? [["Script", script, "cursive", "font-size: 56px; font-weight: 400; line-height: 1; transform: rotate(-3deg); display: inline-block;", "gets simpler —"]] : [])].map(([roleLabel, role, fallbackChain, specimenStyle, specimenText]) => {
-      let note;
-      if (role.source === "site") {
-        note = `<div class="type-note">✓ from site (Google Fonts CDN)</div>`;
-      } else if (role.source === "site-local") {
-        const fileCount = role.localFiles.length;
-        note = `<div class="type-note">✓ from site (self-hosted, ${fileCount} woff/woff2 file${fileCount > 1 ? "s" : ""})</div>`;
-      } else if (role.originalName) {
-        note = `<div class="type-note">site '${esc(role.originalName)}' not resolvable → preset fallback</div>`;
-      } else {
-        note = `<div class="type-note">site has no ${roleLabel.toLowerCase()} face → preset fallback</div>`;
-      }
-      return `
+    ${[
+      [
+        "Display",
+        display,
+        "serif",
+        `font-size: 72px; font-weight: ${preset.name === "neo-brutalism" ? 800 : 400}; letter-spacing: ${preset.name === "neo-brutalism" ? "-0.04em" : "-0.02em"}; line-height: 1;`,
+        brandName,
+      ],
+      [
+        "Body",
+        body,
+        "sans-serif",
+        "font-size: 22px; line-height: 1.5;",
+        "The quick brown fox jumps over the lazy dog.",
+      ],
+      ["Mono", mono, "ui-monospace, monospace", "font-size: 18px;", `font: ${mono.name}`],
+      ...(script
+        ? [
+            [
+              "Script",
+              script,
+              "cursive",
+              "font-size: 56px; font-weight: 400; line-height: 1; transform: rotate(-3deg); display: inline-block;",
+              "gets simpler —",
+            ],
+          ]
+        : []),
+    ]
+      .map(([roleLabel, role, fallbackChain, specimenStyle, specimenText]) => {
+        let note;
+        if (role.source === "site") {
+          note = `<div class="type-note">✓ from site (Google Fonts CDN)</div>`;
+        } else if (role.source === "site-local") {
+          const fileCount = role.localFiles.length;
+          note = `<div class="type-note">✓ from site (self-hosted, ${fileCount} woff/woff2 file${fileCount > 1 ? "s" : ""})</div>`;
+        } else if (role.originalName) {
+          note = `<div class="type-note">site '${esc(role.originalName)}' not resolvable → preset fallback</div>`;
+        } else {
+          note = `<div class="type-note">site has no ${roleLabel.toLowerCase()} face → preset fallback</div>`;
+        }
+        return `
     <div class="type-card">
       <div class="type-role">${roleLabel}</div>
       <div class="type-name">${esc(role.name)}</div>
       ${note}
       <div class="type-specimen" style="font-family: '${esc(role.name)}', ${fallbackChain}; ${specimenStyle}">${esc(specimenText)}</div>
     </div>`;
-    }).join("")}
+      })
+      .join("")}
   </div>
 ${atlasBlock}
 ${(() => {
@@ -2114,12 +2255,15 @@ ${esc(voiceMd)}
 // "serif" must not be preceded by "sans-" (the generic family "sans-serif" is
 // a sans, not a serif). We test for "serif" only when no "sans-" appears just
 // before it. Other serif family names match by literal word.
-const SERIF_NAME_RE = /(?<!sans-)\bserif\b|\b(Bodoni|Playfair|Garamond|Fraunces|Newsreader|Spectral|Times|Lora|Source Serif|Crimson|Merriweather|PT Serif|DM Serif|Alfa Slab|Archivo Black|Anton|Big Shoulders|Stardos Stencil|Bowlby)\b/i;
-const MONO_NAME_RE = /\b(monospace|JetBrains Mono|Fira Code|IBM Plex Mono|Roboto Mono|Source Code|Space Mono|Geist Mono|DM Mono|Inconsolata|SFMono|Menlo|Consolas|ui-monospace|Barlow Condensed|VT323|Press Start 2P)\b/i;
+const SERIF_NAME_RE =
+  /(?<!sans-)\bserif\b|\b(Bodoni|Playfair|Garamond|Fraunces|Newsreader|Spectral|Times|Lora|Source Serif|Crimson|Merriweather|PT Serif|DM Serif|Alfa Slab|Archivo Black|Anton|Big Shoulders|Stardos Stencil|Bowlby)\b/i;
+const MONO_NAME_RE =
+  /\b(monospace|JetBrains Mono|Fira Code|IBM Plex Mono|Roboto Mono|Source Code|Space Mono|Geist Mono|DM Mono|Inconsolata|SFMono|Menlo|Consolas|ui-monospace|Barlow Condensed|VT323|Press Start 2P)\b/i;
 // Script faces (caveat-brush etc.) get routed to var(--font-script). Order
 // matters: script check runs BEFORE serif because some script names share
 // generic keywords. The 4th role lives next to mono/display/serif.
-const SCRIPT_NAME_RE = /\b(Caveat|Caveat Brush|Pacifico|Kalam|Allura|Sacramento|Cookie|Satisfy|Marck Script|Permanent Marker)\b/i;
+const SCRIPT_NAME_RE =
+  /\b(Caveat|Caveat Brush|Pacifico|Kalam|Allura|Sacramento|Cookie|Satisfy|Marck Script|Permanent Marker)\b/i;
 function rewriteComponentFontFamilies(block) {
   // Replace each `font-family: <chain>;` with the right token. Skip values
   // that already reference var(--font-*) so re-running is a no-op.
@@ -2547,7 +2691,8 @@ ${(() => {
   // typography regardless of brand DNA. Also enables .preset-native-scope in §6.
   const chromeFonts = preset.chromeFonts;
   const chromeHref = chromeFonts?.googleFontsHref;
-  if (!chromeHref) return "<!-- (preset declares no chromeFonts — doc chrome uses brand DNA fonts) -->";
+  if (!chromeHref)
+    return "<!-- (preset declares no chromeFonts — doc chrome uses brand DNA fonts) -->";
   return `<!-- preset chromeFonts: native typography for doc chrome + .preset-native-scope -->
 <link href="${esc(chromeHref)}" rel="stylesheet">`;
 })()}
@@ -2628,10 +2773,48 @@ function inferConfidence() {
   if (delta < 0.12) return "medium";
   return "high";
 }
+// First-screen screenshot, relative to the PROJECT_DIR (the agent's cwd) so the
+// brand-review step can open it directly.
+function firstScreenshot() {
+  try {
+    const dir = path.join(captureDir, "screenshots");
+    const files = fs
+      .readdirSync(dir)
+      .filter((f) => /^scroll-.*\.(png|jpe?g)$/i.test(f))
+      .sort();
+    if (files.length) {
+      return path.relative(path.resolve(outDir, ".."), path.join(dir, files[0]));
+    }
+  } catch {}
+  return null;
+}
+// Brand block: the auto-classified triplet + the ranked candidate pool + a
+// confidence + a screenshot, so the design-system agent can review and override
+// the primary via `--brand-primary <hex>` when confidence is low (see guide.md).
+const _brandConf = brandConfidence(_brandChrom);
+const brandReport = {
+  primary: _brand.primary,
+  secondary: _brand.secondary,
+  accent: _brand.accent,
+  source: cliBrandPrimary ? "agent-override" : _brandChrom ? "signals" : "legacy",
+  confidence: cliBrandPrimary ? "agent-override" : _brandChrom ? _brandConf.label : "legacy",
+  // review needed when the auto-pick is ambiguous and the agent hasn't yet
+  // overridden — the agent should open `screenshot` and pick from `candidates`.
+  needs_review: !cliBrandPrimary && !!_brandChrom && _brandConf.label !== "high",
+  screenshot: firstScreenshot(),
+  candidates: (_brandChrom || []).slice(0, 6).map((c) => ({
+    hex: c.hex,
+    score: c.score,
+    bgCount: c.bgCount,
+    interactiveBg: c.interactiveBg,
+    on_button: c.onButton,
+  })),
+};
 const inferenceReport = {
   mode,
   selected: { name: preset.name, label: preset.label },
   confidence: mode === "forced" ? "forced" : inferConfidence(),
+  brand: brandReport,
   baseline_winner:
     scores && scores.find((s) => s.combined > 0)
       ? {
@@ -2663,12 +2846,31 @@ const inferenceReport = {
 fs.mkdirSync(path.dirname(outScoresFile), { recursive: true });
 fs.writeFileSync(outScoresFile, JSON.stringify(inferenceReport, null, 2));
 
+// Surface the brand pick + whether the agent should review it via screenshot.
+console.log(
+  `  brand:    ${brandReport.primary} primary (${brandReport.source}, confidence=${brandReport.confidence})`,
+);
+if (brandReport.needs_review) {
+  console.log(
+    `  ⚠ brand review: ambiguous pick — open ${brandReport.screenshot || "first-screen screenshot"}, ` +
+      `choose the real brand color from inference.json.brand.candidates, ` +
+      `then re-run with --brand-primary <hex>`,
+  );
+}
+
 // ═══════════════════ Write design.html + report ══════════
 if (cliNoEmit) {
-  console.log(`✓ ${path.relative(process.cwd(), outScoresFile)} (inference only; --no-emit, design.html skipped)`);
+  console.log(
+    `✓ ${path.relative(process.cwd(), outScoresFile)} (inference only; --no-emit, design.html skipped)`,
+  );
   console.log(`  preset:   ${preset.name} (${mode}, confidence=${inferenceReport.confidence})`);
   if (mode === "inferred" && scores) {
-    console.log(`    top-5:  ${scores.slice(0, 5).map((s) => `${s.name}=${s.combined.toFixed(2)}`).join(" · ")}`);
+    console.log(
+      `    top-5:  ${scores
+        .slice(0, 5)
+        .map((s) => `${s.name}=${s.combined.toFixed(2)}`)
+        .join(" · ")}`,
+    );
   }
   process.exit(0);
 }
@@ -2679,17 +2881,29 @@ console.log(`✓ ${path.relative(process.cwd(), outFile)} (${sizeKb}KB)`);
 console.log(`✓ ${path.relative(process.cwd(), outScoresFile)} (inference report)`);
 console.log(`  source:   ${sourceUrl || "(no source)"}`);
 console.log(`  brand:    ${brandName} · ${materialLabel} material · ${intentLabel} intent`);
-console.log(`  palette:  ${primaryHex} primary · ${secondaryHex} secondary · ${tertiaryHex} tertiary · ${accentHex} accent · ${costumeHex} costume`);
+console.log(
+  `  palette:  ${primaryHex} primary · ${secondaryHex} secondary · ${tertiaryHex} tertiary · ${accentHex} accent · ${costumeHex} costume`,
+);
 console.log(`  deco:     ${decoColors.join(" · ")}`);
-console.log(`  fonts:    ${display.name} display · ${body.name} body · ${mono.name} mono${script ? ` · ${script.name} script` : ""}`);
-const fontRolesToReport = [["display", display], ["body", body], ["mono", mono]];
+console.log(
+  `  fonts:    ${display.name} display · ${body.name} body · ${mono.name} mono${script ? ` · ${script.name} script` : ""}`,
+);
+const fontRolesToReport = [
+  ["display", display],
+  ["body", body],
+  ["mono", mono],
+];
 if (script) fontRolesToReport.push(["script", script]);
 for (const [roleName, role] of fontRolesToReport) {
   if (role.source === "preset") {
     if (role.originalName) {
-      console.log(`    ! ${roleName.padEnd(7)}: '${role.originalName}' not resolvable → ${role.name}`);
+      console.log(
+        `    ! ${roleName.padEnd(7)}: '${role.originalName}' not resolvable → ${role.name}`,
+      );
     } else {
-      console.log(`    ! ${roleName.padEnd(7)}: site has no ${roleName} face → ${role.name} (preset fallback)`);
+      console.log(
+        `    ! ${roleName.padEnd(7)}: site has no ${roleName} face → ${role.name} (preset fallback)`,
+      );
     }
   } else if (role.source === "site-local") {
     const fileList = role.localFiles.map((f) => path.basename(f)).join(", ");
@@ -2697,11 +2911,18 @@ for (const [roleName, role] of fontRolesToReport) {
   }
 }
 if (copiedFontFiles.length > 0) {
-  console.log(`  fonts/:   ${copiedFontFiles.length} file(s) copied to ${path.relative(process.cwd(), path.join(outDir, "fonts"))}/`);
+  console.log(
+    `  fonts/:   ${copiedFontFiles.length} file(s) copied to ${path.relative(process.cwd(), path.join(outDir, "fonts"))}/`,
+  );
 }
 console.log(`  preset:   ${preset.name} (${mode}, confidence=${inferenceReport.confidence})`);
 if (scores && scores.length) {
-  console.log(`    scores: ${scores.slice(0, 5).map((s) => `${s.name}=${s.combined.toFixed(2)}`).join(" · ")}`);
+  console.log(
+    `    scores: ${scores
+      .slice(0, 5)
+      .map((s) => `${s.name}=${s.combined.toFixed(2)}`)
+      .join(" · ")}`,
+  );
   const trueFeatures = Object.entries(features)
     .filter(([, v]) => v)
     .map(([k]) => k);

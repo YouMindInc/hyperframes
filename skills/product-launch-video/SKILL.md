@@ -211,22 +211,22 @@ cat <SKILL_DIR>/phases/visual-design/rules/{typography,color-system,composition,
   SKILL_DIR: <绝对路径>
   PROJECT_DIR: <视频项目根>
   Schema validator: <SKILL_DIR>/scripts/validate-section-plan.mjs
-  ## Effects catalog
+  ## Design chunks      # ← 契约放最前（高注意力位）：composition-hints 是"违反=渲染失败"、voice 必须在散文承诺、index.json 的 surface/avoids 决定挑 component
+  <chunks/index.json 全文 + 实际存在的 composition-hints.md / voice.md / motifs.md / tokens.css / easings.js（null 的不会出现）—— preset 视觉契约 + 品牌 token；agent 据此挑 component / surface / 承诺 voice register>
+  ## Effects catalog    # ← 以下为静态参考（查表用，放中段无妨）
   <effects-catalog.md 全文>
   ## Blueprints index
   <blueprints-index.md 全文>
-  ## SFX library
-  <manifest.json 全文 —— SFX 可选；列出每条 file / duration / 用途>
   ## Design rules
   <typography / color-system / composition / motion-language 四个 rules/*.md 全文 —— 设计判断的角色/意图目录，静态>
-  ## Design chunks
-  <chunks/index.json 全文 + 实际存在的 composition-hints.md / voice.md / motifs.md / tokens.css / easings.js（null 的不会出现）—— preset 视觉契约 + 品牌 token；agent 据此挑 component / surface / 承诺 voice register>
-  ## Narrator scripts
+  ## SFX library
+  <manifest.json 全文 —— SFX 可选；列出每条 file / duration / 用途>
+  ## Narrator scripts   # ← 工作项放最后（recency：动手那刻最新鲜）
   <narrator_scripts.json 全文 —— 每 scene 的 narrativeIntent / transition / assetCandidates / estimatedDuration + 顶层 archetype + emotionalArc>
   ## Audio meta
   <audio_meta.json 全文（若存在）—— scenes[].duration_s；与 estimatedDuration 相差 >10% 时 Duration 锚点用它>
   ```
-  以上输入全部内联，subagent **不再从盘 Read** 这些文件（Read 工具仅在内联意外缺失时兜底）。`type-roles.md` 和 component HTML 本体**不内联也不读**（worker 的事）。
+  **块序刻意**：契约（`## Design chunks`）放最前不被埋、静态参考居中、工作项（`## Narrator scripts`）放最后吃 recency。以上输入全部内联，subagent **不再从盘 Read**（Read 仅在内联意外缺失时兜底）；`type-roles.md` 和 component HTML 本体**不内联也不读**（worker 的事）。agent 动笔前先复述契约（见 `agents/visual-design.md` 与 guide §4 第 0 步）。
 
 ### Step 5 — Phase 4a prep（deterministic script，NO subagent）
 

@@ -11,9 +11,9 @@
 
 ## 流程
 
-1. **Step 1**：跑 `build-design.mjs --no-emit`（默认读 `../capture/`，如位置非默认可加 `--capture <abs path>`）
-2. **Step 2**：Read `<PROJECT_DIR>/design-system/inference.json`，按 guide.md §3 决策表选 chosen preset。capability_gated 选优时若 `auto_install` 非 null 就在 `PROJECT_DIR` 内跑，跑完重跑 Step 1 验证；`auto_install: null` 改选别的
-3. **Step 3**：用 chosen 跑 `build-design.mjs --style <chosen>`
+1. **Step 1**：Read `<PROJECT_DIR>/design-system/inference.json` —— Phase 1 capture 阶段已确定性跑过 `build-design.mjs --no-emit` 生成它，**你不必再跑**。（仅当 inference.json 缺失，或 capability auto-install 后需重新验证候选时，才自己跑 `build-design.mjs ./design-system --no-emit`。）
+2. **Step 2**：按 guide.md §3 决策表选 chosen preset。capability_gated 选优时若 `auto_install` 非 null 就在 `PROJECT_DIR` 内跑，跑完重跑 `--no-emit` 验证；`auto_install: null` 改选别的。`brand.needs_review=true` 时按 §3b 看截图裁品牌色
+3. **Step 3**：用 chosen 跑 `build-design.mjs --style <chosen> [--brand-primary <hex>]`
 4. **Step 4**：跑 `emit-chunks.mjs`
 
 ## 自检
