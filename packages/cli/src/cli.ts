@@ -115,7 +115,6 @@ const subCommands = {
   "remove-background": () => import("./commands/remove-background.js").then((m) => m.default),
   transcribe: () => import("./commands/transcribe.js").then((m) => m.default),
   tts: () => import("./commands/tts.js").then((m) => m.default),
-  bgm: () => import("./commands/bgm.js").then((m) => m.default),
   docs: () => import("./commands/docs.js").then((m) => m.default),
   doctor: () => import("./commands/doctor.js").then((m) => m.default),
   upgrade: () => import("./commands/upgrade.js").then((m) => m.default),

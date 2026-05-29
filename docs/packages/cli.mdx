@@ -304,95 +304,50 @@ This is suppressed in CI environments, non-TTY shells, and when `HYPERFRAMES_NO_
 
     ### `tts`
 
-    Generate speech audio from text. Auto-detects the provider from environment variables:
-
-    | Order | Provider | Detected when | Voice IDs | Word timestamps |
-    |-------|----------|---------------|-----------|-----------------|
-    | 1 | HeyGen (Starfish) | `$HEYGEN_API_KEY` set | `developers.heygen.com` → `/v3/voices?engine=starfish` | **Yes, native** |
-    | 2 | ElevenLabs | `$ELEVENLABS_API_KEY` set | `elevenlabs.io` dashboard | No — run `transcribe` |
-    | 3 | Kokoro-82M (local) | always (no key required) | `npx hyperframes tts --list` for the 12 curated voices, 54 total | No — run `transcribe` |
-
-    Override with `--provider heygen|elevenlabs|kokoro`. Both cloud providers return mp3 — when `--output` ends in `.wav` (default) the CLI transcodes via `ffmpeg`.
+    Generate speech audio from text using a local AI model (Kokoro-82M). No API key required — runs entirely on-device.
 
     ```bash
-    # Auto-detect (uses HeyGen if $HEYGEN_API_KEY is set)
+    # Generate speech from text
     npx hyperframes tts "Welcome to HyperFrames"
 
-    # Force a specific provider
-    npx hyperframes tts "Hello" --provider kokoro
+    # Choose a voice
+    npx hyperframes tts "Hello world" --voice am_adam
 
-    # Save HeyGen word-level timestamps alongside the audio
-    npx hyperframes tts "Hi there" --words narration.words.json
+    # Save to a specific file
+    npx hyperframes tts "Intro" --voice bf_emma --output narration.wav
 
-    # Kokoro voice (provider auto-selects Kokoro since voice is provider-specific)
-    npx hyperframes tts "La reunión empieza a las nueve" --voice ef_dora --provider kokoro -o es.wav
+    # Adjust speech speed
+    npx hyperframes tts "Slow and clear" --speed 0.8
 
-    # Override the phonemizer (Kokoro only)
-    npx hyperframes tts "Bonjour le monde" --voice af_heart --lang fr-fr --provider kokoro
+    # Generate Spanish speech (lang auto-detected from the `e` voice prefix)
+    npx hyperframes tts "La reunión empieza a las nueve" --voice ef_dora --output es.wav
+
+    # Override the phonemizer (read English text with a French voice)
+    npx hyperframes tts "Bonjour le monde" --voice af_heart --lang fr-fr
 
     # Read text from a file
     npx hyperframes tts script.txt
 
-    # List bundled Kokoro voices
+    # List available voices
     npx hyperframes tts --list
     ```
 
     | Flag | Description |
     |------|-------------|
-    | `--output, -o` | Output path. `.wav` (default) is transcoded from the provider's mp3; `.mp3` is written directly. |
-    | `--provider, -p` | `auto` (default) \| `heygen` \| `elevenlabs` \| `kokoro` |
-    | `--voice, -v` | Voice ID. Provider-specific — Kokoro IDs (`am_michael`) don't work on HeyGen and vice versa. |
-    | `--speed, -s` | Speech speed multiplier (default: 1.0). Honored by Kokoro + HeyGen. |
-    | `--lang, -l` | Kokoro phonemizer locale (`en-us`, `en-gb`, `es`, `fr-fr`, `hi`, `it`, `pt-br`, `ja`, `zh`). Inferred from the voice prefix when omitted. |
-    | `--words, -w` | Path to write word-level timestamps as JSON. Only HeyGen returns these natively; other providers skip the write and log a hint. |
-    | `--list` | List bundled Kokoro voices and exit |
+    | `--output, -o` | Output file path (default: `speech.wav` in current directory) |
+    | `--voice, -v` | Voice ID (run `--list` to see options) |
+    | `--speed, -s` | Speech speed multiplier (default: 1.0) |
+    | `--lang, -l` | Phonemizer locale (`en-us`, `en-gb`, `es`, `fr-fr`, `hi`, `it`, `pt-br`, `ja`, `zh`). When omitted, inferred from the voice ID prefix. |
+    | `--list` | List available voices and exit |
     | `--json` | Output result as JSON |
 
     <Tip>
-      HeyGen returns word-level timestamps in the same response as the audio — pass `--words narration.words.json` to capture them and skip the separate `transcribe` step. For ElevenLabs / Kokoro, chain `tts` → `transcribe` to recover word timing.
+      Voice IDs encode the phonemizer language in their first letter (`a`=American, `b`=British, `e`=Spanish, `f`=French, `h`=Hindi, `i`=Italian, `j`=Japanese, `p`=Brazilian Portuguese, `z`=Mandarin). `--lang` is only needed when you want to override that — for example, giving English text a French phonemizer for a stylized accent.
     </Tip>
 
-    ### `bgm`
-
-    Generate background music. Auto-detects the provider from environment variables:
-
-    | Order | Provider | Detected when | Notes |
-    |-------|----------|---------------|-------|
-    | 1 | Google Lyria | `$GEMINI_API_KEY` or `$GOOGLE_API_KEY` set | Cloud, needs `pip install google-genai` |
-    | 2 | MusicGen (local) | Python with `transformers + torch + soundfile` | First run downloads `facebook/musicgen-small` (~300 MB) |
-
-    Override with `--provider lyria|musicgen`. Mood prompts are passed via `--prompt`, or inferred from a script file with `--from-file`.
-
-    ```bash
-    # 30s of BGM with the default uplifting-tech prompt
-    npx hyperframes bgm --duration 30 -o bgm.wav
-
-    # Custom mood prompt
-    npx hyperframes bgm --duration 60 --prompt "Calm cinematic, soft strings, BPM 95" -o bgm.wav
-
-    # Infer mood from a narration script (matches industry keywords)
-    npx hyperframes bgm --duration 45 --from-file script.txt -o bgm.wav
-
-    # Force local MusicGen (no API key needed)
-    npx hyperframes bgm --duration 30 --provider musicgen -o bgm.wav
-
-    # Tune Lyria parameters
-    npx hyperframes bgm --duration 30 --prompt "..." --bpm 95 --scale MINOR --brightness 0.6 -o bgm.wav
-    ```
-
-    | Flag | Description |
-    |------|-------------|
-    | `--output, -o` | Output WAV path (default: `bgm.wav`) |
-    | `--duration, -d` | Target duration in seconds (**required**) |
-    | `--prompt` | Mood / instrumentation prompt. Overrides `--from-file` inference. |
-    | `--from-file` | Infer mood from this text file by matching industry keywords (saas / fintech / web3 / creative). |
-    | `--provider, -p` | `auto` (default) \| `lyria` \| `musicgen` |
-    | `--bpm` | Lyria BPM (default 110). Ignored by MusicGen. |
-    | `--scale` | Lyria scale: `MAJOR`, `MINOR`, `PENTATONIC`, ... (default `MAJOR`). |
-    | `--brightness` | Lyria brightness, 0–1 (default 0.8). |
-    | `--density` | Lyria density, 0–1 (default 0.5). |
-    | `--negative-prompt` | Lyria — styles to exclude. |
-    | `--json` | Output result as JSON |
+    <Tip>
+      Combine `tts` with `transcribe` to generate narration and word-level timestamps for captions in a single workflow: generate the audio with `tts`, then transcribe the output with `transcribe` to get word-level timing.
+    </Tip>
 
     ### `remove-background`
 

@@ -8,6 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = resolve(HERE, "..");
+const REPO_ROOT = resolve(CLI_ROOT, "..", "..");
 const DIST = join(CLI_ROOT, "dist");
 
 // Studio's vite build clears its dist before rewriting it; don't start the
@@ -54,7 +55,7 @@ function copyMdFiles(srcDir, destDir) {
 }
 
 async function main() {
-  for (const sub of ["studio", "docs", "templates", "docker"]) {
+  for (const sub of ["studio", "docs", "templates", "skills", "docker"]) {
     mkdirSync(join(DIST, sub), { recursive: true });
   }
   mkdirSync(join(DIST, "commands"), { recursive: true });
@@ -65,6 +66,10 @@ async function main() {
 
   for (const tmpl of ["blank", "_shared"]) {
     copyDir(join(CLI_ROOT, "src", "templates", tmpl), join(DIST, "templates", tmpl));
+  }
+
+  for (const skill of ["hyperframes", "hyperframes-cli", "gsap"]) {
+    copyDir(join(REPO_ROOT, "skills", skill), join(DIST, "skills", skill));
   }
 
   const dockerfile = join(CLI_ROOT, "src", "docker", "Dockerfile.render");

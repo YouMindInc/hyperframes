@@ -1,26 +1,22 @@
 import { defineCommand } from "citty";
 import type { Example } from "./_examples.js";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 export const examples: Example[] = [
-  ["Generate speech (auto-detects provider from env)", 'hyperframes tts "Welcome to HyperFrames"'],
-  ["Force a specific provider", 'hyperframes tts "Hello" --provider kokoro'],
-  [
-    "Use a HeyGen voice (requires $HEYGEN_API_KEY)",
-    'hyperframes tts "Hello" --voice <heygen-voice-id>',
-  ],
-  ["Save to a specific file", 'hyperframes tts "Intro" --output narration.wav'],
-  [
-    "Write HeyGen word-level timestamps to JSON",
-    'hyperframes tts "Hi there" --words narration.words.json',
-  ],
+  ["Generate speech from text", 'hyperframes tts "Welcome to HyperFrames"'],
+  ["Choose a voice", 'hyperframes tts "Hello world" --voice am_adam'],
+  ["Save to a specific file", 'hyperframes tts "Intro" --voice bf_emma --output narration.wav'],
   ["Adjust speech speed", 'hyperframes tts "Slow and clear" --speed 0.8'],
   [
-    "Generate Spanish speech (Kokoro)",
+    "Generate Spanish speech",
     'hyperframes tts "La reunión empieza a las nueve" --voice ef_dora --output es.wav',
   ],
+  [
+    "Override phonemizer language",
+    'hyperframes tts "Ciao a tutti" --voice af_heart --lang it --output accented.wav',
+  ],
   ["Read text from a file", "hyperframes tts script.txt"],
-  ["List bundled Kokoro voices", "hyperframes tts --list"],
+  ["List available voices", "hyperframes tts --list"],
 ];
 import { resolve, extname } from "node:path";
 import * as clack from "@clack/prompts";
@@ -34,15 +30,14 @@ import {
   isSupportedLang,
   type SupportedLang,
 } from "../tts/manager.js";
-import { selectProvider, dispatch } from "../tts/providers/index.js";
 
+const voiceList = BUNDLED_VOICES.map((v) => `${v.id} (${v.label})`).join(", ");
 const langList = SUPPORTED_LANGS.join(", ");
 
 export default defineCommand({
   meta: {
     name: "tts",
-    description:
-      "Generate speech audio from text. Auto-detects provider from env: $HEYGEN_API_KEY → $ELEVENLABS_API_KEY → local Kokoro fallback.",
+    description: "Generate speech audio from text using a local AI model (Kokoro-82M)",
   },
   args: {
     input: {
@@ -55,14 +50,9 @@ export default defineCommand({
       description: "Output file path (default: speech.wav in current directory)",
       alias: "o",
     },
-    provider: {
-      type: "string",
-      description: "TTS provider: auto (default) | heygen | elevenlabs | kokoro",
-      alias: "p",
-    },
     voice: {
       type: "string",
-      description: `Voice ID (provider-specific). Kokoro default: ${DEFAULT_VOICE}. HeyGen/ElevenLabs use the provider's own voice IDs.`,
+      description: `Voice ID (default: ${DEFAULT_VOICE}). Options: ${voiceList}`,
       alias: "v",
     },
     speed: {
@@ -72,18 +62,12 @@ export default defineCommand({
     },
     lang: {
       type: "string",
-      description: `Phonemizer language for Kokoro (auto-detected from voice prefix). Options: ${langList}`,
+      description: `Phonemizer language (auto-detected from voice prefix when omitted). Options: ${langList}`,
       alias: "l",
-    },
-    words: {
-      type: "string",
-      description:
-        "Write word-level timestamps to this JSON path (HeyGen only — other providers ignore)",
-      alias: "w",
     },
     list: {
       type: "boolean",
-      description: "List bundled Kokoro voices and exit",
+      description: "List available voices and exit",
       default: false,
     },
     json: {
@@ -93,12 +77,14 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    // ── List voices mode ──────────────────────────────────────────────
     if (args.list) {
       return listVoices(args.json);
     }
 
+    // ── Resolve input text ────────────────────────────────────────────
     if (!args.input) {
-      console.error(c.error("Provide text to speak, or use --list to see Kokoro voices."));
+      console.error(c.error("Provide text to speak, or use --list to see available voices."));
       process.exit(1);
     }
 
@@ -120,7 +106,9 @@ export default defineCommand({
       process.exit(1);
     }
 
+    // ── Resolve output path ───────────────────────────────────────────
     const output = resolve(args.output ?? "speech.wav");
+    const voice = args.voice ?? DEFAULT_VOICE;
     const speed = args.speed ? parseFloat(args.speed) : 1.0;
 
     if (isNaN(speed) || speed <= 0 || speed > 3) {
@@ -128,90 +116,59 @@ export default defineCommand({
       process.exit(1);
     }
 
-    let provider;
-    try {
-      provider = selectProvider(args.provider);
-    } catch (err) {
-      console.error(c.error(err instanceof Error ? err.message : String(err)));
-      process.exit(1);
+    const inferredLang = inferLangFromVoiceId(voice);
+    let lang: SupportedLang = inferredLang;
+    if (args.lang != null) {
+      const requested = String(args.lang).toLowerCase();
+      if (!isSupportedLang(requested)) {
+        errorBox("Invalid --lang", `Got "${args.lang}". Must be one of: ${langList}.`);
+        process.exit(1);
+      }
+      lang = requested;
     }
 
-    // Kokoro-specific language resolution. HeyGen/ElevenLabs ignore these.
-    let lang: SupportedLang | undefined;
-    if (provider === "kokoro") {
-      const voice = args.voice ?? DEFAULT_VOICE;
-      const inferredLang = inferLangFromVoiceId(voice);
-      lang = inferredLang;
-      if (args.lang != null) {
-        const requested = String(args.lang).toLowerCase();
-        if (!isSupportedLang(requested)) {
-          errorBox("Invalid --lang", `Got "${args.lang}". Must be one of: ${langList}.`);
-          process.exit(1);
-        }
-        lang = requested;
-      }
-      if (!args.json && args.lang != null && lang !== inferredLang) {
-        console.log(
-          c.dim(
-            `  Note: voice "${voice}" is ${inferredLang}, rendering with --lang ${lang} instead.`,
-          ),
-        );
-      }
+    // Mismatched voice/lang is a valid stylization (English text, French
+    // phonemization for accent), so this is a hint, not an error.
+    if (!args.json && args.lang != null && lang !== inferredLang) {
+      console.log(
+        c.dim(
+          `  Note: voice "${voice}" is ${inferredLang}, rendering with --lang ${lang} instead.`,
+        ),
+      );
     }
 
-    const voiceForProvider = args.voice ?? (provider === "kokoro" ? DEFAULT_VOICE : undefined);
-
+    // ── Synthesize ────────────────────────────────────────────────────
+    const { synthesize } = await import("../tts/synthesize.js");
     const spin = args.json ? null : clack.spinner();
-    spin?.start(`Generating speech via ${c.accent(provider)}...`);
+    spin?.start(`Generating speech with ${c.accent(voice)} (${lang})...`);
 
     try {
-      const result = await dispatch(provider, text, output, {
-        voice: voiceForProvider,
+      const result = await synthesize(text, output, {
+        voice,
         speed,
         lang,
-        language: args.lang,
         onProgress: spin ? (msg) => spin.message(msg) : undefined,
       });
-
-      let wordsWritten: string | undefined;
-      if (args.words && result.words?.length) {
-        const wordsPath = resolve(args.words);
-        writeFileSync(wordsPath, JSON.stringify(result.words, null, 2));
-        wordsWritten = wordsPath;
-      }
 
       if (args.json) {
         console.log(
           JSON.stringify({
             ok: true,
-            provider: result.provider,
-            voice: voiceForProvider,
+            voice,
             speed,
             lang,
+            langApplied: result.langApplied,
             durationSeconds: result.durationSeconds,
             outputPath: result.outputPath,
-            wordsPath: wordsWritten,
-            wordCount: result.words?.length ?? 0,
           }),
         );
       } else {
         spin?.stop(
           c.success(
-            `[${result.provider}] generated ${c.accent(result.durationSeconds.toFixed(1) + "s")} of speech → ${c.accent(result.outputPath)}`,
+            `Generated ${c.accent(result.durationSeconds.toFixed(1) + "s")} of speech → ${c.accent(result.outputPath)}`,
           ),
         );
-        if (wordsWritten) {
-          console.log(
-            c.dim(`  Wrote ${result.words?.length ?? 0} word timestamps → ${wordsWritten}`),
-          );
-        } else if (args.words && !result.words?.length) {
-          console.log(
-            c.dim(
-              `  Note: ${result.provider} did not return word timestamps; run 'hyperframes transcribe' for them.`,
-            ),
-          );
-        }
-        if (provider === "kokoro" && args.lang != null && result.langApplied === false) {
+        if (args.lang != null && !result.langApplied) {
           console.log(
             c.dim(
               "  Note: installed kokoro-onnx version does not support the --lang kwarg; phonemization used Kokoro's default.",
@@ -222,7 +179,7 @@ export default defineCommand({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (args.json) {
-        console.log(JSON.stringify({ ok: false, provider, error: message }));
+        console.log(JSON.stringify({ ok: false, error: message }));
       } else {
         spin?.stop(c.error(`Speech synthesis failed: ${message}`));
       }
@@ -232,7 +189,7 @@ export default defineCommand({
 });
 
 // ---------------------------------------------------------------------------
-// List voices (Kokoro only — HeyGen/ElevenLabs voices live in their dashboards)
+// List voices
 // ---------------------------------------------------------------------------
 
 function listVoices(json: boolean): void {
@@ -243,7 +200,7 @@ function listVoices(json: boolean): void {
     return;
   }
 
-  console.log(`\n${c.bold("Bundled Kokoro voices")} (local provider)\n`);
+  console.log(`\n${c.bold("Available voices")} (Kokoro-82M)\n`);
   console.log(
     `  ${c.dim("ID")}                ${c.dim("Name")}         ${c.dim("Language")}   ${c.dim("Lang code")}  ${c.dim("Gender")}`,
   );
@@ -256,10 +213,9 @@ function listVoices(json: boolean): void {
     console.log(`  ${c.accent(id)} ${label} ${lang} ${code} ${row.gender}`);
   }
   console.log(
-    `\n  ${c.dim("Use any Kokoro voice ID — see https://github.com/thewh1teagle/kokoro-onnx for all 54.")}`,
+    `\n  ${c.dim("Use any Kokoro voice ID — see https://github.com/thewh1teagle/kokoro-onnx for all 54 voices")}`,
   );
   console.log(
-    `  ${c.dim("HeyGen voices: developers.heygen.com (GET /v3/voices?engine=starfish)")}`,
+    `  ${c.dim("Override phonemizer with --lang <" + SUPPORTED_LANGS.join("|") + ">")}\n`,
   );
-  console.log(`  ${c.dim("ElevenLabs voices: elevenlabs.io dashboard")}\n`);
 }

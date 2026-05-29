@@ -177,10 +177,10 @@ const bgmInferenceBlob = (() => {
 })();
 
 // ---------- Step 3: provider detection ----------
-// Chain mirrors the CLI's `hyperframes tts` selectProvider() (cli/src/tts/providers/index.ts):
-//   heygen     ← $HEYGEN_API_KEY        (cloud, returns word timestamps)
-//   elevenlabs ← $ELEVENLABS_API_KEY + `pip install elevenlabs`
-//   kokoro     ← always (local, no key)
+// Self-contained selection (no dependency on CLI provider plumbing):
+//   heygen     ← $HEYGEN_API_KEY        (cloud REST, returns word timestamps; see synthesizeHeygen)
+//   elevenlabs ← $ELEVENLABS_API_KEY + `pip install elevenlabs` (inline python)
+//   kokoro     ← always (local, no key; via published `hyperframes tts`)
 function heygenAvailable() {
   return !!process.env.HEYGEN_API_KEY;
 }
@@ -191,8 +191,7 @@ function elevenlabsAvailable() {
   });
   return r.status === 0;
 }
-// Lyria accepts either GEMINI_API_KEY or GOOGLE_API_KEY (CLI parity:
-// packages/cli/src/bgm/lyria.ts uses the same OR-fallback).
+// Lyria accepts either GEMINI_API_KEY or GOOGLE_API_KEY (OR-fallback).
 function lyriaKey() {
   return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
 }
@@ -346,30 +345,74 @@ audio = client.text_to_speech.convert(
 save(audio, sys.argv[3])
 `;
 
+// HeyGen TTS — inline, no CLI dependency. One REST call to
+// api.heygen.com/v3/voices/speech returns audio_url + word_timestamps; we
+// download, transcode mp3→wav (44.1k mono), and write the scene's words JSON
+// directly from word_timestamps so the whisper pass is skipped (the "single
+// call" caption path). Self-contained so the skill needs no provider plumbing
+// in the published hyperframes CLI.
+const HEYGEN_ENDPOINT = "https://api.heygen.com/v3/voices/speech";
+
+async function synthesizeHeygen(s) {
+  const wordsAbs = join(hyperframesDir, `assets/voice/${s.sceneId}_words.json`);
+  const wavAbs = join(hyperframesDir, `assets/voice/${s.sceneId}.wav`);
+  try {
+    const text = readFileSync(`/tmp/${s.sceneId}.txt`, "utf8");
+    const reqBody = { text, voice_id: voiceId, speed: 1.0 };
+    if (lang !== "en") reqBody.language = lang;
+    const res = await fetch(HEYGEN_ENDPOINT, {
+      method: "POST",
+      headers: { "X-Api-Key": process.env.HEYGEN_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(reqBody),
+    });
+    if (!res.ok) return { status: -1 };
+    const payload = await res.json();
+    const inner = payload.data ?? payload;
+    if (!inner.audio_url) return { status: -1 };
+
+    const audioRes = await fetch(inner.audio_url);
+    if (!audioRes.ok) return { status: -1 };
+    const bytes = Buffer.from(await audioRes.arrayBuffer());
+    const td = mkdtempSync(join(tmpdir(), `hf-heygen-${s.sceneId}-`));
+    const tmpAudio = join(td, "audio.mp3"); // ffmpeg detects true format from content
+    writeFileSync(tmpAudio, bytes);
+    const ff = spawnSync(
+      "ffmpeg",
+      ["-y", "-loglevel", "error", "-i", tmpAudio, "-ar", "44100", "-ac", "1", wavAbs],
+      { stdio: "ignore" },
+    );
+    rmSync(td, { recursive: true, force: true });
+    if (ff.status !== 0 || !existsSync(wavAbs)) return { status: -1 };
+
+    // word_timestamps → scene_<N>_words.json ([{text,start,end}], scene-local)
+    const wts = inner.word_timestamps;
+    if (Array.isArray(wts)) {
+      const words = wts
+        .filter((w) => w && typeof w.word === "string" && isFinite(w.start) && isFinite(w.end))
+        .map((w) => ({ text: w.word, start: w.start, end: w.end }));
+      if (words.length) writeFileSync(wordsAbs, JSON.stringify(words, null, 2));
+    }
+    return { status: 0 };
+  } catch {
+    return { status: -1 };
+  }
+}
+
 async function ttsScene(s) {
   const txt = `/tmp/${s.sceneId}.txt`;
   const wavRel = `assets/voice/${s.sceneId}.wav`;
 
-  // ElevenLabs: direct python SDK (no CLI dependency — keeps Kokoro/HeyGen and ElevenLabs paths isolated).
+  // HeyGen: inline REST (see synthesizeHeygen) — also writes the words JSON.
+  if (provider === "heygen") return synthesizeHeygen(s);
+
+  // ElevenLabs: direct python SDK (no CLI dependency).
   if (provider === "elevenlabs") {
     const wavAbs = join(hyperframesDir, wavRel);
     return spawnP("python3", ["-c", ELEVENLABS_PY, txt, voiceId, wavAbs], {});
   }
 
-  // heygen + kokoro: delegate to CLI. Pass --provider explicitly so CLI's
-  // selectProvider() doesn't disagree with this script's choice when multiple
-  // API keys are present (e.g. HEYGEN_API_KEY set but user forced --provider kokoro).
-  const args = [
-    "hyperframes",
-    "tts",
-    txt,
-    "--provider",
-    provider,
-    "--voice",
-    voiceId,
-    "--output",
-    wavRel,
-  ];
+  // Kokoro: local model via the published hyperframes CLI.
+  const args = ["hyperframes", "tts", txt, "--voice", voiceId, "--output", wavRel];
   if (lang !== "en") args.push("--lang", lang);
   return spawnP("npx", args, { cwd: hyperframesDir });
 }
@@ -406,14 +449,22 @@ async function transcribeScene(s) {
 }
 
 async function runScene(s) {
+  const wordsRel = `assets/voice/${s.sceneId}_words.json`;
+  const wordsAbs = join(hyperframesDir, wordsRel);
+  // Clear any stale words file from a prior run: HeyGen re-writes it from
+  // word_timestamps; Kokoro/ElevenLabs leave it absent → whisper writes it.
+  rmSync(wordsAbs, { force: true });
+
   const tts = await ttsScene(s);
   if (tts.status !== 0) return { sceneId: s.sceneId, ttsOk: false };
 
-  const trans = await transcribeScene(s);
-  const wordsRel = `assets/voice/${s.sceneId}_words.json`;
-  const wordsAbs = join(hyperframesDir, wordsRel);
+  // Skip the whisper pass when TTS already produced word timestamps (HeyGen).
+  if (!existsSync(wordsAbs)) {
+    await transcribeScene(s);
+  }
+
   let wordsNonempty = false;
-  if (trans.status === 0 && existsSync(wordsAbs)) {
+  if (existsSync(wordsAbs)) {
     try {
       const arr = JSON.parse(readFileSync(wordsAbs, "utf8"));
       wordsNonempty = Array.isArray(arr) && arr.length > 0;

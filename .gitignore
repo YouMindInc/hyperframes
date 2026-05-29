@@ -54,10 +54,6 @@ compositions/**/*.MOV
 # npm pack artifacts
 *.tgz
 
-# Python bytecode cache
-__pycache__/
-*.pyc
-
 # Logs
 *.log
 npm-debug.log*
@@ -111,7 +107,6 @@ cursor-tests/
 basecamp-video/
 launch-video*/
 !skills/launch-video/
-!skills/launch-video-v2/
 ab-test/
 compositions/
 video-6-2-patched/
@@ -131,9 +126,3 @@ test-outputs/
 .claude/
 docs/superpowers/
 .worktrees
-
-# refactor/skills-audit
-registry/_preview.html
-registry/index.html
-heygen-research
-extraction

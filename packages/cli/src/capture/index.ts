@@ -106,14 +106,6 @@ export async function captureWebsite(
     await page1.setUserAgent(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     );
-    // Force English content. Sites with geo/locale detection (heygen, vercel,
-    // many Next.js shops) silently return localized copy when this header is
-    // absent — design / story / voice extraction then sees non-English headings
-    // and the downstream pipeline gets confused. Override per-page rather than
-    // relying on Chrome's locale default.
-    await page1.setExtraHTTPHeaders({
-      "Accept-Language": "en-US,en;q=0.9",
-    });
 
     // Set up hooks BEFORE navigation
     await setupAnimationCapture(page1);
