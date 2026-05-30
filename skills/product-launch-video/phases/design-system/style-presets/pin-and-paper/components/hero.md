@@ -22,7 +22,7 @@
     display: block;
     font-family: "DM Mono", ui-monospace, monospace;
     font-weight: 500;
-    font-size: 18px;
+    font-size: 26px;
     letter-spacing: 0.22em;
     text-transform: uppercase;
     opacity: 0.85;

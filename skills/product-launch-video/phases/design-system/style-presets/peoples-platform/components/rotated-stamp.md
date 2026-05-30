@@ -56,7 +56,7 @@ avoids_same_scene: end-stamp, stamp-statement
     line-height: 0.9;
   }
   .pp-rotated-stamp-small {
-    font-size: clamp(20px, 1.8vw, 28px);
+    font-size: clamp(24px, 2vw, 30px);
     letter-spacing: 0.18em;
     font-family: "DM Mono", monospace;
     margin-top: 12px;

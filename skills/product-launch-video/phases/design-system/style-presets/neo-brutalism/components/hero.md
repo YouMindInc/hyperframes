@@ -13,7 +13,7 @@
     transform: rotate(var(--tilt-l));
   }
   .bn-eyebrow {
-    font-size: clamp(14px, 1.4vw, 30px);
+    font-size: clamp(24px, 1.6vw, 32px);
     letter-spacing: 0.18em;
     text-transform: uppercase;
     font-weight: 600;
@@ -25,7 +25,7 @@
     line-height: 0.95;
   }
   .bn-body {
-    font-size: clamp(18px, 1.8vw, 28px);
+    font-size: clamp(24px, 2vw, 32px);
     margin-top: 24px;
     max-width: 50ch;
   }

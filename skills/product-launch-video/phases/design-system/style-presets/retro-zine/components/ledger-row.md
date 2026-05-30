@@ -37,7 +37,7 @@
   .rz-ledger-header {
     border-bottom: var(--border-fine);
     font-family: "Bebas Neue", sans-serif;
-    font-size: 14px;
+    font-size: 28px;
     font-weight: 400;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -45,7 +45,7 @@
   }
   .rz-ledger-row {
     border-bottom: var(--border-hairline);
-    font-size: clamp(13px, 1.2vw, 16px);
+    font-size: clamp(24px, 1.8vw, 28px);
     line-height: 1.5;
   }
   .rz-ledger-cell {

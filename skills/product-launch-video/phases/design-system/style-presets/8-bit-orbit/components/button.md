@@ -10,7 +10,7 @@
     border: none;
     cursor: pointer;
     font-family: "Tektur", cursive;
-    font-size: 1rem;
+    font-size: clamp(24px, 1.4vw, 28px);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;

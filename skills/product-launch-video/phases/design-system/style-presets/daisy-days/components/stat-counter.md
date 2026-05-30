@@ -29,7 +29,7 @@
   .dc-stat-label {
     font-family: var(--font-body);
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: clamp(24px, 1.6vw, 28px);
     color: color-mix(in srgb, var(--ink) 70%, transparent);
     letter-spacing: 0.02em;
   }

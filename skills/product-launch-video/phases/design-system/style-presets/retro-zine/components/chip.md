@@ -11,7 +11,7 @@
   .rz-chip {
     display: inline-block;
     font-family: "Bebas Neue", sans-serif;
-    font-size: 14px;
+    font-size: 26px;
     font-weight: 400;
     line-height: 1.2;
     letter-spacing: 0.2em;
@@ -24,7 +24,7 @@
     background: var(--brand-accent);
     color: var(--anchor-cream);
     letter-spacing: 0.06em;
-    font-size: 12px;
+    font-size: 24px;
   }
   .rz-chip.solid.primary {
     background: var(--brand-primary);

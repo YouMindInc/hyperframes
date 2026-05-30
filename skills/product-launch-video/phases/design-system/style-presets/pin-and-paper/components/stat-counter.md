@@ -71,7 +71,7 @@
   .pp-stat-counter-body {
     font-family: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
     font-weight: 400;
-    font-size: 19px;
+    font-size: 24px;
     line-height: 1.45;
     margin: 0;
     color: var(--brand-primary);

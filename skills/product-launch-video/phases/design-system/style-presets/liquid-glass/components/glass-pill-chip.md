@@ -1,5 +1,5 @@
 ```html
-<!-- 130×36 status pill. Stack 3-5 in a row for "system state" beats. -->
+<!-- 210×56 status pill. Stack 3-5 in a row for "system state" beats. -->
 <div id="glass-pill1" class="glass-panel pill-chip liquid-glass"></div>
 <div class="text-overlay pill-text" style="top: 720px; left: 300px;">
   <span class="pill-dot" style="background: var(--brand-accent);"></span>
@@ -7,8 +7,8 @@
 </div>
 <style>
   .pill-chip {
-    width: 130px;
-    height: 36px;
+    width: 210px;
+    height: 56px;
     /* Widget archetype, pill-shape override on corner-radius. */
     --lg-blur: var(--lg-widget-blur);
     --lg-refraction: var(--lg-widget-refraction);
@@ -20,25 +20,25 @@
     --lg-saturation: var(--lg-widget-saturation);
   }
   .pill-text {
-    width: 130px;
-    height: 36px;
+    width: 210px;
+    height: 56px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
     border-radius: 40px;
-    background: linear-gradient(130deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1));
-    border: 1px solid rgba(255, 255, 255, 0.34);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
+    background: linear-gradient(130deg, var(--lg-rim-lo), var(--lg-rim-ghost));
+    border: 1px solid var(--lg-rim-mid-soft);
+    box-shadow: inset 0 1px 0 var(--lg-rim-hi-soft);
   }
   .pill-dot {
-    width: 8px;
-    height: 8px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     flex-shrink: 0;
   }
   .pill-label {
-    font-size: 13px;
+    font-size: 24px;
     font-weight: 600;
     color: var(--ink-on-glass);
   }

@@ -17,7 +17,7 @@
     max-width: 44vw;
   }
   .dc-welcome-cap {
-    background: color-mix(in srgb, var(--brand-primary) 32%, #a8e6cf);
+    background: color-mix(in srgb, var(--brand-primary) 32%, var(--anchor-mint));
     border: var(--border-bold);
     border-bottom: none;
     border-radius: var(--radius-card-lg) var(--radius-card-lg) 0 0;
@@ -27,7 +27,7 @@
   .dc-welcome-title {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: clamp(1.4rem, 2.4vw, 2rem);
+    font-size: clamp(32px, 2.6vw, 44px);
     line-height: 1.15;
     letter-spacing: 0.02em;
     color: var(--ink);
@@ -43,7 +43,7 @@
   .dc-welcome-lede {
     font-family: var(--font-body);
     font-weight: 500;
-    font-size: clamp(1rem, 1.3vw, 1.15rem);
+    font-size: clamp(24px, 1.6vw, 28px);
     line-height: 1.6;
     color: var(--ink);
     margin: 0;

@@ -42,7 +42,7 @@
     border: 1.5px solid var(--brand-accent);
     font-family: "DM Mono", ui-monospace, monospace;
     font-weight: 500;
-    font-size: 16px;
+    font-size: 26px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }

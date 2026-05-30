@@ -18,10 +18,10 @@
     display: inline-block;
     background: var(--surface-paper);
     color: var(--ink);
-    padding: 6px 16px;
+    padding: 8px 18px;
     border-radius: var(--radius-card);
     font-family: "Barlow Condensed", sans-serif;
-    font-size: 18px;
+    font-size: 24px;
     font-weight: 700;
     line-height: 1.1;
     letter-spacing: var(--track-chrome-loose);

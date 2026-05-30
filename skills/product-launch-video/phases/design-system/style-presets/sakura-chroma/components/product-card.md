@@ -66,7 +66,7 @@
   .sk-product-card-desc {
     font-family: "Albert Sans", sans-serif;
     font-weight: 400;
-    font-size: clamp(14px, 0.95vw, 15px);
+    font-size: clamp(24px, 1.4vw, 28px);
     line-height: 1.4;
     color: var(--anchor-ink);
     margin: 0;
@@ -79,7 +79,7 @@
     flex-direction: column;
     gap: 4px;
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: clamp(11px, 0.78vw, 12px);
+    font-size: clamp(24px, 1.4vw, 28px);
     color: var(--anchor-ink);
     letter-spacing: 0.02em;
     margin-top: auto;

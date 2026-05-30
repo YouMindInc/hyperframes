@@ -43,14 +43,14 @@
   .se-color-card-sub {
     font-family: var(--font-body, "Work Sans", sans-serif);
     font-weight: 500;
-    font-size: clamp(20px, 1.8vw, 32px);
+    font-size: clamp(28px, 2vw, 34px);
     line-height: 1.1;
     color: var(--ink);
   }
   .se-color-card-body {
     font-family: var(--font-body, "Work Sans", sans-serif);
     font-weight: 400;
-    font-size: clamp(16px, 1.4vw, 24px);
+    font-size: clamp(24px, 1.5vw, 28px);
     line-height: 1.45;
     max-width: 26ch;
     color: var(--ink);

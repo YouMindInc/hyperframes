@@ -66,7 +66,7 @@ avoids_same_scene: stamp-statement, framed-stamp, end-stamp
   .pp-mega-stat-lede {
     margin: 0;
     font-family: "Archivo Narrow", sans-serif;
-    font-size: clamp(22px, 1.8vw, 28px);
+    font-size: clamp(28px, 2.4vw, 40px);
     font-weight: 500;
     line-height: 1.4;
     color: color-mix(in srgb, var(--cream) 90%, transparent);
@@ -77,7 +77,7 @@ avoids_same_scene: stamp-statement, framed-stamp, end-stamp
     padding: 10px 18px;
     border-top: 3px solid var(--cream);
     font-family: "DM Mono", monospace;
-    font-size: 16px;
+    font-size: 27px;
     font-weight: 500;
     line-height: 1;
     letter-spacing: 0.18em;

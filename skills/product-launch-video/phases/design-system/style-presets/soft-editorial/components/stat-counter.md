@@ -35,7 +35,7 @@
   .se-stat-label {
     font-family: var(--font-body, "Work Sans", sans-serif);
     font-weight: 400;
-    font-size: clamp(16px, 1.4vw, 24px);
+    font-size: clamp(24px, 1.5vw, 28px);
     line-height: 1.4;
     color: var(--ink);
     max-width: 28ch;

@@ -70,26 +70,26 @@
     text-align: center;
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: 1rem;
+    font-size: clamp(26px, 1.7vw, 30px);
     line-height: 1.15;
     color: var(--ink);
     border-bottom: var(--border-bold);
   }
   .dc-week-cap--1 {
-    background: color-mix(in srgb, var(--brand-secondary) 45%, #f7c8d4);
+    background: color-mix(in srgb, var(--brand-secondary) 45%, var(--anchor-blush));
   }
   .dc-week-cap--2 {
-    background: color-mix(in srgb, var(--brand-primary) 40%, #a8e6cf);
+    background: color-mix(in srgb, var(--brand-primary) 40%, var(--anchor-mint));
   }
   .dc-week-cap--3 {
     background: var(--brand-accent);
     color: var(--canvas);
   }
   .dc-week-cap--4 {
-    background: color-mix(in srgb, var(--brand-secondary) 45%, #fde68a);
+    background: color-mix(in srgb, var(--brand-secondary) 45%, var(--anchor-butter));
   }
   .dc-week-cap--5 {
-    background: color-mix(in srgb, var(--brand-primary) 45%, #d4a5e8);
+    background: color-mix(in srgb, var(--brand-primary) 45%, var(--anchor-lavender));
   }
   .dc-week-body {
     padding: 0.8rem 1rem;
@@ -105,9 +105,9 @@
   .dc-week-body li {
     font-family: var(--font-body);
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: clamp(24px, 1.5vw, 26px);
     line-height: 1.4;
-    padding-left: 0.8rem;
+    padding-left: 1rem;
     position: relative;
     color: var(--ink);
   }

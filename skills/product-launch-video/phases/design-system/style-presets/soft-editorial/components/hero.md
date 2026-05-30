@@ -28,7 +28,7 @@
   .se-hero-kicker {
     font-style: italic;
     font-weight: 400;
-    font-size: clamp(22px, 2vw, 38px);
+    font-size: clamp(28px, 2.2vw, 40px);
     line-height: 1.2;
     color: color-mix(in srgb, var(--ink) 65%, transparent);
   }
@@ -46,7 +46,7 @@
   }
   .se-hero-lede {
     font-family: var(--font-body, "Work Sans", sans-serif);
-    font-size: clamp(18px, 1.6vw, 30px);
+    font-size: clamp(26px, 1.8vw, 32px);
     line-height: 1.45;
     max-width: var(--measure-body);
     color: color-mix(in srgb, var(--ink) 70%, transparent);

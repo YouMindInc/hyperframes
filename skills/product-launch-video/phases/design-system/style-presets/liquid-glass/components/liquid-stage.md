@@ -107,7 +107,7 @@
         color-mix(in oklab, var(--brand-accent) 45%, transparent),
         transparent 65%
       ),
-      linear-gradient(160deg, #0a0218 0%, #15082a 60%, #062035 100%);
+      var(--liquid-bg-fallback);
     filter: blur(60px) saturate(1.2);
   }
   /*
@@ -120,15 +120,15 @@
    */
   .glass-panel {
     position: absolute;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--lg-rim-veil);
     backdrop-filter: blur(28px) saturate(1.4);
     -webkit-backdrop-filter: blur(28px) saturate(1.4);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid var(--lg-rim-edge);
     border-radius: 28px;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.34),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-      0 18px 48px rgba(0, 0, 0, 0.32);
+      inset 0 1px 0 var(--lg-rim-mid-soft),
+      inset 0 -1px 0 var(--lg-rim-veil),
+      0 18px 48px var(--lg-base-shadow-deep);
   }
 </style>
 ```

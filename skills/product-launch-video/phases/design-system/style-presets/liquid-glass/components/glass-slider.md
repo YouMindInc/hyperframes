@@ -47,7 +47,7 @@
   .slider-text svg {
     width: 26px;
     height: 26px;
-    stroke: rgba(255, 255, 255, 0.88);
+    stroke: var(--lg-glint-glow);
     fill: none;
     stroke-width: 2;
     stroke-linecap: round;
@@ -57,7 +57,7 @@
   .slider-track {
     flex: 1;
     height: 8px;
-    background: rgba(255, 255, 255, 0.24);
+    background: var(--lg-rim-track);
     border-radius: 4px;
     position: relative;
   }
@@ -66,16 +66,16 @@
     top: 0;
     left: 0;
     height: 100%;
-    background: #fff;
+    background: var(--lg-glint-white);
     border-radius: 3px;
-    box-shadow: 0 0 14px rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 14px var(--lg-glint-halo);
   }
   .slider-pct {
-    font-size: 17px;
+    font-size: 24px;
     font-weight: 600;
     color: var(--ink-on-glass);
     font-variant-numeric: tabular-nums;
-    width: 42px;
+    width: 64px;
     text-align: right;
     text-shadow: var(--text-shadow-glass);
   }

@@ -31,7 +31,7 @@
         color-mix(in oklab, var(--brand-accent) 50%, transparent),
         transparent 60%
       ),
-      linear-gradient(160deg, #0a0218 0%, #15082a 60%, #062035 100%);
+      var(--liquid-bg-fallback);
     filter: blur(80px) saturate(1.15);
   }
 </style>

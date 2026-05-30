@@ -37,15 +37,15 @@
     text-shadow: var(--text-shadow-glass);
   }
   .notif-avatar {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--lg-glint-white);
     font-weight: 800;
-    font-size: 18px;
+    font-size: 24px;
     flex-shrink: 0;
   }
   .notif-body {
@@ -53,12 +53,12 @@
     min-width: 0;
   }
   .notif-title {
-    font-size: 16px;
+    font-size: 28px;
     font-weight: 700;
     color: var(--ink-on-glass);
   }
   .notif-msg {
-    font-size: 14px;
+    font-size: 24px;
     font-weight: 550;
     color: var(--ink-on-glass-soft);
     margin-top: 2px;

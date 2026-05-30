@@ -37,14 +37,14 @@
   }
   .bo-bar-value {
     font-family: "Tektur", sans-serif;
-    font-size: 16px;
+    font-size: 28px;
     font-weight: 700;
     color: var(--brand-secondary);
     letter-spacing: 0.02em;
   }
   .bo-bar-label {
     font-family: "Space Mono", monospace;
-    font-size: 11px;
+    font-size: 24px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--canvas-navy);

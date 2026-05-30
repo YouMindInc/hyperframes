@@ -17,7 +17,7 @@
     padding: 4px 10px;
     font-family: "JetBrains Mono", ui-monospace, monospace;
     font-weight: 500;
-    font-size: clamp(11px, 0.78vw, 12px);
+    font-size: clamp(24px, 1.4vw, 28px);
     line-height: 1;
     letter-spacing: 0.06em;
     text-transform: uppercase;

@@ -33,7 +33,7 @@
     display: flex;
     align-items: center;
     font-family: "Inter", sans-serif;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 400;
     line-height: 1.35;
     color: var(--ink);

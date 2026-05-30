@@ -30,7 +30,7 @@
 }
 ```
 
-> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Cormorant Garamond (roman + italic) + Work Sans + JetBrains Mono — instead of the brand DNA fonts. Soft Editorial is a two-face system: Cormorant carries every headline and ornamental moment (with italic doing all the "script" work, since the preset has no handwritten voice); Work Sans recedes into body. The `script` slot points at Cormorant Garamond because italic IS the system's intimate / personal voice — no third face. Mono is declared for completeness only (the preset never reaches for it in components). The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Cormorant Garamond (roman + italic) + Work Sans + JetBrains Mono — instead of the brand DNA fonts. Soft Editorial is a two-face system: Cormorant carries every headline and ornamental moment (with italic doing all the "script" work, since the preset has no handwritten voice); Work Sans recedes into body. The `script` slot points at Cormorant Garamond because italic IS the system's intimate / personal voice — no third face. Mono is declared for completeness only (the preset never reaches for it in components). The brand fonts still apply to §6 component code (paste-ready for Phase 4b). The §6 component preview and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -187,41 +187,20 @@ The atlas is the **sole authoring source** for non-component text. If a scene ne
     "id": "eyebrow",
     "family": "body",
     "purpose": "plain Work Sans eyebrow at top-left chrome (NEVER uppercase, NEVER italic)",
-    "px_min": 22, "px_max": 28, "weight": 400, "leading": "1.2", "tracking": "-0.005em", "case": "sentence",
+    "px_min": 26, "px_max": 34, "weight": 400, "leading": "1.2", "tracking": "-0.005em", "case": "sentence",
     "sample_html": "<div class=\"t-trole-eyebrow\">Section · The quiet field</div>"
-  },
-  {
-    "id": "body",
-    "family": "body",
-    "purpose": "default paragraph body (Work Sans 400, 1.5 leading)",
-    "px_min": 22, "px_max": 26, "weight": 400, "leading": "1.5", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-body\">Body sits at Work Sans 400, leading 1.5. Sentence case throughout; italic emphasis comes from the serif <em>em</em>, never from bold inside body.</p>"
-  },
-  {
-    "id": "body-md",
-    "family": "body",
-    "purpose": "denser body for card / column content (Work Sans 400)",
-    "px_min": 20, "px_max": 24, "weight": 400, "leading": "1.5", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-body-md\">A denser body, sized for cards and tight columns. Same family, same italic emphasis discipline.</p>"
   },
   {
     "id": "page-marker",
     "family": "script",
     "purpose": "italic serif page numeral at top-right chrome (Cormorant italic 400, ink-soft)",
-    "px_min": 22, "px_max": 26, "weight": 400, "leading": "1", "tracking": "0", "case": "sentence",
+    "px_min": 26, "px_max": 32, "weight": 400, "leading": "1", "tracking": "0", "case": "sentence",
     "sample_html": "<div class=\"t-trole-page-marker\">iv</div>"
-  },
-  {
-    "id": "swatch-label",
-    "family": "body",
-    "purpose": "the only uppercase moment in the system — 11px Work Sans inside a swatch tile",
-    "px_min": 10, "px_max": 11, "weight": 400, "leading": "1.2", "tracking": "0.06em", "case": "upper",
-    "sample_html": "<div class=\"t-trole-swatch-label\">Lemon · #D6DD63</div>"
   }
 ]
 ```
 
-The atlas omits page chrome positions (declared in §H) and the cover swatch row (a §M motif, not a text role).
+The atlas omits page chrome positions (declared in §H) and the cover swatch row (a §6 component, not a text role). The 11px uppercase swatch tile label was retired with the §T no-small-text pass — its only home, the swatch-row component, carries no text, so the role had no live consumer.
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -287,8 +266,8 @@ lands, which makes the weight-drop reveal feel like a turning of the page.
 
 Take the brand's product description / value prop. Transform with:
 
-1. Keep complete sentences. Sentence case throughout — no UPPERCASE outside the rare
-   small label (≤11px).
+1. Keep complete sentences. Sentence case throughout — soft-editorial reads
+   UPPERCASE as shouting, so on-screen text stays sentence case everywhere.
 2. Prefer one warm noun phrase over a list of features. The mood is "essayist's
    summary", not "product spec".
 3. Drop hyperbole and superlatives (`best`, `most`, `revolutionary`). Replace with
@@ -346,8 +325,8 @@ Take the brand's product description / value prop. Transform with:
   is broken.
 - Roman-numeral step ordinals (`i.`, `ii.`, `iii.`, `iv.`, `v.`) — lowercase
   italic serif. Arabic step numbers break the editorial register.
-- The 11px Work Sans uppercase swatch label is the only uppercase element in the
-  system. Everything else is sentence case.
+- Sentence case everywhere. Soft-editorial has no uppercase element — uppercase
+  reads as shouting against the Cormorant serif calm.
 
 **Layout & density**
 
@@ -368,95 +347,13 @@ Take the brand's product description / value prop. Transform with:
 - The full-bleed closer scene fades _to_ full-pastel from cream, holds for the
   closer's duration, fades back to cream on exit.
 
-## §M Atomic motifs (gestures the plan agent can reference)
-
-Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. Soft-editorial's atomic vocabulary is small — the system's voice depends on restraint, so adding more motifs dilutes the editorial calm. Six gestures, each carrying a non-negotiable register signal.
-
-```motifs
-[
-  {
-    "id": "drop-cap",
-    "label": "Drop cap",
-    "role": "editorial-opener",
-    "surface_safe": ["paper", "card"],
-    "description": "Oversized Cormorant Garamond medium initial that opens a long-form paragraph. Floated left, line-height 0.85, padding 8px 14px 0 0. The single most distinctive editorial moment — one per scene maximum, only on opener paragraphs.",
-    "wide": true,
-    "demo": "<p class=\"se-motif-drop\"><span>F</span>or the editorial register the drop cap is the system's signal — every long-form opener carries one, in Cormorant Garamond medium at 132px, the paragraph body wrapping warmly around it.</p>",
-    "css": ".se-motif-drop{margin:0;font-family:var(--f-body-native);font-weight:400;font-size:clamp(16px,1.4vw,22px);line-height:1.5;color:var(--ink);max-width:44ch}.se-motif-drop span{float:left;font-family:var(--f-disp-native);font-weight:500;font-size:clamp(72px,8vw,132px);line-height:.85;letter-spacing:0;color:var(--ink);padding:8px 14px 0 0}"
-  },
-  {
-    "id": "italic-em",
-    "label": "Italic em phrase",
-    "role": "headline-emphasis",
-    "surface_safe": ["paper", "card"],
-    "description": "An `<em>` mid-headline drops from Cormorant 500 roman to Cormorant 400 italic — a weight drop, not a weight gain. The italic phrase reads as softer and more intimate, not as bolded. This is opposite the magazine convention of italic-for-emphasis; here italic is the lighter tone.",
-    "wide": true,
-    "demo": "<div class=\"se-motif-em\">A canvas where teams design <em>together</em>, in real time.</div>",
-    "css": ".se-motif-em{font-family:var(--f-disp-native);font-weight:500;font-size:clamp(40px,4.5vw,72px);line-height:1;letter-spacing:-0.01em;color:var(--ink);max-width:18ch}.se-motif-em em{font-weight:400;font-style:italic}"
-  },
-  {
-    "id": "roman-numeral-step",
-    "label": "Roman numeral step",
-    "role": "step-ordinal",
-    "surface_safe": ["paper", "card", "pastel"],
-    "description": "Lowercase italic Cormorant roman numeral (i. ii. iii. iv. v.) sitting at the top of a step card above a serif headline. Arabic step numbers break the editorial register — the roman numeral IS the system's step voice.",
-    "demo": "<div class=\"se-motif-step\"><span>iii.</span><div class=\"se-motif-step-h\">Considered, careful.</div></div>",
-    "css": ".se-motif-step{display:flex;flex-direction:column;gap:12px}.se-motif-step span{font-family:var(--f-script-native);font-weight:500;font-style:italic;font-size:clamp(56px,6vw,92px);line-height:.9;color:var(--ink)}.se-motif-step-h{font-family:var(--f-disp-native);font-weight:500;font-size:clamp(32px,2.6vw,44px);line-height:1.05;color:var(--ink)}"
-  },
-  {
-    "id": "translucent-card",
-    "label": "Translucent white card",
-    "role": "lifted-surface",
-    "surface_safe": ["paper"],
-    "description": "Translucent white card (55% opacity) on the cream field. The cream bleeds through and IS the depth signal — no shadow, no border. 24–36px radius. The system's default container — never reach for a saturated fill unless a card needs color.",
-    "wide": true,
-    "demo": "<div class=\"se-motif-card\"><div class=\"se-motif-card-h\">A floating panel</div><p class=\"se-motif-card-b\">Translucent white over cream. The lift comes from translucency and rounded form — never a drop shadow.</p></div>",
-    "css": ".se-motif-card{background:rgba(255,255,255,.55);border-radius:28px;padding:32px 36px;max-width:36ch}.se-motif-card-h{font-family:var(--f-disp-native);font-weight:500;font-size:clamp(28px,2.4vw,44px);line-height:1.05;color:var(--ink);margin:0 0 8px}.se-motif-card-b{font-family:var(--f-body-native);font-weight:400;font-size:clamp(14px,1.2vw,18px);line-height:1.5;color:var(--ink);margin:0}"
-  },
-  {
-    "id": "pastel-pill",
-    "label": "Pastel pill",
-    "role": "status-marker",
-    "surface_safe": ["paper", "card"],
-    "description": "Fully rounded 999px pill with a pastel fill (lemon=yes, blush=partial, pink=no inside matrices; any pastel outside). Sentence-case Cormorant medium label, ink text — never inverted. The system's sub-headline emphasis unit.",
-    "demo": "<div class=\"se-motif-pill-row\"><span class=\"se-motif-pill\" style=\"background:#D6DD63\">Yes</span><span class=\"se-motif-pill\" style=\"background:#E8C9B6\">Partial</span><span class=\"se-motif-pill\" style=\"background:#E1A4C2\">No</span></div>",
-    "css": ".se-motif-pill-row{display:flex;gap:10px;flex-wrap:wrap}.se-motif-pill{display:inline-block;background:var(--brand-primary);color:var(--ink);border-radius:999px;padding:6px 16px;font-family:var(--f-disp-native);font-weight:500;font-size:clamp(15px,1.3vw,20px);line-height:1.3}"
-  },
-  {
-    "id": "dashed-rule",
-    "label": "Dashed warm-ink rule",
-    "role": "soft-divider",
-    "surface_safe": ["paper", "card"],
-    "description": "1px dashed warm-ink hairline at 18% opacity — the notebook-margin feel. Used inside matrix cells, panel dividers, source-line markers. Never solid (solid breaks the soft register); 1.5px solid at 35% opacity is the heavier sibling for matrix head-rows only.",
-    "wide": true,
-    "demo": "<div class=\"se-motif-rule-wrap\"><div class=\"se-motif-rule-label\">Filed under</div><div class=\"se-motif-rule\"></div><div class=\"se-motif-rule-body\">A dashed warm-ink hairline marks the source attribution under a column.</div></div>",
-    "css": ".se-motif-rule-wrap{max-width:36ch}.se-motif-rule-label{font-family:var(--f-script-native);font-style:italic;font-weight:400;font-size:clamp(14px,1.2vw,18px);color:color-mix(in srgb,var(--ink) 60%,transparent);margin-bottom:8px}.se-motif-rule{border-top:1px dashed color-mix(in srgb,var(--ink) 18%,transparent);margin:0 0 12px}.se-motif-rule-body{font-family:var(--f-body-native);font-weight:400;font-size:clamp(13px,1.1vw,16px);line-height:1.5;color:var(--ink)}"
-  },
-  {
-    "id": "swatch-row",
-    "label": "Cover swatch row",
-    "role": "palette-signature",
-    "surface_safe": ["paper"],
-    "description": "Row of 3 circular 56px discs in the deck's accent palette, positioned top-right of the cover slide. The visual signature of the system's color philosophy. Strict 3 discs — five reads as a color-wheel demo, two reads as broken.",
-    "demo": "<div class=\"se-motif-swatch-row\"><span class=\"se-motif-disc\" style=\"background:#E1A4C2\"></span><span class=\"se-motif-disc\" style=\"background:#D6DD63\"></span><span class=\"se-motif-disc\" style=\"background:#B7C7A8\"></span></div>",
-    "css": ".se-motif-swatch-row{display:flex;gap:12px;align-items:center}.se-motif-disc{width:56px;height:56px;border-radius:50%;display:inline-block}"
-  }
-]
-```
-
-The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
-
-**Materials lexicon** (informational — these are the composition atoms behind the patterns):
-
-- drop-cap · italic-em · roman-numeral-step · translucent-card · pastel-pill · dashed-rule · swatch-row · quote-mark · action-bar
-
 ## §I Page-level CSS (makes design.html itself read as soft-editorial)
 
 ```css
 /* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
  * These let the doc chrome render in Cormorant Garamond + Work Sans + JetBrains Mono
- * regardless of brand DNA. The §6 component preview, §M motifs grid, and §T type-role
- * atlas all read these via .preset-native-scope.
+ * regardless of brand DNA. The §6 component preview and §T type-role
+ * atlas read these via .preset-native-scope.
  *
  * Soft-editorial has no script face — the script slot points at Cormorant Garamond
  * because italic Cormorant IS the system's intimate / personal voice. The fallback
@@ -477,7 +374,7 @@ The `motifs` JSON block above is the SOLE source of truth. build-design.mjs read
 }
 
 /* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
- * Wraps §6 component previews, §M motif demos, and §T type-role atlas so
+ * Wraps §6 component previews and §T type-role atlas so
  * var(--font-*) resolves to Cormorant / Work Sans / JetBrains Mono regardless of
  * brand DNA. Paste-ready component source is untouched — Phase 4b still grep +
  * paste the original `var(--font-display)` tokens, which resolve to brand DNA at
@@ -539,90 +436,6 @@ h2 {
   text-transform: none;
   letter-spacing: -0.005em;
 }
-
-/* ── §M Motifs grid: atomic gestures.
- * Mirrors soft-editorial's editorial calm — rounded translucent cards on cream,
- * dashed warm-ink dividers between cards, generous breathing. Cards may declare a
- * surface (paper / card / pastel) to demonstrate the gesture against its native bg.
- * Default surface is translucent white over the cream body. */
-.ds-motif-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 28px;
-}
-.ds-motif {
-  grid-column: span 4;
-  min-height: 280px;
-  padding: 32px;
-  border: none;
-  border-radius: var(--radius-card-sm, 24px);
-  background: var(--surface-card, rgba(255, 255, 255, 0.55));
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 16px;
-  position: relative;
-  overflow: hidden;
-}
-.ds-motif.ds-motif-wide {
-  grid-column: span 8;
-}
-.ds-motif.ds-motif-surface-paper {
-  background: var(--paper-anchor);
-}
-.ds-motif.ds-motif-surface-card {
-  background: var(--surface-card, rgba(255, 255, 255, 0.55));
-}
-.ds-motif.ds-motif-surface-pastel {
-  background: color-mix(in srgb, var(--brand-primary) 70%, var(--paper-anchor));
-  color: var(--ink);
-}
-.ds-motif-h {
-  margin: 0;
-  font-family: var(--f-disp-native);
-  font-weight: 500;
-  font-style: italic;
-  font-size: clamp(24px, 2.4vw, 36px);
-  line-height: 1;
-  letter-spacing: -0.005em;
-  color: var(--ink);
-}
-.ds-motif-desc {
-  margin: 0;
-  font-family: var(--f-body-native);
-  font-weight: 400;
-  font-size: 14px;
-  line-height: 1.55;
-  color: color-mix(in srgb, var(--ink) 72%, transparent);
-  max-width: 36ch;
-}
-.ds-motif-demo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 96px;
-}
-.ds-motif-id {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  font-family: var(--f-script-native);
-  font-style: italic;
-  font-size: 12px;
-  letter-spacing: 0;
-  text-transform: none;
-  color: color-mix(in srgb, var(--ink) 45%, transparent);
-}
-@media (max-width: 880px) {
-  .ds-motif-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .ds-motif,
-  .ds-motif.ds-motif-wide {
-    grid-column: auto;
-  }
-}
-
 /* ── §T Type-role atlas. Container = translucent white card on cream with
  * dashed warm-ink dividers between rows. Each .t-trole-* class encodes the
  * role's family / size / weight / italic / leading / tracking / case / color.
@@ -743,7 +556,7 @@ h2 {
   font-family: var(--font-script);
   font-style: italic;
   font-weight: 400;
-  font-size: clamp(24px, 2.4vw, 38px);
+  font-size: clamp(32px, 2.4vw, 38px);
   line-height: 1.2;
   color: color-mix(in srgb, var(--ink) 72%, transparent);
 }
@@ -751,56 +564,29 @@ h2 {
   font-family: var(--font-script);
   font-style: italic;
   font-weight: 400;
-  font-size: clamp(22px, 2vw, 32px);
+  font-size: clamp(26px, 2vw, 32px);
   line-height: 1.3;
   color: color-mix(in srgb, var(--ink) 60%, transparent);
 }
 .t-trole-eyebrow {
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: clamp(20px, 1.6vw, 28px);
+  font-size: clamp(26px, 1.9vw, 34px);
   line-height: 1.2;
   letter-spacing: -0.005em;
   color: var(--ink);
-}
-.t-trole-body {
-  font-family: var(--font-body);
-  font-weight: 400;
-  font-size: clamp(18px, 1.5vw, 26px);
-  line-height: 1.5;
-  color: var(--ink);
-  max-width: 60ch;
-  margin: 0;
 }
 .t-trole-body em {
   font-family: var(--font-script);
   font-style: italic;
   font-weight: 400;
 }
-.t-trole-body-md {
-  font-family: var(--font-body);
-  font-weight: 400;
-  font-size: clamp(16px, 1.3vw, 24px);
-  line-height: 1.5;
-  color: var(--ink);
-  max-width: 50ch;
-  margin: 0;
-}
 .t-trole-page-marker {
   font-family: var(--font-script);
   font-style: italic;
   font-weight: 400;
-  font-size: clamp(20px, 1.5vw, 26px);
+  font-size: clamp(26px, 1.7vw, 32px);
   line-height: 1;
   color: color-mix(in srgb, var(--ink) 55%, transparent);
-}
-.t-trole-swatch-label {
-  font-family: var(--font-body);
-  font-weight: 400;
-  font-size: 11px;
-  line-height: 1.2;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink);
 }
 ```

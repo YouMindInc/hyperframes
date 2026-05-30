@@ -14,7 +14,7 @@
     font-family: var(--font-display, "Cormorant Garamond", serif);
     font-weight: 500;
     font-style: italic;
-    font-size: clamp(18px, 1.6vw, 28px);
+    font-size: clamp(26px, 1.8vw, 32px);
     line-height: 1.2;
     cursor: pointer;
     letter-spacing: -0.005em;

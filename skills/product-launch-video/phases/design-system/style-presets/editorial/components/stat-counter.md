@@ -16,7 +16,7 @@
     font-variant-numeric: tabular-nums;
   }
   .ed-stat-label {
-    font-size: clamp(11px, 1.1vw, 14px);
+    font-size: clamp(24px, 1.6vw, 28px);
     text-transform: uppercase;
     letter-spacing: 0.14em;
     margin-top: 12px;

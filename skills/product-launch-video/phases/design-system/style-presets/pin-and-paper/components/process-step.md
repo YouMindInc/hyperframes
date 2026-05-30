@@ -50,7 +50,7 @@
   .pp-process-step-title {
     font-family: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
     font-weight: 700;
-    font-size: clamp(22px, 1.8vw, 28px);
+    font-size: clamp(28px, 2.4vw, 34px);
     line-height: 1.05;
     letter-spacing: -0.015em;
     margin: 0;
@@ -59,7 +59,7 @@
   .pp-process-step-body {
     font-family: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
     font-weight: 400;
-    font-size: 18px;
+    font-size: 24px;
     line-height: 1.4;
     margin: 0;
     color: var(--brand-primary);

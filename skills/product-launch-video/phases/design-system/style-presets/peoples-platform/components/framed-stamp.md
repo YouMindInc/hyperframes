@@ -39,12 +39,12 @@ avoids_same_scene: stamp-statement, mega-stat, end-stamp
   }
   .pp-framed-stamp-pill {
     align-self: flex-start;
-    padding: 8px 18px;
+    padding: 10px 22px;
     border: 3px solid var(--cream);
     background: var(--blue);
     color: var(--cream);
     font-family: "DM Mono", monospace;
-    font-size: 16px;
+    font-size: 27px;
     font-weight: 500;
     line-height: 1;
     letter-spacing: 0.18em;

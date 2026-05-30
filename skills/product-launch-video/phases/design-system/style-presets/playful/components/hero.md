@@ -20,7 +20,7 @@
   .pf-eyebrow {
     display: block;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.85rem;
+    font-size: 1.5rem;
     font-weight: 600;
     line-height: 1.2;
     letter-spacing: 0.15em;
@@ -40,7 +40,7 @@
   }
   .pf-hero-sub {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 1.1rem;
+    font-size: 1.6rem;
     font-weight: 500;
     line-height: 1.6;
     color: var(--ink);

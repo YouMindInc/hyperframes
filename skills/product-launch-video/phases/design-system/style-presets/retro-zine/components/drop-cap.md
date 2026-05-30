@@ -15,7 +15,7 @@
   */
   .rz-drop-cap-para {
     font-family: "Space Grotesk", sans-serif;
-    font-size: clamp(13px, 1.2vw, 16px);
+    font-size: clamp(24px, 1.8vw, 28px);
     line-height: 1.7;
     color: var(--ink);
     margin: 0;

@@ -28,7 +28,7 @@
     background: var(--signal-fill, var(--brand-primary));
     color: var(--ink);
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 18px;
+    font-size: 24px;
     letter-spacing: var(--track-mono);
     text-transform: uppercase;
     padding: 4px 10px;
@@ -37,7 +37,7 @@
   .ng-feature-title {
     font-family: var(--font-display), "Space Grotesk", sans-serif;
     font-weight: 700;
-    font-size: 30px;
+    font-size: 34px;
     line-height: 1.05;
     letter-spacing: var(--track-display-tight);
     text-transform: uppercase;
@@ -45,7 +45,7 @@
   }
   .ng-feature-body {
     font-family: var(--font-body), "Space Grotesk", sans-serif;
-    font-size: 22px;
+    font-size: 26px;
     line-height: 1.4;
     margin: 0;
   }

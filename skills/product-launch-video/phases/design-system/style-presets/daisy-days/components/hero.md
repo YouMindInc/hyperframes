@@ -21,12 +21,12 @@
     display: inline-block;
     font-family: var(--font-body);
     font-weight: 600;
-    font-size: 1rem;
+    font-size: clamp(24px, 1.5vw, 26px);
     letter-spacing: 0.02em;
     padding: 6px 18px;
     border-radius: var(--radius-pill);
     border: var(--border-bold);
-    background: color-mix(in srgb, var(--brand-secondary) 35%, #fde68a);
+    background: color-mix(in srgb, var(--brand-secondary) 35%, var(--anchor-butter));
     color: var(--ink);
     margin-bottom: 0.8rem;
     box-shadow: var(--shadow-small);
@@ -43,7 +43,7 @@
   .dc-hero-subhead {
     font-family: var(--font-body);
     font-weight: 600;
-    font-size: clamp(1rem, 1.5vw, 1.3rem);
+    font-size: clamp(28px, 1.8vw, 34px);
     line-height: 1.45;
     color: color-mix(in srgb, var(--ink) 70%, transparent);
     max-width: 42ch;

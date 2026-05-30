@@ -33,7 +33,7 @@
   }
   .ef-meta-dl-term {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1vw;
+    font-size: 1.3vw;
     letter-spacing: var(--ef-track-caption);
     text-transform: uppercase;
     color: var(--brand-primary);
@@ -42,7 +42,7 @@
   }
   .ef-meta-dl-value {
     font-family: "Source Serif 4", "Source Serif Pro", Georgia, serif;
-    font-size: 1.4vw;
+    font-size: 1.7vw;
     color: var(--ink);
     margin: 0;
     font-weight: 500;

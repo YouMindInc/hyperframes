@@ -39,8 +39,8 @@
     gap: 1.2rem;
   }
   .dc-timeline-dot {
-    width: 3rem;
-    height: 3rem;
+    width: 3.6rem;
+    height: 3.6rem;
     border-radius: 50%;
     border: var(--border-bold);
     flex-shrink: 0;
@@ -49,17 +49,17 @@
     justify-content: center;
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: 1.1rem;
+    font-size: clamp(26px, 1.8vw, 32px);
     color: var(--canvas);
   }
   .dc-timeline-dot--1 {
     background: var(--brand-accent);
   }
   .dc-timeline-dot--2 {
-    background: color-mix(in srgb, var(--brand-primary) 50%, #a8e6cf);
+    background: color-mix(in srgb, var(--brand-primary) 50%, var(--anchor-mint));
   }
   .dc-timeline-dot--3 {
-    background: color-mix(in srgb, var(--brand-secondary) 50%, #d4a5e8);
+    background: color-mix(in srgb, var(--brand-secondary) 50%, var(--anchor-lavender));
   }
   .dc-timeline-card {
     flex: 1;
@@ -72,7 +72,7 @@
   .dc-timeline-title {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: 1.1rem;
+    font-size: clamp(28px, 1.9vw, 34px);
     line-height: 1.2;
     color: var(--ink);
     margin: 0 0 0.2rem;
@@ -80,7 +80,7 @@
   .dc-timeline-desc {
     font-family: var(--font-body);
     font-weight: 500;
-    font-size: 0.9rem;
+    font-size: clamp(24px, 1.5vw, 26px);
     line-height: 1.45;
     color: color-mix(in srgb, var(--ink) 65%, transparent);
     margin: 0;

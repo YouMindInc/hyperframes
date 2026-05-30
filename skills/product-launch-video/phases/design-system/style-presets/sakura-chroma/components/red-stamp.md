@@ -18,7 +18,7 @@
     padding: clamp(8px, 1vh, 14px) clamp(12px, 1.4vw, 22px);
     font-family: "Big Shoulders Display", sans-serif;
     font-weight: 900;
-    font-size: clamp(20px, 1.6vw, 28px);
+    font-size: clamp(26px, 1.9vw, 36px);
     line-height: 1;
     letter-spacing: 0.02em;
     text-transform: uppercase;

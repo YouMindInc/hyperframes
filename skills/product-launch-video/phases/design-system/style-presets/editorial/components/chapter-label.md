@@ -13,7 +13,7 @@
     align-items: center;
     gap: 16px;
     padding: 16px 0;
-    font-size: clamp(11px, 1.1vw, 14px);
+    font-size: clamp(24px, 1.6vw, 28px);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--ink-soft, var(--ink));

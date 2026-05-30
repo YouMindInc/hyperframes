@@ -57,7 +57,7 @@
   }
   .ng-quote-role {
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 14px;
+    font-size: 24px;
     letter-spacing: var(--track-mono);
     text-transform: uppercase;
   }

@@ -27,7 +27,7 @@
     border: var(--border-ink);
     font-family: "Albert Sans", sans-serif;
     font-weight: 700;
-    font-size: clamp(12px, 0.9vw, 14px);
+    font-size: clamp(24px, 1.5vw, 30px);
     line-height: 1.2;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -56,7 +56,7 @@
     color: var(--anchor-paper);
     padding: clamp(8px, 1vh, 14px) clamp(14px, 1.4vw, 22px);
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: clamp(12px, 0.85vw, 14px);
+    font-size: clamp(24px, 1.5vw, 28px);
     letter-spacing: 0.04em;
   }
 </style>

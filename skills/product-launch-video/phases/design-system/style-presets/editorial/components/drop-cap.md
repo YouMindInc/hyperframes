@@ -4,7 +4,7 @@
   /* Editorial opener — first letter set 4x body, hanging into the margin.
      Use once per scene at most. */
   .ed-dropcap {
-    font-size: clamp(18px, 1.8vw, 26px);
+    font-size: clamp(26px, 2vw, 34px);
     line-height: 1.55;
     max-width: var(--measure-narrow);
     color: var(--ink);

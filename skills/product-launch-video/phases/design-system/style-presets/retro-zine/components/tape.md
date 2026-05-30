@@ -15,8 +15,8 @@
     position: absolute;
     width: 80px;
     height: 24px;
-    background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: color-mix(in srgb, var(--anchor-cream) 40%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
     /* Default tilt; variants override. Sharp angles only — tape is the one
        element allowed to break the ±8° rule (it's literally tape). */
     transform: rotate(-25deg);

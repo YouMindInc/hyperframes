@@ -34,7 +34,7 @@
   }
   .ef-hero-eyebrow {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     font-weight: 500;
     letter-spacing: var(--ef-track-label);
     text-transform: uppercase;
@@ -49,7 +49,7 @@
     align-items: center;
     justify-content: center;
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.15vw;
+    font-size: 1.5vw;
     letter-spacing: 0.1em;
     font-weight: 500;
     color: var(--brand-secondary);
@@ -71,7 +71,7 @@
     display: flex;
     justify-content: space-between;
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;

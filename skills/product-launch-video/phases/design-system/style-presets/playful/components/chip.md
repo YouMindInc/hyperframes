@@ -10,7 +10,7 @@
   .pf-chip {
     display: inline-block;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.85rem;
+    font-size: 1.5rem;
     font-weight: 600;
     line-height: 1.2;
     letter-spacing: 0.15em;

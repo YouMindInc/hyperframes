@@ -16,7 +16,7 @@
     background: var(--ink);
     color: var(--brand-primary);
     font-family: "Bebas Neue", sans-serif;
-    font-size: 18px;
+    font-size: 26px;
     font-weight: 400;
     letter-spacing: 0.1em;
     text-transform: uppercase;

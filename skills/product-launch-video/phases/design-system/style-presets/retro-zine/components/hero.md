@@ -19,7 +19,7 @@
   .rz-hero-eyebrow {
     display: block;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 14px;
+    font-size: 26px;
     font-weight: 600;
     letter-spacing: 0.25em;
     text-transform: uppercase;
@@ -38,7 +38,7 @@
   }
   .rz-hero-hand {
     font-family: "Caveat", cursive;
-    font-size: clamp(22px, 2.5vw, 30px);
+    font-size: clamp(30px, 3vw, 42px);
     font-weight: 600;
     line-height: 1.3;
     color: var(--ink);

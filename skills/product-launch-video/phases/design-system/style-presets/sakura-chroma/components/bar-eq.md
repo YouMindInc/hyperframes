@@ -121,7 +121,7 @@
   }
   .sk-bar-eq-ticklab {
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: clamp(11px, 0.8vw, 12px);
+    font-size: clamp(24px, 1.4vw, 28px);
     color: var(--anchor-ink);
     letter-spacing: 0.04em;
     text-align: center;

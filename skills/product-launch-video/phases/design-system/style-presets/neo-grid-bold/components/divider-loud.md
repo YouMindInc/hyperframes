@@ -36,7 +36,7 @@
   }
   .ng-divider-label {
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 18px;
+    font-size: 24px;
     letter-spacing: var(--track-mono-wide);
     text-transform: uppercase;
   }
@@ -58,7 +58,7 @@
   }
   .ng-divider-overline {
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 16px;
+    font-size: 24px;
     letter-spacing: var(--track-mono);
     text-transform: uppercase;
     color: var(--canvas);
@@ -80,7 +80,7 @@
   }
   .ng-divider-sub {
     font-family: var(--font-body), "Space Grotesk", sans-serif;
-    font-size: 22px;
+    font-size: 26px;
     line-height: 1.45;
     max-width: 48ch;
     opacity: 0.85;

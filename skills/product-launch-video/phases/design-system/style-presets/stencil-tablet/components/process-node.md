@@ -44,7 +44,7 @@
   }
   .stn-process-node-body {
     font-family: "Inter", sans-serif;
-    font-size: 18px;
+    font-size: 24px;
     font-weight: 400;
     line-height: 1.4;
     margin: 0;

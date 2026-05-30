@@ -34,7 +34,7 @@
     align-items: center;
     justify-content: center;
     font-family: "Syne", sans-serif;
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     font-weight: 800;
     line-height: 1;
     letter-spacing: -0.01em;
@@ -48,7 +48,7 @@
   .pf-step-node-title {
     font-family: "Syne", sans-serif;
     font-weight: 700;
-    font-size: 1.1rem;
+    font-size: 1.6rem;
     line-height: 1.1;
     letter-spacing: -0.01em;
     color: var(--ink);
@@ -56,7 +56,7 @@
   }
   .pf-step-node-desc {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.85rem;
+    font-size: 1.5rem;
     font-weight: 500;
     line-height: 1.4;
     color: var(--ink);

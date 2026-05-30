@@ -43,7 +43,7 @@
     margin-top: 48px;
     font-family: var(--font-body, "Work Sans", sans-serif);
     font-weight: 500;
-    font-size: clamp(16px, 1.4vw, 24px);
+    font-size: clamp(24px, 1.5vw, 28px);
     line-height: 1.3;
     color: var(--ink);
   }

@@ -24,8 +24,8 @@
     max-width: 22vw;
   }
   .dc-info-icon {
-    width: 2.8rem;
-    height: 2.8rem;
+    width: 3.4rem;
+    height: 3.4rem;
     border-radius: 50%;
     border: var(--border-bold);
     display: flex;
@@ -33,23 +33,23 @@
     justify-content: center;
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: 1.2rem;
+    font-size: clamp(26px, 1.8vw, 34px);
     color: var(--ink);
     margin-bottom: 0.2rem;
   }
   .dc-info-icon--soft {
-    background: color-mix(in srgb, var(--brand-secondary) 45%, #f7c8d4);
+    background: color-mix(in srgb, var(--brand-secondary) 45%, var(--anchor-blush));
   }
   .dc-info-icon--cool {
-    background: color-mix(in srgb, var(--brand-primary) 40%, #a8e6cf);
+    background: color-mix(in srgb, var(--brand-primary) 40%, var(--anchor-mint));
   }
   .dc-info-icon--warm {
-    background: color-mix(in srgb, var(--brand-accent) 40%, #ffcba4);
+    background: color-mix(in srgb, var(--brand-accent) 40%, var(--anchor-peach));
   }
   .dc-info-title {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: 1.2rem;
+    font-size: clamp(30px, 2vw, 38px);
     line-height: 1.2;
     color: var(--ink);
     margin: 0;
@@ -57,7 +57,7 @@
   .dc-info-body {
     font-family: var(--font-body);
     font-weight: 500;
-    font-size: 0.92rem;
+    font-size: clamp(24px, 1.5vw, 28px);
     line-height: 1.5;
     color: color-mix(in srgb, var(--ink) 65%, transparent);
     margin: 0;

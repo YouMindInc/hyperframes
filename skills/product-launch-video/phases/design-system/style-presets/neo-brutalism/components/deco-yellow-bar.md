@@ -6,14 +6,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 180px;
-    height: 44px;
+    width: 280px;
+    height: 64px;
     background: var(--deco-1);
     border: var(--border-bold);
     box-shadow: 4px 4px 0 var(--ink);
     transform: rotate(-3deg);
     font-family: ui-monospace, monospace;
-    font-size: 13px;
+    font-size: 24px;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;

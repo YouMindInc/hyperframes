@@ -19,7 +19,7 @@
   .dc-bullet-list li {
     font-family: var(--font-body);
     font-weight: 600;
-    font-size: clamp(0.95rem, 1.3vw, 1.15rem);
+    font-size: clamp(24px, 1.5vw, 28px);
     line-height: 1.5;
     color: var(--ink);
     padding-left: 2.2rem;
@@ -29,18 +29,18 @@
     content: "";
     position: absolute;
     left: 0;
-    top: 0.32rem;
+    top: 0.5rem;
     width: 1.2rem;
     height: 1.2rem;
-    background: color-mix(in srgb, var(--brand-secondary) 45%, #fde68a);
+    background: color-mix(in srgb, var(--brand-secondary) 45%, var(--anchor-butter));
     border: var(--border-thin);
     border-radius: 50%;
   }
   .dc-bullet-list li:nth-child(2)::before {
-    background: color-mix(in srgb, var(--brand-primary) 35%, #a8e6cf);
+    background: color-mix(in srgb, var(--brand-primary) 35%, var(--anchor-mint));
   }
   .dc-bullet-list li:nth-child(3)::before {
-    background: color-mix(in srgb, var(--brand-accent) 35%, #a8d8f0);
+    background: color-mix(in srgb, var(--brand-accent) 35%, var(--anchor-sky));
   }
 </style>
 ```

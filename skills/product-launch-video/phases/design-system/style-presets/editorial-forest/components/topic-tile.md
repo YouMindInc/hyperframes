@@ -43,7 +43,7 @@
   }
   .ef-topic-tile-num {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     letter-spacing: var(--ef-track-caption);
     font-weight: 500;
     text-transform: uppercase;
@@ -60,7 +60,7 @@
   }
   .ef-topic-tile-foot {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1vw;
+    font-size: 1.3vw;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-weight: 500;

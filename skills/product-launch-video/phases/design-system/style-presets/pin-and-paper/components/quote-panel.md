@@ -54,7 +54,7 @@
     margin-top: 32px;
     font-family: "DM Mono", ui-monospace, monospace;
     font-weight: 500;
-    font-size: 18px;
+    font-size: 26px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--brand-primary);

@@ -58,7 +58,7 @@
     background: var(--canvas);
     border: 3px solid var(--ink);
     box-shadow: 4px 4px 0 var(--ink);
-    font-size: 14px;
+    font-size: 24px;
     line-height: 1.45;
     font-weight: 500;
   }
@@ -66,7 +66,7 @@
     background: var(--brand-primary);
   }
   .bn-rules-col li::before {
-    font-size: 22px;
+    font-size: 28px;
     font-weight: 900;
     align-self: center;
     text-align: center;

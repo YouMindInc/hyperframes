@@ -15,7 +15,7 @@
     justify-content: space-between;
     width: 100%;
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;

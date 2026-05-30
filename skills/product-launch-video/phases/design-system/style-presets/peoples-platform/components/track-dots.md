@@ -81,13 +81,13 @@ avoids_same_scene: stamp-statement, end-stamp
   }
   .pp-track-dots-when {
     font-family: "DM Mono", monospace;
-    font-size: 22px;
+    font-size: 27px;
     font-weight: 500;
     line-height: 1;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--ink);
-    padding: 6px 14px;
+    padding: 8px 16px;
     border: 3px solid var(--ink);
     border-radius: 999px;
   }

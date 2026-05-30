@@ -30,7 +30,7 @@
   }
   .ef-quote-card-kicker {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     font-weight: 500;
     letter-spacing: var(--ef-track-label);
     text-transform: uppercase;
@@ -52,7 +52,7 @@
     justify-content: space-between;
     align-items: flex-end;
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     text-transform: uppercase;
     letter-spacing: var(--ef-track-caption);
     font-weight: 500;

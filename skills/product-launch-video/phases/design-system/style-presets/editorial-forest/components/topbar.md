@@ -19,7 +19,7 @@
   }
   .ef-topbar-label {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     font-weight: 500;
     letter-spacing: var(--ef-track-label);
     text-transform: uppercase;
@@ -28,7 +28,7 @@
   }
   .ef-topbar-counter {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     font-weight: 500;
     letter-spacing: var(--ef-track-caption);
     text-transform: uppercase;

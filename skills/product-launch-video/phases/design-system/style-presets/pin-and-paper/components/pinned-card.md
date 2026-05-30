@@ -51,7 +51,7 @@
   .pp-pinned-card-num {
     font-family: "DM Mono", ui-monospace, monospace;
     font-weight: 500;
-    font-size: 16px;
+    font-size: 26px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     opacity: 0.65;
@@ -69,7 +69,7 @@
   .pp-pinned-card-body {
     font-family: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
     font-weight: 400;
-    font-size: clamp(18px, 1.2vw, 22px);
+    font-size: clamp(24px, 1.6vw, 28px);
     line-height: 1.45;
     margin: 0;
     color: var(--brand-primary);

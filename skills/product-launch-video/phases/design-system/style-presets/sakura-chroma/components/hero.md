@@ -22,7 +22,7 @@
     display: block;
     font-family: "Albert Sans", sans-serif;
     font-weight: 700;
-    font-size: clamp(12px, 0.9vw, 14px);
+    font-size: clamp(24px, 1.5vw, 30px);
     line-height: 1.2;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -45,7 +45,7 @@
   .sk-hero-tagline {
     font-family: "Albert Sans", sans-serif;
     font-weight: 400;
-    font-size: clamp(14px, 1vw, 17px);
+    font-size: clamp(24px, 1.5vw, 28px);
     line-height: 1.5;
     color: var(--anchor-ink);
     opacity: 0.92;

@@ -38,7 +38,7 @@
   }
   .ef-step-tile-num {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.05vw;
+    font-size: 1.3vw;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     font-weight: 500;
@@ -55,7 +55,7 @@
   }
   .ef-step-tile-body {
     font-family: "Source Serif 4", "Source Serif Pro", Georgia, serif;
-    font-size: 1.1vw;
+    font-size: 1.3vw;
     line-height: 1.34;
     margin: 0;
     font-weight: 400;
@@ -69,7 +69,7 @@
     padding-top: 20px;
     border-top: var(--ef-rule-weight) solid currentColor;
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1vw;
+    font-size: 1.3vw;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-weight: 500;

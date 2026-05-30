@@ -41,7 +41,7 @@
   .bo-feature-card-title {
     font-family: "Tektur", cursive;
     font-weight: 700;
-    font-size: clamp(17.6px, 2vw, 24px);
+    font-size: clamp(28px, 2.2vw, 34px);
     line-height: 1.15;
     text-transform: uppercase;
     color: var(--canvas-navy);
@@ -49,7 +49,7 @@
   }
   .bo-feature-card-body {
     font-family: "Chakra Petch", sans-serif;
-    font-size: clamp(14.4px, 1.2vw, 16px);
+    font-size: clamp(24px, 1.5vw, 28px);
     font-weight: 400;
     line-height: 1.7;
     color: var(--canvas-navy);

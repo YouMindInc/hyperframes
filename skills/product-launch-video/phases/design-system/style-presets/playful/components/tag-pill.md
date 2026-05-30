@@ -14,7 +14,7 @@
     color: var(--anchor-peach);
     padding: 0.4rem 0.8rem;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.75rem;
+    font-size: 1.5rem;
     font-weight: 600;
     line-height: 1.2;
     letter-spacing: 0.05em;

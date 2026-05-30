@@ -13,14 +13,14 @@
     color: var(--ink);
     font-family: var(--font-body, "Work Sans", sans-serif);
     font-weight: 500;
-    font-size: clamp(14px, 1.25vw, 22px);
+    font-size: clamp(24px, 1.5vw, 28px);
     line-height: 1.3;
     letter-spacing: 0;
   }
   /* "Note" variant — translucent white with a low-opacity ink hairline,
      for soft annotations that aren't carrying status. Apply with .se-chip-note. */
   .se-chip-note {
-    background: rgba(255, 255, 255, 0.6);
+    background: var(--surface-card);
     border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
     font-style: italic;
     font-family: var(--font-display, "Cormorant Garamond", serif);

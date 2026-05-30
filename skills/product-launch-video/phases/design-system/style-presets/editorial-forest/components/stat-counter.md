@@ -17,7 +17,7 @@
   }
   .ef-stat-counter-tag {
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1vw;
+    font-size: 1.3vw;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--brand-secondary);
@@ -41,7 +41,7 @@
   }
   .ef-stat-counter-desc {
     font-family: "Source Serif 4", "Source Serif Pro", Georgia, serif;
-    font-size: 1.25vw;
+    font-size: 1.4vw;
     line-height: 1.32;
     color: var(--canvas);
     margin: 6px 0 0 0;

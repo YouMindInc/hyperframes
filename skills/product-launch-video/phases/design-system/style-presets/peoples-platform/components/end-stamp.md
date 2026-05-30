@@ -77,7 +77,7 @@ avoids_same_scene: framed-stamp, mega-stat, rotated-stamp, stamp-statement
   }
   .pp-end-stamp-credit {
     font-family: "DM Mono", monospace;
-    font-size: 22px;
+    font-size: 27px;
     font-weight: 500;
     line-height: 1.5;
     letter-spacing: 0.18em;
@@ -85,8 +85,8 @@ avoids_same_scene: framed-stamp, mega-stat, rotated-stamp, stamp-statement
     color: var(--cream);
   }
   .pp-end-stamp-mark {
-    width: 180px;
-    height: 180px;
+    width: 210px;
+    height: 210px;
     border-radius: 50%;
     background: var(--cream);
     color: var(--blue);
@@ -98,12 +98,12 @@ avoids_same_scene: framed-stamp, mega-stat, rotated-stamp, stamp-statement
     transform: rotate(var(--tilt-stamp));
     box-shadow: 8px 8px 0 var(--red);
     font-family: "Alfa Slab One", serif;
-    font-size: 48px;
+    font-size: 56px;
     font-weight: 400;
     line-height: 1;
   }
   .pp-end-stamp-mark-small {
-    font-size: 18px;
+    font-size: 24px;
     letter-spacing: 0.18em;
     font-family: "DM Mono", monospace;
     margin-top: 8px;

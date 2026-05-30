@@ -53,7 +53,7 @@
   }
   .rz-card-offset-hand {
     font-family: "Caveat", cursive;
-    font-size: clamp(22px, 2.5vw, 30px);
+    font-size: clamp(30px, 3vw, 40px);
     font-weight: 600;
     line-height: 1.3;
     color: var(--ink);
@@ -61,7 +61,7 @@
   }
   .rz-card-offset-body {
     font-family: "Space Grotesk", sans-serif;
-    font-size: clamp(13px, 1.2vw, 16px);
+    font-size: clamp(24px, 1.8vw, 28px);
     line-height: 1.7;
     color: var(--ink);
     margin: 0;

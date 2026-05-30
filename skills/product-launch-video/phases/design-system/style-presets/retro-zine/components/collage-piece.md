@@ -37,7 +37,7 @@
   }
   .rz-collage-piece-hand {
     font-family: "Caveat", cursive;
-    font-size: clamp(18px, 2vw, 26px);
+    font-size: clamp(26px, 2.4vw, 34px);
     font-weight: 600;
     line-height: 1.3;
     color: var(--ink);

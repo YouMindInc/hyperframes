@@ -8,7 +8,7 @@
     color: var(--brand-secondary);
     padding: 6px 14px;
     font-family: "Space Mono", monospace;
-    font-size: 12px;
+    font-size: 24px;
     font-weight: 700;
     line-height: 1;
     letter-spacing: 0.2em;

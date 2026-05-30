@@ -46,7 +46,7 @@
   .sk-ledger-headrow > div {
     font-family: "Albert Sans", sans-serif;
     font-weight: 700;
-    font-size: clamp(11px, 0.75vw, 12px);
+    font-size: clamp(24px, 1.4vw, 28px);
     line-height: 1.2;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -54,14 +54,14 @@
   }
   .sk-ledger-date {
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: clamp(14px, 0.95vw, 16px);
+    font-size: clamp(24px, 1.4vw, 28px);
     color: var(--anchor-ink);
     letter-spacing: 0.02em;
   }
   .sk-ledger-ttl {
     font-family: "Big Shoulders Display", sans-serif;
     font-weight: 700;
-    font-size: clamp(22px, 1.7vw, 30px);
+    font-size: clamp(28px, 1.9vw, 38px);
     line-height: 1.1;
     letter-spacing: -0.005em;
     color: var(--anchor-ink);
@@ -72,7 +72,7 @@
   }
   .sk-ledger-ven {
     font-family: "Albert Sans", sans-serif;
-    font-size: clamp(14px, 0.95vw, 15px);
+    font-size: clamp(24px, 1.4vw, 28px);
     color: var(--anchor-ink);
   }
   .sk-ledger-chip {
@@ -81,7 +81,7 @@
     justify-content: center;
     padding: 4px 10px;
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: clamp(11px, 0.75vw, 12px);
+    font-size: clamp(24px, 1.4vw, 28px);
     font-weight: 500;
     letter-spacing: 0.06em;
     color: var(--anchor-paper);

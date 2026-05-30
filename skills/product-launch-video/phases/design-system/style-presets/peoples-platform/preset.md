@@ -191,15 +191,8 @@ The atlas is the **sole authoring source** for non-component text. If a scene ne
     "id": "lead",
     "family": "body",
     "purpose": "deck lead beside the stamp",
-    "px_min": 36, "px_max": 60, "weight": 600, "leading": "1.4", "tracking": "0", "case": "sentence",
+    "px_min": 28, "px_max": 40, "weight": 600, "leading": "1.4", "tracking": "0", "case": "sentence",
     "sample_html": "<p class=\"t-trole-lead\">The lede sits beside the stamp. Same width as the shadow; never above the headline.</p>"
-  },
-  {
-    "id": "body",
-    "family": "body",
-    "purpose": "body paragraph",
-    "px_min": 36, "px_max": 60, "weight": 500, "leading": "1.55", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-body\">Body holds at 500. Tight measure, no italic — the script does the curve.</p>"
   },
   {
     "id": "pill-row",
@@ -378,79 +371,6 @@ Scene transitions go through hard cut, not surface fade.
 - 60% — `var(--paper)` (paper scenes) or `var(--blue)` (framed scenes) — full-bleed background
 - 30% — `var(--cream)` for frame chrome, `var(--ink)` for type
 - 10% — `var(--orange)` for the stamp head — exactly one focal element per plate
-
-## §M Atomic motifs (gestures the plan agent can reference)
-
-Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:triple-shadow on the headline" without specifying which pattern the headline sits in.
-
-```motifs
-[
-  {
-    "id": "triple-shadow",
-    "label": "Triple shadow",
-    "role": "signature-shadow",
-    "surface_safe": ["paper", "blue", "cream"],
-    "description": "Orange word + 6px red drop + 12px red-deep drop. The system's only shadow. Apply to every focal headline; never duplicate within a scene.",
-    "wide": true,
-    "demo": "<div class=\"pp-motif-shadow\">SHADOW.</div>",
-    "css": ".pp-motif-shadow{font-family:var(--f-disp-native);font-weight:400;font-size:clamp(64px,8vw,120px);line-height:.9;text-transform:uppercase;letter-spacing:.005em;color:var(--orange);text-shadow:6px 6px 0 var(--red),12px 12px 0 var(--red-deep);text-align:center}"
-  },
-  {
-    "id": "script-flick",
-    "label": "Script flick",
-    "role": "handwritten-accent",
-    "surface_safe": ["paper", "blue", "orange"],
-    "description": "Caveat Brush, −3° rotation, in red ink. One handwritten word per stamp; never two. Threads humanity through authority.",
-    "demo": "<span class=\"pp-motif-flick\">— simpler</span>",
-    "css": ".pp-motif-flick{display:inline-block;font-family:var(--f-script-native);font-weight:400;font-size:clamp(48px,5vw,80px);line-height:1;color:var(--red);transform:rotate(-3deg)}"
-  },
-  {
-    "id": "star-flank",
-    "label": "Star flank",
-    "role": "separator-stars",
-    "surface_safe": ["orange", "paper"],
-    "surface": "orange",
-    "description": "★ ★ ★ separators frame chrome lines in mono caps. The only ornament allowed inside ribbon strips.",
-    "demo": "<div class=\"pp-motif-star\">★ ★ ★&nbsp; OUR THESIS &nbsp;★ ★ ★</div>",
-    "css": ".pp-motif-star{font-family:var(--f-mono-native);font-weight:500;font-size:clamp(16px,1.6vw,22px);line-height:1;letter-spacing:.22em;text-transform:uppercase;color:var(--blue);text-align:center}"
-  },
-  {
-    "id": "diamond-row",
-    "label": "Diamond row",
-    "role": "list-marker",
-    "surface_safe": ["paper", "cream"],
-    "description": "Red square rotated 45°. List items only — never decorative. Three rows is the cap; one sentence per row.",
-    "demo": "<div class=\"pp-motif-diamonds\"><span>Stamped.</span><span>Signed.</span><span>Framed.</span></div>",
-    "css": ".pp-motif-diamonds{display:flex;flex-direction:column;gap:10px}.pp-motif-diamonds span{font-family:var(--f-body-native);font-weight:500;font-size:clamp(16px,1.6vw,22px);line-height:1.4;color:var(--ink);padding-left:30px;position:relative}.pp-motif-diamonds span::before{content:\"\";position:absolute;left:0;top:.4em;width:16px;height:16px;background:var(--red);transform:rotate(45deg)}"
-  },
-  {
-    "id": "rotated-stamp",
-    "label": "Rotated stamp",
-    "role": "round-approval",
-    "surface_safe": ["paper", "blue"],
-    "surface": "cream",
-    "description": "Cream disc, orange border, −9° rotation, red drop shadow. Reserved for END / APPROVED beats — never opens, only closes.",
-    "demo": "<div class=\"pp-motif-round\">★</div>",
-    "css": ".pp-motif-round{width:140px;height:140px;border-radius:50%;background:var(--cream);color:var(--blue);border:6px solid var(--orange);display:grid;place-items:center;font-family:var(--f-disp-native);font-weight:400;font-size:36px;line-height:1;text-transform:uppercase;transform:rotate(-9deg);box-shadow:8px 8px 0 var(--red);margin:0 auto}"
-  },
-  {
-    "id": "end-mark",
-    "label": "End mark",
-    "role": "closing-mark",
-    "surface_safe": ["blue"],
-    "surface": "blue",
-    "description": "The closing lock: triple-stamped headline on cream-framed blue plate, with rotated round stamp. Last-shot only; never used mid-arc.",
-    "demo": "<div class=\"pp-motif-end\">End.</div>",
-    "css": ".pp-motif-end{font-family:var(--f-disp-native);font-weight:400;font-size:clamp(64px,8vw,120px);line-height:.9;text-transform:uppercase;letter-spacing:.005em;color:var(--orange);text-shadow:6px 6px 0 var(--red),12px 12px 0 var(--red-deep);text-align:center}"
-  }
-]
-```
-
-The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
-
-**Materials lexicon** (informational — these are the composition atoms behind the patterns):
-
-- triple-stamp · cream-frame · script-em · star-ribbon · diamond-bullet · round-stamp · pill-chip · track-dot · grain-tooth
 
 ## §I Page-level CSS (makes design.html itself read as peoples)
 
@@ -690,7 +610,7 @@ h3 {
 }
 
 /* ── .preset-native-scope: re-bind brand DNA font tokens to preset-native
- * families. Wraps §6 component previews and §M motifs demos so var(--font-*)
+ * families. Wraps §6 component previews so var(--font-*)
  * resolves to Alfa Slab / Source Sans / Caveat Brush / DM Mono regardless of
  * the brand DNA tokens emitted in :root. The paste-ready component source is
  * untouched — Phase 4b still grep + paste original `var(--font-display)`
@@ -700,119 +620,6 @@ h3 {
   --font-body: var(--f-body-native);
   --font-script: var(--f-script-native);
   --font-mono: var(--f-mono-native);
-}
-
-/* ── §M Motifs grid: atomic gestures.
- * Mirrors peoples-design.html "06 moves" — a 12-col grid of small cards each
- * teaching ONE reusable gesture (triple-shadow, script-flick, star-flank,
- * diamond-row, rotated-stamp, end-mark). Cards may declare a surface
- * (orange / blue / cream) to demonstrate the gesture against its native bg. */
-.ds-motif-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 16px;
-}
-.ds-motif {
-  grid-column: span 4;
-  min-height: 280px;
-  padding: 30px;
-  border: 4px solid var(--ink);
-  border-radius: 14px;
-  background: var(--paper);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 16px;
-  position: relative;
-  overflow: hidden;
-}
-.ds-motif.ds-motif-wide {
-  grid-column: span 8;
-}
-.ds-motif.ds-motif-surface-blue {
-  background: var(--blue);
-  color: var(--cream);
-  border-color: var(--cream);
-}
-.ds-motif.ds-motif-surface-orange {
-  background: var(--orange);
-  color: var(--blue);
-}
-.ds-motif.ds-motif-surface-cream {
-  background: var(--cream);
-  color: var(--ink);
-}
-.ds-motif-h {
-  margin: 0;
-  font-family: var(--f-disp-native);
-  font-weight: 400;
-  font-size: clamp(26px, 2.8vw, 40px);
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.005em;
-  color: var(--blue);
-  text-shadow: 4px 4px 0 var(--red);
-}
-.ds-motif.ds-motif-surface-blue .ds-motif-h {
-  color: var(--orange);
-  text-shadow: 4px 4px 0 var(--red);
-}
-.ds-motif.ds-motif-surface-orange .ds-motif-h {
-  color: var(--blue);
-  text-shadow: 4px 4px 0 var(--red);
-}
-.ds-motif-h em {
-  font-style: normal;
-  color: var(--orange);
-  text-shadow: 4px 4px 0 var(--red);
-}
-.ds-motif.ds-motif-surface-orange .ds-motif-h em {
-  color: var(--cream);
-}
-.ds-motif-desc {
-  margin: 0;
-  font-family: var(--f-body-native);
-  font-weight: 500;
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--ink-dim);
-  max-width: 30ch;
-}
-.ds-motif.ds-motif-surface-blue .ds-motif-desc {
-  color: color-mix(in srgb, var(--cream) 85%, transparent);
-}
-.ds-motif.ds-motif-surface-orange .ds-motif-desc {
-  color: var(--blue);
-}
-.ds-motif-demo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 96px;
-}
-.ds-motif-id {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  font-family: var(--f-mono-native);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ink);
-  opacity: 0.45;
-}
-.ds-motif.ds-motif-surface-blue .ds-motif-id {
-  color: var(--cream);
-  opacity: 0.7;
-}
-@media (max-width: 880px) {
-  .ds-motif-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .ds-motif,
-  .ds-motif.ds-motif-wide {
-    grid-column: auto;
-  }
 }
 
 /* ── §T Type-role atlas (declared as JSON in §T; rendered in §3 Typography).
@@ -961,15 +768,6 @@ h3 {
   max-width: 44ch;
   margin: 0;
 }
-.t-trole-body {
-  font-family: var(--font-body);
-  font-weight: 500;
-  font-size: 27px;
-  line-height: 1.55;
-  color: var(--ink);
-  max-width: 60ch;
-  margin: 0;
-}
 .t-trole-pill-row {
   display: inline-flex;
   gap: 8px;
@@ -977,13 +775,13 @@ h3 {
 }
 .t-trole-pill {
   display: inline-block;
-  padding: 8px 18px;
+  padding: 10px 22px;
   border: 3px solid var(--cream);
   background: var(--blue);
   color: var(--cream);
   font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 16px;
+  font-size: 27px;
   line-height: 1;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -1002,7 +800,7 @@ h3 {
 .t-trole-mono-chrome {
   font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 16px;
+  font-size: 27px;
   line-height: 1.5;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -1016,10 +814,10 @@ h3 {
 .t-trole-diamond-row span {
   font-family: var(--font-body);
   font-weight: 500;
-  font-size: 22px;
+  font-size: 27px;
   line-height: 1.4;
   color: var(--ink);
-  padding-left: 36px;
+  padding-left: 42px;
   position: relative;
 }
 .t-trole-diamond-row span::before {
@@ -1027,8 +825,8 @@ h3 {
   position: absolute;
   left: 0;
   top: 0.4em;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   background: var(--red);
   transform: rotate(45deg);
 }
@@ -1036,13 +834,13 @@ h3 {
   display: flex;
   align-items: center;
   gap: 36px;
-  padding: 14px 24px;
+  padding: 18px 28px;
   background: var(--orange);
   border-top: 5px solid var(--ink);
   border-bottom: 5px solid var(--ink);
   font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 18px;
+  font-size: 27px;
   line-height: 1;
   letter-spacing: 0.22em;
   color: var(--blue);
@@ -1053,8 +851,8 @@ h3 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 180px;
-  height: 180px;
+  width: 220px;
+  height: 220px;
   border-radius: 50%;
   background: var(--cream);
   color: var(--blue);
@@ -1066,14 +864,14 @@ h3 {
   line-height: 1;
   text-transform: uppercase;
   text-align: center;
-  gap: 8px;
+  gap: 10px;
 }
 .t-trole-rotated-stamp .big {
-  font-size: 44px;
+  font-size: 52px;
   line-height: 0.9;
 }
 .t-trole-rotated-stamp .small {
-  font-size: 13px;
+  font-size: 24px;
   letter-spacing: 0.18em;
   font-family: var(--font-mono);
 }
@@ -1102,7 +900,7 @@ h3 {
 .t-trole-track-row .label {
   font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 16px;
+  font-size: 27px;
   line-height: 1;
   letter-spacing: 0.16em;
   text-transform: uppercase;

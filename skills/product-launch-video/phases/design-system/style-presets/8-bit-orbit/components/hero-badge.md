@@ -26,7 +26,7 @@
   }
   .bo-hero-badge {
     font-family: "Space Mono", monospace;
-    font-size: 11px;
+    font-size: 24px;
     line-height: 1;
     letter-spacing: 0.12em;
     text-transform: uppercase;

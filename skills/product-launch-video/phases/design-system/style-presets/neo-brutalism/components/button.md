@@ -7,7 +7,7 @@
     border: var(--border-bold);
     box-shadow: var(--shadow-hard);
     padding: 16px 32px;
-    font-size: clamp(16px, 1.6vw, 22px);
+    font-size: clamp(26px, 1.8vw, 34px);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;

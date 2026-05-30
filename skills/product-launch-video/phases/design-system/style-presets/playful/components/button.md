@@ -17,7 +17,7 @@
     border: var(--border-stroke);
     padding: 1rem 2rem;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 1rem;
+    font-size: 1.6rem;
     font-weight: 600;
     line-height: 1.2;
     letter-spacing: 0.02em;

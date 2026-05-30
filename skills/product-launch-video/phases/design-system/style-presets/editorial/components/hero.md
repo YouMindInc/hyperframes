@@ -10,7 +10,7 @@
     max-width: var(--measure-wide);
   }
   .ed-kicker {
-    font-size: clamp(11px, 1.1vw, 14px);
+    font-size: clamp(24px, 1.6vw, 28px);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     font-weight: 500;
@@ -24,7 +24,7 @@
     margin-top: 24px;
   }
   .ed-lede {
-    font-size: clamp(18px, 1.8vw, 26px);
+    font-size: clamp(26px, 2vw, 34px);
     line-height: 1.55;
     max-width: var(--measure-narrow);
     margin-top: 36px;

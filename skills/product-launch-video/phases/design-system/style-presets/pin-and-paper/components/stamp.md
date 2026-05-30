@@ -25,7 +25,7 @@
     padding: 6px 16px;
     font-family: "DM Mono", ui-monospace, monospace;
     font-weight: 500;
-    font-size: 16px;
+    font-size: 26px;
     line-height: 1;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -34,7 +34,7 @@
   }
   .pp-stamp.lg {
     padding: 8px 20px;
-    font-size: 18px;
+    font-size: 30px;
     letter-spacing: 0.2em;
   }
   .pp-stamp.upright {

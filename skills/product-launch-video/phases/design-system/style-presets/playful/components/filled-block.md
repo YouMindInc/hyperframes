@@ -36,7 +36,7 @@
   .pf-filled-block-num {
     font-family: "Syne", sans-serif;
     font-weight: 800;
-    font-size: 2.5rem;
+    font-size: 2.75rem;
     line-height: 1;
     letter-spacing: -0.02em;
     color: var(--anchor-peach);
@@ -45,7 +45,7 @@
   .pf-filled-block-title {
     font-family: "Syne", sans-serif;
     font-weight: 700;
-    font-size: 1.3rem;
+    font-size: 1.75rem;
     line-height: 1.2;
     letter-spacing: -0.01em;
     color: var(--anchor-peach);
@@ -53,7 +53,7 @@
   }
   .pf-filled-block-body {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.95rem;
+    font-size: 1.5rem;
     font-weight: 400;
     line-height: 1.5;
     color: var(--anchor-peach);

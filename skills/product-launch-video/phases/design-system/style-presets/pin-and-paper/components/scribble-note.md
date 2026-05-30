@@ -34,7 +34,7 @@
     max-width: 32ch;
   }
   .pp-scribble-note.sm {
-    font-size: clamp(22px, 1.8vw, 28px);
+    font-size: clamp(28px, 2vw, 32px);
   }
   .pp-scribble-note.lg {
     font-size: clamp(38px, 3.2vw, 50px);

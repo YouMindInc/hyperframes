@@ -37,7 +37,7 @@
   .sk-topbar-rule-lab {
     font-family: "Albert Sans", sans-serif;
     font-weight: 700;
-    font-size: clamp(12px, 0.9vw, 14px);
+    font-size: clamp(24px, 1.5vw, 30px);
     line-height: 1.2;
     letter-spacing: 0.18em;
     text-transform: uppercase;

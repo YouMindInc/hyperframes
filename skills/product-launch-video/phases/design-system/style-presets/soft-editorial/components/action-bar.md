@@ -23,7 +23,7 @@
     font-family: var(--font-display, "Cormorant Garamond", serif);
     font-style: italic;
     font-weight: 400;
-    font-size: clamp(18px, 1.6vw, 28px);
+    font-size: clamp(26px, 1.8vw, 32px);
     line-height: 1.2;
     color: var(--ink);
     flex-shrink: 0;
@@ -33,7 +33,7 @@
   .se-action-headline {
     font-family: var(--font-display, "Cormorant Garamond", serif);
     font-weight: 500;
-    font-size: clamp(24px, 2.6vw, 40px);
+    font-size: clamp(34px, 2.8vw, 48px);
     line-height: 1.15;
     letter-spacing: -0.005em;
     margin: 0;

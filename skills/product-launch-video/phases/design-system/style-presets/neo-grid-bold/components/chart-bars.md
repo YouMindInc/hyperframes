@@ -62,7 +62,7 @@
     align-items: center;
     gap: 8px;
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 14px;
+    font-size: 24px;
     letter-spacing: var(--track-mono);
     text-transform: uppercase;
   }
@@ -109,7 +109,7 @@
   }
   .ng-chart-xaxis span {
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 14px;
+    font-size: 24px;
     text-align: center;
     letter-spacing: var(--track-mono);
     text-transform: uppercase;

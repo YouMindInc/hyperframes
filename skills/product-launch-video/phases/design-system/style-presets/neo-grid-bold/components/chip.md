@@ -9,7 +9,7 @@
     display: inline-block;
     padding: 6px 14px;
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 16px;
+    font-size: 24px;
     letter-spacing: var(--track-mono);
     text-transform: uppercase;
     font-weight: 500;

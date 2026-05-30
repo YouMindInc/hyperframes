@@ -7,7 +7,7 @@
     border: none;
     border-bottom: var(--rule-hairline);
     padding: 8px 0;
-    font-size: clamp(15px, 1.4vw, 18px);
+    font-size: clamp(24px, 1.6vw, 28px);
     font-weight: 500;
     cursor: pointer;
   }

@@ -45,7 +45,7 @@
   }
   .ng-stat-label {
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 18px;
+    font-size: 24px;
     letter-spacing: var(--track-mono);
     text-transform: uppercase;
     margin-top: 8px;

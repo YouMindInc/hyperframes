@@ -52,7 +52,7 @@
   .se-step-text {
     font-family: var(--font-body, "Work Sans", sans-serif);
     font-weight: 400;
-    font-size: clamp(16px, 1.4vw, 24px);
+    font-size: clamp(24px, 1.5vw, 28px);
     line-height: 1.45;
     color: color-mix(in srgb, var(--ink) 70%, transparent);
     margin: 0;

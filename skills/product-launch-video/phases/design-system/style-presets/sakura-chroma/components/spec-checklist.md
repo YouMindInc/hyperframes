@@ -60,7 +60,7 @@
   .sk-spec-label {
     font-family: "Albert Sans", sans-serif;
     font-weight: 700;
-    font-size: clamp(14px, 1.1vw, 20px);
+    font-size: clamp(24px, 1.5vw, 30px);
     line-height: 1.2;
     letter-spacing: 0.04em;
     color: var(--anchor-ink);

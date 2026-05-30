@@ -28,7 +28,7 @@
 }
 ```
 
-> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Bebas Neue + Space Grotesk + Caveat + JetBrains Mono — instead of the brand DNA fonts. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). §M motifs grid uses `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
+> `chromeFonts` makes the design.html doc chrome (title-card, section heads, h2/h3, lede paragraphs, eyebrows) render in the preset's NATIVE typography — Bebas Neue + Space Grotesk + Caveat + JetBrains Mono — instead of the brand DNA fonts. The brand fonts still apply to §6 component code (paste-ready for Phase 4b). The §6 component preview and §T type-role atlas use `.preset-native-scope` so var(--font-display/body/script/mono) re-resolves to these native families for the live preview.
 
 ## §A Director's intent
 
@@ -152,83 +152,69 @@ The atlas is the **sole authoring source** for non-component text. If a scene ne
     "id": "label-eyebrow",
     "family": "display",
     "purpose": "eyebrow label above a headline, tracked 0.2em (brand-primary)",
-    "px_min": 14, "px_max": 18, "weight": 400, "leading": "1.2", "tracking": "0.2em", "case": "upper",
+    "px_min": 26, "px_max": 32, "weight": 400, "leading": "1.2", "tracking": "0.2em", "case": "upper",
     "sample_html": "<div class=\"t-trole-label-eyebrow\">Vol. 01 — May 2026</div>"
   },
   {
     "id": "label-spaced",
     "family": "body",
-    "purpose": "tracked all-caps small label (Space Grotesk 600, ink)",
-    "px_min": 12, "px_max": 14, "weight": 600, "leading": "1.2", "tracking": "0.25em", "case": "upper",
+    "purpose": "tracked all-caps label (Space Grotesk 600, ink)",
+    "px_min": 24, "px_max": 28, "weight": 600, "leading": "1.2", "tracking": "0.25em", "case": "upper",
     "sample_html": "<div class=\"t-trole-label-spaced\">Section meta · Issue 03</div>"
   },
   {
     "id": "caption-feature",
     "family": "display",
     "purpose": "tracked all-caps caption / feature callout (Bebas, ink)",
-    "px_min": 13, "px_max": 15, "weight": 400, "leading": "1.2", "tracking": "0.2em", "case": "upper",
+    "px_min": 24, "px_max": 30, "weight": 400, "leading": "1.2", "tracking": "0.2em", "case": "upper",
     "sample_html": "<div class=\"t-trole-caption-feature\">— printed in this issue —</div>"
-  },
-  {
-    "id": "body-md",
-    "family": "body",
-    "purpose": "lead paragraph or emphasized body (Space Grotesk 400)",
-    "px_min": 14, "px_max": 18, "weight": 400, "leading": "1.6", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-body-md\">A lead paragraph carries the zine's argument — small body type, generous line-height, never above 18px.</p>"
-  },
-  {
-    "id": "body",
-    "family": "body",
-    "purpose": "standard paragraph body (13-16px magazine column density)",
-    "px_min": 13, "px_max": 16, "weight": 400, "leading": "1.7", "tracking": "0", "case": "sentence",
-    "sample_html": "<p class=\"t-trole-body\">Body holds at 13-16px. Tight measure, no italic — the hand-script does the curve.</p>"
   },
   {
     "id": "hand-script",
     "family": "script",
     "purpose": "author attribution / decorative byline (Caveat 600)",
-    "px_min": 22, "px_max": 36, "weight": 600, "leading": "1.3", "tracking": "0", "case": "sentence",
+    "px_min": 30, "px_max": 44, "weight": 600, "leading": "1.3", "tracking": "0", "case": "sentence",
     "sample_html": "<div class=\"t-trole-hand-script\">— our founding principle since day one</div>"
   },
   {
     "id": "hand-script-sm",
     "family": "script",
     "purpose": "small handwritten label or side note",
-    "px_min": 16, "px_max": 22, "weight": 400, "leading": "1.3", "tracking": "0", "case": "sentence",
+    "px_min": 26, "px_max": 34, "weight": 400, "leading": "1.3", "tracking": "0", "case": "sentence",
     "sample_html": "<div class=\"t-trole-hand-script-sm\">jotted in the margin</div>"
   },
   {
     "id": "stamp-mark",
     "family": "display",
     "purpose": "approval stamp — ink bg, brand-primary text + 2px border, rotated -8deg",
-    "px_min": 16, "px_max": 22, "weight": 400, "leading": "1", "tracking": "0.1em", "case": "upper",
+    "px_min": 24, "px_max": 30, "weight": 400, "leading": "1", "tracking": "0.1em", "case": "upper",
     "sample_html": "<div><span class=\"t-trole-stamp-mark\">Stamped — Vol. 01</span></div>"
   },
   {
     "id": "inline-highlight",
     "family": "body",
     "purpose": "black-on-khaki marker swipe inside a body paragraph (never green)",
-    "px_min": 13, "px_max": 16, "weight": 600, "leading": "1.7", "tracking": "0", "case": "sentence",
+    "px_min": 24, "px_max": 28, "weight": 600, "leading": "1.7", "tracking": "0", "case": "sentence",
     "sample_html": "<p class=\"t-trole-body\">A paragraph that needs to <span class=\"t-trole-inline-highlight\">lift one phrase</span> uses the marker treatment.</p>"
   },
   {
     "id": "ribbon-bar",
     "family": "display",
     "purpose": "brand-primary color block with cream uppercase Bebas — section label / accent strip",
-    "px_min": 14, "px_max": 20, "weight": 400, "leading": "1", "tracking": "0.15em", "case": "upper",
+    "px_min": 26, "px_max": 34, "weight": 400, "leading": "1", "tracking": "0.15em", "case": "upper",
     "sample_html": "<div><span class=\"t-trole-ribbon-bar\">Featured this issue</span></div>"
   },
   {
     "id": "chip",
     "family": "body",
     "purpose": "tabular ledger category tag (Space Grotesk uppercase, brand-primary fill, cream text)",
-    "px_min": 11, "px_max": 13, "weight": 600, "leading": "1", "tracking": "0.06em", "case": "upper",
+    "px_min": 24, "px_max": 28, "weight": 600, "leading": "1", "tracking": "0.06em", "case": "upper",
     "sample_html": "<div><span class=\"t-trole-chip\">Manifesto</span></div>"
   }
 ]
 ```
 
-The atlas omits `grain-overlay` (it's a texture, declared in §B decoration tokens) and `card-offset` (a depth motif, declared in §M atomic motifs).
+The atlas omits `grain-overlay` (it's a texture, declared in §B decoration tokens) and `card-offset` (a depth move, shipped as a §6 component).
 
 ## §E Motion (GSAP consts — REPLACES site ease)
 
@@ -359,84 +345,13 @@ Take the brand's product description / value prop. Transform with:
 
 - Grain overlay (`grain-overlay` component) on every single scene, at 0.07 opacity, fixed full-viewport, pointer-events disabled, z-index 9999. Without it, the print register evaporates.
 
-## §M Atomic motifs (gestures the plan agent can reference)
-
-Each motif is a **single reusable gesture** that lives inside a larger pattern. Patterns compose motifs; motifs do not compose anything. The plan agent treats motifs as the smallest cite-able vocabulary — a scene description can say "uses motif:offset-block on the RSVP card" without specifying which pattern the card sits in.
-
-```motifs
-[
-  {
-    "id": "offset-block",
-    "label": "Offset block",
-    "role": "paper-on-paper-depth",
-    "surface_safe": ["paper", "cream"],
-    "description": "Brand-primary slab sits 12px down-and-right behind a cream card via ::before. The signature depth move — paper-on-paper underprint, never a blurred shadow. Apply to hero callouts and RSVP-style cards.",
-    "wide": true,
-    "demo": "<div class=\"rz-motif-offset\"><div class=\"rz-motif-offset-card\">Card front.</div></div>",
-    "css": ".rz-motif-offset{position:relative;display:inline-block;padding-right:12px;padding-bottom:12px}.rz-motif-offset-card{position:relative;background:var(--anchor-cream);border:var(--border-thick);padding:24px 32px;font-family:var(--f-disp-native);font-weight:400;font-size:clamp(28px,3vw,48px);line-height:1;letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}.rz-motif-offset-card::before{content:\"\";position:absolute;inset:12px -12px -12px 12px;background:var(--brand-primary);z-index:-1}"
-  },
-  {
-    "id": "rotated-stamp",
-    "label": "Rotated stamp",
-    "role": "approval-mark",
-    "surface_safe": ["paper", "cream"],
-    "description": "Ink rectangle, brand-primary text + 2px brand-primary border, rotated -8deg. Reserve for status / approval / 'CONTACT US' callouts — overuse degrades the signal.",
-    "demo": "<div class=\"rz-motif-stamp\">Stamp of approval</div>",
-    "css": ".rz-motif-stamp{display:inline-block;background:var(--ink);color:var(--brand-primary);border:2px solid var(--brand-primary);padding:10px 24px;font-family:var(--f-disp-native);font-weight:400;font-size:clamp(16px,1.6vw,22px);line-height:1;letter-spacing:.1em;text-transform:uppercase;transform:rotate(-8deg)}"
-  },
-  {
-    "id": "drop-cap",
-    "label": "Drop cap",
-    "role": "editorial-opener",
-    "surface_safe": ["paper", "cream"],
-    "description": "Oversized brand-primary Bebas initial that opens an editorial paragraph. Floated left, line-height 0.8, body text wraps around. The system's editorial fingerprint.",
-    "wide": true,
-    "demo": "<p class=\"rz-motif-drop\"><span>F</span>or the editorial column, the drop cap is the system's signal — every feature-length paragraph opens with one, in brand-primary Bebas Neue.</p>",
-    "css": ".rz-motif-drop{margin:0;font-family:var(--f-body-native);font-weight:400;font-size:clamp(14px,1.3vw,17px);line-height:1.6;color:var(--ink);max-width:36ch}.rz-motif-drop span{float:left;font-family:var(--f-disp-native);font-weight:400;font-size:clamp(48px,6vw,80px);line-height:.8;letter-spacing:.02em;text-transform:uppercase;color:var(--brand-primary);margin-right:12px}"
-  },
-  {
-    "id": "ribbon-bar",
-    "label": "Ribbon bar",
-    "role": "accent-strip",
-    "surface_safe": ["paper", "cream"],
-    "description": "Brand-primary block with cream uppercase Bebas text. Read as a printed ribbon glued onto the page — section labels, eyebrows, inline highlights.",
-    "demo": "<span class=\"rz-motif-ribbon\">Featured · vol. 01</span>",
-    "css": ".rz-motif-ribbon{display:inline-block;background:var(--brand-primary);color:var(--anchor-cream);padding:8px 20px;font-family:var(--f-disp-native);font-weight:400;font-size:clamp(14px,1.4vw,20px);line-height:1;letter-spacing:.15em;text-transform:uppercase}"
-  },
-  {
-    "id": "inline-highlight",
-    "label": "Inline highlight",
-    "role": "marker-swipe",
-    "surface_safe": ["paper"],
-    "description": "Black-on-khaki marker swipe inside body paragraphs to lift a phrase. The print equivalent of a marker pen. Never green-on-khaki — green inline reads as a typo.",
-    "demo": "<p class=\"rz-motif-inline\">The paragraph keeps its calm <span>but lifts this phrase</span> in marker.</p>",
-    "css": ".rz-motif-inline{margin:0;font-family:var(--f-body-native);font-weight:400;font-size:clamp(14px,1.3vw,17px);line-height:1.7;color:var(--ink);max-width:36ch}.rz-motif-inline span{background:var(--ink);color:var(--anchor-paper);padding:2px 8px;font-weight:600}"
-  },
-  {
-    "id": "hand-script-byline",
-    "label": "Hand-script byline",
-    "role": "human-voice",
-    "surface_safe": ["paper", "cream", "brand"],
-    "description": "Caveat handwritten attribution under a quote or statement. One byline per statement — never two. Pairs with the em-dash opener (\"— our founding principle since day one\").",
-    "demo": "<div class=\"rz-motif-byline\">— our founding principle since day one</div>",
-    "css": ".rz-motif-byline{font-family:var(--f-script-native);font-weight:600;font-size:clamp(22px,3vw,36px);line-height:1.3;color:var(--ink)}"
-  }
-]
-```
-
-The `motifs` JSON block above is the SOLE source of truth. build-design.mjs reads it to render §M cards in design.html. The Phase 3 plan agent and Phase 4b scene worker may cite motifs by `id` when annotating which gesture a scene relies on.
-
-**Materials lexicon** (informational — these are the composition atoms behind the patterns):
-
-- offset-block · rotated-stamp · drop-cap · ribbon-bar · inline-highlight · hand-script-byline · collage-piece · tape-mark · grain-overlay · diamond-rule
-
 ## §I Page-level CSS (overrides design.html's neutral chrome — makes the doc itself read as retro-zine)
 
 ```css
 /* ── Preset-native typography vars (loaded via preset-meta.chromeFonts.googleFontsHref).
  * These let the doc chrome render in Bebas Neue / Space Grotesk / Caveat / JetBrains Mono
- * regardless of which brand DNA the preset is applied to. The §6 component preview,
- * §M motifs grid also reads these via .preset-native-scope.
+ * regardless of which brand DNA the preset is applied to. The §6 component preview
+ * and §T type-role atlas also read these via .preset-native-scope.
  *
  * Fallback chains end in a face that still carries the preset's vibe (Oswald / Anton /
  * Impact for the display slab; Inter for body; system cursives for script). Falling
@@ -454,7 +369,7 @@ The `motifs` JSON block above is the SOLE source of truth. build-design.mjs read
 }
 
 /* .preset-native-scope: re-bind brand DNA font tokens to preset-native families.
- * Wraps §6 component previews and §M motif demos so
+ * Wraps §6 component previews and the §T type-role atlas so
  * var(--font-*) resolves to Bebas Neue / Space Grotesk / Caveat / JetBrains Mono
  * regardless of the brand DNA tokens emitted in :root. The paste-ready
  * component source is untouched — Phase 4b still grep + paste original
@@ -545,100 +460,6 @@ h2 {
   color: var(--ink) !important;
 }
 
-/* ── §M Motifs grid: atomic gestures.
- * Mirrors retro-zine-design.html's signature-moves grid — a 12-col grid of
- * small cards each teaching ONE reusable gesture. Cards may declare a surface
- * (paper / cream / brand) to demonstrate the gesture against its native bg. */
-.ds-motif-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 16px;
-}
-.ds-motif {
-  grid-column: span 4;
-  min-height: 280px;
-  padding: 28px;
-  border: var(--border-thick);
-  border-radius: 0;
-  background: var(--anchor-cream);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 16px;
-  position: relative;
-  overflow: hidden;
-}
-.ds-motif.ds-motif-wide {
-  grid-column: span 8;
-}
-.ds-motif.ds-motif-surface-paper {
-  background: var(--anchor-paper);
-}
-.ds-motif.ds-motif-surface-brand {
-  background: var(--brand-primary);
-  color: var(--anchor-cream);
-  border-color: var(--ink);
-}
-.ds-motif.ds-motif-surface-cream {
-  background: var(--anchor-cream);
-  color: var(--ink);
-}
-.ds-motif-h {
-  margin: 0;
-  font-family: var(--f-disp-native);
-  font-weight: 400;
-  font-size: clamp(24px, 2.6vw, 36px);
-  line-height: 1;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--brand-primary);
-}
-.ds-motif.ds-motif-surface-brand .ds-motif-h {
-  color: var(--anchor-cream);
-}
-.ds-motif-desc {
-  margin: 0;
-  font-family: var(--f-body-native);
-  font-weight: 400;
-  font-size: 14px;
-  line-height: 1.55;
-  color: color-mix(in srgb, var(--ink) 70%, transparent);
-  max-width: 30ch;
-}
-.ds-motif.ds-motif-surface-brand .ds-motif-desc {
-  color: color-mix(in srgb, var(--anchor-cream) 85%, transparent);
-}
-.ds-motif-demo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 96px;
-}
-.ds-motif-id {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  font-family: var(--f-mono-native);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ink);
-  opacity: 0.45;
-}
-.ds-motif.ds-motif-surface-brand .ds-motif-id {
-  color: var(--anchor-cream);
-  opacity: 0.7;
-}
-@media (max-width: 880px) {
-  .ds-motif-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .ds-motif,
-  .ds-motif.ds-motif-wide {
-    grid-column: auto;
-  }
-}
-
 /* ── §T Type-role atlas. Container = paper-on-paper card look. Each .t-trole-*
  * class encodes the role's family / size / weight / leading / tracking / case /
  * decoration. Family selectors use var(--font-*) tokens so the atlas renders
@@ -727,7 +548,7 @@ h2 {
 .t-trole-label-eyebrow {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(14px, 1.2vw, 18px);
+  font-size: clamp(26px, 2vw, 32px);
   line-height: 1.2;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -736,7 +557,7 @@ h2 {
 .t-trole-label-spaced {
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: clamp(12px, 1vw, 14px);
+  font-size: clamp(24px, 1.7vw, 28px);
   line-height: 1.2;
   letter-spacing: 0.25em;
   text-transform: uppercase;
@@ -745,41 +566,23 @@ h2 {
 .t-trole-caption-feature {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(13px, 1.1vw, 15px);
+  font-size: clamp(24px, 1.9vw, 30px);
   line-height: 1.2;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--ink);
 }
-.t-trole-body-md {
-  font-family: var(--font-body);
-  font-weight: 400;
-  font-size: clamp(14px, 1.3vw, 18px);
-  line-height: 1.6;
-  color: var(--ink);
-  max-width: 50ch;
-  margin: 0;
-}
-.t-trole-body {
-  font-family: var(--font-body);
-  font-weight: 400;
-  font-size: clamp(13px, 1.2vw, 16px);
-  line-height: 1.7;
-  color: var(--ink);
-  max-width: 60ch;
-  margin: 0;
-}
 .t-trole-hand-script {
   font-family: var(--font-script);
   font-weight: 600;
-  font-size: clamp(22px, 3vw, 36px);
+  font-size: clamp(30px, 3.4vw, 44px);
   line-height: 1.3;
   color: var(--ink);
 }
 .t-trole-hand-script-sm {
   font-family: var(--font-script);
   font-weight: 400;
-  font-size: clamp(16px, 2vw, 22px);
+  font-size: clamp(26px, 2.5vw, 34px);
   line-height: 1.3;
   color: var(--ink);
 }
@@ -787,7 +590,7 @@ h2 {
   display: inline-block;
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(16px, 1.5vw, 22px);
+  font-size: clamp(24px, 1.9vw, 30px);
   line-height: 1;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -809,7 +612,7 @@ h2 {
   display: inline-block;
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(14px, 1.4vw, 20px);
+  font-size: clamp(26px, 2.2vw, 34px);
   line-height: 1;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -821,7 +624,7 @@ h2 {
   display: inline-block;
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: 12px;
+  font-size: clamp(24px, 1.8vw, 28px);
   line-height: 1;
   letter-spacing: 0.06em;
   text-transform: uppercase;

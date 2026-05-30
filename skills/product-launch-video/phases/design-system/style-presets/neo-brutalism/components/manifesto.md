@@ -23,7 +23,7 @@
     background: var(--canvas);
     padding: 6px 14px;
     font-family: ui-monospace, monospace;
-    font-size: 12px;
+    font-size: 24px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     font-weight: 600;

@@ -28,7 +28,7 @@
   }
   .pf-stat-counter-label {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 1rem;
+    font-size: 1.5rem;
     font-weight: 500;
     line-height: 1.5;
     color: var(--ink);

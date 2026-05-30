@@ -50,7 +50,7 @@
   }
   .stn-stat-counter-body {
     font-family: "Inter", sans-serif;
-    font-size: 20px;
+    font-size: 24px;
     font-weight: 400;
     line-height: 1.4;
     margin: 0;

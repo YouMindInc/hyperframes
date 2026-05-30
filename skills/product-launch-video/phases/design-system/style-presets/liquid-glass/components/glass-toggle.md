@@ -2,8 +2,8 @@
 <!--
   640×64 segmented control with a sliding active pill. Three segments by
   default — tween `.toggle-active-pill { transform: translateX(...) }` to
-  move the highlight between options. Active segment's text stays #fff;
-  inactive segments are 96% opacity white.
+  move the highlight between options. Active segment's text stays pure white
+  (--lg-glint-white); inactive segments are 96% opacity white (--ink-on-glass).
 
   Suggested motion: pill slides between positions with EASE.emphasis
   (power3.inOut) over DUR.snap. Trigger at the same time as the corresponding
@@ -52,11 +52,10 @@
     height: calc(100% - 12px);
     border-radius: 999px;
     background:
-      radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.32), transparent 42%),
-      rgba(255, 255, 255, 0.14);
+      radial-gradient(circle at 28% 18%, var(--lg-rim-glow), transparent 42%), var(--lg-rim-glint);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.32),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.09);
+      inset 0 1px 0 var(--lg-rim-glow),
+      inset 0 -1px 0 var(--lg-rim-haze);
     transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .toggle-item {
@@ -64,14 +63,14 @@
     position: relative;
     z-index: 1;
     text-align: center;
-    font-size: 16px;
+    font-size: 24px;
     font-weight: 700;
     color: var(--ink-on-glass);
     line-height: 52px;
     text-shadow: var(--text-shadow-glass);
   }
   .toggle-item.active {
-    color: #fff;
+    color: var(--lg-glint-white);
   }
 </style>
 ```

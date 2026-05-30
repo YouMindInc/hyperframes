@@ -19,7 +19,7 @@
     clip-path: var(--starburst-clip);
     font-family: "Big Shoulders Display", sans-serif;
     font-weight: 900;
-    font-size: clamp(22px, 2vw, 38px);
+    font-size: clamp(26px, 2.2vw, 42px);
     line-height: 1;
     letter-spacing: -0.01em;
     text-align: center;

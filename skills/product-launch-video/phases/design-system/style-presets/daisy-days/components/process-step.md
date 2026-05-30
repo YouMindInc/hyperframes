@@ -58,15 +58,15 @@
     background: var(--brand-accent);
   }
   .dc-step-circle--2 {
-    background: color-mix(in srgb, var(--brand-primary) 55%, #7ecdc0);
+    background: color-mix(in srgb, var(--brand-primary) 55%, var(--anchor-teal));
   }
   .dc-step-circle--3 {
-    background: color-mix(in srgb, var(--brand-secondary) 55%, #d4a5e8);
+    background: color-mix(in srgb, var(--brand-secondary) 55%, var(--anchor-lavender));
   }
   .dc-step-title {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: 1.1rem;
+    font-size: clamp(28px, 1.9vw, 34px);
     line-height: 1.2;
     color: var(--ink);
     margin: 0;
@@ -74,10 +74,10 @@
   .dc-step-desc {
     font-family: var(--font-body);
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: clamp(24px, 1.5vw, 26px);
     line-height: 1.45;
     color: color-mix(in srgb, var(--ink) 65%, transparent);
-    max-width: 12rem;
+    max-width: 16rem;
     margin: 0;
   }
   .dc-process-arrow {

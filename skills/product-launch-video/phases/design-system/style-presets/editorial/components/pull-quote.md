@@ -17,7 +17,7 @@
   .ed-quote cite {
     display: block;
     margin-top: 24px;
-    font-size: 13px;
+    font-size: 24px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     font-style: normal;

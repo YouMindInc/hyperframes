@@ -18,7 +18,7 @@
     font-variant-numeric: tabular-nums;
   }
   .bn-stat-label {
-    font-size: clamp(13px, 1.3vw, 18px);
+    font-size: clamp(24px, 1.5vw, 28px);
     text-transform: uppercase;
     letter-spacing: 0.16em;
     margin-top: 12px;

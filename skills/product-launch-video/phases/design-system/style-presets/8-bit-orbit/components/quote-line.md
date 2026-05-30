@@ -43,7 +43,7 @@
     z-index: 1;
     margin: 0;
     font-family: "Chakra Petch", sans-serif;
-    font-size: clamp(18px, 2.2vw, 26px);
+    font-size: clamp(26px, 2.4vw, 34px);
     font-weight: 500;
     line-height: 1.8;
     color: var(--canvas-navy);
@@ -59,7 +59,7 @@
   .bo-quote-author {
     margin-top: 20px;
     font-family: "Space Mono", monospace;
-    font-size: 12px;
+    font-size: 24px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--canvas-navy);

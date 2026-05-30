@@ -47,7 +47,7 @@
   }
   .bo-stat-block-label {
     font-family: "Space Mono", monospace;
-    font-size: 11.2px;
+    font-size: 24px;
     font-weight: 400;
     line-height: 1;
     letter-spacing: 0.2em;

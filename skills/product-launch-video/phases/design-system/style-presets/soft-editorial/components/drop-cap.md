@@ -10,7 +10,7 @@
 <style>
   .se-dropcap {
     font-family: var(--font-body, "Work Sans", sans-serif);
-    font-size: clamp(20px, 1.8vw, 30px);
+    font-size: clamp(24px, 1.8vw, 30px);
     line-height: 1.5;
     max-width: var(--measure-body);
     color: var(--ink);
@@ -20,7 +20,7 @@
     float: left;
     font-family: var(--font-display, "Cormorant Garamond", serif);
     font-weight: 500;
-    font-size: 5em; /* ~132px against a 26px body */
+    font-size: 5.4em; /* ~130px against a 24px body */
     line-height: 0.85;
     padding: 8px 14px 0 0;
     color: var(--ink);

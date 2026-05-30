@@ -20,7 +20,7 @@
     align-items: center;
     justify-content: center;
     font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-    font-size: 1.2vw;
+    font-size: 1.5vw;
     letter-spacing: 0.1em;
     font-weight: 500;
     color: var(--brand-secondary);

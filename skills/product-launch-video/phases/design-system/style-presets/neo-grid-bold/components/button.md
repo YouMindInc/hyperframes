@@ -36,7 +36,7 @@
   }
   .ng-button-eyebrow {
     font-family: var(--font-mono), "JetBrains Mono", monospace;
-    font-size: 16px;
+    font-size: 24px;
     letter-spacing: var(--track-mono);
     text-transform: uppercase;
     opacity: 0.85;
@@ -52,7 +52,7 @@
   }
   .ng-button-body {
     font-family: var(--font-body), "Space Grotesk", sans-serif;
-    font-size: 20px;
+    font-size: 26px;
     line-height: 1.45;
     margin: 0;
   }

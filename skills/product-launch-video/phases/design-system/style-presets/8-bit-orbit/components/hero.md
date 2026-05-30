@@ -14,7 +14,7 @@
   .bo-eyebrow {
     display: block;
     font-family: "Space Mono", monospace;
-    font-size: 13.6px;
+    font-size: 24px;
     font-weight: 400;
     letter-spacing: 0.3em;
     text-transform: uppercase;
@@ -34,7 +34,7 @@
   }
   .bo-hero-tagline {
     font-family: "Chakra Petch", sans-serif;
-    font-size: clamp(14.4px, 1.5vw, 19.2px);
+    font-size: clamp(25px, 1.8vw, 30px);
     font-weight: 400;
     line-height: 1.8;
     color: var(--ink);
