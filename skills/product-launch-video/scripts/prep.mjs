@@ -490,6 +490,17 @@ if (audioMetaPath) {
 // Final s.estimatedDuration_s = highest-priority source that exists.
 // Mismatch anomalies surface upstream inconsistencies but do NOT block.
 
+// ffprobe a media file's container duration in seconds (NaN on any failure).
+function ffprobeDurationSeconds(absPath) {
+  const r = spawnSync(
+    "ffprobe",
+    ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", absPath],
+    { encoding: "utf8" },
+  );
+  if (r.status !== 0) return NaN;
+  return parseFloat((r.stdout || "").trim());
+}
+
 for (const s of scenes) {
   const planDur = s.estimatedDuration_s; // value as parsed from section_plan
   const narrator = narratorByNumber.get(s.sceneNumber);
@@ -500,10 +511,30 @@ for (const s of scenes) {
   }
   let audioDur = NaN;
   let audioScene = null;
+  let audioDurSource = null;
   if (audioMeta) {
     audioScene = audioMeta.scenes?.[s.sceneId] || null;
     if (audioScene && isFinite(audioScene.voiceDuration) && audioScene.voiceDuration > 0) {
       audioDur = audioScene.voiceDuration;
+      audioDurSource = "audio_meta";
+    } else if (audioScene) {
+      // audio_meta lists the scene but voiceDuration is missing/0 (e.g. an
+      // interrupted or partially-written audio.mjs run). The TTS wav on disk is
+      // still the real truth — ffprobe it before falling back to the plan
+      // estimate, so a stale 0 doesn't inflate the scene into dead air (visual
+      // slot far longer than the voiceover → captions vanish mid-scene).
+      const voiceRel = audioScene.voicePath || `assets/voice/${s.sceneId}.wav`;
+      const voiceAbs = join(hyperframesDir, voiceRel);
+      if (existsSync(voiceAbs)) {
+        const probed = ffprobeDurationSeconds(voiceAbs);
+        if (isFinite(probed) && probed > 0) {
+          audioDur = probed;
+          audioDurSource = "voice_probe";
+          anomalies.push(
+            `${s.sceneId}: audio_meta.voiceDuration missing/0 — recovered ${probed.toFixed(3)}s by ffprobing ${voiceRel} (vs section_plan ${planDur}s)`,
+          );
+        }
+      }
     }
   }
 
@@ -512,7 +543,7 @@ for (const s of scenes) {
   let source = "section_plan";
   if (isFinite(audioDur)) {
     finalDur = audioDur;
-    source = "audio_meta";
+    source = audioDurSource || "audio_meta";
   }
   // Round to 3 decimals — naive cumulative `start_s += dur` accumulates
   // float error fast enough that lint catches it (2.24 + 6.357 = 8.597000…1
@@ -538,7 +569,11 @@ for (const s of scenes) {
         `${s.sceneId}: narrator estimate ${narratorDur}s off by ${p}% vs audio_meta ${audioDur}s (truth)`,
       );
     }
-  } else if (isFinite(narratorDur) && Math.abs(narratorDur - planDur) > 0.01) {
+  } else if (
+    source === "section_plan" &&
+    isFinite(narratorDur) &&
+    Math.abs(narratorDur - planDur) > 0.01
+  ) {
     const p = pct(narratorDur, planDur).toFixed(1);
     anomalies.push(
       `${s.sceneId}: section_plan ${planDur}s vs narrator ${narratorDur}s (${p}% — no audio_meta available; using section_plan)`,
