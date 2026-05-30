@@ -260,8 +260,8 @@ const bgm = {
   log: bgmStatus?.log || null,
   pid: bgmStatus?.pid || null,
   target_duration_s: bgmStatus?.target_duration_s || null,
-  segment_duration_s: bgmStatus?.segment_duration_s || null,
-  segment_count: bgmStatus?.segment_count || null,
+  seed_duration_s: bgmStatus?.seed_duration_s || null,
+  loop_count: bgmStatus?.loop_count || null,
   message:
     bgmStatus?.message ||
     (bgmReady

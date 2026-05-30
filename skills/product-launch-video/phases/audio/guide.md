@@ -1,6 +1,6 @@
 # Audio (Phase 2.5) — workflow guide
 
-Phase 2.5 由 **`scripts/audio.mjs`** 一把跑完：narrator_scripts → 每 scene voice + word JSON + audio_meta.json，外加（可选）detached BGM。Step 3 编排器直接 `node audio.mjs`，**没有 subagent**。脚本先 ffprobe TTS 输出得到实测总时长，再让本地 MusicGen fallback 分段生成（默认 ≤8s/段）并合成一个等长 `assets/bgm.wav`，所以 30-60s BGM 不再一次性打进模型的 token/position 上限。
+Phase 2.5 由 **`scripts/audio.mjs`** 一把跑完：narrator_scripts → 每 scene voice + word JSON + audio_meta.json，外加（可选）detached BGM。Step 3 编排器直接 `node audio.mjs`，**没有 subagent**。脚本先 ffprobe TTS 输出得到实测总时长，再让本地 MusicGen fallback 单次生成一条 ~28s 种子片（一次 `generate()`，控制在模型 ~30s 位置编码上限内），然后：目标短于种子就裁切，目标长于种子就用 ~0.3s crossfade 把种子循环平铺到等长 `assets/bgm.wav`，最后整体首淡入尾淡出。比旧的逐段拼接没有硬接缝。
 
 完整 flag 见 SKILL.md Step 3 / `audio.mjs --help`。本文件只描述 schema 和失败模式。
 
@@ -24,9 +24,9 @@ hyperframes/assets/bgm.wav                      # BGM（可选；可能 audio.mj
   "bgm_path": "assets/bgm.wav" | null,
   "bgm_log": "/tmp/bgm-<timestamp>.log" | null,
   "bgm_pid": 12345 | null,
-  "bgm_mode": "detached-single" | "detached-segmented" | null,
-  "bgm_segment_duration_s": 8 | null,
-  "bgm_segment_count": 5 | null,
+  "bgm_mode": "detached-single" | "detached-seed-loop" | "detached-seed-trim" | null,
+  "bgm_seed_duration_s": 28 | null,    // MusicGen: 单条种子片长(≤30s 规避位置编码上限)
+  "bgm_loop_count": 3 | null,          // 种子 crossfade-loop 平铺到目标时长的圈数(trim 时为 1)
   "total_duration_s": <Σ voiceDuration>,
   "scenes": {
     "scene_1": {

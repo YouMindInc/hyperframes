@@ -13,9 +13,10 @@
 //     script exits as soon as voice + transcribe are done; BGM keeps rendering
 //     in the background. audio_meta.json sets `bgm_pending: true` so prep.mjs
 //     trusts the path and Phase 4c runs wait-bgm.mjs before assemble/render.
-//   * Local MusicGen fallback renders in short segments and concatenates them
-//     into one assets/bgm.wav. This avoids the model's positional limit when
-//     a 30-60s promo asks for too many tokens in a single generate() call.
+//   * Local MusicGen fallback generates ONE ~28s seed clip (one generate()
+//     call, kept under the model's ~30s positional limit), then trims it down
+//     if the target is shorter, or loops it with short crossfades up to the
+//     target length. This avoids the seams of the old per-segment concatenation.
 //
 // BGM prompt inference: the script reads concatenated `script` + `keyMessage`
 // fields from narrator_scripts.json (no tokens.json side file — Phase 1
@@ -32,7 +33,7 @@
 //     [--voice <id>] [--lang en] \
 //     [--provider heygen|elevenlabs|kokoro] \
 //     [--no-bgm] [--bgm-prompt "<custom prompt>"] \
-//     [--bgm-segment-seconds 8]
+//     [--bgm-seed-seconds 28]
 
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -72,12 +73,16 @@ const userBgmPrompt = typeof flag("bgm-prompt") === "string" ? flag("bgm-prompt"
 const noBgm = flag("no-bgm") === true;
 const userProvider = typeof flag("provider") === "string" ? flag("provider") : null;
 const lang = typeof flag("lang") === "string" ? flag("lang") : "en";
-const bgmSegmentSecondsRaw =
-  typeof flag("bgm-segment-seconds") === "string" ? Number(flag("bgm-segment-seconds")) : 8;
-const bgmSegmentSeconds =
-  isFinite(bgmSegmentSecondsRaw) && bgmSegmentSecondsRaw > 0
-    ? Math.min(Math.max(bgmSegmentSecondsRaw, 2), 12)
-    : 8;
+// Seed length for the local MusicGen path: generate ONE clip this long, then
+// loop-with-crossfade up to the target (or trim down if the target is shorter).
+// musicgen-small's positional limit is ~1500 tokens ≈ 30s, so we cap at 28s
+// (1400 tokens) to keep a safety margin and avoid `IndexError: index out of range`.
+const bgmSeedSecondsRaw =
+  typeof flag("bgm-seed-seconds") === "string" ? Number(flag("bgm-seed-seconds")) : 28;
+const bgmSeedSeconds =
+  isFinite(bgmSeedSecondsRaw) && bgmSeedSecondsRaw > 0
+    ? Math.min(Math.max(bgmSeedSecondsRaw, 10), 30)
+    : 28;
 
 // ---------- load .env ----------
 // Mirrors the CLI's loadEnvFile (packages/cli/src/capture/scaffolding.ts):
@@ -542,8 +547,8 @@ if (Object.keys(scenesMap).length === 0) {
     bgm_pid: null,
     bgm_mode: null,
     bgm_target_duration_s: null,
-    bgm_segment_duration_s: null,
-    bgm_segment_count: null,
+    bgm_seed_duration_s: null,
+    bgm_loop_count: null,
     total_duration_s: 0,
     scenes: scenesMap,
   };
@@ -600,15 +605,21 @@ if (noBgm) {
   // Path B: MusicGen via HuggingFace transformers (local, free, no API key).
   // pip install transformers torch soundfile numpy → facebook/musicgen-small (~300MB).
   // MusicGen emits ~50 codec frames per second, so max_new_tokens ≈ duration_s × 50.
-  // Generate in short chunks because one 30-60s generate() can exceed the
-  // decoder's positional embeddings and fail with `IndexError: index out of range`.
+  //
+  // Generate ONE seed clip in a single generate() call (kept ≤28s / 1400 tokens
+  // to stay under the decoder's ~30s positional limit, which otherwise fails
+  // with `IndexError: index out of range`). Then:
+  //   * target ≤ seed → trim the seed down (with a tail fade-out), or
+  //   * target > seed → loop the seed with short crossfades until we reach the
+  //     target, so there are no hard per-segment seams.
   const totalS = bgmTargetDurationS;
   const prompt = inferBgmPrompt();
   const log = `/tmp/bgm-${Date.now()}.log`;
   const targetS = Math.max(1, totalS);
-  const segmentCount = Math.ceil(targetS / bgmSegmentSeconds);
+  const seedS = Math.min(bgmSeedSeconds, 30);
+  const loops = targetS > seedS ? Math.ceil(targetS / seedS) : 1;
   console.log(
-    `BGM: launching MusicGen via transformers (detached, local, segmented ${segmentCount}×≤${bgmSegmentSeconds}s) — prompt: "${prompt.slice(0, 70)}…"`,
+    `BGM: launching MusicGen via transformers (detached, local, ${seedS}s seed → ${targetS > seedS ? `crossfade-loop ×${loops}` : "trim"} → ${targetS.toFixed(1)}s) — prompt: "${prompt.slice(0, 70)}…"`,
   );
   console.log(`     log: ${log}`);
   const fd = openSync(log, "w");
@@ -626,44 +637,67 @@ from transformers import MusicgenForConditionalGeneration, AutoProcessor
 prompt = ${JSON.stringify(prompt)}
 out_path = ${JSON.stringify(bgmAbsPath)}
 target_s = float(${targetS.toFixed(3)})
-segment_s = float(${bgmSegmentSeconds.toFixed(3)})
+seed_s = float(${seedS.toFixed(3)})
 token_rate = 50
+crossfade_s = 0.3
+
+def apply_fade(arr, sr, fade_in_s=0.08, fade_out_s=0.5):
+    n_in = min(int(round(fade_in_s * sr)), arr.shape[0] // 2)
+    n_out = min(int(round(fade_out_s * sr)), arr.shape[0] // 2)
+    if n_in > 1:
+        arr[:n_in] *= np.linspace(0.0, 1.0, n_in, dtype="float32")
+    if n_out > 1:
+        arr[-n_out:] *= np.linspace(1.0, 0.0, n_out, dtype="float32")
+    return arr
+
+def loop_crossfade(seed, target_len, xf):
+    # Equal-power crossfade the seed onto itself until we cover target_len samples.
+    if seed.shape[0] >= target_len:
+        return seed[:target_len]
+    xf = min(xf, seed.shape[0] // 2)
+    if xf < 1:
+        reps = int(math.ceil(target_len / seed.shape[0]))
+        return np.tile(seed, reps)[:target_len]
+    t = np.linspace(0.0, 1.0, xf, dtype="float32")
+    fade_out = np.cos(t * (math.pi / 2))
+    fade_in = np.sin(t * (math.pi / 2))
+    out = seed.copy()
+    while out.shape[0] < target_len:
+        tail = out[-xf:] * fade_out
+        head = seed[:xf] * fade_in
+        out = np.concatenate([out[:-xf], tail + head, seed[xf:]])
+    return out[:target_len]
 
 try:
     Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
-    print(f"[musicgen] segmented render target={target_s:.3f}s segment={segment_s:.3f}s", flush=True)
+    print(f"[musicgen] seed render target={target_s:.3f}s seed={seed_s:.3f}s", flush=True)
     processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
     model = MusicgenForConditionalGeneration.from_pretrained("facebook/musicgen-small")
     model.eval()
     sr = int(model.config.audio_encoder.sampling_rate)
-    chunks = []
-    remaining = target_s
-    i = 0
-    while remaining > 0.001:
-        dur = min(segment_s, remaining)
-        tokens = max(1, int(math.ceil(dur * token_rate)))
-        print(f"[musicgen] segment {i + 1}: dur={dur:.3f}s tokens={tokens}", flush=True)
-        inputs = processor(text=[prompt], padding=True, return_tensors="pt")
-        audio = model.generate(**inputs, max_new_tokens=tokens)
-        arr = audio[0, 0].detach().cpu().numpy().astype("float32")
-        want = max(1, int(round(dur * sr)))
-        if arr.shape[0] < want:
-            arr = np.pad(arr, (0, want - arr.shape[0]))
-        else:
-            arr = arr[:want]
-        fade = min(int(round(0.08 * sr)), max(0, arr.shape[0] // 4))
-        if fade > 1:
-            arr[:fade] *= np.linspace(0.0, 1.0, fade, dtype="float32")
-            arr[-fade:] *= np.linspace(1.0, 0.0, fade, dtype="float32")
-        chunks.append(arr)
-        remaining -= dur
-        i += 1
-    final = np.concatenate(chunks) if chunks else np.zeros(1, dtype="float32")
+
+    # Only generate as much seed as we actually need (target may be < seed).
+    gen_s = min(seed_s, target_s)
+    tokens = max(1, int(math.ceil(gen_s * token_rate)))
+    print(f"[musicgen] generating seed: dur={gen_s:.3f}s tokens={tokens}", flush=True)
+    inputs = processor(text=[prompt], padding=True, return_tensors="pt")
+    audio = model.generate(**inputs, max_new_tokens=tokens)
+    seed = audio[0, 0].detach().cpu().numpy().astype("float32")
+
     want_total = max(1, int(round(target_s * sr)))
+    if seed.shape[0] >= want_total:
+        final = seed[:want_total].copy()
+        print(f"[musicgen] trimmed seed to {want_total} samples", flush=True)
+    else:
+        xf = int(round(crossfade_s * sr))
+        final = loop_crossfade(seed, want_total, xf)
+        print(f"[musicgen] crossfade-looped seed to {final.shape[0]} samples", flush=True)
+
     if final.shape[0] < want_total:
         final = np.pad(final, (0, want_total - final.shape[0]))
     else:
         final = final[:want_total]
+    final = apply_fade(final, sr)
     sf.write(out_path, final, sr)
     print(f"[musicgen] wrote {out_path} samples={final.shape[0]} sr={sr}", flush=True)
 except Exception:
@@ -680,12 +714,12 @@ except Exception:
   bgmPid = bgm.pid;
   bgmMeta = {
     provider: "musicgen",
-    mode: "detached-segmented",
+    mode: targetS > seedS ? "detached-seed-loop" : "detached-seed-trim",
     pid: bgmPid,
     log,
     target_duration_s: Number(targetS.toFixed(3)),
-    segment_duration_s: bgmSegmentSeconds,
-    segment_count: segmentCount,
+    seed_duration_s: seedS,
+    loop_count: loops,
   };
 } else {
   const depsHint = `pip install ${BGM_PY_DEPS.join(" ")}`;
@@ -706,8 +740,8 @@ const audioMeta = {
   bgm_pid: bgmMeta?.pid || null,
   bgm_mode: bgmMeta?.mode || null,
   bgm_target_duration_s: bgmMeta?.target_duration_s || null,
-  bgm_segment_duration_s: bgmMeta?.segment_duration_s || null,
-  bgm_segment_count: bgmMeta?.segment_count || null,
+  bgm_seed_duration_s: bgmMeta?.seed_duration_s || null,
+  bgm_loop_count: bgmMeta?.loop_count || null,
   total_duration_s: parseFloat(totalDuration.toFixed(3)),
   scenes: scenesMap,
 };
@@ -725,7 +759,7 @@ if (bgmEnabled) {
   const bgmBackend =
     lyriaKey() && lyriaRecipe && existsSync(lyriaRecipe)
       ? "Lyria"
-      : `MusicGen via transformers (local, segmented ${bgmMeta?.segment_count || "?"}×≤${bgmMeta?.segment_duration_s || "?"}s)`;
+      : `MusicGen via transformers (local, ${bgmMeta?.seed_duration_s || "?"}s seed ${bgmMeta?.mode === "detached-seed-loop" ? `→ crossfade-loop ×${bgmMeta?.loop_count || "?"}` : "→ trim"})`;
   console.log(`  bgm: launched via ${bgmBackend} pid=${bgmPid} (detached, → ${bgmRelPath})`);
   if (bgmMeta?.log) console.log(`       log: ${bgmMeta.log}`);
   if (audioMeta.bgm_pending) {

@@ -91,8 +91,8 @@ const base = {
   log: logPath || null,
   pid,
   target_duration_s: audioMeta.bgm_target_duration_s || null,
-  segment_duration_s: audioMeta.bgm_segment_duration_s || null,
-  segment_count: audioMeta.bgm_segment_count || null,
+  seed_duration_s: audioMeta.bgm_seed_duration_s || null,
+  loop_count: audioMeta.bgm_loop_count || null,
   timeout_ms: timeoutMs,
 };
 

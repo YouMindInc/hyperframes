@@ -33,7 +33,7 @@ Read `<PROJECT_DIR>/finalize_brief.json`。看这些字段：
 | `gates_clean`                                     | 三道 CLI gate（lint/validate/inspect）全过 = true                                                                      |
 | `gates.{lint,validate,inspect}.ok / .output_tail` | gate 失败时的诊断面（不重跑同 gate；60 行 tail 已够定位）                                                              |
 | `bgm.status / bgm.ready / bgm.message`            | `wait-bgm.mjs` 的结构化结论。只用于报告；不要手动查进程/日志，BGM 不 ready 时继续 render                               |
-| `bgm.provider / bgm.mode / bgm.segment_count`     | BGM 元信息。需要汇报时直接复述 brief；不要再读 `audio_meta.json` 或 `bgm_status.json`                                  |
+| `bgm.provider / bgm.mode / bgm.loop_count`        | BGM 元信息。需要汇报时直接复述 brief；不要再读 `audio_meta.json` 或 `bgm_status.json`                                  |
 | `caption_keepout.violations[]`                    | 静态扫出的字幕带覆盖违规，**每条带 `edit_old` / `edit_new` 两个准 Edit 字符串**——见 Step 2.5，一行 Edit 改对，不读不算 |
 | `snapshot_times_s[]`                              | Step 3 一次性传 `--at`，**不要重新算 midpoint / 加 0.75 / dedup**                                                      |
 | `npx_prefix`                                      | 所有 CLI 调用复用这个 prefix（cache 已 warm，pinned 版本）                                                             |
