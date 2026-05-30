@@ -684,6 +684,13 @@ try:
     audio = model.generate(**inputs, max_new_tokens=tokens)
     seed = audio[0, 0].detach().cpu().numpy().astype("float32")
 
+    # Normalize the seed to ~0.89 peak BEFORE looping. MusicGen output sits near
+    # full-scale, so the equal-power crossfade's brief energy bump at each loop
+    # join would otherwise push samples past 1.0 and clip. Headroom prevents it.
+    seed_peak = float(np.max(np.abs(seed)))
+    if seed_peak > 1e-6:
+        seed = seed * (0.89 / seed_peak)
+
     want_total = max(1, int(round(target_s * sr)))
     if seed.shape[0] >= want_total:
         final = seed[:want_total].copy()
@@ -698,6 +705,11 @@ try:
     else:
         final = final[:want_total]
     final = apply_fade(final, sr)
+    # Safety limiter: a residual peak >1.0 (rounding, fade edges) would clip on
+    # write. Scale the whole buffer down by the overshoot if it ever happens.
+    peak = float(np.max(np.abs(final)))
+    if peak > 1.0:
+        final = final / peak
     sf.write(out_path, final, sr)
     print(f"[musicgen] wrote {out_path} samples={final.shape[0]} sr={sr}", flush=True)
 except Exception:
