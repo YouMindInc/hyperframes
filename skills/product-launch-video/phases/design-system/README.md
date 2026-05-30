@@ -15,11 +15,38 @@
 │   ├── hero.md
 │   ├── feature-card.md
 │   └── …
-├── caption-skin.html          # 必需 — preset 自带字幕皮肤(见 §3.5)
-└── README.md                  # 仅 block-frame 有(本文件 = 标准说明)
+└── caption-skin.html          # 必需 — preset 自带字幕皮肤(见 §3.5)
 ```
 
-构建脚本(`phases/design-system/scripts/build-design.mjs`)按目录读取;**无 `studio` 之类的额外约定文件**。
+构建脚本(`phases/design-system/scripts/build-design.mjs`)按目录读取;**无 `studio` 之类的额外约定文件**。所有 preset 目录形态相同(`preset.md` + `components/` + `caption-skin.html`);只有 `block-frame/` 额外带这份 `README.md`(= 标准本身,既是参照实现也是文档)。
+
+### 1.1 现有 preset(可对照的参照集)
+
+下面是当前 `style-presets/` 里已有的全部 style。新建前先扫一遍:**(a) 别取重名/重复定位的风格;(b) 挑视觉语言最接近你目标的那个做 `cp -r` 起点模板**(§5),改起来比从 block-frame 起更省。`name` = 目录名 = `preset-meta.name`;指纹取自各自的 `preset-meta.fingerprint`(选 preset / 推断匹配用,详见 §2.0)。
+
+| `name`(目录名)      | label             | 一句话风格指纹                                                   |
+| ------------------- | ----------------- | ---------------------------------------------------------------- |
+| `block-frame`       | Block Frame       | 硬黑投影 · 4px 实心墨边 · 饱和粉彩循环(**参照实现**)             |
+| `neo-brutalism`     | Neo-Brutalism     | 硬投影 · 粗实心边 · 命中即停 · 高密度高对比                      |
+| `creative-mode`     | Creative Mode     | 暖奶油纸 · 粗墨方边 · 彩色后转墨色硬投影 · 编辑杂志声            |
+| `retro-zine`        | Retro Zine        | 纸压纸偏移板 · 3px 墨边 · 柔纸洗牌 · 暖纸压森林绿                |
+| `peoples-platform`  | People's Platform | 三重叠印投影 · 奶油内嵌框 · 印章砸下 · 宣言声                    |
+| `pin-and-paper`     | Pin & Paper       | 黄纸带纹理 · 硬墨投影零模糊 · 细墨边 · 手写田野笔记声            |
+| `daisy-days`        | Daisy Days        | 硬炭投影 · 粗炭圆角 · 圆体显示 · 绘本粉彩 · 弹入落定             |
+| `playful`           | Playful           | 双描边偏移框 · 不对称有机 blob · back 过冲手放置 · 涂鸦          |
+| `scatterbrain`      | Scatterbrain      | 柔模糊纸抬升 · 便签无边 · 手放置微倾 · 暖粉彩压纸                |
+| `8-bit-orbit`       | 8-Bit Orbit       | 像素堆叠偏移 · 像素吸附闪烁 · 暗霓虹 · 封闭调色                  |
+| `sakura-chroma`     | Sakura Chroma     | 硬投影零模糊 · 1.5px 墨边 · 考究纸吸附 · 卡带包装编辑声          |
+| `stencil-tablet`    | Stencil & Tablet  | 全平无投影 · 圆角石板 · 考究印章 · 土系饱和 · 镂版显示体         |
+| `editorial`         | Editorial / Swiss | 无投影或发丝线 · 发丝边 · 克制滑入 · 低密度瑞士风                |
+| `editorial-forest`  | Editorial Forest  | 文学季刊 · 衬线 500 带 opsz · mono 大写宽字距 · 平纸无投影       |
+| `emerald-editorial` | Emerald Editorial | 严格矩形 · 无投影 · 4px 墨实线 · 双线戏单 · Bodoni 极端尺度      |
+| `soft-editorial`    | Soft Editorial    | 柔圆角 · 无投影 · 1px 暖墨虚线 · 半透白+粉彩卡 · 小开本季刊声    |
+| `capsule`           | Capsule           | 通用胶囊形 · 柔偏移低不透明 · Didone 衬线+Grotesk · 漂浮胶囊壁纸 |
+| `liquid-glass`      | Liquid Glass      | 内高光 · 半透发丝边 · 升起落定 · 极光底高对比                    |
+| `neo-grid-bold`     | Neo-Grid Bold     | 12×8 CSS 网格 · 1.5px 墨发丝边 · 无投影 · 单一电光信号色         |
+
+> 这张表是**风格定位索引**,不是状态清单 —— 只随真正新增 / 删除 preset 才更新(别往里加"组件数 / 是否达标"这类会变的计数;那不是指南内容)。
 
 ---
 
@@ -78,6 +105,8 @@
 
 **`§T` 角色 schema**(每条):`id` · `family`(display/body/mono/script,渲染时解析成 `var(--font-*)`)· `purpose` · `px_min`/`px_max` · `weight` · `leading` · `tracking` · `case` · `sample_html`(用 `.t-trole-<id>` class)。每个角色的装饰 CSS 写在 §I 的 `.t-trole-<id> { … }`。Block Frame 现有 11 个:`heading-xl / heading-lg / heading-md / close-title / quote-text / stat-number / card-title / step-num / label-pill / mono-tag / counter`。
 
+> **`sample_html` 文案约定**:示例文字应是**真实视频会用的那种短文案**(标题/数字/eyebrow 等),**不要写"自我描述"的占位散文**(例如 `<p>Body sits at 24-28px, weight 400 — never uppercase…</p>` 这种讲该 role 自己的句子)。这类自述文字在 design.html 的 §T atlas 里读起来像调试说明、不像示范。要么给一句像样的示范文案;要么——若该 role 只是泛用正文、没有招牌值得示范——干脆别建这个 role(纯正文交给 §6 component 承载;参见 capsule 几乎不留纯正文 role 的做法)。
+
 ---
 
 ## 3. `components/` —— 可粘贴组件
@@ -124,7 +153,7 @@
 
 **验证**:跑 §8 的 `build-design` + `emit-chunks` → design.html 滚到 **§C** 看实时效果;字幕产物跑 `build-captions-html.mjs`(见 `phases/captions/guide.md`),stdout 应打印 `skin: preset-skin (preset-local → …)` + `self-lint: OK`(自检覆盖上表所有契约项,任一不符响亮退 1)。
 
-> registry 的两套 karaoke 皮肤(`caption-pill-karaoke` / `caption-highlight`)仍在,但只作为**尚未迁移的旧 preset 的安全网 + 运行期兜底** —— 本标准要求每个 preset 自带 `caption-skin.html`,缺了即**不合标准**(字幕风格会断裂成通用 SaaS pill)。`build-captions-html.mjs` 当前不会因缺皮肤而报错(回退而非退 1),所以这条**靠本标准约束、暂未机器强制**;迁移现状见 §8。
+> registry 的两套 karaoke 皮肤(`caption-pill-karaoke` / `caption-highlight`)仍在,但只作为**运行期兜底** —— 本标准要求每个 preset 自带 `caption-skin.html`,缺了即**不合标准**(字幕风格会断裂成通用 SaaS pill)。`build-captions-html.mjs` 当前不会因缺皮肤而报错(回退而非退 1),所以这条**靠本标准约束、暂未机器强制**:你新建 preset 时必须把它补齐。
 
 ---
 
@@ -153,9 +182,9 @@ cd my-new-style
 4. 改 `caption-skin.html` 的 `<style>` 视觉为新风格(§3.5 契约:只动视觉,别碰三个洞 / `.caption-*` 钩子 / `data-composition-id` / `window.__timelines["captions"]` / `gsap.set` 那套)。`cp -r block-frame` 已把它带过来,改视觉即可。
 5. 按 §6 重新生成 + 验证。
 
-## 6. 把旧 preset 重构成本标准
+## 6. 把一套外部风格 / 旧 preset 改写成本标准
 
-逐项过(可拿 block-frame 对照):
+> 用于:把一套不合本标准的风格(从别处搬来的、或手写的草稿)对齐到标准。逐项过(可拿 block-frame 对照):
 
 - [ ] 删 `## §M` 整节 + §I 里的 `.ds-motif*` CSS 块(motif 已废)。
 - [ ] §T:每个角色 `px_min` 抬到 ≥24;同步把 §I 对应 `.t-trole-<id>` font-size 抬到 ≥24;删掉纯小字内容角色(如 15px 的 card-body / 18px 的 subtitle),它们焊死的招牌可在 component 里保留。
@@ -198,7 +227,7 @@ grep -rhoE "font-size:[^;]+" <ds-dir>/chunks/components/*.html <ds-dir>/chunks/t
 
 > ⚠️ **不要只扫 `px`** —— `rem` / `vw` 写的小字会被漏掉(capsule 的组件全是 `rem`,一度骗过 px-only 检查)。上面这条 px/rem/vw 三料归一的版本才可靠。
 
-> 跨全部 preset 的 §T+component 小字清扫尚未做(目前 block-frame + capsule 达标,其余 19 个待清)。若要"今后任何 preset 都不许有小字",需先把 21 个 preset 全扫干净,再在校验脚本里加一条 font-size 下限 lint(否则会让未清扫的 preset 构建报错)。
+> 这条 grep 是**硬性收尾检查**:你新建或改完一个 preset,必须对它跑一遍,**空输出才算过**(任何 <24px 都要抬上去或删掉该 role / 该 font-size)。现存所有 preset 都已满足,所以你可以放心地把它当作不可破的下限。
 
 **`caption-skin.html` 验证**(§4 规则 6,必需):每个 preset 应自带,跑
 
@@ -210,4 +239,4 @@ node skills/product-launch-video/scripts/build-captions-html.mjs \
 
 stdout 应打印 `skin: preset-skin (preset-local → …)` + `self-lint: OK`。
 
-> 迁移现状:**block-frame + capsule + scatterbrain** 已自带 `caption-skin.html`,其余 ~18 个待补。builder 缺皮肤时回退 registry 而非退 1,所以这条规则**靠标准约束、暂未机器强制** —— 同小字 lint,要硬 gate 得先把全部 preset 补齐再加校验(否则未迁移的 preset 会报错)。
+> builder 缺皮肤时会回退 registry 而非退 1,所以"必须自带 `caption-skin.html`"这条**靠本标准约束、暂未机器强制** —— 你新建 preset 时务必补齐;跑 `build-captions-html.mjs` 看到 `skin: preset-skin (preset-local …)` + `self-lint: OK` 才算到位。
