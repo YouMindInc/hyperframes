@@ -18,6 +18,7 @@ assets/bgm.wav                          # BGM（可选；可能 audio.mjs 退出
 ```json
 {
   "tts_provider": "heygen" | "elevenlabs" | "kokoro",
+  "voice_id": "<provider-specific voice id>",   // 实际用的 TTS voice id（顶层）
   "bgm_provider": "lyria" | "musicgen" | null,
   "bgm_enabled": true | false,
   "bgm_pending": true | false,        // detached BGM 可能还在渲染；Step 7 wait-bgm.mjs 复核
@@ -25,9 +26,10 @@ assets/bgm.wav                          # BGM（可选；可能 audio.mjs 退出
   "bgm_log": "/tmp/bgm-<timestamp>.log" | null,
   "bgm_pid": 12345 | null,
   "bgm_mode": "detached-single" | "detached-seed-loop" | "detached-seed-trim" | null,
+  "bgm_target_duration_s": 62.4 | null,  // BGM 目标时长（= 实测 voice 总时长；裁切/循环到此）
   "bgm_seed_duration_s": 28 | null,    // MusicGen: 单条种子片长(≤30s 规避位置编码上限)
   "bgm_loop_count": 3 | null,          // 种子 crossfade-loop 平铺到目标时长的圈数(trim 时为 1)
-  "total_duration_s": <Σ voiceDuration>,
+  "total_duration_s": <Σ 成功场景实测 voice 时长（失败场景不计）>,
   "scenes": {
     "scene_1": {
       "voicePath": "assets/voice/scene_1.wav",
@@ -43,11 +45,11 @@ Provider 链 / voice id / mood prompt / env detection 全部 audio.mjs 内部处
 
 ## Failure modes
 
-| Failure                  | 行为                                                                                               |
-| ------------------------ | -------------------------------------------------------------------------------------------------- |
-| Single scene TTS exits 1 | 该 scene 不进 `audio_meta.scenes`，其他继续。Phase 4a 用 `estimatedDuration` 兜底。                |
-| BGM pending              | `bgm_enabled: true` + `bgm_pending: true`。Step 7 先跑 `wait-bgm.mjs`，ready 才挂 track 11。       |
-| BGM exits 1              | `wait-bgm.mjs` 写 `bgm_status.json { status: "failed" }`；voice 完成，Phase 4c 跳 `<audio>` 元素。 |
-| All scenes fail          | audio.mjs 退 1，stderr 报错，pipeline 停。                                                         |
+| Failure                  | 行为                                                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Single scene TTS exits 1 | 该 scene 不进 `audio_meta.scenes`，其他继续。Phase 4a 用 group_spec 的 `estimatedDuration_s`（源自 narrator_scripts.estimatedDuration）兜底。 |
+| BGM pending              | `bgm_enabled: true` + `bgm_pending: true`。Step 7 先跑 `wait-bgm.mjs`，ready 才挂 track 11。                                                  |
+| BGM exits 1              | `wait-bgm.mjs`（Step 7 finalize 阶段产 `bgm_status.json { status: "failed" }`，本 phase 不产）；voice 完成，Phase 4c 跳 `<audio>` 元素。      |
+| All scenes fail          | audio.mjs 退 1，stderr 报错，pipeline 停。                                                                                                    |
 
 BGM 失败永不阻塞；只有"零场景拿到 voice"是 fatal。

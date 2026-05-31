@@ -132,7 +132,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 - 不用任何 component 时整行省略
 - 列错 id（拼写错、组件不存在）→ 下游 fatal（重派 Phase 3）；validator 只校验语法
 
-写 Components 锚点的价值：让 plan agent 提前承诺"这个场景的中间层 = 哪个 component"，避免散文里说 "use the manifesto component palette logic" 但下游无法定位你指的是哪个组件。和 Blueprint 锚点一样，是 plan agent 对自己决策的明确承诺，而不是对下游怎么用的描述。
+写 Components 锚点的价值：让 plan agent 提前承诺"这个场景的中间层 = 哪个 component"，避免散文里说 "use the manifesto component palette logic" 但下游无法定位你指的是哪个组件。和 Blueprint 锚点一样，这是对自己决策的承诺，而不是对下游怎么用的描述。
 
 **Transition 锚点（可选 / soft —— 命名「这一场怎么被进入」）**：
 
@@ -225,9 +225,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 **Bridge:** `product-card` ← 逻辑名（kebab-case），下游 worker 用它做 data-bridge-id
 ```
 
-- `**Bridge:**` 的值是一个反引号包裹的 kebab-case 逻辑名（worker 会在**出场 + 进场两个场景**都放 `data-bridge-id="<这个名>"` 的元素并设计 morph）。
-- `**Bridge:**` 只在 `**Transition:** shared-element` 时出现；其他 transition 类型不写。
-- **写 Bridge 的那两场必须 `Continuity: continue`**（保证落到同一个 worker，否则下游 prep fatal）。这也意味着一串 morph（如 demo sequence 3 场连桥）受 worker 分组 cap 限制 —— 见 §2。
+机器规则（kebab-case、必须配 `Continuity: continue`、worker 在两场放 `data-bridge-id`、morph 链受 cap=2 限制）详见上方 §2 Transition / Bridge 锚点。
 
 > 需要的 effect 不在 catalog 里：先尝试组合现有 effects。仍不够 → **不要编造名字**，在 phase report 标 `needed effect missing: <description>`。
 
@@ -249,7 +247,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 **用法**：扫 Dispatch 上下文里 `## Blueprints index` 段的 triggers / role 字段，匹配本场景 narrativeIntent 的 narrativeRole 与 keyMessage。命中后**仅用 index 里的信息**——`uses` 列表直接填 `**Effects:**` 锚点、phases 概述启发散文第 5 条（多阶段编排）、情感弧描述启发散文第 1 条（情感与节奏脚注）。**不要 Read blueprint 全文**（`blueprints/<id>.md`）—— 那含 GSAP 代码、DOM 拓扑、精确 timing 表，是 build agent 的事。
 
-**采纳后必须标 `**Blueprint:**` 锚点**（见 §2）：用了就写 `based-on <id>` 或 `extended <id>`，没用就写 `composed` 或省略。这是 plan agent 对自己决策的明确承诺，避免"既不想用又模糊使用"。
+**采纳后必须标 `**Blueprint:**` 锚点**（见 §2）：用了就写 `based-on <id>` 或 `extended <id>`，没用就写 `composed` 或省略。
 
 **匹配硬阈值**：`role` + `triggers` + 情感弧三项必须**自然贴合**才采纳。任一项需要"创造性弯曲"才能匹配 → **拒绝该 blueprint，回退到 effects catalog 自由组合**。自由组合不是 fallback 次等选择 —— 非典型场景（痛点叙述 / 概念解释 / list reveal / quote / pricing / FAQ）的正确路径就是自由组合。Archive 最强方案 playground-launch 在 8 个节拍里跑 5+ 个视觉宇宙、全自由组合 + 共享 cut-the-curve 粘合。
 

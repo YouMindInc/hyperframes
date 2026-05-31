@@ -7,8 +7,10 @@
 ```bash
 mkdir -p design-system
 
-# Step 1 — 读已生成的 inference.json（Phase 1 capture 阶段已确定性跑过 --no-emit）。
-#          一般不必重跑；仅当 inference.json 缺失 / capability auto-install 后需重验候选时，再跑下面这行。
+# Step 1 — 用已生成的 inference.json（Phase 1 capture 阶段已确定性跑过 --no-emit）。
+#          正常情况编排器已把 inference.json 正文内联进 dispatch 的 `## Inference decision inputs`，
+#          你既不必 Read 也不必重跑下面这行；仅当 dispatch 没内联 / inference.json 缺失 /
+#          capability auto-install 后需重验候选时，才 Read 它或重跑。
 #          build-design.mjs 默认读 <design-system-dir>/../capture/，与 Phase 1 hyperframes capture 的输出对齐。
 node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system --no-emit
 

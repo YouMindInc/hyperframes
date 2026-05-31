@@ -56,12 +56,12 @@ capture/
 
 ## 报告（回给用户）
 
-- Final URL ← 从 `capture/CLAUDE.md` 或 `meta.json.id` 还原
+- Final URL ← 优先 `meta.json.id`（若为 URL）；否则从 `capture/CLAUDE.md` 首部的 URL 行 grep
 - Page title ← `tokens.json.title`
 - Section candidates：`tokens.json.sections.length` + 简短列表
 - Assets：`ls capture/assets | wc -l`，按扩展名拆分
 - Fonts：`tokens.json.fonts` 列表（与 `fonts-manifest.json` 对齐情况）
-- 动画 / shader / Lottie / video：`animations.json.summary` + `shaders.json` 长度 + 是否有 `assets/lottie/` 和 `extracted/video-manifest.json`
+- 动画 / shader / Lottie / video：`animations.json.summary` + `shaders.json` 长度 + 是否有 `assets/lottie/`（如有）和 `extracted/video-manifest.json`
 - 异常（timeout / no assets / blank screenshot / 反爬）
 
 ## 写日志
@@ -79,4 +79,4 @@ Notes: <one line>
 
 - 所有命令用 `(cd "$PROJECT_DIR" && ...)` subshell；不要单独 `cd`。
 - 只写 `./capture/`，不碰 `./design-system/`。
-- 强制 English：capture 已默认设置 `Accept-Language: en-US,en;q=0.9`。如果 `tokens.json.headings` 仍是本地语言，记入 anomaly 并继续。
+- 强制 English：capture 已默认设置 `Accept-Language: en-US,en;q=0.9`。如果 `tokens.json.headings` 仍是本地语言，在 `context.log` 的 Notes 行记一条 anomaly 并继续。

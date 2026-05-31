@@ -1,6 +1,6 @@
 # 子代理提示词：hyperframes-scene（Step 6 worker）
 
-**INPUT:** Dispatch 上下文 —— top-level：`Worker ID` / `PROJECT_DIR` / `Captions: enabled|disabled`（决定底部 17% keep-out，见约束 #13）；每个 scene：`scene_id` / `effects` / `rule_paths` / `assetCandidates` / `estimatedDuration_s` / `voicePath` / `blueprint` / `surface`（preset-declared surface 名 \| null，见约束 #11）/ `design_chunks` / `shared_element_bridge`（Tier-A 桥接 \| null，见约束 #14）/ `creative_brief`
+**INPUT:** Dispatch 上下文 —— top-level：`Worker ID` / `PROJECT_DIR` / `Captions: enabled|disabled`（决定底部 y900-1080 字幕带 keep-out，见约束 #13）；每个 scene：`scene_id` / `effects` / `rule_paths` / `assetCandidates` / `estimatedDuration_s` / `voicePath` / `blueprint` / `surface`（preset-declared surface 名 \| null，见约束 #11）/ `design_chunks` / `shared_element_bridge`（Tier-A 桥接 \| null，见约束 #14）/ `creative_brief`
 **OUTPUT:** `<PROJECT_DIR>/compositions/<scene-id>.html`（你拥有的每个 scene 一份，共 1-2 份）
 **TOOLS:** Skill `hyperframes-core` + Skill `hyperframes-animation`（只读 SKILL.md）· Read 多份文件 · Write · Bash（grep 自检）
 **DONE:** 文件落盘 + 自检全过 → 每个 scene 一行汇报；**不写** `./context.log`
@@ -21,7 +21,7 @@
    - `easings_file` —— **优先用内联正文**（同上）；缺失才 Read，~0.5 KB。整段 `const EASE = { ... }; const DUR = { ... }` 粘进 scene `<script>` 顶部
    - `voice_file` —— **优先用内联正文**（同上）；缺失才 Read，~0.5 KB。DOM 里**所有可见文字**（headline / chip / button / stat label）按这份 register 写：照 recipe（strip articles、UPPERCASE、句号断行等）改写 creative_brief 里出现的英文短句。**不要**改 `<audio>` 关联的 narrator script（Phase 2 已把它定型给 TTS，大写会毁掉语音节奏）
    - `hints_file` —— 绝对路径 \| null。非 null 时必读，~1-3 KB。preset 的 surface contract / 60-30-10 / sound 钩子，**plus** "Surface `#root` CSS" 段（surface-aware preset）。§12 配色 + §3 60-30-10 都来自这里
-   - `type_roles_file` —— 绝对路径 \| null（指向单个 `type-roles.md` 文件，不是目录）。**按需读**：creative_brief 里要的文字超出 `components[]` 提供的范围时（hero display / 单行 lede / pill row / CTA button / closing end mark / 等），按 id 在这份 type-roles.md 文件里找 `t-trole-<id>` 段的 CSS 整段粘进 scene `<style>`（加 `s<N>-` 前缀重写 class 名）。**不用就别读**（这份 catalog 文件几 KB，多份 scene 同时读浪费 token）
+   - `type_roles_file` —— 绝对路径 \| null（指向单个 `type-roles.md` 文件，不是目录）。**按需读，用这条判据决定**：先扫 `components[]` 里有没有承载 creative_brief 所需文字的文本槽（hero display / lede / pill row / CTA button / closing end mark 等）；**有 → 不读**（直接用 component 的槽）；**没有 → 才读** type-roles.md，按 id 找 `t-trole-<id>` 段的 CSS 整段粘进 scene `<style>`（加 `s<N>-` 前缀重写 class 名）。这条判据避免两种浪费：每场都读（这份 catalog 文件几 KB，多场同读浪费 token）/ 该读不读（漏掉 type role 导致文字降级）
    - `components[]` —— 0-N 个绝对路径（Phase 3 给本 scene 挑选的 design-system 组件 HTML 片段）。**全部 Read**（每份 0.3-1.5 KB），按 §3 token + §5 effect→asset 映射在 DOM 中粘贴并把所有 class 加 `s<N>-` 前缀避免 sibling 串扰
    - **不要读** `./design-system/design.html` —— 已被 chunks 取代；如果 `design_chunks` 为 null（chunks 缺失），回退去读 `./design-system/design.html` 并自报一个 anomaly
 
@@ -51,7 +51,7 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
 
 0. **standalone → fragment 转换**（自检/gate 都按 fragment 契约查，这步漏了会踩 root 契约 / data-composition-id / timeline 注册三条 FATAL）：
    - 剥掉 `<!doctype>` / `<html>` / `<head>` / `<body>` 外壳和 CDN gsap `<script>`（GSAP 由 Step 7 在 index.html 统一注入），把 `#root` 包进 `<template id="scene_<N>-template">`
-   - root div：补 `class="scene_<N>-root"`、`data-composition-id="main"` → `scene_<N>`、删 `data-start="0"`、`data-duration` 设成 dispatch 的 `estimatedDuration_s`（一字不差，约束 #12）
+   - root div：补 `class="scene_<N>-root"`、`data-composition-id="main"` → `scene_<N>`、**只删 `data-start="0"`**（`data-width="1920"` / `data-height="1080"` 必须保留 —— 它们是 root 5 属性之一，连同 data-start 一起删掉会触发 root 契约 FATAL）、`data-duration` 设成 dispatch 的 `estimatedDuration_s`（一字不差，约束 #12）
    - `<style>`：`:root { }` → `#root { }`，把 `html,body { }` 和裸 `* { }` 折进 `#root` / `#root *`（约束 #1）
    - `window.__timelines["main"]` → `window.__timelines["scene_<N>"]`（约束 #8；下面第 1 步的"同步 timeline 选择器"**不含**这个 host-id / 注册 key 改名，单独做）
 1. 把所有 class/id 加 `s<N>-` 前缀，同步 timeline 选择器
@@ -109,7 +109,7 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
 8. **timeline 注册用 literal scene id 字符串**：`window.__timelines["scene_1"] = tl;`。禁 `SID` 变量绕一层（`check-compositions.mjs` 正则扫认不出）。整段 `<script>` 选择器 / dataset key / timeline key 一律字面。
 9. **macro-camera scene 默认挂 layout escape hatch**
    - effects 含 `coordinate-target-zoom` / `multi-phase-camera` / `camera-cursor-tracking` / `viewport-change` 任一 → 最外层 zoom/pan wrapper 挂 `data-layout-allow-overflow="true"`
-   - 原因：zoom peak 必然超出 1920×1080 viewport，`hyperframes inspect` 必报 `text_box_overflow`。by-design，提前声明省 finalize 返工 ~60s
+   - 原因：zoom peak 必然超出 1920×1080 viewport，`hyperframes inspect` 必报 `text_box_overflow`。by-design，提前声明。
    - 例：`<div class="s2-zoom-outer" id="s2-zoom-outer" data-layout-allow-overflow="true">`
 10. **Primary handoff before enter（防 overlap）**
     - 每个时刻只有一个 `primary subject`；其他可见内容必须是 `supporting`。
@@ -123,11 +123,11 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
     - **粘 surface 的 #root CSS**：Read `design_chunks.hints_file` 的 "Surface `#root` CSS" 段（preset 自己声明的 paste-ready stanza），按 dispatch 给的 surface 名挑对应那块整段粘进 scene `<style>`。所有 `var(--*)` 引用都已经在 tokens.css 里定义好，不要替换。
     - **`::after` 装饰 frame 的 surface 必须 wrap 内容**：composition-hints 里某个 surface 的 CSS 含 `#root::after { ... }` 时，scene 内容必须包一层 `<div style="position:relative; z-index:1;">`（`::after` 是 z-index:0，DOM 默认 z-index:auto，不 wrap 会被 frame 盖住）。
     - `surface: null` 或非 surface-aware preset —— 继续用 `background: var(--canvas)` 默认行为，不读 composition-hints 的 Surface #root CSS 段。
-    - 选错 surface 或漏装饰 → mp4 渲出来"普通 SaaS 配色"而不是 preset 的视觉签名，丢掉 preset 一半的辨识度。
+    - 选错 surface 或漏装饰 → mp4 渲出来"普通 SaaS 配色"而不是 preset 的视觉签名。
 12. **`data-duration` 必须 = dispatch 给的 `estimatedDuration_s`（一字不差）** —— Step 7 的 `assemble-index.mjs` 用 group_spec 的 `start_s` 排好全片时间轴，再逐个核对 scene root 的 `data-duration`；不符直接 **fatal**、整个 Step 7 卡住回来重派你。别用 `creative_brief` 里的约数、别自己 round。`voicePath` 非空时尤其照抄（voice / SFX / captions 的全局时刻都按这个值算）。
 13. **底部字幕带 keep-out（HARD 约束 —— 仅当 dispatch `Captions: enabled`，preflight 机器校验）**
 
-    **原则一句话**：`Captions: enabled` 时，finalize 在底部贴一条全片逐词 karaoke pill，占画布底部 **180px**（y 900 → 1080，约 17%）。**任何 FOREGROUND 元素的渲染下沿 y 必须 ≤ 900**（加 20px 安全：实际目标 **bottom edge ≤ y=880**）。Foreground = headline / cards / CTA / button / chip / stat / hero text / quote / 关键 logo / 任何可读内容。
+    **原则一句话**：`Captions: enabled` 时，finalize 在底部贴一条全片逐词 karaoke pill，**字幕带占 y900-1080（180px）；任何 FOREGROUND 元素的渲染下沿目标 ≤ y880**（留 20px 安全）。Foreground = headline / cards / CTA / button / chip / stat / hero text / quote / 关键 logo / 任何可读内容。
 
     几何（写每个 absolute 前先口算一次，下沿 y 一旦算出 > 880 就是 bug）：
 
@@ -149,9 +149,9 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
     | large CTA / hero close button (font 40+, padding 28×72) | `bottom: 260px`                                              | 留 element 高 ≤ 120 的余量 |
     | feature-card 整张                                       | `top: 100–148px`，`height` 留到 ≤ 720                        | top + height ≤ 880         |
     | vertical ticker / 拉伸条带                              | `top: 80px; bottom: 200px`                                   | 下沿固定在 y=880           |
-    | 居中 hero 文字                                          | 用 flex `justify-content: center`，垂直锚在 y ≈ 454 而非 540 | 居中针对"上 83% 区"        |
+    | 居中 hero 文字                                          | 用 flex `justify-content: center`，垂直锚在 y ≈ 454 而非 540 | 居中针对 y0-880 可用区     |
 
-    **BACKGROUND 例外（豁免，可全幅 full-bleed 到底部 17%）**：
+    **BACKGROUND 例外（豁免，可全幅 full-bleed 到底部 y1080）**：
     - `#root` 背景 / surface 装饰 / `::before` / `::after` frame / ambient mesh / 全幅截图底层。
     - 装饰类 leaf class 名 —— preflight 自动跳过这些 selector，含以下任一关键词（hyphen/underscore 切词）即识别为装饰：`bg` / `background` / `dot-grid` / `mesh` / `gradient` / `swell` / `ambient` / `texture` / `noise` / `scanline` / `surface` / `overlay` / `halo` / `glow` / `frame` / `pin` / `corner-pin` / `deco` / `star-burst` / `burst` / `ring` / `stripe` / `rect` / `shadow` / `pulse` / `ripple` / `measure` / `probe` / `hidden` / `scrim` / `backdrop` / `veil` / `fog` / `grain`。
     - 约束 #9 的 macro-camera overflow 包装层（带 `data-layout-allow-overflow="true"`）—— zoom peak 本就会超框。
@@ -163,7 +163,7 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
     2. `position: absolute` + `top: <X>px`、X ≥ 900 且非装饰
     3. `position: absolute` + `top + height` 静态可加和 > 900 且非装饰
 
-    每条违规生成准 Edit 字符串（`edit_old` / `edit_new`）写进 `finalize_brief.json.caption_keepout.violations[]`，finalize agent 直接 `Edit(file, edit_old, edit_new)` 改对。**所以契约写错不靠 snapshot 眼检发现，preflight 当场抓 —— 但每条违规都让 finalize 多花一次 Edit + 重 snapshot，最省事的办法就是写之前照表查值。**
+    每条违规生成准 Edit 字符串（`edit_old` / `edit_new`）写进 `finalize_brief.json.caption_keepout.violations[]`，finalize agent 直接 `Edit(file, edit_old, edit_new)` 改对。**所以契约写错不靠 snapshot 眼检发现，preflight 当场抓 —— 写之前照表查值。**
 
     **静态查不到的形态**（GSAP 运行时 `translateY`、`transform: translate(...)`、`margin-top:`、flex 自然布局把内容挤到 y > 900 等）—— 这些靠 finalize 的 snapshot 眼检兜底，但**写代码时还是按"元素下沿 y ≤ 880"这条原则定位**，别故意贴边。
 
@@ -262,15 +262,12 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
          所有 class 都用 s1- 前缀；id 也用 s1- 前缀（例：id="s1-headline"）。 -->
 
     <script>
-      // design.html §5 的 EASE / DUR const，粘过来
+      // easings.js / dispatch 内联段的 EASE / DUR const，粘过来
       const EASE = { entry: "power2.out" /* ... */ };
       const DUR = { med: 0.55 /* ... */ };
       window.__timelines = window.__timelines || {};
       const tl = gsap.timeline({ paused: true });
-      // effects 列表顺序 = 视觉层叠顺序（背景 → 主入场 → 持续 → 强调 → 过渡），不是严格时间顺序；
-      // 每个 effect 在 timeline 上的 fire 时刻由 creative_brief 散文 §3 / §5 指定。
-      // selector 都写裸的 .s1-foo / #s1-foo，不挂祖先。runtime 的 scoped-document
-      // proxy 会自动把 query 限定在当前 scene 的 host 子树。
+      // selector 写裸的 .s1-foo / #s1-foo（见约束 #1）；每个 effect 的 fire 时刻见 creative_brief §3 / §5（见范围段）。
       const headlineEl = document.querySelector("#s1-headline");
       tl.fromTo(
         ".s1-word",
