@@ -132,8 +132,6 @@ whitelist is a _scene-worker_ prompt rule only — it does not bind index.html).
     }
   ],
   "tier_a_types": ["morph", "shared-element"],
-  "default_break": "crossfade",
-  "default_break_on_bg_conflict": "blur-crossfade",
   "default_high_energy": "zoom-through",
   "default_calm": "blur-crossfade",
   "max_duration_s": 2.0
@@ -142,20 +140,21 @@ whitelist is a _scene-worker_ prompt rule only — it does not bind index.html).
 
 ## Default-derivation (used by prep.mjs when the planner omits `**Transition:**`)
 
-A `break` boundary with no named transition gets a default, in this order:
+A `break` boundary with no named transition gets a default:
 
-1. If the two scenes' `#root` background colors differ by a large margin (read
-   from `design-system/inference.json`), use `default_break_on_bg_conflict`
-   (`blur-crossfade`) — the blur hides the hard color cut.
-2. Else if the incoming scene's creative brief reads HIGH energy
-   (launch / reveal / explosive keywords), use `default_high_energy`.
-3. Else if it reads CALM (wellness / premium / slow), use `default_calm`.
-4. Else `default_break` (`crossfade`).
+1. If the incoming scene's creative brief reads HIGH energy (explosive / kinetic /
+   frenetic keywords), use `default_high_energy` (`zoom-through`).
+2. Otherwise use `default_calm` (`blur-crossfade`) — the universal default. The
+   blur masks any background shift and reads intentional, which keeps the whole
+   video to ~2 transition types (the "repeat 2-3" principle).
 
 ## Choosing as a planner (the only agent touchpoint)
 
 Pick **2-3 types for the whole video** and repeat them — repetition is what reads
-as professional (see `overview.md`). Name the entering transition on each scene:
+as professional (see `overview.md`). This budget counts the **Tier-B between-scene
+types only** (the 5 in the registry above); the Tier-A `shared-element` morph is a
+worker-authored bridge driven by narrative `intent: morph` — it is **exempt and
+does not count** toward the 2-3. Name the entering transition on each scene:
 
 ```
 **Transition:** blur-crossfade

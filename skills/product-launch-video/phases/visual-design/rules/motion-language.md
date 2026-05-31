@@ -125,6 +125,8 @@ Archive 反复出现的招牌：主要动作和确认/结果之间留一段 **0.
 
 场景间过渡遵循有限词汇。整片只挑 2-3 种反复用 —— 过渡类型的重复创造专业整体感。Archive 中最干净参考：playground-launch 在 8 个截然不同视觉宇宙中**只用 cut-the-curve**，正是这一点让整片凝聚。
 
+> **这 2-3 个名额只数 `break` 边界的 Tier-B（场景间）过渡**（crossfade / blur-crossfade / push-slide / zoom-through / squeeze 里挑 2-3）。`shared-element`（morph，Tier-A）是 worker 在两场内部手写的共享元素桥接，**不属于这套词汇、不占名额** —— 它由叙事 `intent: morph` 驱动，按故事需要随便用（如一段 demo sequence 连着几对 morph）。
+
 ### Cut-the-curve（archive 招牌，多数情况默认）
 
 当前场景 blur + 滑出 → 下一场景 blur + 滑入。两侧用相同 blur 量级、方向逐缝交替（右→左→上→下）、背景比前景内容提前少许触发、内部 reveal 等舞台落定后才动。Plan 点名方向（"cut-the-curve LEFT"）即可，具体 0.33s / 0.42s / 8-10px blur 是 build 的事。

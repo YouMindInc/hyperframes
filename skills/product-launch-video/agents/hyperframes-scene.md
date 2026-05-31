@@ -9,6 +9,17 @@
 
 **Path contract**：Dispatch 给 `PROJECT_DIR`（视频项目根）。写到 `PROJECT_DIR/compositions/<scene-id>.html`；不在 `PROJECT_DIR` 下建 `hyperframes/` 子目录。
 
+## Pre-write cheat-sheet（动键盘前扫一眼，省 15-20% 返工）
+
+实测下来，单次 worker run 的返工有 80% 集中在 4 个隐性坑——开工前心里过一遍：
+
+1. **桥接 morph（约束 #14）的 bbox 差 → 必须换算成 GSAP transform**（`x/y/scaleX/scaleY`），**不要** tween `left/top/width/height`。换算公式见约束 #5。
+2. **要 tween 的 component 元素 → CSS baked `transform: rotate(...)` 删掉，倾斜搬进 GSAP `rotation`**。同元素 CSS transform + GSAP transform 互相覆写，preset 倾斜签名会丢。见约束 #5b。
+3. **桥接元素「初始隐藏」用 `gsap.set` 不用 CSS `opacity: 0`**——后者会被 `check-bridge-continuity` 判定为静态藏起，fatal。见约束 #14 末尾的 paste-ready stanza。
+4. **root `<div>` 5 属性 + class + style 写在同一行**——拆多行虽合法但自检 regex 单行匹配失败。见骨架。
+
+写完后跑自检 grep 块（见末尾），任一 FAIL/MISSING/bug-形态命中先修再报。Step 7 finalize 同一套 harness，本地拦住省 8-13 分钟 round-trip。
+
 ## 必读资源（开工前同一条 message 并行 Read）
 
 1. Skill `hyperframes-core` —— composition 结构、timeline contract、non-negotiable rules
@@ -17,9 +28,9 @@
 4. 你 `rule_paths` 列表里**每个** `.md`（绝对路径，全部读）
 5. `blueprint` 非 `composed` 时 → 在 hyperframes-animation skill 的 `blueprints/` 子目录下读 `<id>.md`（id 从 `based-on <id>` / `extended <id>` 抽出）
 6. **`design_chunks` 字段（替代旧的 `design.html` 通读）**：
-   - `tokens_file` —— **优先用 dispatch 的 `## Tokens/easings/voice (inline)` 段里 tokens.css 正文**（每个 worker 已内联，省一次 Read）；仅当内联缺失才 Read 此绝对路径，~1 KB。整段 `:root { ... }` 改写为 `#root { ... }` 粘进 scene `<style>`
-   - `easings_file` —— **优先用内联正文**（同上）；缺失才 Read，~0.5 KB。整段 `const EASE = { ... }; const DUR = { ... }` 粘进 scene `<script>` 顶部
-   - `voice_file` —— **优先用内联正文**（同上）；缺失才 Read，~0.5 KB。DOM 里**所有可见文字**（headline / chip / button / stat label）按这份 register 写：照 recipe（strip articles、UPPERCASE、句号断行等）改写 creative_brief 里出现的英文短句。**不要**改 `<audio>` 关联的 narrator script（Phase 2 已把它定型给 TTS，大写会毁掉语音节奏）
+   - `tokens_file` —— **优先用 dispatch packet 的 `## Tokens/easings/voice` 段里 tokens.css 正文**（Step 0 Read packet 时已拿到，省一次额外 Read）；仅当该段缺失才 Read 此绝对路径，~1 KB。整段 `:root { ... }` 改写为 `#root { ... }` 粘进 scene `<style>`
+   - `easings_file` —— **优先用 packet 段里的正文**（同上）；缺失才 Read，~0.5 KB。整段 `const EASE = { ... }; const DUR = { ... }` 粘进 scene `<script>` 顶部。creative_brief 只会引规范角色键（`EASE.entry/emphasis/exit/drift`、`DUR.snap/med/slow`）。**若 brief 引了某个粘入对象里没有的键**：用语义最近的现有角色键（如 `EASE.emphasis`→`EASE.entry`、`DUR.slow`→`DUR.med`），**并在完成报告里记一行 `ease-key fallback: <brief 键>→<实际键>`——不要静默 drop、也不要硬编码裸曲线**
+   - `voice_file` —— **优先用 packet 段里的正文**（同上）；缺失才 Read，~0.5 KB。DOM 里**所有可见文字**（headline / chip / button / stat label）按这份 register 写：照 recipe（strip articles、UPPERCASE、句号断行等）改写 creative_brief 里出现的英文短句。**不要**改 `<audio>` 关联的 narrator script（Phase 2 已把它定型给 TTS，大写会毁掉语音节奏）
    - `hints_file` —— 绝对路径 \| null。非 null 时必读，~1-3 KB。preset 的 surface contract / 60-30-10 / sound 钩子，**plus** "Surface `#root` CSS" 段（surface-aware preset）。§12 配色 + §3 60-30-10 都来自这里
    - `type_roles_file` —— 绝对路径 \| null（指向单个 `type-roles.md` 文件，不是目录）。**按需读，用这条判据决定**：先扫 `components[]` 里有没有承载 creative_brief 所需文字的文本槽（hero display / lede / pill row / CTA button / closing end mark 等）；**有 → 不读**（直接用 component 的槽）；**没有 → 才读** type-roles.md，按 id 找 `t-trole-<id>` 段的 CSS 整段粘进 scene `<style>`（加 `s<N>-` 前缀重写 class 名）。这条判据避免两种浪费：每场都读（这份 catalog 文件几 KB，多场同读浪费 token）/ 该读不读（漏掉 type role 导致文字降级）
    - `components[]` —— 0-N 个绝对路径（Phase 3 给本 scene 挑选的 design-system 组件 HTML 片段）。**全部 Read**（每份 0.3-1.5 KB），按 §3 token + §5 effect→asset 映射在 DOM 中粘贴并把所有 class 加 `s<N>-` 前缀避免 sibling 串扰
@@ -101,7 +112,21 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
 2. **`@font-face` 绝不复制到 scene** —— Step 7 在 `index.html` `<head>` 统一声明。scene 内只用 `var(--font-display|body|mono|script)`，**禁止硬编码字面字体名**（绕过 `@font-face`，真实字体无效）。chunks/tokens.css 缺某角色 token 也别降级到字面 family，留 `var(--font-body)` 让 CSS fallback 接管。
 3. **Track lane**：scene 内部用 `data-track-index="0"`–`"9"`；`10` / `11` / `12` / `20+` 归顶层 `index.html`（voice / BGM / captions / SFX，全由 Step 7 的 assemble-index 发），**不要**在 scene 里发 `<audio>`
 4. **Asset src 无前导斜杠** —— `public/hero.png`，不是 `/public/hero.png`
-5. **GSAP transform alias 限白名单**：`x` / `y` / `scale` / `rotation` / `opacity`。永不 tween `width` / `height` / `top` / `left`
+5. **GSAP transform alias 限白名单**：`x` / `y` / `scale` / `scaleX` / `scaleY` / `rotation` / `opacity`。永不 tween `width` / `height` / `top` / `left`
+   - **桥接 morph 的常见首错（约束 #14 出场场景必踩）**：两场交接姿态的 bbox 不同（例：scene_2 ink 线 `(720,760,480,6)` → scene_3 编辑器内下划线 `(200,600,700,4)`）时，第一直觉会写 `tl.to(bridge, { left: 200, top: 600, width: 700, height: 4 })` —— **违反本约束**。正确做法是把 bbox 差换算成 transform：
+     - 中心位移：`dx = newCenterX − oldCenterX`，`dy = newCenterY − oldCenterY` → `x: dx, y: dy`
+     - 形状缩放：`scaleX = newWidth / oldWidth`，`scaleY = newHeight / oldHeight`
+     - 配 `transform-origin: 50% 50%`（CSS 里或 `gsap.set` 里设一次）
+     - 例（上面 ink 线）：`x: -410, y: -161, scaleX: 1.458, scaleY: 0.667`。完事
+
+5b. **CSS baked `transform: rotate(...)` 与 GSAP `rotation` 二选一 —— 同元素只用一种**
+
+- 隐性坑：component（如 `feature-card` / `star-burst` / `avatar-portrait`）粘进来时常带 CSS `transform: rotate(var(--bf-tilt-sm-l))`；同元素一旦再起 `tl.to(el, { scale: 1, ... })` 或 `gsap.fromTo(el, { rotation: -2 }, ...)`，GSAP 会**整段覆写** `style.transform`，CSS 的 baked tilt 直接消失，卡片"摆正"，preset 视觉签名丢失。
+- 规则：**要 tween 的元素，倾斜也用 GSAP `rotation` 表达**（在 CSS 里删掉 `transform: rotate(...)`，在 `gsap.set` 或入场 `fromTo` 里写 `rotation: <deg>`）。从 chunks/components 里拷 CSS 时，遇到 `transform: rotate(var(--bf-tilt-*))` 的 leaf：
+  - 若该 leaf **不会被 GSAP 触碰**（纯装饰条带等）→ 留 CSS baked，OK
+  - 若该 leaf 出现在 timeline `tl.to/.fromTo/.set` 的 selector 里 → **删 CSS 那行**，倾斜改写到 GSAP（`gsap.set(el, { rotation: -2 })` 或 `fromTo({...rotation: -2}, {...rotation: -2, ...})` 保住静态倾斜）
+- 同样适用于 baked `transform: translate(...)` / `scale(...)` / `skew(...)` —— GSAP 一旦动这个元素，所有 baked transform 都会被覆写。`will-change: transform` 不解决这个问题，只是 perf hint。
+
 6. **`voicePath` 非空的 scene** —— Step 7 会在顶层挂 `<audio>` 配合这个 scene 的时长。你不发 `<audio>`，但 timing 设计要给旁白留呼吸空间
    - **普通场景间过渡（Tier-B）不归你**：crossfade / push / 等由 Step 7 的 `inject-transitions.mjs` 确定性地加在你的 clip **外壳**上（`index.html` 层，在你的场景**之上**），**不在你的场景内**。所以：(a) **不要在场景末尾把元素动画出去**（no exit tween）—— 让场景停在一个稳定的**最终帧**，过渡负责接力；(b) 不要为"和下一场衔接"在场景里写任何滑动/淡出 wrapper 的逻辑。场景内部只管自己的入场 + 持续动效，结尾 hold 住即可。（hyperframes-animation 的硬规则：exit 动画只允许出现在**最后一个**场景。）
    - **例外：dispatch 给了 `shared_element_bridge` 字段时**（Tier-A 共享元素桥接）—— 那个共享元素的跨场 morph **就是你写**（harness 够不到子合成内部，只能你在场景内做）。见约束 #14。
@@ -198,7 +223,16 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
 
     **校验**：`check-bridge-continuity.mjs` 会确定性检查两场都有同 `data-bridge-id` 元素、且没被 `display:none`/`opacity:0` 静态藏掉。交接姿态是否**视觉对齐**由 finalize 在接缝 snapshot 眼检（静态查不到 GSAP 末态几何）。所以**两场的交接姿态数值你要亲自对齐**（出场末态 left/top/w/h == 进场初态 left/top/w/h）。
 
-    **不要**：在场景里碰 `index.html` / 外壳；给桥接元素加 `s<N>-` 前缀到 `data-bridge-id` 属性；在接缝窗口内动进场的桥接元素。
+    **桥接元素的「初始隐藏」必须用 `gsap.set`，禁止 CSS `opacity: 0` / `display: none`**：
+    - `role: from` 元素在场景早期还没入场（如 scene_2 的 ink 线只在 Phase E t=3.6 才显现）；`role: to` 元素在场景早期也不展示新姿态（虽然 Phase 0 HOLD 阶段它就**在** handoff 姿态，但有些 worker 会想给它做"渐入"）—— 直觉是 CSS `opacity: 0` 起手。**别这样**：`check-bridge-continuity.mjs` 静态扫 CSS，看到 `opacity: 0` 就判定"桥接元素被藏掉" → fatal。
+    - 正确写法：CSS 留 `opacity: 1`（或不写 opacity 让默认 1），timeline 顶部用 `gsap.set("#s<N>-bridge", { opacity: 0, ... })` 初始化。静态扫不到，运行时该藏照样藏。
+    - paste-ready stanza（`role: to` 的进场场景；`role: from` 出场场景把 `opacity: 0` 换成 `opacity: 1` 即可）：
+      ```js
+      // Tier-A bridge initial state — gsap.set (not CSS opacity:0) so check-bridge-continuity 看到静态可见
+      gsap.set("#s<N>-bridge", { opacity: 1, rotation: <baked-tilt>, scale: 1, transformOrigin: "50% 50%" });
+      ```
+
+    **不要**：在场景里碰 `index.html` / 外壳；给桥接元素加 `s<N>-` 前缀到 `data-bridge-id` 属性；在接缝窗口内动进场的桥接元素；在 CSS 里给桥接元素写 `opacity: 0` / `display: none`（用 `gsap.set` 替代）。
 
 ## 范围
 
@@ -216,6 +250,8 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
 ## 骨架
 
 下面用 `scene_1` 举例（其他 scene 把 `scene_1` / `s1-` 换成自己的编号即可）：
+
+⚠ root `<div>` 的 5 属性 + class + style 必须**写在同一行** —— 自检 regex 和 `check-compositions` Rule 1 都按"id 和 class 在同一 tag"做单行匹配。属性拆多行虽然 HTML 解析合法，但会被自检判 FAIL，浪费一次 Edit。
 
 ```html
 <template id="scene_1-template">
@@ -325,8 +361,11 @@ grep -nE '@font-face|transition:|animation:|Date\.now|Math\.random|performance\.
 # 5) 字体名必须走 var(--font-*) token —— 硬编码字面字体名会绕过 index.html <head> 的 @font-face
 #    白名单：var(--font-display/body/mono)、CSS 通用 family（serif/sans-serif/monospace/system-ui/ui-monospace/ui-sans-serif/ui-serif）、
 #         安全 fallback（Georgia/Times/Helvetica/Arial/Menlo/Monaco/SFMono-Regular/-apple-system/BlinkMacSystemFont）
-grep -nE "font-family:[[:space:]]*['\"]" "$F" | grep -vE "var\\(--font-(display|body|mono)\\)" && \
-  echo "FAIL: 字体名硬编码 — 改用 var(--font-display/body/mono)，让 index.html @font-face 生效"
+# ⚠ macOS bash 坑：`grep -v >/dev/null` 在空输入下返回 0（GNU grep 返回 1），导致 `&& echo FAIL` 永远触发。
+#    用 if-block + 显式检查输出行数，规避 pipefail-off 误报。
+HARDCODED_FONTS=$(grep -nE "font-family:[[:space:]]*['\"]" "$F" | grep -vE "var\\(--font-(display|body|mono)\\)" || true)
+[ -n "$HARDCODED_FONTS" ] && \
+  echo "FAIL: 字体名硬编码 — 改用 var(--font-display/body/mono)，让 index.html @font-face 生效"$'\n'"$HARDCODED_FONTS"
 # 6) 资产路径禁前导斜杠 —— /public/… 是 check-compositions Rule 6 fatal（自检不补就只能等 gate 才发现，浪费 round-trip）
 grep -nE '["(]/public/' "$F" && echo "FAIL: 资产路径有前导斜杠 — 写 public/…（不是 /public/…）"
 # 7) 字幕带 keep-out（约束 #13）—— foreground 元素下沿 y > 900 = preflight 当场抓

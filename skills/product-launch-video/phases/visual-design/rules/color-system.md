@@ -122,29 +122,36 @@ category: visual-design
 
 > 命中以上 preset 时，plan agent **必须**在每个 scene 散文里写出 mesh 句式（见下方"Plan 引用样例"），不要因为 preset §H 写了 "canvas is the hero" 就退回纯 canvas。
 
+> **收尾 / CTA 场也走 mesh（D 类）**：项目 mesh 默认同样覆盖 preset 的 **close-frame 背景纪律**——例如 `block-frame` 的 preset.md 写 "close-frame = ink ground / canvas text"，在 D 类项目默认下**被 mesh 覆盖**，收尾场同样用 mesh 浅底。品牌收束的冲击靠**前景**（wordmark 揭幕 + hero 双层 glow + CTA pill），**不是**靠把整场背景翻黑。（这条专门修掉"全片浅色、唯独最后一场突然全黑"的明暗跳变。）
+
 **不走 mesh 默认（保留 preset 自带背景设计）**：
 
 - 显式反对渐变 / 网格 / 软光晕：`neo-brutalism` · `editorial-forest`
 - 自带核心背景介质：`liquid-glass`（aurora 着色器）· `8-bit-orbit`（CRT 显象管）· `sakura-chroma`（半色调暖纸）· `scatterbrain`（cork / paper / warm 三变体）
 - Paper-grain 系（mesh 与 grain 美学冲突）：`pin-and-paper` · `retro-zine` · `peoples-platform` · `creative-mode` · `stencil-tablet`
 
-以上 11 个 preset 命中时，plan agent **保留 preset 自己的背景设计**——按 preset §H 写。
+以上 11 个 preset 命中时，plan agent **保留 preset 自己的背景设计**——按 preset §H 写，**且全片一致、不做每场 surface 即兴偏移**（同一条"背景由 preset 系统决定、plan 不即兴"的硬规则）。注意区分：surface-aware preset（如 `peoples-platform` 的 paper / blue / orange 组件-surface 绑定）是 **preset 声明的 surface 系统**，照常遵守——那是 preset 的规则，不是 plan 的每场即兴，本规则不动它。原生暗介质 preset（`8-bit-orbit` CRT 等）的暗底同理是 preset 声明的，保留。
 
 > 若未来要回归严格 editorial：把 mesh 仅保留给 1-2 个高潮节拍、其他场景换回纯 canvas + hairline + 12-col 网格暗示、前景 accent ≤ 5%。**当前 D 类默认是放开的。**
 
-### 例外场景
+### 背景统一规则（无每场 surface 偏移）
 
-少数场景可以离开 mesh 默认（plan 必须明说为什么）：
+**项目级硬规则：场景背景只由 preset 背景系统 + mesh 默认决定，plan 不做每场 surface 即兴。** D 类 mesh 默认对**每一个场景一致生效，含结尾 / CTA 收尾场**；全片保持一致的浅色氛围底盘，**不得**为戏剧性把某场换成 off-black / ink 暗底——那正是明暗跳变的根源。需要高潮冲击时用**前景手段**（hero 词双层 glow、accent 饱和释放、scale / impact 节拍、wordmark 揭幕），**背景始终不变**。
 
-- **纯工作区演示**（屏幕录制、UI 截图）—— 改用 `--canvas` + 建筑感网格，避免 mesh 与 UI 截图的色彩竞争
-- **暗场氛围 / 痛点节拍** —— mesh 降饱和、blob 用 neutral 替代 brand 色；或直接换 off-black 底
-- **品牌揭幕高潮** —— mesh veil 临时调轻，让品牌色饱和释放，配合 hero 词的双层 glow
+仅剩两类允许的 flex（都**必须保持浅色、mesh 不切暗**）：
 
-Plan 写："默认 brand-color mesh 背景（veil 重，brand-primary + secondary + accent 三 blob，氛围底盘）"；或例外："本场景换 canvas + 12-col 网格暗示 —— 屏幕录制不要 mesh 干扰"。**不要**写 `opacity: 0.7` / `blur(140px)` —— 这是 build 的事。
+- **品牌揭幕高潮** —— mesh veil 临时调轻让品牌色饱和释放、配合 hero 词双层 glow。这是 mesh **强度**的释放，**底盘仍是 mesh**（light→lighter，不是换底）。
+- **纯工作区演示**（整帧屏幕录制 / UI 截图占帧 ≥60%）—— 可改 `--canvas` + 建筑感网格，避免 mesh 与 UI 截图色彩竞争；**仍是浅地、绝不变暗**，下一场回归 mesh。
 
-## 暗场景规则（plan 层）
+**已废止**（不再允许，因为它制造每场明暗跳变）：~~暗场氛围 / 痛点节拍 → off-black 底~~。暗底只在 preset **原生**就是暗介质时成立（见下方"暗场景规则"），不是 plan 在 D 类 mesh preset 上的每场可选项。
 
-暗场景不只是反转：
+Plan 写："默认 brand-color mesh 背景（veil 重，三 blob，氛围底盘）——本片每场一致，含收尾场"。**不要**写整场 off-black / ink 底，**不要**写 `opacity: 0.7` / `blur(140px)`（build 的事）。
+
+## 暗场景规则（仅限原生暗底 preset）
+
+> **适用范围（自"背景统一规则"起收窄）**：暗场**不再是 D 类 mesh preset 上的每场可选项**——plan 不得在 mesh preset 上把某场（含收尾）改成暗底。下面只适用于 preset **原生**背景就是暗的情况（如 `8-bit-orbit` CRT、或非 mesh preset 的 §H 本就声明暗底）。在那些 preset 里，暗是全片基调、不是 plan 的每场跳变。
+
+命中上述情形时，暗场不只是反转：
 
 - 用带色调的 off-black（`chunks/tokens.css` 的 dark token），**不要**纯 `#000`
 - 文字字重比亮场降一级（这是 build 的事，plan 知道存在即可）

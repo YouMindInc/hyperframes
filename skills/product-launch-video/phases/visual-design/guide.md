@@ -40,7 +40,9 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
    }
    ```
 
-   老 preset（22 个）和 surface-aware preset 混在同一份 manifest 里：老 entry 只有 `{id, file}` 两键；surface-aware entry 多 5 个可选字段（具体 surface 名 / role 名 / 互斥关系全部由 preset 自己声明，例：peoples-platform 声明 `paper` / `blue` / `orange` 三个 surface，并把 `stamp-statement` ⊥ `framed-stamp` ⊥ `mega-stat` ⊥ `end-stamp` 列入 `avoids_same_scene`）。**只对带字段的 entry 启用下面的两级过滤；老 entry 退回纯按 id 选**。
+单 surface preset 和 surface-aware preset 混在同一份 manifest 里：单 surface entry 只有 `{id, file}` 两键；surface-aware entry 多 5 个可选字段（具体 surface 名 / role 名 / 互斥关系全部由 preset 自己声明，例：peoples-platform 声明 `paper` / `blue` / `orange` 三个 surface，并把 `stamp-statement` ⊥ `framed-stamp` ⊥ `mega-stat` ⊥ `end-stamp` 列入 `avoids_same_scene`）。**只对带字段的 entry 启用下面的两级过滤；单 surface entry 退回纯按 id 选**。
+
+> **现状（务必知悉）**：目前 19 个 preset 里**只有 `peoples-platform` 一个**给组件写了 surface/role/avoids frontmatter（它有 paper/blue/orange 三块组件必须分别摆放的互斥画布）。其余 18 个（含 neo-grid-bold / editorial-forest / emerald-editorial / pin-and-paper 等）都是**单 surface 设计** —— 组件随便摆在唯一画布上都成立、靠 `color:inherit` / fill 变体自适应底色、无跨组件互斥对。它们的 component entry 因此只有 `{id, file}`，下面的三级过滤对它们**自然 no-op，plan agent 纯按 id 语义选** —— **这是预期行为，不是元数据缺失或 bug**，不要因为某 preset 没有 surface 字段就认为它"漏了"。判断标准：只有当组件确实必须摆特定 surface、或确实有不能同场的视觉互斥对时，preset 才需要 frontmatter（绝大多数 preset 不需要）。
 
 2. **挑 component 算法（component entry 带 `surface` 时强制走这套）**：
    - 第 1 级 surface 过滤：决定这个 scene 走哪种 surface（看 narrative beat / 节奏），从 `components[]` 里 `filter(c => c.surface === sceneSurface || !c.surface)`
@@ -48,7 +50,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
    - 第 3 级互斥校验：选出的多个 component 之间，**任一对**若有 `a.id ∈ b.avoids_same_scene` 或 `b.id ∈ a.avoids_same_scene` → 拒绝组合，重选
    - **同 scene 内不要混不同 surface 的 component**（即使 surface 字段未声明，也不要把"明显 paper 风格"和"明显 blue 风格"的混在一起 —— 视觉破坏）
 
-3. Read `chunks/composition-hints.md`（必读 if `index.json.hints_file != null`，~1-3 KB）→ preset 自己宣告的硬规则（surface contract / material 互斥 / 60-30-10 colour 配比）。**这是 preset 视觉契约的真理源 —— 违反 = scene 渲染失败**。`hints_file` 为 null（老 preset）时跳过。
+3. Read `chunks/composition-hints.md`（必读 if `index.json.hints_file != null`，~1-3 KB）→ preset 自己宣告的硬规则（surface contract / material 互斥 / 60-30-10 colour 配比）。**这是 preset 视觉契约的真理源 —— 违反 = scene 渲染失败**。`hints_file` 为 null 时跳过。
 
 4. （可选）Read `chunks/tokens.css`（~1-2 KB）→ 看 `:root` 里实际定义了哪些角色 token（`--canvas` / `--ink` / `--brand-*` / preset-internal 别名如 `--paper` / `--blue` / `--cream` / `--shadow-triple-*`）—— 决定 30% 中间层 / 痛点场景的调色描述
 
@@ -84,6 +86,8 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 ## 2. 硬契约（machine-checked）
 
+**文件整体形状（强制）**：`section_plan.md` **只含**一行可选 H1 标题 + 一串 `## Scene N:` 块，**没有别的**。**不要写项目级前言 / "system commitments" / "项目级承诺" / 跨场景汇总段**——下游一律不读它：`prep.mjs` 只从第一个 `## Scene` 开始切，validator 只遍历 scene 块，worker 被禁止读 `section_plan.md`（拿的是 prep 切好的 per-scene `creative_brief`）。第一个 `## Scene` 之前的任何成段内容 = 纯写不读的死字节，且 validator 会报错（见下）。全局不变量靠**两条真实通道**到达 worker：① 与本场相关时写进该场散文；② 专用通道（`voice_file` / `Captions` flag / `tokens.css` / `easings.js`）。动笔前对契约的"复述"（§4 第 0 步）**只在脑中**，绝不落进文件。
+
 `section_plan.md` 每个场景一段，顺序与 `narrator_scripts.json` 一致：
 
 ```markdown
@@ -97,23 +101,27 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 **Components:** [`<component-id>`, `<component-id>`, ...] ← 可选（soft），见下方
 **Transition:** <type> [DIRECTION] [<dur>s] ← 可选（soft）；这一场怎么被「进入」，见下方
 **Bridge:** `<bridge-id>` ← 仅当 **Transition:** shared-element（Tier-A morph）；跨场元素逻辑名，见下方
+**SFX:** ← 可选（soft）；不用音效就整段省略，多行 bullet list 见下方
 **PrimarySubjectTimeline:** <only for multi-act / dense multi-subject scenes>
 **Handoff:** <only for multi-act / dense multi-subject scenes>
-**SFX:** ← 可选（soft）；不用音效就整段省略，多行 bullet list 见下方
 
-<散文正文 —— 见 §4>
+<散文正文 —— 第一句即 §4 第 1 条情感脚注 —— 见 §4>
 ```
+
+**块内顺序是强制的，且 PrimarySubjectTimeline / Handoff 必须排在所有锚点之后、散文之前**（紧跟在 SFX 块后面）。原因是机器性的：`prep.mjs` 的 `creative_brief = 最后一个被识别锚点之后的全部文本`，而它识别 `SFX` 但**不识别** `PrimarySubjectTimeline` / `Handoff`——所以这两条必须落在 SFX **之后**才会进入 worker 的 brief；放在 SFX 之前会被切掉、worker 收不到。规则：① 全部 `**锚点:**` 行（含 SFX bullet 块、PST、Handoff）集中在最前；② 之后才是自由散文，且散文**第一句**就是情感脚注（§4 第 1 条，"真 plan 与通用 AI 输出的分水岭"）；③ 散文一旦开始，**不得**再出现任何 `**锚点:**` 行（交错 = validator fatal）。多 act 场景的 brief 会以 `**PrimarySubjectTimeline:**` 开头、紧接情感脚注，这是预期形态。
 
 `validate-section-plan.mjs` 强制（hard）：
 
 - **Effects**：2-5 个反引号包裹的 rule id，逗号分隔在方括号内；每个 id 必须是 `hyperframes-animation/rules/` 下存在的 rule（这是 validator 实际校验项）—— 正常只从 Dispatch 的 `## Effects catalog` 引用；顺序是 timeline-layering 顺序
 - **Duration**：浮点秒数（来源见 §1）
-- **Continuity**：`break` 或 `continue`；**Scene 1 永远是 `break`**
+- **Continuity**：`break` 或 `continue`；**Scene 1 永远是 `break`**。照抄 story-design 的 `transition.continuity`（已跟着 `intent` 定死：`morph` ⇒ `continue`，其余 ⇒ `break`）。**`continue` ⟺ 本场 `**Transition:** shared-element`**（见下方 Transition 硬契约）
 - 必选锚点各自独立成行，前后无其他文字；缺任一锚点 → 下游 fatal → 重派 Phase 3
 - **Surface**（preset-conditional）：当 `chunks/index.json.components[]` 中**任一** component 声明 `surface` 字段（surface-aware preset），所有场景**必填** `**Surface:**` 锚点；值必须出现在该 preset 声明过的 surface 集合里（运行时由 chunks/index.json 决定）。其他 preset（无 surface 字段）此锚点可省。**同一 scene 内 cited 的 component 若有 `surface` 字段且与 Surface 不一致 → validator fatal**（视觉契约破坏，不同 surface 的元素不可同 scene）
-- **PrimarySubjectTimeline + Handoff**：multi-act scene、或 action/payoff + proof/supporting subject 同屏的 scene 必写。缺任一 → validator fatal
+- **PrimarySubjectTimeline + Handoff**：multi-act scene、或 action/payoff + proof/supporting subject 同屏的 scene 必写。缺任一 → validator fatal。**位置**：紧跟在 SFX 块之后、散文之前（机器原因见上方模板说明——它们要落进 `creative_brief` 给 worker）
+- **块内顺序**：所有 `**锚点:**` 行（含 SFX bullets、PrimarySubjectTimeline、Handoff）必须排在自由散文之前；散文开始后再出现任何 `**Word:**` 锚点行 → validator fatal（交错会让 worker 的 brief 形态不可预测）
+- **文件级**：第一个 `## Scene` 之前不得有项目级前言 / 承诺段（只允许一行 H1 标题）→ validator fatal（见本节开头"文件整体形状"）
 - **avoids_same_scene 互斥**（Components 锚点存在时）：每对 cited component 检查 `chunks/index.json.components[].avoids_same_scene` 列表；命中任一对 → validator fatal（具体互斥关系由 preset 自己声明）
-- **Transition**（soft / 出现才校验）：type 必须在 TRANSITION-REGISTRY 词汇内；方向只对 directional type（push-slide）合法；duration `0 < dur ≤ 2.0s`；`Continuity: break` 不可命名 Tier-A（`morph`/`shared-element`）类型 → validator fatal
+- **Transition**（soft / 出现才校验）：type 必须在 TRANSITION-REGISTRY 词汇内；方向只对 directional type（push-slide）合法；duration `0 < dur ≤ 2.0s`。**Continuity ⟺ Tier-A 双向强制**：`Continuity: break` 不可命名 Tier-A（`shared-element`）；反之 `Continuity: continue` **必须**命名 Tier-A `shared-element`（**省略 `**Transition:**` 走 Tier-B 默认也算违反**）→ 两向皆 validator fatal
 - **Bridge**（soft / 仅 Tier-A）：仅当 `**Transition:** shared-element` 时出现，值为单个反引号包裹的 kebab-case 逻辑名；`shared-element` 必须配 `**Continuity:** continue`（否则下游 prep fatal —— 两场要落同一 worker 才能写共享元素）。非 shared-element 的 scene 写了 Bridge → validator 警告/忽略
 
 **Blueprint 锚点（soft —— validator 不强制，但强烈建议写）**：
@@ -136,9 +144,11 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 **Transition 锚点（可选 / soft —— 命名「这一场怎么被进入」）**：
 
+> **本小节 + 下方「Bridge 锚点」是过渡 / 桥接的权威撰写指南（单一真源）。** §3 后的「Transition：翻译」表只补 `intent → registry type` 的映射，不重述机器规则；validator 的硬契约清单（上方）只列"校验什么"。改规则只改这里。
+
 - 形态：`**Transition:** <type> [DIRECTION] [<dur>s]`，例 `**Transition:** blur-crossfade` / `**Transition:** push-slide LEFT` / `**Transition:** zoom-through 0.3s`
 - 可选 type（Tier-B，过渡发生在**场景之间**，由 harness 在拼装后注入到 clip 外壳上，**你不写任何 GSAP**）：`crossfade` / `blur-crossfade` / `push-slide`（带方向 LEFT/RIGHT/UP/DOWN）/ `zoom-through` / `squeeze`。完整词汇 + 选型见 `<SKILL_DIR>/../hyperframes-animation/transitions/TRANSITION-REGISTRY.md`
-- **整片只挑 2-3 种反复用**（重复 = 专业整体感，见 motion-language.md "过渡词汇"）。Scene 1 的 Transition 是开场（无前序场景，被忽略），可省
+- **整片只挑 2-3 种反复用**（重复 = 专业整体感，见 motion-language.md "过渡词汇"）—— **此预算只数 Tier-B（场景间）那 5 种里挑 2-3；`shared-element`（morph）是 worker 写的桥接、不占名额**，按叙事需要随便用。Scene 1 的 Transition 是开场（无前序场景，被忽略），可省
 - **省略整行 = 接受默认**：harness 按 surface 冲突 / energy 自动推导（背景可能撞色→`blur-crossfade`、高能→`zoom-through`、平静→`blur-crossfade`、否则 `crossfade`）。所以 Tier-B **不确定就别写**，默认通常够好
 - **`shared-element`（Tier-A 共享元素桥接）= story-design `intent: morph` 翻译来的** —— 必须配 `**Continuity:** continue`（两场落同一 worker）+ `**Bridge:**` 锚点（见下）。Tier-A 的桥接 morph 由 **worker 在两场场景内部写**（不是 harness 注入），harness 只做接缝外壳 crossfade
 - harness 做掉一切（Tier-B）：算 overlap、延长出场 clip、排 track、stamp GSAP、复核。你只命名意图，**绝不写过渡代码、不碰 timing、不碰 index.html**
@@ -148,8 +158,15 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 - 形态：`**Bridge:** \`<bridge-id>\``，一个反引号包裹的 kebab-case 逻辑名（如 `\`product-card\``/`\`avatar-circle\``）
 - 来自 story-design 的 `transition.sharedMotif`（叙事层"什么元素跨场"）—— 你把那句话落成一个稳定的机器名
 - worker 会在**出场 + 进场两场**都放 `data-bridge-id="<这个名>"` 的元素，并设计两场之间的 morph 交接。**你只命名,不画几何** —— 具体 morph 是 worker 的活
-- **写 Bridge 的两场必须 `Continuity: continue`**（同一 worker），否则下游 prep fatal
-- 一串连续 morph（demo sequence 3 场连桥）受 worker 分组 cap 限制（默认 cap=2）—— 超过会被 prep 拦，必要时拆成"morph 对 + 普通过渡"或提高 cap
+- **写 `**Bridge:**` 锚点的是 morph 目标场**（被 morph"进入"的那场，prep 用 `toScene.transition`），它 `Continuity: continue`；morph 源场 `Continuity: break`（见下方 cap=2 对齐）。两场 worker 都放 `data-bridge-id` 元素，但只有目标场写 `**Transition:** shared-element` + `**Bridge:**` 锚点。这对落进同一 cap 窗口 = 同一 worker，否则下游 prep fatal
+
+**⚠️ cap=2 分组对齐（必须在写 plan 时就想清楚，否则 prep 必拒、强制重派）**：你写 `shared-element` 时**看不到** worker 分组——分组是 prep 事后按 `Continuity` 锚点确定性算的，规则是：**`break` 起一个新组、`continue` 续入当前组、组满 `cap`（默认 2）就强制断新组**。Tier-A 的两场必须落进**同一组**，所以一对 morph 场景 `(A → B)` 必须**正好是某个 cap 窗口的头两场**。可靠落法：
+
+- **把 morph 源 A 设 `Continuity: break`**（让 A 起一个新组）、**morph 目标 B 设 `Continuity: continue`**（B 续入，这对正好填满 cap=2 的窗口）。这是最稳的模式。
+- 反例（本类 fatal 的成因）：A、B 都 `continue`，但 A 前面已有一个 `continue` 场景占了窗口的第 1 格 → A 落第 2 格（组满）、B 被踢进**下一组** → A、B 跨 worker → prep fatal `Transition A→B: grouping splits the scenes across workers`。
+- **连续 >2 场的 morph 链**（demo sequence 3 场连桥）在 cap=2 下**必然**跨 worker → 拆成"一对 morph（Tier-A）+ 一个 Tier-B 过渡"，或提高 `--scenes-per-group`。
+
+> 一句话：**morph 对 = 一个 cap 窗口的前两场；最稳就是 morph 源 `break`、目标 `continue`。** 想不清就别用 Tier-A，改 Tier-B（`blur-crossfade`）——视觉接缝照样干净。
 
 > 这是 plan agent 对"场景间怎么衔接"的明确承诺。和散文第 8 条（命名到下一场的 transition）一致 —— 第 8 条是给人读的创意方向，`**Transition:**`/`**Bridge:**` 锚点是给 harness/worker 读的机器指令；保持一致。
 
@@ -202,7 +219,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 - New primary 进场前，previous primary 必须 exit / hide / compact / demote；**camera pan / zoom / push 不算退场**。
 - Action / payoff frame：primary headline / product / decision point 独占 center safe zone；proof、labels、logos、stats、cards 若保留，必须更小、更低对比、更少运动、离开 primary bbox。
 
-**Continuity 直接来自 story-design**（不再反推）：`narrator_scripts.json` 的每个 scene `transition.continuity`（`break` | `continue`）是叙事层已经定好的判断 —— **照抄到 `**Continuity:**` 锚点**。Scene 1 永远 `break`。跨场景一致性见 §5 的"多样性"软指南。
+**Continuity 直接来自 story-design**（不再反推）：`narrator_scripts.json` 的每个 scene `transition.continuity`（`break` | `continue`）是叙事层已经定好的判断 —— **照抄到 `**Continuity:**` 锚点**。`continuity` 已跟着 `intent` 定死（`morph` ⇒ `continue`，其余 ⇒ `break`），所以照抄即可；**凡 `continue` 的场必然 `intent: morph`，下游要求它命名 `shared-element`**（见 §2 双向硬契约）。Scene 1 永远 `break`。跨场景一致性见 §5 的"多样性"软指南。
 
 **Transition：把 story-design 的叙事 `intent` 翻译成具体 registry 类型**（这是 visual-design 的活 —— 你有 preset/palette/surface/energy 上下文，story-design 没有）。`narrator_scripts.json` 每个 scene 的 `transition.intent` 是 5 个叙事意图之一；按下表翻译成 `**Transition:**` 锚点的 registry 类型（完整词汇见 `<SKILL_DIR>/../hyperframes-animation/transitions/TRANSITION-REGISTRY.md`）：
 
@@ -215,7 +232,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 | `zoom`                              | `zoom-through`                                          | 镜头推进 / 高能                                                                       |
 
 - **你有视觉上下文，可以 override**：若某 `intent` 的默认翻译在本 preset 下不合适（如撞色该用 blur 而表里写 crossfade），按视觉判断改 —— 表是默认，不是死规则。
-- **整片只挑 2-3 种 registry 类型反复用**（重复=专业整体感，见 motion-language.md）；`intent` 已经收窄了选择，你在它给的方向里定具体值。
+- **整片只挑 2-3 种反复用**（重复=专业整体感，见 motion-language.md）—— **只数 Tier-B（场景间）那 5 种；`shared-element` morph 不占名额**。`intent` 已经收窄了选择，你在它给的方向里定具体值。
 - **不确定就省略 `**Transition:**` 锚点** —— 下游 prep 会按 energy/撞色自动默认（见 §2 Transition 锚点）。但 `intent: morph` 时**不能**省略 —— 必须显式 `shared-element` + `**Bridge:**`。
 
 **`**Bridge:**`锚点（仅`intent: morph` 时写）**：把 story-design 的 `transition.sharedMotif`（叙事层的"什么元素跨场"，如 "the product card"）落成一个机器可读的桥接 id：
@@ -264,20 +281,22 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 ## 4. 撰写散文（在三行 anchor 之后）
 
-**第 0 步（动笔前，强制）**：输入是内联的、容易被一眼扫过 —— 先用 2-3 句话向自己**复述本次硬契约**，把它们拉到前台：① 本 preset 的 **Surface 契约**（`## Design chunks` 的 `index.json.components[].surface` + `composition-hints.md`，"违反 = 渲染失败"）；② **Voice register**（`voice.md` recipe，下面第 4 条必须承诺它）；③ **每场 Blueprint 决策**（`based-on`/`extended`/`composed` + 一句理由）。复述不写进 `section_plan.md`，只为定调。
+**第 0 步（动笔前，强制）**：先向自己复述本次硬契约（Surface 契约 / Voice register / 每场 Blueprint 决策）——完整三条见 **agent 提示词的「动笔前先复述契约」一节**（那是常驻提示词，单一真源，此处不重复）。关键约束：复述**只在脑中定调，绝不写进 `section_plan.md`**（写进去 = 项目级前言 = §2"文件整体形状"禁止项 = validator fatal）。
 
 然后按以下 8 条顺序写一段自由散文。这段散文会**原样**传给下游的 build agent —— 把自己当成在向一位没见过本品牌的资深动画师做 brief。
 
 1. **情感与节奏脚注** —— 一句话，点名本节拍的*感觉*和*节奏*（"frustrated, slightly-off comma"、"luminous launch-film slow build"）。**这是真 plan 与通用 AI 输出的分水岭。**
 2. **空间关系** —— composition 模板（centered / thirds / split / layered / asymmetric / triptych / strip）、主素材的画布占比（≥40%）、留白意图。**本片 dispatch 顶部 `Captions: enabled` 时（编排器从 audio_meta 算出的规划提示；prep.mjs 在 Step 5 会重算权威闸 `group_spec.captions_enabled`）**：字幕占底部 ~17% 保留带，凡把内容压低的概念（full-bleed cards、oversized hero、large CTA、stat stamp）必须**显式告诉 worker 把所有内容留在上 ~83%、底部 ~17% 当字幕领地**，垂直居中锚 ~0.42×高。措辞例："centered in the upper ~83%, caption band reserved below"、"bottom edge of card sits just above the caption band"、"CTA vertically centered around 42% of canvas height"。背景 / ambient 层不受限、照常 full-bleed。
-3. **Effect → asset 映射** —— 对 `**Effects:**` 中的每个 id，命名驱动它的素材（`public/<basename>`，来自本场景 `assetCandidates`）或文本标签，以及在场景 phase timeline 内*触发的时刻*
-4. **品牌样式覆盖层（按角色，不按值）** —— Palette：点名 60% canvas / 30% surface（这份预设若无 surface token，用 hairline + canvas 重复并明确说出来）/ 10% accent，accent 绑定到哪个焦点元素；Type：display 用于什么、body 用于什么、是否有 mono eyebrow；Motion：引用 `EASE.entry` / `EASE.emphasis` 等**角色键名**（即使 `chunks/easings.js` 里的实际键名略不同，build agent 会做映射）。**完全不抄 hex / 字体名 / ease 曲线 / px / em / ms。** 如果 `chunks/tokens.css` 缺某 token（如 mono 字体未提取），点明并说预期 fallback
-5. **多阶段编排** —— 阶段序列 `entry → ambient drift → major transition → stillness → emphasis → exit` 及粗略时长比例；明确点出 `stillness-before-climax` 节拍；每阶段命名弹簧意图（`entry` / `gentle` / `snappy` / `heavy` / `slam`）。若已通过 §3 选中某个 blueprint，phase 序列沿用该 blueprint index 描述里的 phase 骨架；本场景的情感节拍决定每阶段的时长比例与 ease 意图，**不必逐字复制 blueprint 的 timing 数值**（那是 build 的事）。若本场多 act 或 dense multi-subject，先写 `PrimarySubjectTimeline` + `Handoff`，再写散文。
+3. **Effect → asset 映射** —— 对 `**Effects:**` 中的每个 id，命名驱动它的素材（`public/<basename>`，来自本场景 `assetCandidates`）或文本标签，以及在场景 phase timeline 内*触发的时刻*。**默认把本场 `assetCandidates` 都用上**（story-design 已按覆盖率铺开过，这里别再砍）：焦点主体仍 ≥40% 画布、挑最贴叙事的那个，其余候选**降级共存**而非丢弃——supporting / ambient 层、triptych / strip / layered 模板让多素材并置（分主次，不是并列等大网格），或在不同 phase 先后出场。某候选确实塞不进本场 → 在第 7 条否定句里点名"本场不用 `public/X`、因为…"，**别静默忽略**（它若也没出现在别的 scene 就等于废掉）
+4. **品牌样式覆盖层（按角色，不按值）** —— Palette：点名 60% canvas / 30% surface（这份预设若无 surface token，用 hairline + canvas 重复并明确说出来）/ 10% accent，accent 绑定到哪个焦点元素；Type：display 用于什么、body 用于什么、是否有 mono eyebrow；Motion：只引**规范角色键** `EASE.entry` / `EASE.emphasis` / `EASE.exit` / `EASE.drift` 与 `DUR.snap` / `DUR.med` / `DUR.slow`（§1 第 5 条；这些是 `easings.js` 保证暴露的角色键）——不要自造别名键名，worker 是按这套规范键直接用的，引了它没有的键会落空。**完全不抄 hex / 字体名 / ease 曲线 / px / em / ms。** 如果 `chunks/tokens.css` 缺某 token（如 mono 字体未提取），点明并说预期 fallback
+5. **多阶段编排** —— 阶段序列 `entry → ambient drift → major transition → stillness → emphasis → exit` 及粗略时长比例；明确点出 `stillness-before-climax` 节拍；每阶段命名弹簧意图（`entry` / `gentle` / `snappy` / `heavy` / `slam`）。若已通过 §3 选中某个 blueprint，phase 序列沿用该 blueprint index 描述里的 phase 骨架；本场景的情感节拍决定每阶段的时长比例与 ease 意图，**不必逐字复制 blueprint 的 timing 数值**（那是 build 的事）。phase 用 **scene-local 相对秒数 / 比例**（如 "0-0.45s 入场"、"~0.5s setup hold"）即可；**不要在散文里复述场景总时长 / 结束秒数**（如 "持续到 2.82s 退出"）——总时长在 `**Duration:**` 锚点，且 worker 的 `data-duration` 以 `estimatedDuration_s` 钉死，散文里再写一个约数只会和它冲突。块顺序（PST/Handoff 在散文前）见 §2。
 6. **持续 / 环境运动** —— entry 落定后是什么让场景持续活着：hero 乘性 breathing（±2-5% scale）、卡片正弦 drift（±6-8px 反相）、icon orbit、halftone 密度形变、CTA glow pulse
 7. **一条否定句** —— 本场景**不能**做什么，用 codex-plugin 的语气（"no halo behind the bell — Jake killed those"、"no neon glow, this is a workspace"）
-8. **到下一场景的 transition** —— 散文描述衔接（承接 story-design 的 `transition.intent` + `description`）：morph 时写清什么元素跨场、交什么形态给下一场；slide/dissolve/zoom/cut 时写视线落点。这段是给人读的方向，机器指令在 `**Transition:**`/`**Bridge:**` 锚点
+8. **到下一场景的 transition** —— 详略**取决于 Tier**：**Tier-A（`shared-element`/morph）出场是承重的**——worker 要在出场+进场两场内部亲手写这个 morph，所以要写清什么元素跨场、交什么形态给下一场（这段是 worker 的施工图）。**纯 Tier-B（crossfade/blur-crossfade/push-slide/zoom-through/squeeze）出场由 Step 7 harness 注入到 clip 外壳上，worker 不写任何出场 tween**——所以散文一句话带过视线落点即可，**不要详述 veil/dissolve/curtain 的机制**（写了也没人照着做，纯增 token）。机器指令始终在 `**Transition:**`/`**Bridge:**` 锚点
 
 **不要**写像素值、GSAP timeline 代码、composition HTML、具体 hex / 字体名 / ease 曲线 —— 那是 build agent 的活。但要给足约束让结果一眼识别为*本场景*而非通用解读：具体的意图角色、按比例的具体时长、按用途的字体引用、按角色的调色板分配、具体的 phase 顺序。
+
+**别重述 worker 已从专用通道拿到的全局规则（省 token、避免漂移）**：worker 每个都已收到 `voice_file`（DOM 文字 recipe 全文）、`Captions` flag + 自身 keep-out 契约（底部 ~17% 字幕带几何）、`tokens.css` / `easings.js`（全部 token 值与 ease 曲线）。所以散文里**不要逐场复述** voice recipe 的机械细节（strip/case/断句）、字幕带的几何数值、或任何 hex/字体名/曲线值——只写**本场特有的应用或风险**（例：voice 写"hero 落成单行 UPPERCASE 叠词、`<mark>` 绑 'videos'"，而非整套 recipe；caption 写"CTA 底边压在字幕带上沿之上"，而非"底部 17% 是字幕领地、锚 0.42×高"这类每场都一样的几何）。**没有专用通道的全局规则照常逐场承载**（如 "no neon / no italic / 60-30-10 调色分配 / hard cut / stillness-before-climax 节拍"——这些 worker 只能从本场散文得知，是该场 brief 的承重内容，不算重复）。
 
 ### 完整场景块样例（含 anchor）
 
@@ -326,6 +345,8 @@ Beat 2b — the spiral (frustrated, slightly-off comma). Centered chat-app compo
 ## 5. 软指南（taste-level，影响 plan 质量但不被 validator 强制）
 
 ### 场景质量底线 —— 三层运动模型
+
+> 这是**质量底线视角**（"什么算够活")；**逐场怎么写**进散文见 §4 第 6 条（持续/环境运动）——同一件事的两个高度，"乘性 breathing 不是 yoyo"只在此处展开一次，别在散文里逐场复述这条方法论。
 
 每个场景必须有：
 

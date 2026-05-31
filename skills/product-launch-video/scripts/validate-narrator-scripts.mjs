@@ -15,11 +15,17 @@ const REQUIRED_SCENE = [
   "sceneNumber",
   "sceneName",
   "narrativeIntent",
+  "transition",
   "assetCandidates",
   "script",
   "estimatedDuration",
 ];
 const REQUIRED_INTENT = ["type", "narrativeRole", "keyMessage", "persuasion", "emotionalBeat"];
+// Narrative bridge intents (transition.intent). `morph` is the only one that maps
+// to a Tier-A shared-element bridge (→ continuity "continue", same worker); the
+// rest are Tier-B between-scene transitions the harness injects across workers
+// (→ continuity "break"). Enforced below.
+const VALID_TX_INTENTS = new Set(["morph", "cut", "slide", "dissolve", "zoom"]);
 const VALID_INTENT_TYPES = new Set([
   "hook",
   "pain_point",
@@ -130,6 +136,46 @@ function validate(filePath) {
             }
           });
         }
+      }
+
+      // transition: intent ⟺ continuity (A2). `continue` (→ same worker) exists
+      // ONLY for a Tier-A morph; every other intent is a between-scene Tier-B
+      // transition the harness injects across workers, so it must be `break`.
+      // Mirrors the section-plan validator's biconditional, one representation up.
+      const tx = scene.transition;
+      if (tx && typeof tx === "object") {
+        const intent = tx.intent;
+        const cont =
+          typeof tx.continuity === "string" ? tx.continuity.toLowerCase() : tx.continuity;
+        if (intent != null && !VALID_TX_INTENTS.has(intent)) {
+          errors.push(
+            `${ctx}.transition.intent: "${intent}" not in [${[...VALID_TX_INTENTS].join(", ")}]`,
+          );
+        }
+        if (cont != null && cont !== "break" && cont !== "continue") {
+          errors.push(
+            `${ctx}.transition.continuity: must be "break" or "continue" (got "${tx.continuity}")`,
+          );
+        }
+        if (i === 0 && cont != null && cont !== "break") {
+          errors.push(`${ctx}.transition.continuity: scene 1 must be "break"`);
+        }
+        if (intent === "morph") {
+          if (cont !== "continue") {
+            errors.push(
+              `${ctx}.transition: intent "morph" requires continuity "continue" (a shared-element morph is authored by one worker across both scenes)`,
+            );
+          }
+          if (typeof tx.sharedMotif !== "string" || !tx.sharedMotif.trim()) {
+            errors.push(`${ctx}.transition: intent "morph" requires a non-empty "sharedMotif"`);
+          }
+        } else if (VALID_TX_INTENTS.has(intent) && cont === "continue") {
+          errors.push(
+            `${ctx}.transition: intent "${intent}" is a Tier-B between-scene transition and must use continuity "break" — only intent "morph" may be "continue"`,
+          );
+        }
+      } else if ("transition" in scene) {
+        errors.push(`${ctx}.transition must be an object {continuity, intent, ...}`);
       }
 
       // captions field is no longer consumed (LV2 captions are agent-authored

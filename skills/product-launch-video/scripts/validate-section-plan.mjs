@@ -320,6 +320,11 @@ for (let i = 0; i < heads.length; i++) {
   // Absent → prep default-fills. Scene 1's is the open (ignored as a between-
   // scene transition) but still shape-checked if present. Only validated when
   // the registry loaded (TX_BY_NAME non-empty).
+  // continue ⟺ Tier-A: track whether this scene NAMED a Tier-A (shared-element)
+  // transition, so the converse check after this block can enforce that a
+  // `continue` scene IS a Tier-A morph (the only reason two scenes share a
+  // worker). Stays false when no Transition anchor / registry unreadable.
+  let namedTierA = false;
   const txMatch = body.match(/^\*\*Transition:\*\*\s*(.*)$/m);
   if (txMatch && TX_BY_NAME.size > 0) {
     const raw = txMatch[1].trim();
@@ -330,6 +335,7 @@ for (let i = 0; i < heads.length; i++) {
       const type = tokens[0].toLowerCase();
       const rec = TX_BY_NAME.get(type);
       const isTierA = TX_TIER_A.has(type);
+      namedTierA = isTierA;
       if (!rec && !isTierA) {
         errors.push(
           `${sceneId}: **Transition:** unknown type "${type}" (known: ${[...TX_BY_NAME.keys()].join(", ")})`,
@@ -389,6 +395,19 @@ for (let i = 0; i < heads.length; i++) {
         );
       }
     }
+  }
+
+  // Converse of the break-rule above (A1): `continue` exists ONLY to land two
+  // scenes in one worker for a Tier-A morph. A `continue` scene that did not name
+  // a Tier-A (shared-element) transition — including one that omitted
+  // **Transition:** to accept a Tier-B default — has no reason to share a worker.
+  // Gated on the registry loading (else we'd false-positive when Transition
+  // validation is skipped). scene 1 can't reach here (continue on scene 1 already
+  // errored, leaving continuityVal null).
+  if (TX_BY_NAME.size > 0 && continuityVal === "continue" && !namedTierA) {
+    errors.push(
+      `${sceneId}: **Continuity: continue** is reserved for shared-element (Tier-A) morphs — name **Transition: shared-element** + **Bridge:** \`<id>\`, or set **Continuity: break**`,
+    );
   }
 
   if (found.Duration != null) {

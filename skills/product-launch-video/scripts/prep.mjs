@@ -717,8 +717,6 @@ if (txRegistry) {
   // principle) instead of a monotonous zoom on every cut.
   const HIGH_TONE_RX =
     /\b(explosive|high[- ]energy|frenetic|kinetic|momentum|powerful|adrenaline|hype|punchy|aggressive|fast[- ]cut|rapid)\b/i;
-  const CALM_TONE_RX =
-    /\b(calm|serene|slow|gentle|breathe|breathes|soft|softly|elegant|quiet|luminous|warm|tender|frustrated|anxious|claustrophobic|wistful|melancholy|somber|reflective|empowering|expansive|exhale|inhale)\b/i;
 
   const briefFor = (sid) => {
     for (const g of groups) if (g.scenes[sid]) return g.scenes[sid].creative_brief || "";
@@ -739,21 +737,18 @@ if (txRegistry) {
     let durationOverride = named?.duration_s ?? null;
     const bridgeId = named?.bridge_id || null;
 
-    // Default-fill (no named transition) — registry rules, in priority order.
+    // Default-fill (no named transition): one calm universal — blur-crossfade,
+    // which masks any background shift and reads intentional — unless the entering
+    // beat's TONE reads HIGH energy, which promotes to zoom-through. (The old
+    // surface-conflict and calm branches both resolved to blur-crossfade too, so
+    // they were redundant; zoom-through itself blurs, so it still masks a bg clash.)
     if (!type) {
-      // bg-conflict proxy: surface differs between the two scenes (or one lacks a
-      // surface) ⇒ backgrounds may clash ⇒ blur masks the hard cut.
-      const surfaceConflict = (fromScene.surface || null) !== (toScene.surface || null);
-      const brief = briefFor(toSid);
-      // Only the FIRST ~120 chars (the beat's mood parenthetical) drive tone — the
-      // rest is layout prose full of false-positive words.
-      const tone = brief.slice(0, 160);
-      if (surfaceConflict) type = txRegistry.default_break_on_bg_conflict || "blur-crossfade";
-      else if (HIGH_TONE_RX.test(tone)) type = txRegistry.default_high_energy || "zoom-through";
-      else if (CALM_TONE_RX.test(tone)) type = txRegistry.default_calm || "blur-crossfade";
-      // Universal default leans calm (blur-crossfade) — NOT a bare crossfade — so an
-      // unclassified cut still masks any background shift and reads intentional.
-      else type = txRegistry.default_break_on_bg_conflict || "blur-crossfade";
+      // Scan only the FIRST ~160 chars (the beat's mood parenthetical) — the rest is
+      // layout prose full of false-positive words.
+      const tone = briefFor(toSid).slice(0, 160);
+      type = HIGH_TONE_RX.test(tone)
+        ? txRegistry.default_high_energy || "zoom-through"
+        : txRegistry.default_calm || "blur-crossfade";
     }
 
     const rec = txByName.get(type);
