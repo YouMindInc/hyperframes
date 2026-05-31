@@ -8,9 +8,9 @@ category: visual-design
 
 好的宣传视频感觉像一个连续整体，不是一堆毫无关联动画的幻灯片。这需要一致的运动语言：相同的缓动曲线意图、相同的节奏时序、相同的弹簧手感。
 
-**本文件只负责 plan 层的设计判断** —— 弹簧意图、节拍结构、停留、静默节拍、过渡词汇。具体 GSAP ease 名称（`back.out(1.4)`）、ms / 帧映射、stagger 公式、cut-the-curve 精确 JS 代码、乘性 breathing 公式都属于 build agent 在写 timeline 时查 `/hyperframes-animation` 与 design.html 的事；plan 不写代码。
+**本文件只负责 plan 层的设计判断** —— 弹簧意图、节拍结构、停留、静默节拍、过渡词汇。具体 GSAP ease 名称（`back.out(1.4)`）、ms / 帧映射、stagger 公式、cut-the-curve 精确 JS 代码、乘性 breathing 公式都属于 build agent 在写 timeline 时查 `/hyperframes-animation` 与 `chunks/easings.js` 的事；plan 不写代码。
 
-> **`EASE` / `DUR` 的 JS 常量来自 design.html。** Plan 按**意图角色**引用（`EASE.entry` / `EASE.emphasis` / `EASE.exit`、`DUR.fast` / `DUR.med` / `DUR.slow`，但典型预设里的实际键名可能略不同 —— 比如 editorial 预设用 `DUR.snap` 代替 `DUR.fast`）。Plan 写"用 entry 弹簧"或"参考 `EASE.entry`"，build agent 自己映射到具体曲线。
+> **`EASE` / `DUR` 的 JS 常量来自 `chunks/easings.js`**（已内联在 Phase 3 dispatch 的 `## Design chunks`，不读 design.html）。Plan 按**意图角色**引用（`EASE.entry` / `EASE.emphasis` / `EASE.exit`、`DUR.fast` / `DUR.med` / `DUR.slow`，但典型预设里的实际键名可能略不同 —— 比如 editorial 预设用 `DUR.snap` 代替 `DUR.fast`）。Plan 写"用 entry 弹簧"或"参考 `EASE.entry`"，build agent 自己映射到具体曲线。
 
 ## 弹簧意图（按角色，不按曲线）
 

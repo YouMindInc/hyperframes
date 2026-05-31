@@ -8,11 +8,11 @@ category: visual-design
 
 视频排版与网页排版不同。没有滚动，没有响应式重排。每个文本元素必须在 1-5 秒可见窗口内**一眼可读**，并且承担情感工作 —— 在好的发布视频里，文字几乎不是装饰，而是场景的情感锚点。
 
-**本文件只负责 plan 层的设计判断** —— 角色、层级意图、搭配逻辑、否定句。具体数值（字号 px、letter-spacing em、CJK fallback、`tabular-nums` 等 CSS）是 build agent 在写 HTML/CSS 时查 `/hyperframes-core` 与 design.html 的事；plan 不抄。
+**本文件只负责 plan 层的设计判断** —— 角色、层级意图、搭配逻辑、否定句。具体数值（字号 px、letter-spacing em、CJK fallback、`tabular-nums` 等 CSS）是 build agent 在写 HTML/CSS 时查 `/hyperframes-core` 与 `chunks/tokens.css` 的事；plan 不抄。
 
 ## 字体来源
 
-**字体族来自 design.html**（按用途的 display / body / mono 角色名，或具体字体名如 "Instrument Serif"）。Plan 里按**用途**点名："display 用于 hero 标题"、"body 用于支撑文字"、"mono 用于 eyebrow / 元数据"。**不要**编造字体名，也**不要**在 plan 里把具体字体名抄一遍——build agent 自己会从 design.html grep。
+**字体族来自 `chunks/tokens.css`**（`--font-display` / `--font-body` / `--font-mono` 角色 token，已内联在 Phase 3 dispatch 的 `## Design chunks`）。Plan 里按**用途**点名："display 用于 hero 标题"、"body 用于支撑文字"、"mono 用于 eyebrow / 元数据"。**不要**编造字体名，也**不要**在 plan 里把具体字体名抄一遍——build agent 自己从 `chunks/tokens.css` 读（不读 design.html）。
 
 如果场景用了**第二种字体**做对比（serif italic 重音、mono 标签），plan 必须点名这是设计决策；同质字体（两种几何 sans）不允许 —— 视觉张力而无层次收益。
 

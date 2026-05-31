@@ -218,8 +218,21 @@ const html = `<!doctype html>
     <!--
       ════════════════════════════════════════════════════════════════════════
       AUTO-GENERATED page-card skeleton (build-page-card.mjs) for the
-      demo-page-scroll-spotlight blueprint. This is a REFERENCE, not a final
-      composition. Scene worker TODO before shipping into compositions/<id>.html:
+      demo-page-scroll-spotlight blueprint. This is a STANDALONE REFERENCE doc,
+      not a final composition. Scene worker TODO before shipping into
+      compositions/<id>.html:
+        0. STANDALONE -> FRAGMENT (else trips 3 FATAL check-compositions rules:
+           root-contract / data-composition-id / timeline-registration):
+           - strip <!doctype>/<html>/<head>/<body> shell + the CDN gsap <script>
+             (GSAP is injected once in index.html at Step 7); wrap #root in
+             <template id="scene_<N>-template">.
+           - root div: add class="scene_<N>-root"; data-composition-id="main" ->
+             scene_<N>; delete data-start="0"; set data-duration to the dispatch
+             estimatedDuration_s verbatim.
+           - <style>: :root{} -> #root{}; fold html,body{} and bare *{} into
+             #root / #root *.
+           - window.__timelines["main"] -> window.__timelines["scene_<N>"]
+             (step 1's selector sync does NOT cover this host-id/registration-key rename).
         1. Prefix every class/id with your scene id (e.g. s2-page-card / #s2-pop-target)
            and update the timeline selectors to match.
         2. Fill each .kw data-glow-start / data-glow-end from the voiceover ASR

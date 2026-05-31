@@ -53,6 +53,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
+import {
+  loadTransitionRegistry,
+  transitionsByName,
+  tierATypes,
+} from "./lib/transition-registry.mjs";
 
 // ---------- argv ----------
 const argv = process.argv.slice(2);
@@ -210,7 +215,7 @@ const ANCHORS = ["Effects", "Duration", "Continuity"];
 // shows surface-aware components). prep.mjs treats it as OPTIONAL here purely so
 // the anchor doesn't leak into creative_brief — its value is forwarded to
 // group_spec.json so the Step 6 dispatch can pass it to scene workers.
-const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Surface"];
+const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Surface", "Transition"];
 
 function anchorRe(name) {
   return new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`, "m");
@@ -268,6 +273,24 @@ function parseSceneBlock(body, sceneId, isFirst) {
   // or null. Worker uses this to pick #root background style from the preset's
   // composition-hints; validator enforces presence + allowed values upstream.
   const surface = raw.Surface ? raw.Surface.trim().toLowerCase() : null;
+
+  // Transition (OPTIONAL): how THIS scene is entered.
+  //   **Transition:** <type> [DIRECTION] [<dur>s]
+  // Parsed loosely here (validator already shape-checked); null when absent so
+  // Step 6.5 can default-fill. Scene 1's transition is the open (no between-
+  // scene transition precedes it) — parsed but ignored at injection time.
+  let transition = null;
+  if (raw.Transition) {
+    const tokens = raw.Transition.trim().split(/\s+/);
+    const type = tokens[0].toLowerCase();
+    let direction = null;
+    let durationOverride = null;
+    for (const tok of tokens.slice(1)) {
+      if (/^[\d.]+s$/i.test(tok)) durationOverride = parseFloat(tok);
+      else direction = tok.toUpperCase();
+    }
+    if (type) transition = { type, direction, duration_s: durationOverride };
+  }
 
   // SFX (optional / soft anchor; omitted entirely = no SFX for this scene):
   //   **SFX:**
@@ -331,6 +354,7 @@ function parseSceneBlock(body, sceneId, isFirst) {
     blueprint,
     componentIds,
     surface,
+    transition,
     sfxCues,
     creative_brief: brief,
   };
@@ -651,6 +675,136 @@ for (const s of scenes) {
 }
 if (cur) groups.push(cur);
 
+// ---------- Step 6.6: scene-to-scene transitions (Tier B harness) ----------
+// One record per adjacent scene pair. `is_break` is derived from the GROUPING
+// (different worker_id) — NOT re-read from the plan's Continuity anchor — because
+// the cap=N grouping (Step 6) is the authority on which scenes a single worker
+// actually owns. inject-transitions.mjs acts only on tier:"b" records in Phase 1.
+//
+// Determinism: the planner optionally names a transition per scene (the ENTERING
+// transition). When absent, we default-fill from the registry's rules. No agent.
+const transitions = [];
+let txRegistry = null;
+let txByName = new Map();
+let txTierA = new Set();
+try {
+  txRegistry = loadTransitionRegistry();
+  txByName = transitionsByName();
+  txTierA = tierATypes();
+} catch (e) {
+  anomalies.push(`transition registry unreadable — scene transitions skipped (${e.message})`);
+}
+if (txRegistry) {
+  // scene_id -> worker_id (so we can tell break vs continue boundaries from grouping)
+  const sceneWorker = new Map();
+  for (const g of groups) for (const sid of g.scene_ids) sceneWorker.set(sid, g.worker_id);
+
+  // Energy classification for the DEFAULT transition (only when the planner did
+  // not name one). We scan the entering scene's TONE words — the mood the brief
+  // actually describes — NOT layout jargon. Critically we do NOT match words like
+  // "hero" / "reveal" / "drop" / "punch": those are composition/layout terms
+  // ("centered hero composition", "product reveal") that say nothing about energy,
+  // and matching them made every scene default to zoom-through (observed on a real
+  // 8-scene promo). Only genuine high-energy TONE words promote to zoom-through;
+  // everything else gets the calm universal default (blur-crossfade), which suits
+  // most moods and keeps the whole video to ~2 transition types (the "repeat 2-3"
+  // principle) instead of a monotonous zoom on every cut.
+  const HIGH_TONE_RX =
+    /\b(explosive|high[- ]energy|frenetic|kinetic|momentum|powerful|adrenaline|hype|punchy|aggressive|fast[- ]cut|rapid)\b/i;
+  const CALM_TONE_RX =
+    /\b(calm|serene|slow|gentle|breathe|breathes|soft|softly|elegant|quiet|luminous|warm|tender|frustrated|anxious|claustrophobic|wistful|melancholy|somber|reflective|empowering|expansive|exhale|inhale)\b/i;
+
+  const briefFor = (sid) => {
+    for (const g of groups) if (g.scenes[sid]) return g.scenes[sid].creative_brief || "";
+    return "";
+  };
+
+  for (let i = 1; i < scenes.length; i++) {
+    const fromScene = scenes[i - 1];
+    const toScene = scenes[i];
+    const fromSid = fromScene.sceneId;
+    const toSid = toScene.sceneId;
+    const is_break = sceneWorker.get(fromSid) !== sceneWorker.get(toSid);
+
+    // The ENTERING transition is named on the destination scene.
+    const named = toScene.transition; // { type, direction, duration_s } | null
+    let type = named?.type || null;
+    let direction = named?.direction || null;
+    let durationOverride = named?.duration_s ?? null;
+
+    // Default-fill (no named transition) — registry rules, in priority order.
+    if (!type) {
+      // bg-conflict proxy: surface differs between the two scenes (or one lacks a
+      // surface) ⇒ backgrounds may clash ⇒ blur masks the hard cut.
+      const surfaceConflict = (fromScene.surface || null) !== (toScene.surface || null);
+      const brief = briefFor(toSid);
+      // Only the FIRST ~120 chars (the beat's mood parenthetical) drive tone — the
+      // rest is layout prose full of false-positive words.
+      const tone = brief.slice(0, 160);
+      if (surfaceConflict) type = txRegistry.default_break_on_bg_conflict || "blur-crossfade";
+      else if (HIGH_TONE_RX.test(tone)) type = txRegistry.default_high_energy || "zoom-through";
+      else if (CALM_TONE_RX.test(tone)) type = txRegistry.default_calm || "blur-crossfade";
+      // Universal default leans calm (blur-crossfade) — NOT a bare crossfade — so an
+      // unclassified cut still masks any background shift and reads intentional.
+      else type = txRegistry.default_break_on_bg_conflict || "blur-crossfade";
+    }
+
+    const rec = txByName.get(type);
+    const isTierA = txTierA.has(type);
+    // Tier assignment: Tier-A only when same-worker (continue) AND a Tier-A type.
+    const tier = !is_break && isTierA ? "a" : "b";
+
+    // Resolve direction default for directional types.
+    if (rec && Array.isArray(rec.directions) && rec.directions.length > 0 && !direction) {
+      direction = rec.default_direction || rec.directions[0];
+    }
+
+    const duration_s = Number(
+      (durationOverride != null ? durationOverride : (rec?.default_duration_s ?? 0.5)).toFixed(3),
+    );
+
+    transitions.push({
+      from: fromSid,
+      to: toSid,
+      type,
+      direction: direction || null,
+      duration_s,
+      tier,
+      is_break,
+      from_worker: sceneWorker.get(fromSid),
+      to_worker: sceneWorker.get(toSid),
+    });
+  }
+
+  // ---------- Step 6.7: Tier-A cannot span workers ----------
+  // The cap=N grouping can split a "continue" pair across two workers. An anchor-
+  // level check (validator) can't catch that — it only sees Continuity, not the
+  // post-grouping worker assignment. A Tier-A transition needs ONE worker to author
+  // both scenes (shared element lives in both files), so a cross-worker Tier-A is
+  // unbuildable. Fail loudly with the three fixes.
+  for (const t of transitions) {
+    const namedTierA = toSceneTransitionIsTierA(t);
+    if (namedTierA && t.is_break) {
+      die(
+        `Transition ${t.from}→${t.to}: a shared-element (Tier-A) transition was requested but grouping ` +
+          `splits the scenes across workers (${t.from}=${t.from_worker}, ${t.to}=${t.to_worker}). ` +
+          `Fix one of: (a) use a Tier-B transition here (e.g. blur-crossfade), ` +
+          `(b) ensure both scenes are **Continuity: continue** so they share a worker, or ` +
+          `(c) raise --scenes-per-group so the cap doesn't split them.`,
+      );
+    }
+  }
+}
+
+// True iff the destination scene explicitly NAMED a Tier-A transition type.
+// (We only hard-fail on an explicit Tier-A request that got split — never on a
+// defaulted Tier-B, which is always safe.)
+function toSceneTransitionIsTierA(t) {
+  const toScene = scenes.find((s) => s.sceneId === t.to);
+  const named = toScene?.transition?.type;
+  return named != null && tierATypes().has(named);
+}
+
 // ---------- Step 6.5: SFX library copy + cue → global timing ----------
 // SFX library is OPT-IN: when orchestrator passes --sfx-lib the directory is
 // copied into <PROJECT_DIR>/assets/sfx/ and section_plan **SFX:** cues are
@@ -769,6 +923,7 @@ const spec = {
   bgm_path,
   font_face_css: fontFaceCss,
   groups,
+  transitions,
   sfx,
 };
 
@@ -791,6 +946,19 @@ console.log(`  bgm: ${bgm_path || "(none)"}`);
 console.log(
   `  sfx cues:      ${sfx.length}${sfxLibDir ? "" : " (--sfx-lib not passed; cues dropped)"}`,
 );
+if (transitions.length) {
+  const tb = transitions.filter((t) => t.tier === "b").length;
+  const ta = transitions.filter((t) => t.tier === "a").length;
+  console.log(`  transitions:   ${transitions.length} (tier-b ${tb}, tier-a ${ta})`);
+  for (const t of transitions) {
+    const dir = t.direction ? ` ${t.direction}` : "";
+    console.log(
+      `    ${t.from}→${t.to}: ${t.type}${dir} ${t.duration_s}s [tier ${t.tier}${t.is_break ? "" : ", continue"}]`,
+    );
+  }
+} else {
+  console.log(`  transitions:   0 (single scene or registry unavailable)`);
+}
 console.log(`  assets copied: ${copied} (collisions skipped: ${collisions.length})`);
 console.log(`  fonts copied:  ${fontsCopied}`);
 console.log(

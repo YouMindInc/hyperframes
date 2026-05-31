@@ -12,7 +12,7 @@
 **输入约束：**
 
 - `capture/context_pack.md` 是**叙事 + 资产的主读文件**（含 product signals / headings / sections / CTAs / visible text + Asset Inventory）。资产清单以它的 **Asset Inventory** 为准 —— 不要找 `capture/extraction.json`（不存在）；需要复核 basename 时 `ls capture/assets/`
-- `design-system/inference.json` 的 **`site_dna`** 开场读一次，定叙事 register（详见 guide「用 site_dna 定 register」）：`voice_tone`→脚本语气、`material`/`imagery`→archetype + hook 偏向、`page_intent`/`section_role_counts`→是否走 Feature-Benefit Cascade 长 demo。**只读 `site_dna` 这一段**（Step 1 的确定性稳定产出）；**不读** `design.html` / `chunks/` —— 那是 design-system subagent 的并行产物，读它会破坏 1b∥2 并行
+- `design-system/inference.json` 的 **`site_dna`** 开场读一次，定叙事 register（详见 guide「用 site_dna 定 register」）：`voice_tone`→脚本语气、`material`/`imagery`→archetype + hook 偏向、`page_intent`/`section_role_counts`→是否走 Feature-Benefit Cascade 长 demo。**只读 `site_dna` 这一段**（Step 1 的确定性稳定产出）；**不读** `design.html` / `chunks/` —— 那是 design-system subagent 的并行产物，读它会破坏 1b∥2 并行。**`inference.json` 缺失时**（Phase 1 未跑 `--no-emit`）先 `(cd "$PROJECT_DIR" && node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system --no-emit)` 再读；确定性产出，重跑不影响并行
 - **Asset path 转换**：context_pack 里路径是 `assets/<filename>`，写入 `assetCandidates[].path` 时必须改为 `"public/<filename>"`（Phase 4a 把 `capture/assets/` 复制到 `public/`；写错 → fatal）
 - 不生成 `capture/analysis.json` 等派生文件
 - scene 不含 `voicePath` / `voiceDuration` / `captions[]` 字段（`script` 里 `<em>/<brand>/<emph>/<cta>` 会被 TTS strip）

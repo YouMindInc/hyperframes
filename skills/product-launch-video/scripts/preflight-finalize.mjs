@@ -221,6 +221,35 @@ for (const group of groupSpec.groups || []) {
   }
 }
 
+// Transition seam midpoints — so finalize eyeballs the crossfade/push itself, not
+// just scene mids (a 0.4-0.6s seam would otherwise fall between two scene-midpoint
+// snapshots and never be captured). The transition plays in [to.start, to.start+dur]
+// (extend-outgoing-only), so its visual midpoint is to.start + dur/2.
+const sceneStart = new Map();
+for (const group of groupSpec.groups || []) {
+  for (const sid of group.scene_ids || []) {
+    const s = group.scenes?.[sid];
+    if (s && isFinite(Number(s.start_s))) sceneStart.set(sid, Number(s.start_s));
+  }
+}
+const transitionRows = [];
+for (const t of groupSpec.transitions || []) {
+  const toStart = sceneStart.get(t.to);
+  const dur = Number(t.duration_s);
+  if (!isFinite(toStart) || !isFinite(dur) || dur <= 0) continue;
+  const seamMid = Math.round((toStart + dur * 0.5) * 1000) / 1000;
+  pushTs(seamMid);
+  transitionRows.push({
+    from: t.from,
+    to: t.to,
+    type: t.type,
+    direction: t.direction || null,
+    duration_s: dur,
+    tier: t.tier,
+    seam_mid_s: seamMid,
+  });
+}
+
 const snapshotTimes = [...tsSet].sort((a, b) => a - b);
 
 // ---------- 5. Caption keep-out static check ----------
@@ -287,6 +316,7 @@ const brief = {
   snapshot_times_s: snapshotTimes,
   total_duration_s: groupSpec.total_duration_s,
   scenes: sceneRows,
+  transitions: transitionRows,
 };
 
 writeFileSync(outPath, JSON.stringify(brief, null, 2) + "\n");
@@ -320,7 +350,9 @@ if (!captionKeepout.enabled) {
     );
   }
 }
-console.log(`  snapshot_times: ${snapshotTimes.length} timestamp(s)`);
+console.log(
+  `  snapshot_times: ${snapshotTimes.length} timestamp(s)${transitionRows.length ? ` (incl. ${transitionRows.length} transition seam mid${transitionRows.length > 1 ? "s" : ""})` : ""}`,
+);
 console.log(
   `  deterministic_fixes: ${deterministicFixes.length === 0 ? "none" : deterministicFixes.join("; ")}`,
 );

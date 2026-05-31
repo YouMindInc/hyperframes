@@ -13,6 +13,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve, basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { transitionsByName, tierATypes } from "./lib/transition-registry.mjs";
 
 function loadKnownEffects(rulesDir) {
   return new Set(
@@ -73,7 +74,6 @@ if (chunksIndex?.components) {
   }
 }
 
-
 // SFX manifest (self-located relative to this script, like the default rules dir
 // above). Used to validate that each cited `<file>.mp3` actually exists in the
 // library — turning what used to be a silent Phase-4a drop (prep.mjs only pushed
@@ -111,6 +111,22 @@ const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
 const heads = [...plan.matchAll(sceneHeadRe)];
 const ANCHORS = ["Effects", "Duration", "Continuity"];
 const OPTIONAL_ANCHORS = ["Blueprint", "Components"];
+
+// Transition vocabulary — loaded from the single source of truth so this
+// validator never drifts from prep/injector. Absence of the anchor is fine
+// (prep default-fills); when present, type/direction/duration are checked here.
+let TX_BY_NAME = new Map();
+let TX_TIER_A = new Set();
+try {
+  TX_BY_NAME = transitionsByName();
+  TX_TIER_A = tierATypes();
+} catch (e) {
+  // Non-fatal: if the registry can't be read, skip Transition validation rather
+  // than block the whole plan check. prep.mjs will surface a hard error later.
+  console.error(
+    `⚠ transition registry unreadable, skipping **Transition:** validation — ${e.message}`,
+  );
+}
 
 const hasAnchor = (body, name) => {
   const re = new RegExp(`^\\*\\*${name}:\\*\\*`, "mi");
@@ -204,6 +220,7 @@ for (let i = 0; i < heads.length; i++) {
     }
   }
 
+  let continuityVal = null;
   if (found.Continuity != null) {
     const v = found.Continuity.toLowerCase();
     if (v !== "break" && v !== "continue") {
@@ -212,6 +229,60 @@ for (let i = 0; i < heads.length; i++) {
       );
     } else if (i === 0 && v !== "break") {
       errors.push(`${sceneId}: scene 1 must be **Continuity:** break`);
+    } else {
+      continuityVal = v;
+    }
+  }
+
+  // Transition (OPTIONAL): how this scene is ENTERED. Shape:
+  //   **Transition:** <type> [DIRECTION] [<dur>s]
+  // e.g. `blur-crossfade`, `push-slide LEFT`, `zoom-through 0.3s`.
+  // Absent → prep default-fills. Scene 1's is the open (ignored as a between-
+  // scene transition) but still shape-checked if present. Only validated when
+  // the registry loaded (TX_BY_NAME non-empty).
+  const txMatch = body.match(/^\*\*Transition:\*\*\s*(.*)$/m);
+  if (txMatch && TX_BY_NAME.size > 0) {
+    const raw = txMatch[1].trim();
+    if (raw === "") {
+      errors.push(`${sceneId}: **Transition:** is empty — name a type or omit the anchor`);
+    } else {
+      const tokens = raw.split(/\s+/);
+      const type = tokens[0].toLowerCase();
+      const rec = TX_BY_NAME.get(type);
+      const isTierA = TX_TIER_A.has(type);
+      if (!rec && !isTierA) {
+        errors.push(
+          `${sceneId}: **Transition:** unknown type "${type}" (known: ${[...TX_BY_NAME.keys()].join(", ")})`,
+        );
+      } else {
+        // break boundary must not name a Tier-A (shared-element) transition —
+        // those require the same worker to author both scenes (continue only).
+        if (continuityVal === "break" && isTierA) {
+          errors.push(
+            `${sceneId}: **Transition:** "${type}" is a shared-element (Tier-A) transition but **Continuity: break** — Tier-A needs **Continuity: continue** (same worker authors both scenes)`,
+          );
+        }
+        // direction / duration trailing tokens
+        for (const tok of tokens.slice(1)) {
+          const t = tok.toLowerCase();
+          if (/^[\d.]+s$/.test(t)) {
+            const dur = parseFloat(t);
+            if (!(dur > 0) || dur > 2.0) {
+              errors.push(
+                `${sceneId}: **Transition:** duration "${tok}" out of range (0 < dur ≤ 2.0s)`,
+              );
+            }
+          } else {
+            const dir = tok.toUpperCase();
+            const allowed = rec?.directions || [];
+            if (!allowed.includes(dir)) {
+              errors.push(
+                `${sceneId}: **Transition:** "${type}" does not take direction "${tok}"${allowed.length ? ` (allowed: ${allowed.join(", ")})` : " (this type is non-directional)"}`,
+              );
+            }
+          }
+        }
+      }
     }
   }
 

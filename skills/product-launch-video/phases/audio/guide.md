@@ -7,10 +7,10 @@ Phase 2.5 由 **`scripts/audio.mjs`** 一把跑完：narrator_scripts → 每 sc
 ## 产物
 
 ```
-./audio_meta.json                               # 给 prep.mjs 的 index
-hyperframes/assets/voice/scene_<N>.wav          # 每 scene narration
-hyperframes/assets/voice/scene_<N>_words.json   # 每 scene word-level timestamp
-hyperframes/assets/bgm.wav                      # BGM（可选；可能 audio.mjs 退出时还没落盘）
+./audio_meta.json                       # 给 prep.mjs 的 index（PROJECT_DIR 根）
+assets/voice/scene_<N>.wav              # 每 scene narration（PROJECT_DIR/assets/，无 hyperframes/ 子目录）
+assets/voice/scene_<N>_words.json       # 每 scene word-level timestamp
+assets/bgm.wav                          # BGM（可选；可能 audio.mjs 退出时还没落盘）
 ```
 
 `audio_meta.json` schema（被 `prep.mjs` 消费）：

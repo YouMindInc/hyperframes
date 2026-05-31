@@ -338,14 +338,27 @@ for (const sceneId of sceneIds) {
     { re: /\bfetch\s*\(/, name: "fetch(", scope: "script" },
   ];
 
+  // CSS transition:/animation: and @font-face are PLV pre-flight conventions
+  // (force all motion through one seekable GSAP timeline; declare fonts once in
+  // index.html <head>), NOT hyperframes-core contract — core/determinism-rules.md
+  // forbids none of them and adapters/css-animations.md actually supports seekable
+  // CSS keyframes. Date.now/Math.random/performance.now/repeat:-1/fetch ARE core
+  // determinism rules. The detail string says which so the agent doesn't go
+  // cross-checking core for a rule that isn't there.
+  const plvOnly = new Set(["CSS transition:", "CSS animation:"]);
   for (const f of forbidden) {
     const blocks = f.scope === "style" ? styleBlocks : scriptBlocks;
     for (const m of blocks) {
       if (f.re.test(m[1])) {
+        const src = plvOnly.has(f.name)
+          ? "PLV pre-flight 约束（强制改成 GSAP tween；非 core 契约，css-animations adapter 本身支持可 seek CSS）"
+          : f.name.startsWith("@font-face")
+            ? "PLV 约束（@font-face 移到 index.html <head>）"
+            : "core 确定性契约";
         errors.push({
           sceneId,
           rule: "forbidden",
-          detail: `<${f.scope}> 里出现 ${f.name} — 违反 composition contract`,
+          detail: `<${f.scope}> 里出现 ${f.name} — ${src}`,
         });
         break;
       }

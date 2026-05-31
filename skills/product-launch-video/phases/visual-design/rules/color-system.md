@@ -6,20 +6,20 @@ category: visual-design
 
 # 视频色彩系统 —— 设计判断层
 
-**本文件只负责 plan 层的设计判断** —— 角色、60-30-10 分配逻辑、跨场景一致性、危险组合。具体 hex 值、对比度 4.5:1 计算、暗场 saturation 补偿、双层 glow 配方都属于 build agent 在写 CSS 时查 design.html 与 `/hyperframes-core` 的事；plan 不抄。
+**本文件只负责 plan 层的设计判断** —— 角色、60-30-10 分配逻辑、跨场景一致性、危险组合。具体 hex 值、对比度 4.5:1 计算、暗场 saturation 补偿、双层 glow 配方都属于 build agent 在写 CSS 时查 `chunks/tokens.css` 与 `/hyperframes-core` 的事；plan 不抄。
 
 ## 调色板来源
 
-**Hex 值来自 design.html**（`:root` 里的命名 token，按品牌不同会有 `--brand-primary` / `--brand-accent` / `--canvas` / `--ink` 等）。Plan 里按**角色**引用，**不要**抄具体 hex —— build agent 自己会从 design.html grep。
+**Hex 值来自 `## Design chunks` 的 `tokens.css`**（`:root` 里的命名 token，按品牌不同会有 `--brand-primary` / `--brand-accent` / `--canvas` / `--ink` 等；已内联在 Phase 3 dispatch）。Plan 里按**角色**引用，**不要**抄具体 hex —— build agent 自己会从 `chunks/tokens.css` 读。
 
-> **预设规范优先于本文件的通用规则**。design.html 的 preset（editorial / neo-brutalism / 等）会定义自己的颜色纪律 —— 例如 editorial 明确"accent ≤ 5% frame area、primary 不做背景填充、canvas is the hero"。如果通用规则（如"背景用 dual-radial swell"）与预设的 §H 颜色纪律冲突，**预设胜出**。Plan 阶段读 design.html 时连同 preset 名一起识别（`title` 标签或 §1 eyebrow），并以预设的规范约束本片调色板使用。
+> **预设规范优先于本文件的通用规则**。preset 名在 `## Design chunks` 的 `index.json.preset`；它的颜色纪律在 `composition-hints.md`（§H surface contract / accent 预算）—— 例如 editorial 明确"accent ≤ 5% frame area、primary 不做背景填充、canvas is the hero"。如果通用规则（如"背景用 dual-radial swell"）与预设的 §H 颜色纪律冲突，**预设胜出**。Plan 从 `index.json.preset` 拿 preset 名、从 `composition-hints.md` 拿其规范来约束本片调色板使用（**不读 design.html**，已被 chunks 取代）。
 
 ### 痛点 / 凝重场景
 
 如果某场景的 `emotionalBeat` 需要刻意的调色板转换：
 
-- design.html **有** `[data-theme="dark"]` 块 → 用它（反转 canvas / ink），不引入外来调色板
-- design.html **没有**暗主题块（editorial 等亮色预设常见）→ **不要**自创暗色。改用：accent 灰化（去饱和）+ 低对比（用 `--paper-warm` 替代 `--canvas` 把场景压暗一档）+ 收紧留白 + 静止节拍承担凝重感
+- `chunks/tokens.css` / `composition-hints.md` **有** `[data-theme="dark"]` 块或暗 surface → 用它（反转 canvas / ink），不引入外来调色板
+- **没有**暗主题块（editorial 等亮色预设常见）→ **不要**自创暗色。改用：accent 灰化（去饱和）+ 低对比（用 `--paper-warm` 替代 `--canvas` 把场景压暗一档）+ 收紧留白 + 静止节拍承担凝重感
 
 ### 当 `--ink` / `--canvas` 是纯黑 / 纯白
 
@@ -45,7 +45,7 @@ category: visual-design
 | **克制第三色**          | 中性或纸调                                                                  | **<2%** —— 偶尔出现                        |
 | **语义色**              | 成功/错误/警告（从品牌色相派生）                                            | 节制使用                                   |
 
-> **当 design.html 缺 `--surface` 这一档** —— 这份预设用 hairline rule 分层而非 surface 色 —— plan 应明确说"30% 用 hairline + canvas 重复"，而不是编一个假的中间色。
+> **当 `chunks/tokens.css` 缺 `--surface` 这一档** —— 这份预设用 hairline rule 分层而非 surface 色 —— plan 应明确说"30% 用 hairline + canvas 重复"，而不是编一个假的中间色。
 
 ## 60-30-10 是**视觉权重**，不是像素数量
 
@@ -64,7 +64,7 @@ category: visual-design
 - 暖品牌（红 / 橙 / 黄）→ 灰加微妙暖铸调
 - 冷品牌（蓝 / 紫 / 绿 / 青）→ 灰加微妙冷铸调
 
-色调要几乎不可察觉，但在潜意识层创造一致性。这通常已经在 design.html 的 `--canvas` / `--paper-2` token 里编码好了；plan 只需引用角色，不需要算 OKLCH。
+色调要几乎不可察觉，但在潜意识层创造一致性。这通常已经在 `chunks/tokens.css` 的 `--canvas` / `--paper-2` token 里编码好了；plan 只需引用角色，不需要算 OKLCH。
 
 ## 调色板四层结构
 
@@ -90,7 +90,7 @@ category: visual-design
 
 ## 永远不要纯黑 / 纯白
 
-纯 `#000` / `#fff` 在自然界不存在 —— 对比刺眼、显合成、压缩破细节。永远用 design.html 提供的 off-black / off-white token（典型名 `--ink` / `--canvas`）。
+纯 `#000` / `#fff` 在自然界不存在 —— 对比刺眼、显合成、压缩破细节。永远用 `chunks/tokens.css` 提供的 off-black / off-white token（典型名 `--ink` / `--canvas`）。
 
 例外：强调时刻的纯白 `text-shadow` / `drop-shadow` 光环（点击涟漪峰值）是 OK 的 —— 用 build agent 的低不透明度叠加，不直接当文本色。
 
@@ -117,18 +117,18 @@ category: visual-design
 
 本项目级 mesh 默认**覆盖以下 preset 的 §H 背景纪律**（"canvas is the hero"、"accent ≤ 5%"、"primary 不做背景填充"等），把它们的印刷克制感偏向品牌化 marketing 视频方向：
 
-**走 mesh 默认（D 类，9 个）**：
-`editorial` · `capsule` · `soft-editorial` · `daisy-days` · `block-frame` · `playful` · `studio` · `neo-grid-bold` · `emerald-editorial`
+**走 mesh 默认（D 类，8 个）**：
+`editorial` · `capsule` · `soft-editorial` · `daisy-days` · `block-frame` · `playful` · `neo-grid-bold` · `emerald-editorial`
 
 > 命中以上 preset 时，plan agent **必须**在每个 scene 散文里写出 mesh 句式（见下方"Plan 引用样例"），不要因为 preset §H 写了 "canvas is the hero" 就退回纯 canvas。
 
 **不走 mesh 默认（保留 preset 自带背景设计）**：
 
-- 显式反对渐变 / 网格 / 软光晕：`long-table` · `neo-brutalism` · `editorial-forest` · `raw-grid`
+- 显式反对渐变 / 网格 / 软光晕：`neo-brutalism` · `editorial-forest`
 - 自带核心背景介质：`liquid-glass`（aurora 着色器）· `8-bit-orbit`（CRT 显象管）· `sakura-chroma`（半色调暖纸）· `scatterbrain`（cork / paper / warm 三变体）
 - Paper-grain 系（mesh 与 grain 美学冲突）：`pin-and-paper` · `retro-zine` · `peoples-platform` · `creative-mode` · `stencil-tablet`
 
-以上 14 个 preset 命中时，plan agent **保留 preset 自己的背景设计**——按 preset §H 写。
+以上 11 个 preset 命中时，plan agent **保留 preset 自己的背景设计**——按 preset §H 写。
 
 > 若未来要回归严格 editorial：把 mesh 仅保留给 1-2 个高潮节拍、其他场景换回纯 canvas + hairline + 12-col 网格暗示、前景 accent ≤ 5%。**当前 D 类默认是放开的。**
 
@@ -146,14 +146,14 @@ Plan 写："默认 brand-color mesh 背景（veil 重，brand-primary + secondar
 
 暗场景不只是反转：
 
-- 用带色调的 off-black（design.html 的 dark token），**不要**纯 `#000`
+- 用带色调的 off-black（`chunks/tokens.css` 的 dark token），**不要**纯 `#000`
 - 文字字重比亮场降一级（这是 build 的事，plan 知道存在即可）
 - 强调色去饱和（build 处理；plan 只说"暗场氛围"）
 - Hero 词上的 glow 通常**双层**（紧 + 广）—— plan 点名"hero 加双层 glow"
 
 ## Plan 引用样例
 
-**标准场景（mesh 默认背景，适用于 D 类全部 9 个 preset：editorial / capsule / soft-editorial / daisy-days / block-frame / playful / studio / neo-grid-bold / emerald-editorial）**：
+**标准场景（mesh 默认背景，适用于 D 类全部 8 个 preset：editorial / capsule / soft-editorial / daisy-days / block-frame / playful / neo-grid-bold / emerald-editorial）**：
 
 > "Background: brand-color mesh 默认（veil 重，brand-primary + secondary + accent 三 blob 作为隐约氛围，远观仍读作克制底盘）。Palette 60-30-10：60% canvas（mesh veil 之上仍读作 canvas）+ 30% hairline + chapter-label rule 分层（无 surface token）+ 10% accent 用在 hero 词与 CTA underline。`--ink` 纯黑保留作为印刷感墨色。"
 
