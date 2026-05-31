@@ -9,6 +9,7 @@ import { createTypegpuAdapter } from "./adapters/typegpu";
 import { patchVideoTextureCompat } from "./adapters/video-texture-compat";
 import { createWaapiAdapter } from "./adapters/waapi";
 import { refreshRuntimeMediaCache, syncRuntimeMedia } from "./media";
+import { probeAndCacheElementVolume, type VolumeKeyframe } from "./mediaVolumeEnvelope.js";
 import { createPickerModule } from "./picker";
 import { createRuntimePlayer } from "./player";
 import { createRuntimeState } from "./state";
@@ -917,6 +918,7 @@ export function initSandboxRuntimeModular(): void {
   // (setTimeout(0)). Scripts using requestAnimationFrame or longer delays may
   // not be discovered.
   let childrenBound = false;
+  // fallow-ignore-next-line complexity
   const bindRootTimelineIfAvailable = (): boolean => {
     if (!externalCompositionsReady) return false;
     const currentTimeline = state.capturedTimeline;
@@ -946,6 +948,10 @@ export function initSandboxRuntimeModular(): void {
         // clock not yet initialized — duration will be set during TransportClock setup
       }
       state.capturedTimeline.pause();
+      const seekTime = Math.max(0, state.currentTime || 0);
+      if (typeof state.capturedTimeline.totalTime === "function") {
+        state.capturedTimeline.totalTime(seekTime, false);
+      }
     }
     if (resolution.diagnostics) {
       postRuntimeMessage({
@@ -965,6 +971,12 @@ export function initSandboxRuntimeModular(): void {
         mediaDurationFloorSeconds: resolution.mediaDurationFloorSeconds ?? null,
       },
     });
+    // (Re-)probe all already-bound media elements against the new timeline.
+    // Clear the cache first so elements probed against a prior timeline get fresh keyframes.
+    for (const el of metadataBoundMedia) {
+      volumeKeyframeCache.delete(el);
+      probeAndCacheVolumeKeyframes(el);
+    }
     return true;
   };
 
@@ -1184,6 +1196,7 @@ export function initSandboxRuntimeModular(): void {
   let metadataRebindDebounceTimerId: number | null = null;
   let metadataRebindApplied = false;
   const metadataBoundMedia = new Set<HTMLMediaElement>();
+  const volumeKeyframeCache = new WeakMap<HTMLMediaElement, VolumeKeyframe[]>();
 
   const scheduleMetadataDurationHydration = () => {
     if (state.tornDown) return;
@@ -1264,9 +1277,27 @@ export function initSandboxRuntimeModular(): void {
       if (mediaEl.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
         mediaEl.load();
       }
+
+      // Probe volume automation from the GSAP timeline — same approach as the
+      // renderer (see discoverAudioVolumeAutomationFromTimeline / audioMixer).
+      // Runs only when the timeline is already captured; elements bound before
+      // the timeline is ready are re-probed the first time bindMediaMetadataListeners
+      // fires after the timeline has been captured (every 30 transport ticks).
+      probeAndCacheVolumeKeyframes(mediaEl);
     }
   };
 
+  const probeAndCacheVolumeKeyframes = (mediaEl: HTMLMediaElement) => {
+    if (volumeKeyframeCache.has(mediaEl)) return;
+    probeAndCacheElementVolume(
+      mediaEl,
+      state.capturedTimeline,
+      getSafeTimelineDurationSeconds(state.capturedTimeline, 0),
+      volumeKeyframeCache,
+    );
+  };
+
+  // fallow-ignore-next-line complexity
   const syncMediaForCurrentState = () => {
     const resolveMediaCompositionContext = (element: HTMLVideoElement | HTMLAudioElement) => {
       const compositionRoot = element.closest("[data-composition-id]");
@@ -1312,6 +1343,13 @@ export function initSandboxRuntimeModular(): void {
         return sourceDuration ?? hostRemaining;
       },
     });
+    // Attach probed volume keyframes to clips so syncRuntimeMedia can use the
+    // same envelope the renderer uses instead of tracking GSAP-change diffs.
+    for (const clip of cache.mediaClips) {
+      const kf = volumeKeyframeCache.get(clip.el as HTMLMediaElement);
+      if (kf) clip.volumeKeyframes = kf;
+    }
+
     const forceSync = state.mediaForceSyncNextTick;
     if (forceSync) state.mediaForceSyncNextTick = false;
     syncRuntimeMedia({

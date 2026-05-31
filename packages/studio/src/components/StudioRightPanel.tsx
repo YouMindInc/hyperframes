@@ -34,6 +34,7 @@ export interface StudioRightPanelProps {
   onCloseBlockParams?: () => void;
 }
 
+// fallow-ignore-next-line complexity
 export function StudioRightPanel({
   selectedStudioMotion,
   designPanelActive,
@@ -87,6 +88,9 @@ export function StudioRightPanel({
     handleGsapAddAnimation,
     handleGsapAddProperty,
     handleGsapRemoveProperty,
+    handleGsapUpdateFromProperty,
+    handleGsapAddFromProperty,
+    handleGsapRemoveFromProperty,
   } = useDomEditContext();
 
   const { assets, fontAssets, projectDir, handleImportFiles, handleImportFonts } =
@@ -215,6 +219,9 @@ export function StudioRightPanel({
                   onDeleteGsapAnimation={handleGsapDeleteAnimation}
                   onAddGsapProperty={handleGsapAddProperty}
                   onRemoveGsapProperty={handleGsapRemoveProperty}
+                  onUpdateGsapFromProperty={handleGsapUpdateFromProperty}
+                  onAddGsapFromProperty={handleGsapAddFromProperty}
+                  onRemoveGsapFromProperty={handleGsapRemoveFromProperty}
                   onAddGsapAnimation={handleGsapAddAnimation}
                 />
               ) : motionPanelActive ? (

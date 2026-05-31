@@ -67,6 +67,7 @@ export interface UseDomEditSessionParams {
 
 // ── Hook ──
 
+// fallow-ignore-next-line complexity
 export function useDomEditSession({
   projectId,
   activeCompPath,
@@ -129,6 +130,7 @@ export function useDomEditSession({
     clearDomSelection,
     buildDomSelectionFromTarget,
     resolveDomSelectionFromPreviewPoint,
+    resolveAllDomSelectionsFromPreviewPoint,
     updateDomEditHoverSelection,
     buildDomSelectionForTimelineElement,
     handleTimelineElementSelect,
@@ -187,6 +189,7 @@ export function useDomEditSession({
     showToast,
     applyDomSelection,
     resolveDomSelectionFromPreviewPoint,
+    resolveAllDomSelectionsFromPreviewPoint,
     updateDomEditHoverSelection,
     onClickToSource,
   });
@@ -215,9 +218,13 @@ export function useDomEditSession({
     addGsapAnimation,
     addGsapProperty,
     removeGsapProperty,
+    updateGsapFromProperty,
+    addGsapFromProperty,
+    removeGsapFromProperty,
   } = useGsapScriptCommits({
     projectIdRef,
     activeCompPath,
+    previewIframeRef,
     editHistory,
     domEditSaveTimestampRef,
     reloadPreview,
@@ -288,7 +295,7 @@ export function useDomEditSession({
   );
 
   const handleGsapAddAnimation = useCallback(
-    (method: "to" | "from" | "set") => {
+    (method: "to" | "from" | "set" | "fromTo") => {
       if (!domEditSelection) return;
       addGsapAnimation(domEditSelection, method, currentTime);
     },
@@ -311,11 +318,36 @@ export function useDomEditSession({
     [domEditSelection, removeGsapProperty],
   );
 
+  const handleGsapUpdateFromProperty = useCallback(
+    (animId: string, prop: string, value: number | string) => {
+      if (!domEditSelection) return;
+      updateGsapFromProperty(domEditSelection, animId, prop, value);
+    },
+    [domEditSelection, updateGsapFromProperty],
+  );
+
+  const handleGsapAddFromProperty = useCallback(
+    (animId: string, prop: string) => {
+      if (!domEditSelection) return;
+      addGsapFromProperty(domEditSelection, animId, prop);
+    },
+    [domEditSelection, addGsapFromProperty],
+  );
+
+  const handleGsapRemoveFromProperty = useCallback(
+    (animId: string, prop: string) => {
+      if (!domEditSelection) return;
+      removeGsapFromProperty(domEditSelection, animId, prop);
+    },
+    [domEditSelection, removeGsapFromProperty],
+  );
+
   // Sync selection from preview document on load / refresh
   // eslint-disable-next-line no-restricted-syntax
   useEffect(() => {
     if (!previewIframe) return;
 
+    // fallow-ignore-next-line complexity
     const syncSelectionFromDocument = async () => {
       if (!STUDIO_INSPECTOR_PANELS_ENABLED || captionEditMode) return;
       const currentSelection = domEditSelectionRef.current;
@@ -375,16 +407,20 @@ export function useDomEditSession({
   // not when openSourceForSelection is recreated due to editingFile content updates.
   const openSourceRef = useRef(openSourceForSelection);
   openSourceRef.current = openSourceForSelection;
-  useEffect(() => {
-    if (!domEditSelection || !openSourceRef.current || !getSidebarTab) return;
-    if (!domEditSelection.sourceFile) return;
-    if (getSidebarTab() !== "code") return;
-    openSourceRef.current(domEditSelection.sourceFile, {
-      id: domEditSelection.id,
-      selector: domEditSelection.selector,
-      selectorIndex: domEditSelection.selectorIndex,
-    });
-  }, [domEditSelection, getSidebarTab]);
+  useEffect(
+    // fallow-ignore-next-line complexity
+    () => {
+      if (!domEditSelection || !openSourceRef.current || !getSidebarTab) return;
+      if (!domEditSelection.sourceFile) return;
+      if (getSidebarTab() !== "code") return;
+      openSourceRef.current(domEditSelection.sourceFile, {
+        id: domEditSelection.id,
+        selector: domEditSelection.selector,
+        selectorIndex: domEditSelection.selectorIndex,
+      });
+    },
+    [domEditSelection, getSidebarTab],
+  );
 
   return {
     // State
@@ -443,5 +479,8 @@ export function useDomEditSession({
     handleGsapAddAnimation,
     handleGsapAddProperty,
     handleGsapRemoveProperty,
+    handleGsapUpdateFromProperty,
+    handleGsapAddFromProperty,
+    handleGsapRemoveFromProperty,
   };
 }

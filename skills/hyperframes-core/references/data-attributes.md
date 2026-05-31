@@ -20,15 +20,15 @@ The root should be `position: relative`, have explicit pixel dimensions, and hid
 
 Timed child elements are clips. **`class="clip"` is required on visible timed elements** (`<div>`, `<img>`, etc.) — without it the runtime keeps the element visible for the whole composition, ignoring `data-start` / `data-duration`. Omit on `<video>` (framework manages visibility directly) and `<audio>` (no visual).
 
-| Attribute          | Required                                        | Meaning                                                                                 |
-| ------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `id`               | Yes                                             | Stable DOM ID for linting, timeline targets, and debugging.                             |
-| `data-start`       | Yes                                             | Start time in seconds, or a supported clip-time reference.                              |
-| `data-duration`    | Required for `div`, `img`, and sub-compositions | Duration in seconds. Video/audio can default to media duration when known.              |
-| `data-track-index` | Yes                                             | Timeline track. Clips on the same track must not overlap.                               |
-| `data-media-start` | No                                              | Offset into the media source, in seconds.                                               |
-| `data-volume`      | No                                              | Audio volume, `0` to `1`, default `1`.                                                  |
-| `data-has-audio`   | No (`<video>` only)                             | `"true"` to declare the video carries an audio track when auto-detection would miss it. |
+| Attribute          | Required                                        | Meaning                                                                                                                           |
+| ------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `id`               | Yes                                             | Stable DOM ID for linting, timeline targets, and debugging.                                                                       |
+| `data-start`       | Yes                                             | Start time in seconds, or a supported clip-time reference.                                                                        |
+| `data-duration`    | Required for `div`, `img`, and sub-compositions | Duration in seconds. Video/audio can default to media duration when known.                                                        |
+| `data-track-index` | Yes                                             | Timeline track. Clips on the same track must not overlap.                                                                         |
+| `data-media-start` | No                                              | Offset into the media source, in seconds.                                                                                         |
+| `data-volume`      | No                                              | Static audio volume, `0` to `1`, default `1`. For fades, animate `volume` on the timeline instead (see `variables-and-media.md`). |
+| `data-has-audio`   | No (`<video>` only)                             | `"true"` to declare the video carries an audio track when auto-detection would miss it.                                           |
 
 ## Sub-Composition Host Attributes
 

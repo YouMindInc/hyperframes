@@ -60,7 +60,7 @@ See `references/sub-compositions.md` for the file shape, host wiring, pitfall ex
 Every composition registers exactly one GSAP timeline.
 
 - Create with `gsap.timeline({ paused: true })` — the player owns playback.
-- Register at `window.__timelines["<composition-id>"]`; the key **must exactly match** the root's `data-composition-id`.
+- Register at `window.__timelines["<composition-id>"]`; the key **must exactly match** the root's `data-composition-id`. Dot syntax (`window.__timelines.<id> = tl`) is equivalent when the id is a valid identifier; use brackets if the id contains `-`.
 - Build the timeline **synchronously** during page load — not inside `async`, `setTimeout`, `Promise`, or event handlers. The renderer samples after page load completes; any deferred timeline construction misses the sample.
 - Render duration comes from `data-duration` on the root, **not** from GSAP timeline length. Do not pad the timeline with empty tweens to set duration.
 - For sub-compositions, do **not** manually nest sub-timelines into the host (`master.add(sub)`); the framework drives them independently.

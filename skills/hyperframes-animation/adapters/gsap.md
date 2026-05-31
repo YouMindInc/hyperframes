@@ -25,6 +25,7 @@ HyperFrames controls GSAP through its `gsap` runtime adapter. Create a paused ti
 ```
 
 - The registry key must match the composition root's `data-composition-id`.
+- Bracket and dot syntax both register: `window.__timelines["main"] = tl` and `window.__timelines.main = tl` are equivalent (the linter recognizes both). Bracket form is required when the id isn't a valid identifier (e.g. contains `-`).
 - Do not call `tl.play()` for render-critical motion.
 - Do not build timelines inside async code, timers, or event handlers.
 - Keep loops finite. HyperFrames renders finite video durations.
@@ -60,6 +61,7 @@ HyperFrames is stricter than vanilla GSAP. Animate only:
 - **Compositor-cheap**: `opacity`, `x`, `y`, `scale`, `scaleX`, `scaleY`, `rotation`, `rotationX`, `rotationY`, `skewX`, `skewY`, `transformOrigin`
 - **Visual fills**: `color`, `backgroundColor`, `borderColor`, `borderRadius`
 - **CSS variables**: `"--hue": 180` etc.
+- **Media `volume`** (on `<audio>` / `<video>`): animate for fades/ducking, e.g. `tl.to("#bgm", { volume: 0, duration: 1 }, "outro")`. The runtime probes these keyframes from the timeline and drives them in both preview and render (they match). This sets the _author_ volume; `data-volume` is the static baseline when no tween touches the element.
 
 **Avoid** (use the transform alias instead):
 

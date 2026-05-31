@@ -8,34 +8,154 @@ import {
   EASE_LABELS,
   METHOD_LABELS,
   METHOD_TOOLTIPS,
+  PERCENT_PROPS,
   PROP_LABELS,
   PROP_TOOLTIPS,
   PROP_UNITS,
 } from "./gsapAnimationConstants";
+import { buildTweenSummary } from "./gsapAnimationHelpers";
 import { EaseCurveSection } from "./EaseCurveSection";
+const BOOLEAN_PROPS = new Set(["visibility"]);
 
-const PERCENT_PROPS = new Set(["opacity", "autoAlpha"]);
 function isPercentProp(prop: string): boolean {
   return PERCENT_PROPS.has(prop);
 }
 
-function buildTweenSummary(animation: GsapAnimation): string {
-  const easeName = animation.ease ?? "none";
-  const ease = EASE_LABELS[easeName] ?? easeName;
-  const props = Object.entries(animation.properties);
-  const target = animation.targetSelector;
-  const dur = animation.duration ?? 0;
-  const pos = animation.position;
-  const propDescs = props.map(([p, v]) => {
-    const label = (PROP_LABELS[p] ?? p).toLowerCase();
-    const unit = PROP_UNITS[p] ?? "";
-    return `${label} to ${v}${unit}`;
-  });
-  const propText = propDescs.length > 0 ? propDescs.join(", ") : "no properties yet";
-  if (animation.method === "set") return `At ${pos}s, instantly set ${target}'s ${propText}.`;
-  if (animation.method === "from")
-    return `Starting at ${pos}s, over ${dur}s, ${target} enters from ${propText} using a ${ease.toLowerCase()} curve.`;
-  return `Starting at ${pos}s, over ${dur}s, animate ${target}'s ${propText} using a ${ease.toLowerCase()} curve.`;
+function displayValue(prop: string, val: number | string): string {
+  if (isPercentProp(prop)) return String(Math.round(Math.max(0, Math.min(1, Number(val))) * 100));
+  return String(val);
+}
+
+function adjustedValue(prop: string, raw: string): string {
+  if (isPercentProp(prop)) return String(Math.max(0, Math.min(1, Number(raw) / 100)));
+  return raw;
+}
+
+function RemoveButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-shrink-0 rounded p-0.5 text-neutral-600 transition-colors hover:bg-neutral-800 hover:text-red-400"
+      title={title}
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path d="M3 3l6 6M9 3l-6 6" />
+      </svg>
+    </button>
+  );
+}
+
+function PropertyRow({
+  prop,
+  val,
+  onCommit,
+  onRemove,
+  removeTitle,
+}: {
+  prop: string;
+  val: number | string;
+  onCommit: (adjusted: string) => void;
+  onRemove: () => void;
+  removeTitle: string;
+}) {
+  if (BOOLEAN_PROPS.has(prop)) {
+    const isVisible = val === "visible" || val === 1;
+    return (
+      <div className="flex items-center gap-1">
+        <div className="min-w-0 flex-1 flex items-center gap-2 px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800">
+          <span className="flex-1 text-[11px] font-medium text-neutral-500">
+            {PROP_LABELS[prop] ?? prop}
+          </span>
+          <button
+            type="button"
+            onClick={() => onCommit(isVisible ? "hidden" : "visible")}
+            className={`flex-shrink-0 w-7 h-4 rounded-full transition-colors relative ${isVisible ? "bg-emerald-500/30" : "bg-neutral-700"}`}
+            title={isVisible ? "Visible — click to hide" : "Hidden — click to show"}
+          >
+            <span
+              className={`absolute top-0.5 h-3 w-3 rounded-full transition-transform ${isVisible ? "bg-emerald-400 translate-x-3.5" : "bg-neutral-500 translate-x-0.5"}`}
+            />
+          </button>
+        </div>
+        <RemoveButton onClick={onRemove} title={removeTitle} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">
+        <MetricField
+          label={PROP_LABELS[prop] ?? prop}
+          value={displayValue(prop, val)}
+          suffix={PROP_UNITS[prop]}
+          tooltip={PROP_TOOLTIPS[prop]}
+          scrub
+          liveCommit
+          onCommit={(raw) => onCommit(adjustedValue(prop, raw))}
+        />
+      </div>
+      <RemoveButton onClick={onRemove} title={removeTitle} />
+    </div>
+  );
+}
+
+function AddPropertyTrigger({
+  adding,
+  available,
+  addLabel,
+  addTitle,
+  onAdd,
+  onOpen,
+  onClose,
+  buttonClassName,
+}: {
+  adding: boolean;
+  available: string[];
+  addLabel: string;
+  addTitle: string;
+  onAdd: (prop: string) => void;
+  onOpen: () => void;
+  onClose: () => void;
+  buttonClassName: string;
+}) {
+  if (adding && available.length > 0) {
+    return (
+      <select
+        autoFocus
+        className="min-w-0 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-[11px] text-neutral-100 outline-none"
+        defaultValue=""
+        onChange={(e) => {
+          if (e.target.value) onAdd(e.target.value);
+          onClose();
+        }}
+        onBlur={onClose}
+      >
+        <option value="" disabled>
+          Choose property…
+        </option>
+        {available.map((p) => (
+          <option key={p} value={p}>
+            {PROP_LABELS[p] ?? p}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  if (available.length === 0) return null;
+  return (
+    <button type="button" onClick={onOpen} className={buttonClassName} title={addTitle}>
+      {addLabel}
+    </button>
+  );
 }
 
 function parseNumericOrString(raw: string): number | string {
@@ -54,6 +174,9 @@ interface AnimationCardProps {
   onDeleteAnimation: (animationId: string) => void;
   onAddProperty: (animationId: string, property: string) => void;
   onRemoveProperty: (animationId: string, property: string) => void;
+  onUpdateFromProperty?: (animationId: string, property: string, value: number | string) => void;
+  onAddFromProperty?: (animationId: string, property: string) => void;
+  onRemoveFromProperty?: (animationId: string, property: string) => void;
   onLivePreview?: (property: string, value: number | string) => void;
   onLivePreviewEnd?: () => void;
 }
@@ -67,19 +190,35 @@ export const AnimationCard = memo(function AnimationCard({
   onDeleteAnimation,
   onAddProperty,
   onRemoveProperty,
+  onUpdateFromProperty,
+  onAddFromProperty,
+  onRemoveFromProperty,
   onLivePreview,
   onLivePreviewEnd,
 }: AnimationCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [addingProp, setAddingProp] = useState(false);
+  const [addingFromProp, setAddingFromProp] = useState(false);
 
   const usedProps = useMemo(
     () => new Set(Object.keys(animation.properties)),
     [animation.properties],
   );
   const availableProps = useMemo(
-    () => SUPPORTED_PROPS.filter((p) => !usedProps.has(p)),
-    [usedProps],
+    () =>
+      SUPPORTED_PROPS.filter(
+        (p) => !usedProps.has(p) && (animation.method === "set" || !BOOLEAN_PROPS.has(p)),
+      ),
+    [usedProps, animation.method],
+  );
+
+  const usedFromProps = useMemo(
+    () => new Set(Object.keys(animation.fromProperties ?? {})),
+    [animation.fromProperties],
+  );
+  const availableFromProps = useMemo(
+    () => SUPPORTED_PROPS.filter((p) => !usedFromProps.has(p) && !BOOLEAN_PROPS.has(p)),
+    [usedFromProps],
   );
 
   const commitProperty = useCallback(
@@ -96,6 +235,15 @@ export const AnimationCard = memo(function AnimationCard({
       onLivePreview?.(prop, parseNumericOrString(raw));
     },
     [onLivePreview],
+  );
+
+  const commitFromProperty = useCallback(
+    (prop: string, raw: string) => {
+      const value = parseNumericOrString(raw);
+      onUpdateFromProperty?.(animation.id, prop, value);
+      onLivePreviewEnd?.();
+    },
+    [animation.id, onUpdateFromProperty, onLivePreviewEnd],
   );
 
   const commitDuration = useCallback(
@@ -232,82 +380,73 @@ export const AnimationCard = memo(function AnimationCard({
               </>
             )}
 
+            {animation.method === "fromTo" && (
+              <div className="space-y-1">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-orange-400/70">
+                  From
+                </p>
+                <div className="space-y-1.5">
+                  {Object.entries(animation.fromProperties ?? {}).map(([prop, val]) => (
+                    <PropertyRow
+                      key={prop}
+                      prop={prop}
+                      val={val}
+                      onCommit={(adjusted) => commitFromProperty(prop, adjusted)}
+                      onRemove={() => onRemoveFromProperty?.(animation.id, prop)}
+                      removeTitle={`Remove from-${PROP_LABELS[prop] ?? prop}`}
+                    />
+                  ))}
+                </div>
+                <div className="pt-0.5">
+                  <AddPropertyTrigger
+                    adding={addingFromProp}
+                    available={availableFromProps}
+                    addLabel="+ From property"
+                    addTitle="Add a from-state property"
+                    onAdd={(prop) => onAddFromProperty?.(animation.id, prop)}
+                    onOpen={() => setAddingFromProp(true)}
+                    onClose={() => setAddingFromProp(false)}
+                    buttonClassName="text-[11px] font-medium text-orange-400/70 transition-colors hover:text-orange-300"
+                  />
+                </div>
+              </div>
+            )}
+
+            {animation.method === "fromTo" && Object.keys(animation.properties).length > 0 && (
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-400/70">
+                To
+              </p>
+            )}
+
             {Object.keys(animation.properties).length > 0 && (
               <div className="space-y-1.5">
                 {Object.entries(animation.properties).map(([prop, val]) => (
-                  <div key={prop} className="flex items-center gap-1">
-                    <div className="min-w-0 flex-1">
-                      <MetricField
-                        label={PROP_LABELS[prop] ?? prop}
-                        value={
-                          isPercentProp(prop) ? String(Math.round(Number(val) * 100)) : String(val)
-                        }
-                        suffix={PROP_UNITS[prop]}
-                        tooltip={PROP_TOOLTIPS[prop]}
-                        scrub
-                        liveCommit
-                        onCommit={(raw) => {
-                          const adjusted = isPercentProp(prop) ? String(Number(raw) / 100) : raw;
-                          scrubProperty(prop, adjusted);
-                          commitProperty(prop, adjusted);
-                        }}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveProperty(animation.id, prop)}
-                      className="flex-shrink-0 rounded p-0.5 text-neutral-600 transition-colors hover:bg-neutral-800 hover:text-red-400"
-                      title={`Remove ${PROP_LABELS[prop] ?? prop}`}
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 12 12"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      >
-                        <path d="M3 3l6 6M9 3l-6 6" />
-                      </svg>
-                    </button>
-                  </div>
+                  <PropertyRow
+                    key={prop}
+                    prop={prop}
+                    val={val}
+                    onCommit={(adjusted) => {
+                      scrubProperty(prop, adjusted);
+                      commitProperty(prop, adjusted);
+                    }}
+                    onRemove={() => onRemoveProperty(animation.id, prop)}
+                    removeTitle={`Remove ${PROP_LABELS[prop] ?? prop}`}
+                  />
                 ))}
               </div>
             )}
 
             <div className="flex items-center gap-2 pt-1">
-              {addingProp && availableProps.length > 0 ? (
-                <select
-                  autoFocus
-                  className="min-w-0 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-[11px] text-neutral-100 outline-none"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (e.target.value) onAddProperty(animation.id, e.target.value);
-                    setAddingProp(false);
-                  }}
-                  onBlur={() => setAddingProp(false)}
-                >
-                  <option value="" disabled>
-                    Choose effect…
-                  </option>
-                  {availableProps.map((p) => (
-                    <option key={p} value={p}>
-                      {PROP_LABELS[p] ?? p}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                availableProps.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setAddingProp(true)}
-                    className="text-[11px] font-medium text-neutral-400 transition-colors hover:text-neutral-200"
-                    title="Add another animated property to this effect"
-                  >
-                    + Effect
-                  </button>
-                )
-              )}
+              <AddPropertyTrigger
+                adding={addingProp}
+                available={availableProps}
+                addLabel="+ Effect"
+                addTitle="Add another animated property to this effect"
+                onAdd={(prop) => onAddProperty(animation.id, prop)}
+                onOpen={() => setAddingProp(true)}
+                onClose={() => setAddingProp(false)}
+                buttonClassName="text-[11px] font-medium text-neutral-400 transition-colors hover:text-neutral-200"
+              />
               <button
                 type="button"
                 onClick={() => onDeleteAnimation(animation.id)}

@@ -125,7 +125,7 @@ function countClassUsage(tags: OpenTag[]): Map<string, number> {
 
 function readRegisteredTimelineCompositionId(script: string): string | null {
   const match = script.match(WINDOW_TIMELINE_ASSIGN_PATTERN);
-  return match?.[1] || null;
+  return match?.[1] || match?.[2] || null;
 }
 
 /** Strip a `__raw:` prefix the parser adds to unresolvable values. */
@@ -781,6 +781,33 @@ export const gsapRules: LintRule<LintContext>[] = [
           });
         }
       }
+    }
+    return findings;
+  },
+
+  // gsap_timeline_not_registered
+  ({ scripts, rawSource, options }) => {
+    const findings: HyperframeLintFinding[] = [];
+    const canInheritFromHost =
+      options.isSubComposition || rawSource.trimStart().toLowerCase().startsWith("<template");
+
+    for (const script of scripts) {
+      const content = script.content;
+      if (!/gsap\.timeline/.test(content)) continue;
+      const hasRegistration = WINDOW_TIMELINE_ASSIGN_PATTERN.test(content);
+      if (hasRegistration || canInheritFromHost) continue;
+      findings.push({
+        code: "gsap_timeline_not_registered",
+        severity: "warning",
+        message:
+          "GSAP timeline is created but never registered in window.__timelines. " +
+          "The runtime discovers timelines from this registry — without registration, " +
+          "animations will not play during preview or render.",
+        fixHint:
+          "Add `window.__timelines = window.__timelines || {};` and " +
+          '`window.__timelines["root"] = tl;` after creating the timeline (use the ' +
+          "composition's data-composition-id as the key).",
+      });
     }
     return findings;
   },
