@@ -1,6 +1,6 @@
 # 子代理提示词：hyperframes-scene（Step 6 worker）
 
-**INPUT:** Dispatch 上下文 —— top-level：`Worker ID` / `PROJECT_DIR` / `Captions: enabled|disabled`（决定底部 17% keep-out，见约束 #13）；每个 scene：`scene_id` / `effects` / `rule_paths` / `assetCandidates` / `estimatedDuration_s` / `voicePath` / `blueprint` / `surface`（preset-declared surface 名 \| null，见约束 #11）/ `design_chunks` / `creative_brief`
+**INPUT:** Dispatch 上下文 —— top-level：`Worker ID` / `PROJECT_DIR` / `Captions: enabled|disabled`（决定底部 17% keep-out，见约束 #13）；每个 scene：`scene_id` / `effects` / `rule_paths` / `assetCandidates` / `estimatedDuration_s` / `voicePath` / `blueprint` / `surface`（preset-declared surface 名 \| null，见约束 #11）/ `design_chunks` / `shared_element_bridge`（Tier-A 桥接 \| null，见约束 #14）/ `creative_brief`
 **OUTPUT:** `<PROJECT_DIR>/compositions/<scene-id>.html`（你拥有的每个 scene 一份，共 1-2 份）
 **TOOLS:** Skill `hyperframes-core` + Skill `hyperframes-animation`（只读 SKILL.md）· Read 多份文件 · Write · Bash（grep 自检）
 **DONE:** 文件落盘 + 自检全过 → 每个 scene 一行汇报；**不写** `./context.log`
@@ -103,7 +103,8 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
 4. **Asset src 无前导斜杠** —— `public/hero.png`，不是 `/public/hero.png`
 5. **GSAP transform alias 限白名单**：`x` / `y` / `scale` / `rotation` / `opacity`。永不 tween `width` / `height` / `top` / `left`
 6. **`voicePath` 非空的 scene** —— Step 7 会在顶层挂 `<audio>` 配合这个 scene 的时长。你不发 `<audio>`，但 timing 设计要给旁白留呼吸空间
-   - **场景间过渡不归你**：scene-to-scene transition（crossfade / push / 等）由 Step 7 的 `inject-transitions.mjs` 确定性地加在你的 clip **外壳**上（`index.html` 层，在你的场景**之上**），**不在你的场景内**。所以：(a) **不要在场景末尾把元素动画出去**（no exit tween）—— 让场景停在一个稳定的**最终帧**，过渡负责接力；(b) 不要为"和下一场衔接"在场景里写任何滑动/淡出 wrapper 的逻辑。场景内部只管自己的入场 + 持续动效，结尾 hold 住即可。（hyperframes-animation 的硬规则：exit 动画只允许出现在**最后一个**场景。）
+   - **普通场景间过渡（Tier-B）不归你**：crossfade / push / 等由 Step 7 的 `inject-transitions.mjs` 确定性地加在你的 clip **外壳**上（`index.html` 层，在你的场景**之上**），**不在你的场景内**。所以：(a) **不要在场景末尾把元素动画出去**（no exit tween）—— 让场景停在一个稳定的**最终帧**，过渡负责接力；(b) 不要为"和下一场衔接"在场景里写任何滑动/淡出 wrapper 的逻辑。场景内部只管自己的入场 + 持续动效，结尾 hold 住即可。（hyperframes-animation 的硬规则：exit 动画只允许出现在**最后一个**场景。）
+   - **例外：dispatch 给了 `shared_element_bridge` 字段时**（Tier-A 共享元素桥接）—— 那个共享元素的跨场 morph **就是你写**（harness 够不到子合成内部，只能你在场景内做）。见约束 #14。
 7. **注释 / 字符串字面量里不要出现字面 HTML 开标签**（`<template>` / `<style>` / `<script>`）—— linter 用正则扫会误报。转义成 `&lt;template&gt;` 或纯文本。
 8. **timeline 注册用 literal scene id 字符串**：`window.__timelines["scene_1"] = tl;`。禁 `SID` 变量绕一层（`check-compositions.mjs` 正则扫认不出）。整段 `<script>` 选择器 / dataset key / timeline key 一律字面。
 9. **macro-camera scene 默认挂 layout escape hatch**
@@ -165,6 +166,39 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
     每条违规生成准 Edit 字符串（`edit_old` / `edit_new`）写进 `finalize_brief.json.caption_keepout.violations[]`，finalize agent 直接 `Edit(file, edit_old, edit_new)` 改对。**所以契约写错不靠 snapshot 眼检发现，preflight 当场抓 —— 但每条违规都让 finalize 多花一次 Edit + 重 snapshot，最省事的办法就是写之前照表查值。**
 
     **静态查不到的形态**（GSAP 运行时 `translateY`、`transform: translate(...)`、`margin-top:`、flex 自然布局把内容挤到 y > 900 等）—— 这些靠 finalize 的 snapshot 眼检兜底，但**写代码时还是按"元素下沿 y ≤ 880"这条原则定位**，别故意贴边。
+
+14. **共享元素桥接（Tier-A morph）—— 仅当某个 scene 的 dispatch 带 `shared_element_bridge` 字段**
+
+    这是你**两个场景**之间的连续 morph（如卡片→头像、波形→搜索框）。和 Tier-B 不同：**morph 由你在场景内部写**，harness 只在接缝做外壳 crossfade。所以两场必须"对齐"在一个共同的**交接姿态（handoff pose）**上。
+
+    dispatch 字段：
+
+    ```
+    shared_element_bridge:
+      bridge_id: <kebab-id>      # 两场共用，放进 data-bridge-id 属性
+      role: from | to            # 这一场是出场(from)还是进场(to)
+      partner: <other scene_id>  # 另一场
+      seam_duration_s: <float>   # 接缝 crossfade 时长（默认 0.25），进场要 HOLD 住这么久
+    ```
+
+    **共同契约（两场都做）**：
+    - 在 DOM 里放一个带 `data-bridge-id="<bridge_id>"` 的元素（**属性原样,不加 `s<N>-` 前缀** —— 它要跨两场稳定；class/id 仍照常加前缀）。两场该元素是**同一个视觉物体**（同样的内容/外形语义）。
+    - 两场对这个元素商定一个**交接姿态**：一个具体的屏幕 bbox（left/top/width/height）+ 外形（圆角/底色）。出场在它的末态到达这个姿态,进场从这个姿态开始 —— 两者在接缝那一刻**几何一致**,crossfade 才读成同一个元素而不是两个鬼影。
+    - 交接姿态用**各自场景自己的坐标**表达（两个子合成不共享 transform 原点,别用 `x/y` 偏移去对齐,直接写 left/top/width/height 或等价的最终 transform）。
+
+    **`role: from`（出场场景）**：
+    - 元素先按本场叙事正常入场 + 展示。
+    - 在你 timeline 的**最后 ~0.5s**,把该元素 tween 到交接姿态（移到约定位置、缩放、改圆角）；同时把本场**其他**内容（标题等）淡出/退场。
+    - 结尾让该元素**停在交接姿态**（hold 到 data-duration 末尾）。
+
+    **`role: to`（进场场景）**：
+    - 该元素**初始**就放在交接姿态（= 出场末态的那个 bbox/外形,用本场坐标写）。
+    - **接缝 HOLD**：开头 `seam_duration_s` 秒内,**不要 tween 这个桥接元素**（让它静止在交接姿态,覆盖外壳 crossfade 窗口 —— 否则接缝会出现两张错位的鬼影,这是 prototype 实测的坑）。
+    - `seam_duration_s` 之后,再把它 tween 到本场的最终休息位,并让本场其他内容入场。
+
+    **校验**：`check-bridge-continuity.mjs` 会确定性检查两场都有同 `data-bridge-id` 元素、且没被 `display:none`/`opacity:0` 静态藏掉。交接姿态是否**视觉对齐**由 finalize 在接缝 snapshot 眼检（静态查不到 GSAP 末态几何）。所以**两场的交接姿态数值你要亲自对齐**（出场末态 left/top/w/h == 进场初态 left/top/w/h）。
+
+    **不要**：在场景里碰 `index.html` / 外壳；给桥接元素加 `s<N>-` 前缀到 `data-bridge-id` 属性；在接缝窗口内动进场的桥接元素。
 
 ## 范围
 

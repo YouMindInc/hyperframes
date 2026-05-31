@@ -262,7 +262,7 @@ for (let i = 0; i < heads.length; i++) {
             `${sceneId}: **Transition:** "${type}" is a shared-element (Tier-A) transition but **Continuity: break** — Tier-A needs **Continuity: continue** (same worker authors both scenes)`,
           );
         }
-        // direction / duration trailing tokens
+        // direction / duration trailing tokens (Tier-A types take neither)
         for (const tok of tokens.slice(1)) {
           const t = tok.toLowerCase();
           if (/^[\d.]+s$/.test(t)) {
@@ -282,6 +282,31 @@ for (let i = 0; i < heads.length; i++) {
             }
           }
         }
+      }
+
+      // Bridge anchor (Tier-A only): `shared-element` REQUIRES a **Bridge:** anchor
+      // (single backtick-wrapped kebab-case id) AND **Continuity: continue** (both
+      // scenes must land in one worker). A non-Tier-A scene must NOT carry **Bridge:**.
+      const bridgeMatch = body.match(/^\*\*Bridge:\*\*\s*(.*)$/m);
+      const bridgeRaw = bridgeMatch ? bridgeMatch[1].trim() : null;
+      const bridgeId = bridgeRaw ? (bridgeRaw.match(/`([^`]+)`/)?.[1] ?? null) : null;
+      if (isTierA) {
+        if (!bridgeId) {
+          errors.push(
+            `${sceneId}: **Transition:** "${type}" (Tier-A) requires a **Bridge:** \`<kebab-id>\` anchor naming the shared element`,
+          );
+        } else if (!/^[a-z][a-z0-9-]*$/.test(bridgeId)) {
+          errors.push(
+            `${sceneId}: **Bridge:** "${bridgeId}" must be kebab-case (lowercase, digits, hyphens)`,
+          );
+        }
+        if (continuityVal === "continue" || continuityVal == null) {
+          // ok (null = Continuity already errored above)
+        }
+      } else if (bridgeId) {
+        errors.push(
+          `${sceneId}: **Bridge:** present but **Transition:** is not a shared-element (Tier-A) type — Bridge only applies to Tier-A morphs`,
+        );
       }
     }
   }

@@ -47,7 +47,9 @@ try {
   bail(`group_spec.json parse: ${e.message}`);
 }
 const transitions = Array.isArray(spec.transitions) ? spec.transitions : [];
-const tierB = transitions.filter((t) => t.tier === "b");
+// Both tiers get the same wrapper overlap + cross-track invariants (Tier-A's morph
+// lives inside the scenes, but its seam wrapper-crossfade obeys the same mechanics).
+const injectable = transitions.filter((t) => t.tier === "b" || t.tier === "a");
 
 // Authoritative SCENE id set (same as the injector) — captions/voice/bgm/sfx are
 // NOT scenes and are excluded from the scene track-overlap invariant. Captions
@@ -99,13 +101,13 @@ for (let i = 0; i < all.length; i++) {
 // Isolate the injected transition block so the tween-reference check only looks there.
 const blockMatch = html.match(/scene transitions \(injected[\s\S]*?\}\)\(\);/);
 const txBlock = blockMatch ? blockMatch[0] : "";
-if (tierB.length > 0 && !txBlock) {
+if (injectable.length > 0 && !txBlock) {
   fail.push(
-    `group_spec has ${tierB.length} tier-b transition(s) but no injected transition block in index.html`,
+    `group_spec has ${injectable.length} transition(s) but no injected transition block in index.html`,
   );
 }
 
-for (const t of tierB) {
+for (const t of injectable) {
   const from = clips.get(t.from);
   const to = clips.get(t.to);
   if (!from || !to) {
@@ -142,6 +144,6 @@ if (fail.length) {
 }
 
 console.log(
-  `✓ verify-transitions: ${tierB.length} tier-b transition(s) verified ` +
+  `✓ verify-transitions: ${injectable.length} transition(s) verified ` +
     `(overlap==duration, cross-track, both ids referenced, no same-track overlap)`,
 );

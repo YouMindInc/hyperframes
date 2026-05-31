@@ -215,7 +215,7 @@ const ANCHORS = ["Effects", "Duration", "Continuity"];
 // shows surface-aware components). prep.mjs treats it as OPTIONAL here purely so
 // the anchor doesn't leak into creative_brief — its value is forwarded to
 // group_spec.json so the Step 6 dispatch can pass it to scene workers.
-const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Surface", "Transition"];
+const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Surface", "Transition", "Bridge"];
 
 function anchorRe(name) {
   return new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`, "m");
@@ -289,7 +289,10 @@ function parseSceneBlock(body, sceneId, isFirst) {
       if (/^[\d.]+s$/i.test(tok)) durationOverride = parseFloat(tok);
       else direction = tok.toUpperCase();
     }
-    if (type) transition = { type, direction, duration_s: durationOverride };
+    // Bridge (Tier-A only): backtick-wrapped kebab-case id naming the shared element.
+    // The destination scene carries it; both scenes' workers place data-bridge-id=<id>.
+    const bridgeId = raw.Bridge ? (raw.Bridge.match(/`([^`]+)`/)?.[1] ?? null) : null;
+    if (type) transition = { type, direction, duration_s: durationOverride, bridge_id: bridgeId };
   }
 
   // SFX (optional / soft anchor; omitted entirely = no SFX for this scene):
@@ -670,6 +673,9 @@ for (const s of scenes) {
     surface: s.surface,
     design_chunks: s.design_chunks,
     creative_brief: s.creative_brief,
+    // Tier-A shared-element bridge — back-filled in Step 6.6 after transitions[] is
+    // computed (a scene can be the `from` and/or `to` of a bridge). null = no bridge.
+    shared_element_bridge: null,
   };
   runningStart += s.estimatedDuration_s;
 }
@@ -727,10 +733,11 @@ if (txRegistry) {
     const is_break = sceneWorker.get(fromSid) !== sceneWorker.get(toSid);
 
     // The ENTERING transition is named on the destination scene.
-    const named = toScene.transition; // { type, direction, duration_s } | null
+    const named = toScene.transition; // { type, direction, duration_s, bridge_id } | null
     let type = named?.type || null;
     let direction = named?.direction || null;
     let durationOverride = named?.duration_s ?? null;
+    const bridgeId = named?.bridge_id || null;
 
     // Default-fill (no named transition) — registry rules, in priority order.
     if (!type) {
@@ -759,8 +766,16 @@ if (txRegistry) {
       direction = rec.default_direction || rec.directions[0];
     }
 
+    // Tier-A duration: the seam crossfade should be SHORT (prototype: 0.25s reads cleaner
+    // than 0.5s — shrinks the two-aligned-elements ghost window). Tier-B keeps registry default.
+    const TIER_A_SEAM_S = 0.25;
     const duration_s = Number(
-      (durationOverride != null ? durationOverride : (rec?.default_duration_s ?? 0.5)).toFixed(3),
+      (isTierA && tier === "a"
+        ? TIER_A_SEAM_S
+        : durationOverride != null
+          ? durationOverride
+          : (rec?.default_duration_s ?? 0.5)
+      ).toFixed(3),
     );
 
     transitions.push({
@@ -771,6 +786,7 @@ if (txRegistry) {
       duration_s,
       tier,
       is_break,
+      bridge_id: tier === "a" ? bridgeId : null,
       from_worker: sceneWorker.get(fromSid),
       to_worker: sceneWorker.get(toSid),
     });
@@ -793,6 +809,41 @@ if (txRegistry) {
           `(c) raise --scenes-per-group so the cap doesn't split them.`,
       );
     }
+  }
+
+  // ---------- Step 6.8: back-fill shared_element_bridge onto worker dispatch ----------
+  // For each tier:"a" transition, tell BOTH scenes' worker(s) (here: the one shared worker)
+  // about the bridge so it places data-bridge-id=<id> in both files and authors the morph.
+  // from-scene role="from" (morphs TO the handoff pose at its end), to-scene role="to"
+  // (starts at the handoff pose, holds across the seam, then continues). bridge_id is required.
+  for (const t of transitions) {
+    if (t.tier !== "a") continue;
+    if (!t.bridge_id) {
+      die(
+        `Transition ${t.from}→${t.to}: Tier-A (${t.type}) requires a **Bridge:** \`<id>\` anchor on ${t.to} ` +
+          `naming the shared element — none found.`,
+      );
+    }
+    // locate the (single) worker group that owns both scenes
+    const g = groups.find((gr) => gr.scenes[t.from] && gr.scenes[t.to]);
+    if (!g) {
+      // should be unreachable (Step 6.7 already fataled cross-worker), but guard anyway
+      die(
+        `Transition ${t.from}→${t.to}: Tier-A scenes not co-located in one worker (internal error)`,
+      );
+    }
+    g.scenes[t.from].shared_element_bridge = {
+      bridge_id: t.bridge_id,
+      role: "from",
+      partner: t.to,
+      seam_duration_s: t.duration_s,
+    };
+    g.scenes[t.to].shared_element_bridge = {
+      bridge_id: t.bridge_id,
+      role: "to",
+      partner: t.from,
+      seam_duration_s: t.duration_s,
+    };
   }
 }
 

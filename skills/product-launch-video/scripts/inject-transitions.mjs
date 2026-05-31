@@ -55,12 +55,18 @@ try {
 }
 
 const transitions = Array.isArray(spec.transitions) ? spec.transitions : [];
-const tierB = transitions.filter((t) => t.tier === "b");
+// Both tiers get the SAME wrapper overlap + ping-pong-track mechanics; only the
+// stamped GSAP differs. Tier B: a registry transition on the wrappers. Tier A:
+// a short plain wrapper crossfade — the morph itself is authored INSIDE the two
+// scenes by the worker (the master timeline can't reach into a sub-comp), so here
+// we only crossfade the wrappers so bg/title swap while the aligned bridge element
+// reads as continuous. (Verified by render-prototype 2026-05-31.)
+const injectable = transitions.filter((t) => t.tier === "b" || t.tier === "a");
 
 let html = readFileSync(indexPath, "utf8");
 
-if (tierB.length === 0) {
-  console.log(`✓ inject-transitions: 0 tier-b transitions — index.html unchanged`);
+if (injectable.length === 0) {
+  console.log(`✓ inject-transitions: 0 transitions to inject — index.html unchanged`);
   process.exit(0);
 }
 
@@ -114,7 +120,7 @@ if (clips.size === 0)
 // ---------- apply overlaps ----------
 const gsapLines = [];
 const applied = [];
-for (const t of tierB) {
+for (const t of injectable) {
   const fromClip = clips.get(t.from);
   const toClip = clips.get(t.to);
   if (!fromClip || !toClip) {
@@ -179,11 +185,16 @@ html = html.replace(masterAnchor, block);
 writeFileSync(indexPath, html);
 
 // ---------- summary ----------
-console.log(`✓ inject-transitions: ${applied.length} tier-b transition(s) stamped into index.html`);
+const nB = applied.filter((a) => a.tier === "b").length;
+const nA = applied.filter((a) => a.tier === "a").length;
+console.log(
+  `✓ inject-transitions: ${applied.length} transition(s) stamped into index.html (tier-b ${nB}, tier-a ${nA})`,
+);
 for (const a of applied) {
   const dir = a.direction ? ` ${a.direction}` : "";
+  const tag = a.tier === "a" ? ` [Tier-A bridge:${a.bridge_id || "?"}]` : "";
   console.log(
-    `  ${a.from}→${a.to}: ${a.type}${dir} ${a.durApplied}s @ T=${a.T}s (from ext +${a.durApplied}s, to start→${a.T})`,
+    `  ${a.from}→${a.to}: ${a.type}${dir} ${a.durApplied}s @ T=${a.T}s${tag} (from ext +${a.durApplied}s, to start→${a.T})`,
   );
 }
 const trackSummary = [...clips.values()]
@@ -193,12 +204,24 @@ const trackSummary = [...clips.values()]
 console.log(`  tracks: ${trackSummary}`);
 
 // ===========================================================================
-// build the GSAP lines for one transition from the registry template.
+// build the GSAP lines for one transition.
 function buildGsap(t, dur, T) {
-  const rec = txByName.get(t.type);
-  if (!rec) die(`transition ${t.from}→${t.to}: type "${t.type}" not in registry`);
   const OLD = `"#el-${t.from}"`;
   const NEW = `"#el-${t.to}"`;
+
+  // Tier A: the worker authored the morph INSIDE the two scenes (outgoing tweens the
+  // bridge element to a handoff pose; incoming starts there, holds for the seam, then
+  // continues). The harness only crossfades the WRAPPERS so bg/title swap while the
+  // aligned bridge element reads as one continuous element. No registry template.
+  if (t.tier === "a") {
+    return [
+      `tl.to(${OLD}, { opacity: 0, duration: ${dur}, ease: "power1.inOut" }, ${T});`,
+      `tl.fromTo(${NEW}, { opacity: 0 }, { opacity: 1, duration: ${dur}, ease: "power1.inOut" }, ${T});`,
+    ];
+  }
+
+  const rec = txByName.get(t.type);
+  if (!rec) die(`transition ${t.from}→${t.to}: type "${t.type}" not in registry`);
 
   // pick template: directional types have horizontal/vertical variants
   let template;
