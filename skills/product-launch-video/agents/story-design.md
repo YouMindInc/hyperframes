@@ -33,10 +33,14 @@ Dispatch 给的 `Schema validator:` 是绝对路径。写完后直接跑（**不
 - Scene count + total estimated duration
 - 每个 scene 一行 summary（sceneNumber + sceneName + 8-word gist）
 
-追加 `<PROJECT_DIR>/context.log`：
+追加 `<PROJECT_DIR>/context.log`（时间戳用机器生成的 UTC，别手填）：
 
-```
-## story-design [done <ISO timestamp>]
+```bash
+(cd "$PROJECT_DIR" && cat >> context.log <<EOF
+
+## story-design [done $(date -u +%Y-%m-%dT%H:%M:%SZ)]
 Archetype: <name>
 Scenes: <count>, total ~<duration>s
+EOF
+)
 ```

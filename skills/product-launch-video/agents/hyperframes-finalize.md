@@ -155,12 +155,16 @@ TIMES=$(jq -r '.snapshot_times_s | join(",")' "$PROJECT_DIR/finalize_brief.json"
 - Render：路径 / 字节 / ffprobe duration / quality
 - 放行的未解决 warning
 
-追加 `<PROJECT_DIR>/context.log`：
+追加 `<PROJECT_DIR>/context.log`（时间戳用机器生成的 UTC，别手填——避免与 mp4 mtime / 其它 phase 行时区不一致）：
 
-```
-## Phase 4c: finalize [done <ISO timestamp>]
+```bash
+(cd "$PROJECT_DIR" && cat >> context.log <<EOF
+
+## Phase 4c: finalize [done $(date -u +%Y-%m-%dT%H:%M:%SZ)]
 Gates: lint <status> / validate <status> / inspect <status> / snapshot OK
 Fixes in place: <scene_N: what> ...（无则 none）
 BGM: <brief.bgm.status> (<brief.bgm.message>)
 Render: renders/video.mp4 (<size>, <duration>s, quality=<quality>)
+EOF
+)
 ```

@@ -140,30 +140,60 @@ const hierarchyActionRe =
 const supportingRe =
   /\b(supporting|demote|rail|side rail|bottom rail|background texture|low-contrast|lower contrast|smaller|outside)\b/i;
 
+// Strip negated clauses so a scene that only mentions proof to DENY it (e.g. a
+// pure CTA: "there is no logo strip / customer logo / stat counter / chart")
+// doesn't read as a proof scene. Each negation eats to the next sentence stop.
+// This is what lets a CTA stop writing anti-regex defensive prose.
+function stripNegations(text) {
+  return text.replace(
+    /\b(no|not|never|without|isn'?t|aren'?t|don'?t|doesn'?t|won'?t|cannot|can'?t)\b[^.;:]*/gi,
+    " ",
+  );
+}
+
 function hierarchyRisk(body) {
   const text = body.toLowerCase();
+  // Proof signals are read from (1) cited component ids — an unambiguous,
+  // structured signal preferred over fuzzy prose scans — and (2) the prose with
+  // negated clauses removed, using PHRASE patterns (not bare "logo"/"customer",
+  // which over-trigger on brand wordmarks and incidental mentions).
+  const proofText = stripNegations(text);
+  const compM = body.match(/^\*\*Components:\*\*\s*(.*)$/m);
+  const compIds = compM ? [...compM[1].matchAll(/`([^`]+)`/g)].map((m) => m[1]) : [];
+  const compProof = compIds.some((id) => /logo|proof|testimonial|customer/i.test(id));
+  const compData = compIds.some((id) => /stat|chart|metric|kpi|counter/i.test(id));
+
   const multiAct = /\b(multi[- ]?act|three[- ]?act|act\s+[abc]|\bfocal points?)\b/i.test(text);
   const hasAction =
     /\b(cta|get started|call[- ]?to[- ]?action|button|sign up|book demo|start trial|download|subscribe|contact sales|action headline|payoff frame|payoff close|closing action)\b/i.test(
       text,
     );
   const hasSocialProof =
-    /\b(logos?|logo strip|customer logos?|social[- ]proof|trusted by|testimonial|customers?|partners?)\b/i.test(
-      text,
-    );
-  const hasDataProof = hasAny(text, [
-    /\bstats?\b/i,
-    /\bstat[- ]?counter\b/i,
-    /\bmetrics?\b/i,
-    /\bkpis?\b/i,
-    /\bproof cluster\b/i,
-    /\bproof rail\b/i,
-    /\bchart\b/i,
-    /\bcount[- ]?up\b/i,
-    /\bpolicy compliance\b/i,
-    /\bhours saved\b/i,
-    /\byield\b/i,
-  ]);
+    compProof ||
+    hasAny(proofText, [
+      /logo[- ]?(strip|grid|wall|cloud|chain|row|rail|lockup)/i,
+      /\btrusted by\b/i,
+      /social[- ]proof/i,
+      /\btestimonials?\b/i,
+      /customer logos?/i,
+      /enterprise logos?/i,
+      /\bbrands? you (know|trust)\b/i,
+    ]);
+  const hasDataProof =
+    compData ||
+    hasAny(proofText, [
+      /\bstats?\b/i,
+      /\bstat[- ]?counter\b/i,
+      /\bmetrics?\b/i,
+      /\bkpis?\b/i,
+      /\bproof cluster\b/i,
+      /\bproof rail\b/i,
+      /\bchart\b/i,
+      /\bcount[- ]?up\b/i,
+      /\bpolicy compliance\b/i,
+      /\bhours saved\b/i,
+      /\byield\b/i,
+    ]);
   return {
     multiAct,
     hasAction,
@@ -179,6 +209,26 @@ if (heads.length === 0) {
   );
 }
 
+// File shape: no project-level preamble. section_plan.md must contain only an
+// optional H1 title + the "## Scene N:" blocks. Anything substantial before the
+// first scene heading is a write-only preamble — prep.mjs slices per-scene from
+// the first "## Scene", the validator iterates scene blocks, and the scene
+// worker is forbidden from reading section_plan.md, so a preamble reaches no
+// consumer. Global invariants travel via per-scene prose + dedicated channels
+// (voice_file / Captions flag / tokens.css / easings.js). See guide.md §2.
+if (heads.length > 0) {
+  const preamble = plan
+    .slice(0, heads[0].index)
+    .replace(/^﻿?[ \t]*#[ \t]+.*$/m, "") // allow one leading H1 title line
+    .replace(/\s+/g, " ")
+    .trim();
+  if (preamble.length > 200) {
+    errors.push(
+      `project-level preamble detected before "## Scene 1" (${preamble.length} chars beyond an H1 title) — section_plan.md must contain only an H1 title and "## Scene N:" blocks. Global rules reach workers via per-scene prose + dedicated channels (voice_file / Captions flag / tokens.css / easings.js), never a preamble.`,
+    );
+  }
+}
+
 for (let i = 0; i < heads.length; i++) {
   const m = heads[i];
   const sceneNumber = m[1];
@@ -186,6 +236,36 @@ for (let i = 0; i < heads.length; i++) {
   const start = m.index + m[0].length;
   const end = i + 1 < heads.length ? heads[i + 1].index : plan.length;
   const body = plan.slice(start, end);
+
+  // Block order: all **Anchor:** lines (incl. SFX bullets, PrimarySubjectTimeline,
+  // Handoff) must precede the free prose. Once a prose sentence appears, no anchor
+  // line may follow — interleaving makes prep.mjs's "creative_brief = text after
+  // the last recognized anchor" slice unpredictable (e.g. PST/Handoff dropping out
+  // of, or prose leaking into, the worker's brief). See guide.md §2 "块内顺序".
+  // PST/Handoff continuation lines (timecode-led) and bullets are NOT prose.
+  {
+    const ANCHOR_LINE_RE =
+      /^\*\*(Effects|Duration|Continuity|Surface|Blueprint|Components|Transition|Bridge|SFX|PrimarySubjectTimeline|Handoff):\*\*/;
+    const blockLines = body.split("\n");
+    let firstProse = -1;
+    let lastAnchor = -1;
+    for (let li = 0; li < blockLines.length; li++) {
+      const t = blockLines[li].trim();
+      if (t === "") continue;
+      if (ANCHOR_LINE_RE.test(t)) {
+        lastAnchor = li;
+        continue;
+      }
+      if (/^[-*]/.test(t)) continue; // SFX cue bullets
+      if (/^[\d>#`]/.test(t)) continue; // timecode continuations / quotes / code / fences
+      if (firstProse === -1) firstProse = li;
+    }
+    if (firstProse !== -1 && lastAnchor > firstProse) {
+      errors.push(
+        `${sceneId}: an **Anchor:** line appears after the prose began (prose at body line ${firstProse}, anchor at ${lastAnchor}) — put ALL anchors (incl. SFX/PrimarySubjectTimeline/Handoff) before the prose`,
+      );
+    }
+  }
 
   const found = {};
   for (const a of ANCHORS) {
