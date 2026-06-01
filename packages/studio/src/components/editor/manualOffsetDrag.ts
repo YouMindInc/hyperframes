@@ -235,9 +235,11 @@ export function createManualOffsetDragMember(input: {
   const initialPathOffset = captureStudioPathOffset(input.element);
   const gestureToken = beginStudioManualEditGesture(input.element);
   const measured = measureManualOffsetDragScreenToOffsetMatrix(input.element, initialOffset);
+  const scaleX = input.rect.editScaleX || 1;
+  const scaleY = input.rect.editScaleY || 1;
   const screenToOffset: ManualOffsetDragMatrix = measured.ok
     ? measured.matrix
-    : { a: 1, b: 0, c: 0, d: 1 };
+    : { a: 1 / scaleX, b: 0, c: 0, d: 1 / scaleY };
 
   return {
     ok: true,
