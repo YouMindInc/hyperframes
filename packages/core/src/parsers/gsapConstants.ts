@@ -6,17 +6,33 @@
  */
 
 export const SUPPORTED_PROPS = [
-  "opacity",
-  "visibility",
+  // Transforms
   "x",
   "y",
   "scale",
   "scaleX",
   "scaleY",
   "rotation",
+  "skewX",
+  "skewY",
+  // Visibility
+  "opacity",
+  "visibility",
   "autoAlpha",
+  // Dimensions
   "width",
   "height",
+  // Colors
+  "color",
+  "backgroundColor",
+  "borderColor",
+  // Box model
+  "borderRadius",
+  // Typography
+  "fontSize",
+  "letterSpacing",
+  // Filter
+  "filter",
 ];
 
 export const SUPPORTED_EASES = [

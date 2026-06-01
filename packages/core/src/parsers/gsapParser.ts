@@ -12,7 +12,14 @@ import * as recast from "recast";
 import { parse as babelParse } from "@babel/parser";
 import { type GsapAnimation, type GsapMethod, type ParsedGsap } from "./gsapSerialize";
 
-export type { GsapAnimation, GsapMethod, ParsedGsap } from "./gsapSerialize";
+export type {
+  GsapAnimation,
+  GsapMethod,
+  ParsedGsap,
+  GsapKeyframesData,
+  GsapPercentageKeyframe,
+  GsapKeyframeFormat,
+} from "./gsapSerialize";
 export {
   serializeGsapAnimations,
   getAnimationsForElementId,
