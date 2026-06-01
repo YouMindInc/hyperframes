@@ -110,7 +110,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 **块内顺序是强制的，且 PrimarySubjectTimeline / Handoff 必须排在所有锚点之后、散文之前**（紧跟在 SFX 块后面）。原因是机器性的：`prep.mjs` 的 `creative_brief = 最后一个被识别锚点之后的全部文本`，而它识别 `SFX` 但**不识别** `PrimarySubjectTimeline` / `Handoff`——所以这两条必须落在 SFX **之后**才会进入 worker 的 brief；放在 SFX 之前会被切掉、worker 收不到。规则：① 全部 `**锚点:**` 行（含 SFX bullet 块、PST、Handoff）集中在最前；② 之后才是自由散文，且散文**第一句**就是情感脚注（§4 第 1 条，"真 plan 与通用 AI 输出的分水岭"）；③ 散文一旦开始，**不得**再出现任何 `**锚点:**` 行（交错 = validator fatal）。多 act 场景的 brief 会以 `**PrimarySubjectTimeline:**` 开头、紧接情感脚注，这是预期形态。
 
-`validate-section-plan.mjs` 强制（hard）：
+`validate.mjs section` 强制（hard）：
 
 - **Effects**：2-5 个反引号包裹的 rule id，逗号分隔在方括号内；每个 id 必须是 `hyperframes-animation/rules/` 下存在的 rule（这是 validator 实际校验项）—— 正常只从 Dispatch 的 `## Effects catalog` 引用；顺序是 timeline-layering 顺序
 - **Duration**：浮点秒数（来源见 §1）
@@ -198,7 +198,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 **Less is more**：多数场景零 SFX，一场 1 条是典型。**不要**在场景转场处加 SFX（hard cut 本身就是 audio-visual event）。
 
-**禁**：估算时间戳（`sfx-verify.mjs` 卡 ±0.1s drift）/ 截短 `data-duration`（impact 在 decay 中段被砍 = 业余感）。
+**禁**：估算时间戳（`verify-output.mjs sfx` 卡 ±0.1s drift）/ 截短 `data-duration`（impact 在 decay 中段被砍 = 业余感）。
 
 可用 mp3 清单见 Dispatch 上下文 `## SFX library`（每条含 file / duration / 用途）——按用途挑文件。
 

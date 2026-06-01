@@ -30,6 +30,48 @@ Derivation (outer scales the inner-translated content):
 
 Note: the formula does NOT depend on S. The translate amount is the same whether you zoom 1.5×, 2×, or 3× — as long as the OUTER is the scale and the INNER is the translate, and scale uses `transform-origin: 50% 50%`.
 
+## Getting the offset
+
+`T = -offset` is only as good as `offset`. The #1 way this pattern ships broken is hand-computing `offset` from a layout formula, getting the **sign** or magnitude wrong, and letting the zoom amplify a small error off-screen. **Default to measuring the target's real laid-out center; reserve the formula for symmetric rows.**
+
+### Default — measure the target's actual center (works for ANY layout)
+
+Read where the target actually is, once, at setup. This is immune to sign errors because it's derived from the rendered DOM, not a mental model:
+
+```js
+await document.fonts.ready; // metrics final; fallback fonts are 10–30px off → tens of px after a 3×+ zoom
+const W = 1920,
+  H = 1080;
+const r = document.getElementById("target-card").getBoundingClientRect();
+const TARGET_OFFSET_X = r.left + r.width / 2 - W / 2;
+const TARGET_OFFSET_Y = r.top + r.height / 2 - H / 2;
+// bake these; feed counterX/Y = -TARGET_OFFSET_X/Y to the inner tween
+```
+
+This `getBoundingClientRect` runs **once at setup**, before timeline registration — NOT per-frame (per-frame DOM reads desync under the renderer's parallel sampling; see SKILL universal constraints). Because the measurement is async (`fonts.ready`), build and register the timeline inside the same `async` setup so the baked offset is ready before `window.__timelines[id]` is published.
+
+### Shortcut — symmetric equal-width row ONLY
+
+If (and only if) the target is one of N **equal-width** cards in a centered row with uniform gaps, you may skip measurement:
+
+```js
+const index_offset = targetIndex - (N - 1) / 2;
+const TARGET_OFFSET_X = index_offset * (CARD_WIDTH + CARD_GAP);
+```
+
+⚠️ This assumes every sibling is the **same width**. The moment the row is asymmetric — a wide companion label beside a narrow chip, a wordmark flanked by unequal elements — it gives the wrong answer, often the wrong **sign**: the heavier side shifts the centered target the _opposite_ way you'd guess. (A real example: `companion(220) + gap + wordmark + gap + chip(110)` puts the wordmark ~55px **right** of center, but the "chip − companion" intuition says left.) For anything but equal cards, **measure**.
+
+### Headroom budget — cap the scale from the measured size
+
+A zoom multiplies any centering error, so leave margin. Keep the target ≤ ~88% of the canvas at peak; derive the cap from the measured size instead of picking a round number by feel:
+
+```js
+const maxScale = Math.min((0.88 * W) / r.width, (0.88 * H) / r.height);
+const ZOOM_SCALE = Math.min(DESIRED_SCALE, maxScale);
+```
+
+A target that fills 97%+ of the frame reads as cut-off the instant its center is even slightly off — and a hand-baked offset always is. (The perception gate flags this as `primary-offscreen`, and `data-layout-allow-overflow` does **not** exempt it.)
+
 ## HTML
 
 ```html
@@ -140,10 +182,11 @@ Note: the formula does NOT depend on S. The translate amount is the same whether
   window.__timelines = window.__timelines || {};
   const tl = gsap.timeline({ paused: true });
 
-  // TARGET_OFFSET_X / TARGET_OFFSET_Y — baked at author time from the layout:
-  //   index_offset = targetIndex - (N - 1) / 2
-  //   TARGET_OFFSET_X = index_offset × (CARD_WIDTH + CARD_GAP)
-  // (for a horizontal row of N equal-width cards; for vertical / grid layouts derive analogously)
+  // TARGET_OFFSET_X / TARGET_OFFSET_Y and ZOOM_SCALE come from the "Getting the
+  // offset" section above — MEASURED at setup (after fonts.ready) and baked. Do NOT
+  // hand-derive the offset for a non-symmetric layout (wrong sign → the zoom shoves
+  // the target off-frame). For a measured target, build the timeline inside that
+  // async setup so the offset is ready before window.__timelines[id] is published.
 
   // Counter-translation = -offset (inner translate cancels target offset BEFORE outer scales)
   const counterX = -TARGET_OFFSET_X;
@@ -197,19 +240,7 @@ Note: the formula does NOT depend on S. The translate amount is the same whether
 
 ### Dynamic target lookup via `getBoundingClientRect`
 
-When the target's exact position isn't known at author time (e.g. flex layout, variable font width), measure at runtime BEFORE the timeline plays:
-
-```js
-const target = document.getElementById("target-card");
-const viewport = { x: 1920 / 2, y: 1080 / 2 };
-const rect = target.getBoundingClientRect();
-const targetCenterX = rect.left + rect.width / 2;
-const targetCenterY = rect.top + rect.height / 2;
-const offsetX = targetCenterX - viewport.x;
-const offsetY = targetCenterY - viewport.y;
-```
-
-But beware: HF compositions render at a fixed canvas size; `getBoundingClientRect` only works after `DOMContentLoaded` and may be off if fonts are still loading.
+This is now the **default**, not a variation — see [Getting the offset](#getting-the-offset). Always `await document.fonts.ready` before measuring (fallback-font metrics are off by 10–30px, which a 3×+ zoom magnifies into tens of visible px) and measure **once at setup**, never per-frame.
 
 ### Zoom out (target → wide view)
 
@@ -250,6 +281,7 @@ Chain multiple zooms: target A (1.5-2.5s) → pause → target B (3-4s) → pull
 - **ZOOM_SCALE** — final magnification.
   - Range: 1.5× (modest emphasis) → 3× (dominant focus) → 5×+ (cinematic extreme)
   - Constraints: card content must remain crisp at this scale; raster source media needs `sourceResolution ≥ rendered × ZOOM_SCALE`
+  - **Headroom budget**: cap from the measured target size so the target stays ≤ ~88% of the canvas at peak — `ZOOM_SCALE = Math.min(DESIRED, 0.88×W/r.width, 0.88×H/r.height)`. Picking a round number by feel (e.g. 3.2× on a 585px wordmark → 1872px = 97% of 1920) leaves no margin, so any centering slop cuts the text off.
 
 ### Target reveal + dwell
 
@@ -269,6 +301,7 @@ Chain multiple zooms: target A (1.5-2.5s) → pause → target B (3-4s) → pull
 
 ## Key Principles
 
+- **Measure the offset, don't hand-derive it** — for any layout that isn't a symmetric equal-width row, read the target's real center with `getBoundingClientRect` at setup (after `fonts.ready`) and bake it (see [Getting the offset](#getting-the-offset)). Hand-computed offsets silently get the **sign** wrong on asymmetric layouts, and the zoom amplifies the error off-screen — the single most common way this pattern ships broken.
 - **Transform order — outer scales, inner translates** — DO NOT put scale and translate on the SAME element. The transform math becomes tangled (`translate * scale` ≠ `scale * translate` in CSS transform composition). Nested wrappers cleanly separate concerns.
 - **Counter-translate = -offset** — independent of scale. Derive from: outer scale around center maps `(offset + T)` to `S × (offset + T)`. Setting that to zero gives `T = -offset`. A common wrong intuition is `T = -offset × (S - 1)` — it happens to give the same answer at S=2 but is wrong for any other S.
 - **`transform-origin: 50% 50%` on outer wrapper** — non-center origin causes unpredictable inner offset; always center.
@@ -283,7 +316,8 @@ Chain multiple zooms: target A (1.5-2.5s) → pause → target B (3-4s) → pull
 - **No CSS `transition` on `.zoom-outer` or `.zoom-inner`** — competes with GSAP
 - **`will-change: transform`** on both wrappers — the transforms update every frame during the zoom phase
 - **`transform-origin: 50% 50%` on `.zoom-outer`** — center-based scaling is what the counter-translate math assumes
-- **Target offset values are fixed constants** — don't recompute every frame in onUpdate; bake to constants at author time or compute once before play
+- **Target offset baked once, at setup, from measurement** — measure the target center after `fonts.ready` and bake (see [Getting the offset](#getting-the-offset)); never recompute per-frame in onUpdate, and never hand-estimate the offset for a non-symmetric layout
+- **Scale within the headroom budget** — keep the target ≤ ~88% of the canvas at peak, derived from the measured size (`maxScale = 0.88 × W / measuredWidth`); a target that fills the frame is cut off the instant the center is slightly off
 
 ## Combinations
 

@@ -6,7 +6,7 @@
 // into the top-level index.html. The finalize AGENT no longer hand-authors
 // clip/audio elements, hand-computes start_s, picks track indices, or eyeballs
 // data-duration — those are this script's invariants now. Mirrors the
-// build-captions.mjs precedent (deterministic engine, agent does only judgment).
+// captions.mjs group precedent (deterministic engine, agent does only judgment).
 //
 // index.html is a *standalone* (top-level) composition: root <div> lives
 // directly in <body> with NO <template> wrapper (template is for sub-comps).
@@ -116,11 +116,15 @@ for (const { sid, scene } of playOrder) {
   }
   const specDur = Number(scene.estimatedDuration_s);
   if (!isFinite(specDur) || specDur <= 0) {
-    die(`${sid}: group_spec estimatedDuration_s missing or non-positive (${scene.estimatedDuration_s})`);
+    die(
+      `${sid}: group_spec estimatedDuration_s missing or non-positive (${scene.estimatedDuration_s})`,
+    );
   }
   const rootDur = rootDataDuration(readFileSync(compAbs, "utf8"));
   if (rootDur == null) {
-    anomalies.push(`${sid}: could not read root data-duration from ${compRel} — skipped duration cross-check`);
+    anomalies.push(
+      `${sid}: could not read root data-duration from ${compRel} — skipped duration cross-check`,
+    );
   } else if (Math.abs(rootDur - specDur) > DUR_EPSILON) {
     durMismatches.push(`${sid}: worker root data-duration=${rootDur}s but group_spec=${specDur}s`);
   }
@@ -141,9 +145,21 @@ const BGM_VOLUME = hasAnyVoice ? "0.8" : "0.9";
 const body = [];
 let voiceCount = 0;
 
-for (const { sid, scene } of playOrder) {
+for (let i = 0; i < playOrder.length; i++) {
+  const { sid, scene } = playOrder[i];
   const start = scene.start_s;
   const dur = scene.estimatedDuration_s;
+  // Voice clips share track 10 (single-lane). start_s is prep.mjs's cumulative
+  // sum of estimatedDuration_s, so (nextStart - start) IS the scene's own span —
+  // this is NOT a semantic change, just a float-exact one: computing dur this way
+  // makes the IEEE-754 sum (start + voiceDur) bit-exact equal to nextStart, which
+  // avoids spurious StaticGuard "overlaps by 5e-16s" failures when two 3-decimal
+  // floats sum off by a ULP (e.g. 1.771 + 3.648 = 5.4190000000000005 ≠ 5.419).
+  // Last scene has no successor → fall back to its own duration.
+  // (Root cause is the overlap guard lacking a float epsilon; this is the
+  // assemble-layer workaround since the skill can't patch core lint.)
+  const next = playOrder[i + 1];
+  const voiceDur = next ? next.scene.start_s - start : dur;
   body.push(`      <!-- ${sid} (${start} → ${Number((start + dur).toFixed(3))}) -->`);
   // (track 0) scene sub-comp clip — host data-composition-id MUST equal the
   // inner file's data-composition-id (= sid) or the runtime never finds the
@@ -168,7 +184,7 @@ for (const { sid, scene } of playOrder) {
       `        class="clip"`,
       `        src="${scene.voicePath}"`,
       `        data-start="${start}"`,
-      `        data-duration="${dur}"`,
+      `        data-duration="${voiceDur}"`,
       `        data-track-index="10"`,
       `      ></audio>`,
     );
@@ -226,14 +242,16 @@ if (existsSync(join(hyperframesDir, "compositions/captions.html"))) {
 
 // (track 20+i) SFX — emitted verbatim from group_spec.sfx[] (already sorted by
 // t, file checked against the manifest, duration locked to manifest truth by
-// prep). Correct-by-construction; sfx-verify.mjs re-asserts this against the
+// prep). Correct-by-construction; verify-output.mjs sfx re-asserts this against the
 // emitted html as the orchestrator's deterministic gate.
 const sfx = Array.isArray(groupSpec.sfx) ? groupSpec.sfx : [];
 let sfxEmitted = 0;
 sfx.forEach((cue, i) => {
   const rel = `assets/sfx/${cue.file}`;
   if (!existsSync(join(hyperframesDir, rel))) {
-    anomalies.push(`sfx "${cue.file}" not on disk at ${rel} — skipped (prep should have copied it)`);
+    anomalies.push(
+      `sfx "${cue.file}" not on disk at ${rel} — skipped (prep should have copied it)`,
+    );
     return;
   }
   const vol = cue.volume != null ? cue.volume : 0.35;
@@ -337,7 +355,9 @@ console.log(`  scenes (track 0):   ${playOrder.length}`);
 console.log(`  voice  (track 10):  ${voiceCount}`);
 console.log(`  bgm    (track 11):  ${bgmEmitted ? `yes (vol ${BGM_VOLUME})` : "no"}`);
 console.log(`  captions (track 12): ${captionsEmitted ? "yes" : "no"}`);
-console.log(`  sfx    (track 20+):  ${sfxEmitted}${sfx.length !== sfxEmitted ? ` (${sfx.length - sfxEmitted} skipped)` : ""}`);
+console.log(
+  `  sfx    (track 20+):  ${sfxEmitted}${sfx.length !== sfxEmitted ? ` (${sfx.length - sfxEmitted} skipped)` : ""}`,
+);
 console.log(`  total duration:     ${totalDuration}s`);
 console.log(`  @font-face:         ${fontFaceCss ? `${fontFaceCss.length}B injected` : "none"}`);
 if (captionOverridesCreated) console.log(`  caption-overrides.json: created empty [] shim`);

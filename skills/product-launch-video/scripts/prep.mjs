@@ -29,7 +29,7 @@
 //   **SFX:**         — optional (soft), bullet list of "`<file>.mp3` at <T>s,
 //                      volume <V> — note" cues (T is scene-local). Resolved
 //                      against the SFX manifest; cues citing unknown files are
-//                      dropped with an anomaly (validate-section-plan.mjs catches
+//                      dropped with an anomaly (validate.mjs section catches
 //                      those typos earlier, in-loop). Omitted entirely → no SFX.
 //
 // Usage:
@@ -300,7 +300,7 @@ function parseSceneBlock(body, sceneId, isFirst) {
   //   - `impact-bass-1.mp3` at 0.2s, volume 0.35 — hero snap
   //   - `whoosh-short.mp3` at 4.1s — exit
   // (or `**SFX:** none`, or no anchor at all). The validator
-  // (validate-section-plan.mjs) no longer requires the anchor; when present it
+  // (validate.mjs section) no longer requires the anchor; when present it
   // checks each cited file against the manifest. This parser accepts either
   // form. "none" / any non-empty trailer skips the bullet scan (no cues).
   // sfx_cues[].t is SCENE-LOCAL seconds (this function knows nothing about
@@ -685,7 +685,7 @@ if (cur) groups.push(cur);
 // One record per adjacent scene pair. `is_break` is derived from the GROUPING
 // (different worker_id) — NOT re-read from the plan's Continuity anchor — because
 // the cap=N grouping (Step 6) is the authority on which scenes a single worker
-// actually owns. inject-transitions.mjs acts only on tier:"b" records in Phase 1.
+// actually owns. transitions.mjs inject acts only on tier:"b" records in Phase 1.
 //
 // Determinism: the planner optionally names a transition per scene (the ENTERING
 // transition). When absent, we default-fill from the registry's rules. No agent.
@@ -954,7 +954,7 @@ if (audioMeta?.bgm_path) {
 }
 
 // Single deterministic gate for the readability-A keep-out + caption band:
-// same condition build-captions.mjs uses to emit-vs-skip (≥1 scene has a usable
+// same condition captions.mjs group uses to emit-vs-skip (≥1 scene has a usable
 // on-disk wordsPath). When true: build-captions(-html) emit captions, assemble
 // mounts track-12, AND every scene worker receives `Captions: enabled` so it
 // keeps foreground content in the upper ~83% and reserves the bottom ~17% band.
@@ -975,8 +975,8 @@ const spec = {
 
 writeFileSync(outPath, JSON.stringify(spec, null, 2));
 
-// Captions: built deterministically in Phase 4a.5 (build-captions.mjs →
-// caption_groups.json, then build-captions-html.mjs → compositions/captions.html).
+// Captions: built deterministically in Phase 4a.5 (captions.mjs group →
+// caption_groups.json, then captions.mjs html → compositions/captions.html).
 // This script only emits the `captions_enabled` gate above; assemble-index.mjs
 // checks compositions/captions.html existence and emits the track-12 clip if present.
 

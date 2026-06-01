@@ -170,33 +170,26 @@ The slide distance DECAYS per word (80→12px) — mimics a camera settling.
 Vector animations that play inside a composition. Use for logos, character animations, icons.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@dotlottie/player-component@2.7.12/dist/dotlottie-player.js"></script>
-<dotlottie-player
-  class="lottie"
-  src="../capture/assets/lottie/animation-0.json"
-  autoplay
-  loop
-  speed="1.5"
-  style="width:500px;height:500px;"
->
-</dotlottie-player>
+<div id="logo-anim" class="lottie" style="width:500px;height:500px;"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 <script>
-  gsap.set(".lottie", { scale: 0.3, opacity: 0 });
-  tl.to(".lottie", { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(1.6)" }, 0.2);
+  window.__hfLottie = window.__hfLottie || [];
+
+  const anim = lottie.loadAnimation({
+    container: document.getElementById("logo-anim"),
+    renderer: "svg",
+    loop: false,
+    autoplay: false,
+    path: "../capture/assets/lottie/animation-0.json",
+  });
+  window.__hfLottie.push(anim); // REQUIRED — adapter seeks every registered instance
+
+  gsap.set("#logo-anim", { scale: 0.3, opacity: 0 });
+  tl.to("#logo-anim", { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(1.6)" }, 0.2);
 </script>
 ```
 
-Or use lottie-web for more control:
-
-```javascript
-var anim = lottie.loadAnimation({
-  container: document.getElementById("anim"),
-  renderer: "svg",
-  loop: false,
-  autoplay: false,
-  path: "../capture/assets/lottie/animation-0.json",
-});
-```
+`autoplay: false` + `loop: false` + `window.__hfLottie.push()` are mandatory — HyperFrames seeks each registered player to composition time, so anything left on `autoplay`/`loop` runs in wall-clock and renders non-deterministically. The adapter seeks absolute time (no modulo loop, no playback-rate scaling): bake repeating cycles or non-default speed into the Lottie asset or an explicit timeline, then verify the render. Full contract + `.lottie`/dotLottie variant: `adapters/lottie.md`.
 
 ---
 

@@ -24,7 +24,7 @@ node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system -
 node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
 ```
 
-> **Captions（自动，无需判断）**：选中的 preset 若带 `style-presets/<preset>/caption-skin.html`，`build-design` 会把它内嵌成 design.html 的 **§C 实时预览**（循环播放），`emit-chunks` 把它拷成 `chunks/caption-skin.html`（并记进 `index.json.caption_skin_file`）。Step 5.5 的 `build-captions-html.mjs` 便优先用它，否则回退 registry 皮肤。agent 不为此做任何决策。
+> **Captions（自动，无需判断）**：选中的 preset 若带 `style-presets/<preset>/caption-skin.html`，`build-design` 会把它内嵌成 design.html 的 **§C 实时预览**（循环播放），`emit-chunks` 把它拷成 `chunks/caption-skin.html`（并记进 `index.json.caption_skin_file`）。Step 5.5 的 `captions.mjs html` 便优先用它，否则回退 registry 皮肤。agent 不为此做任何决策。
 
 可选 flag：
 

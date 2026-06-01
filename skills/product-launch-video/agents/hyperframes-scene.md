@@ -128,7 +128,7 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
 - 同样适用于 baked `transform: translate(...)` / `scale(...)` / `skew(...)` —— GSAP 一旦动这个元素，所有 baked transform 都会被覆写。`will-change: transform` 不解决这个问题，只是 perf hint。
 
 6. **`voicePath` 非空的 scene** —— Step 7 会在顶层挂 `<audio>` 配合这个 scene 的时长。你不发 `<audio>`，但 timing 设计要给旁白留呼吸空间
-   - **普通场景间过渡（Tier-B）不归你**：crossfade / push / 等由 Step 7 的 `inject-transitions.mjs` 确定性地加在你的 clip **外壳**上（`index.html` 层，在你的场景**之上**），**不在你的场景内**。所以：(a) **不要在场景末尾把元素动画出去**（no exit tween）—— 让场景停在一个稳定的**最终帧**，过渡负责接力；(b) 不要为"和下一场衔接"在场景里写任何滑动/淡出 wrapper 的逻辑。场景内部只管自己的入场 + 持续动效，结尾 hold 住即可。（hyperframes-animation 的硬规则：exit 动画只允许出现在**最后一个**场景。）
+   - **普通场景间过渡（Tier-B）不归你**：crossfade / push / 等由 Step 7 的 `transitions.mjs inject` 确定性地加在你的 clip **外壳**上（`index.html` 层，在你的场景**之上**），**不在你的场景内**。所以：(a) **不要在场景末尾把元素动画出去**（no exit tween）—— 让场景停在一个稳定的**最终帧**，过渡负责接力；(b) 不要为"和下一场衔接"在场景里写任何滑动/淡出 wrapper 的逻辑。场景内部只管自己的入场 + 持续动效，结尾 hold 住即可。（hyperframes-animation 的硬规则：exit 动画只允许出现在**最后一个**场景。）
    - **例外：dispatch 给了 `shared_element_bridge` 字段时**（Tier-A 共享元素桥接）—— 那个共享元素的跨场 morph **就是你写**（harness 够不到子合成内部，只能你在场景内做）。见约束 #14。
 7. **注释 / 字符串字面量里不要出现字面 HTML 开标签**（`<template>` / `<style>` / `<script>`）—— linter 用正则扫会误报。转义成 `&lt;template&gt;` 或纯文本。
 8. **timeline 注册用 literal scene id 字符串**：`window.__timelines["scene_1"] = tl;`。禁 `SID` 变量绕一层（`check-compositions.mjs` 正则扫认不出）。整段 `<script>` 选择器 / dataset key / timeline key 一律字面。
@@ -136,6 +136,9 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
    - effects 含 `coordinate-target-zoom` / `multi-phase-camera` / `camera-cursor-tracking` / `viewport-change` 任一 → 最外层 zoom/pan wrapper 挂 `data-layout-allow-overflow="true"`
    - 原因：zoom peak 必然超出 1920×1080 viewport，`hyperframes inspect` 必报 `text_box_overflow`。by-design，提前声明。
    - 例：`<div class="s2-zoom-outer" id="s2-zoom-outer" data-layout-allow-overflow="true">`
+   - ⚠ **`allow-overflow` 只赦免装饰性出血,不赦免 primary 大字**：感知 gate 仍会查 display 大字是否被画布裁掉(`primary-offscreen`,zoom 缩放所致那种)。把品牌字/标题推出框 = bug,不是 by-design。真要让某段大字出血才在那个文字元素上单独标 `data-layout-bleed="true"`。
+   - ⚠ **zoom 进非对称 target(如 companion 比 chip 宽)→ 必须量 offset,别手推**：`await document.fonts.ready` 后读 target 真实 `getBoundingClientRect()` 中心算 `TARGET_OFFSET`(`center − viewport_center`)并 bake;等宽卡片那条公式在不对称布局会**算反符号**,3×+ 缩放会把误差放大出框。见 `/hyperframes-animation` 的 `coordinate-target-zoom` rule「Getting the offset」。
+   - ⚠ **scale 留余量**:peak 时 primary 文字 ≤ ~88% 画布宽(从量到的尺寸反推 `maxScale = 0.88×W/r.width`),别凭手感选 round 数——填满画布时中心稍偏就裁字。
 10. **Primary handoff before enter（防 overlap）**
     - 每个时刻只有一个 `primary subject`；其他可见内容必须是 `supporting`。
     - creative_brief 有 `PrimarySubjectTimeline` / `Handoff` 时，照做，不要重新设计。
@@ -183,7 +186,7 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
 
     **`Captions: disabled` 时**：full-canvas、垂直居中锚 y=540、content 可一直到 y=1080。所有上述约束失效，定位自由。
 
-    **Preflight 机器校验**（Step 7 (2) `check-caption-keepout.mjs`）会捕住的三种形态：
+    **Preflight 机器校验**（Step 7 (2) `captions.mjs keepout`）会捕住的三种形态：
     1. `position: absolute` + `bottom: <X>px`、X < 180 且非装饰
     2. `position: absolute` + `top: <X>px`、X ≥ 900 且非装饰
     3. `position: absolute` + `top + height` 静态可加和 > 900 且非装饰
@@ -221,10 +224,10 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
     - **接缝 HOLD**：开头 `seam_duration_s` 秒内,**不要 tween 这个桥接元素**（让它静止在交接姿态,覆盖外壳 crossfade 窗口 —— 否则接缝会出现两张错位的鬼影,这是 prototype 实测的坑）。
     - `seam_duration_s` 之后,再把它 tween 到本场的最终休息位,并让本场其他内容入场。
 
-    **校验**：`check-bridge-continuity.mjs` 会确定性检查两场都有同 `data-bridge-id` 元素、且没被 `display:none`/`opacity:0` 静态藏掉。交接姿态是否**视觉对齐**由 finalize 在接缝 snapshot 眼检（静态查不到 GSAP 末态几何）。所以**两场的交接姿态数值你要亲自对齐**（出场末态 left/top/w/h == 进场初态 left/top/w/h）。
+    **校验**：`transitions.mjs check-bridge` 会确定性检查两场都有同 `data-bridge-id` 元素、且没被 `display:none`/`opacity:0` 静态藏掉。交接姿态是否**视觉对齐**由 finalize 在接缝 snapshot 眼检（静态查不到 GSAP 末态几何）。所以**两场的交接姿态数值你要亲自对齐**（出场末态 left/top/w/h == 进场初态 left/top/w/h）。
 
     **桥接元素的「初始隐藏」必须用 `gsap.set`，禁止 CSS `opacity: 0` / `display: none`**：
-    - `role: from` 元素在场景早期还没入场（如 scene_2 的 ink 线只在 Phase E t=3.6 才显现）；`role: to` 元素在场景早期也不展示新姿态（虽然 Phase 0 HOLD 阶段它就**在** handoff 姿态，但有些 worker 会想给它做"渐入"）—— 直觉是 CSS `opacity: 0` 起手。**别这样**：`check-bridge-continuity.mjs` 静态扫 CSS，看到 `opacity: 0` 就判定"桥接元素被藏掉" → fatal。
+    - `role: from` 元素在场景早期还没入场（如 scene_2 的 ink 线只在 Phase E t=3.6 才显现）；`role: to` 元素在场景早期也不展示新姿态（虽然 Phase 0 HOLD 阶段它就**在** handoff 姿态，但有些 worker 会想给它做"渐入"）—— 直觉是 CSS `opacity: 0` 起手。**别这样**：`transitions.mjs check-bridge` 静态扫 CSS，看到 `opacity: 0` 就判定"桥接元素被藏掉" → fatal。
     - 正确写法：CSS 留 `opacity: 1`（或不写 opacity 让默认 1），timeline 顶部用 `gsap.set("#s<N>-bridge", { opacity: 0, ... })` 初始化。静态扫不到，运行时该藏照样藏。
     - paste-ready stanza（`role: to` 的进场场景；`role: from` 出场场景把 `opacity: 0` 换成 `opacity: 1` 即可）：
       ```js
@@ -370,7 +373,7 @@ HARDCODED_FONTS=$(grep -nE "font-family:[[:space:]]*['\"]" "$F" | grep -vE "var\
 grep -nE '["(]/public/' "$F" && echo "FAIL: 资产路径有前导斜杠 — 写 public/…（不是 /public/…）"
 # 7) 字幕带 keep-out（约束 #13）—— foreground 元素下沿 y > 900 = preflight 当场抓
 #    三种 CSS 形态各对应一条 grep；命中也意味着 preflight 命中，写之前按 cheat-sheet 改对，省一次 round-trip。
-#    白名单关键词跟 scripts/check-caption-keepout.mjs 一致；命中后人眼复核 selector 是不是装饰类。
+#    白名单关键词跟 scripts/captions.mjs keepout 一致；命中后人眼复核 selector 是不是装饰类。
 DECO_RX='(bg|background|dot-?grid|mesh|gradient|swell|ambient|texture|noise|scanline|surface|overlay|halo|glow|frame|pin|corner-?pin|deco|star-?burst|burst|ring|stripe|rect|shadow|pulse|ripple|measure|probe|hidden|scrim|backdrop|veil|fog|grain)[-_ {]'
 
 # 7a) `bottom: 0–179px;`（不含 180/200+）+ 装饰过滤
@@ -383,7 +386,7 @@ grep -nB3 -E "top:[[:space:]]*(9[0-9]{2}|10[0-7][0-9])([.][0-9]+)?px[[:space:]]*
   | grep -vE "$DECO_RX" | grep -E "top:" && \
   echo "WARN: 上面这些 \`top: <X>px;\` (X≥900) 把元素顶起点直接放进字幕带 — top 调到 ≤ 880 − element_height。"
 
-# 7c) 拉伸条带 `top: <T> + height: <H>` 且 T+H>900 —— shell 不好算和，交给 preflight 的 check-caption-keepout.mjs 处理
+# 7c) 拉伸条带 `top: <T> + height: <H>` 且 T+H>900 —— shell 不好算和，交给 preflight 的 captions.mjs keepout 处理
 #     （它 import 进 preflight-finalize.mjs，无须 worker 这里自检；提示仅用于人工肉眼快查）
 echo "info: 拉伸条带（top:+height: 同时给）的 T+H>900 形态由 preflight 静态算和检查；写之前如果用了 top + height 拉伸，确认 top + height ≤ 880。"
 

@@ -132,7 +132,7 @@
 
 每个 preset **必需**在根目录放一个 `caption-skin.html`(与 `preset.md` 同级)= 这套 style **自己的下三分之一 karaoke 字幕外观**。字幕是视频的一等内容,不是可选附件 —— 没有它,字幕就套用通用 registry pill,与这套 style 的视觉语言断裂。Block Frame 带了一个作参照。
 
-**优先级 / 数据流**:选中的 preset 若有 `caption-skin.html`,它是字幕的**第一来源** —— `emit-chunks` 拷成 `chunks/caption-skin.html`,Phase 4a.5 的 `build-captions-html.mjs` **优先用它**(没有才回退 registry 的 `caption-pill-karaoke` / `caption-highlight` 评分);`build-design` 还把它内嵌成 design.html 的 **§C 实时预览**(循环播放)。**整条链零 agent 判断** —— 脚本自动选用、填词、自检。
+**优先级 / 数据流**:选中的 preset 若有 `caption-skin.html`,它是字幕的**第一来源** —— `emit-chunks` 拷成 `chunks/caption-skin.html`,Phase 4a.5 的 `captions.mjs html` **优先用它**(没有才回退 registry 的 `caption-pill-karaoke` / `caption-highlight` 评分);`build-design` 还把它内嵌成 design.html 的 **§C 实时预览**(循环播放)。**整条链零 agent 判断** —— 脚本自动选用、填词、自检。
 
 它是一个**"预烤"皮肤**:作者写好完整、已 brand-token 化的字幕子合成,脚本只做**通用填充**(下面三个洞,各断言恰好出现一次),不含任何 per-preset 代码。所以**契约必须严守**:
 
@@ -151,9 +151,9 @@
 2. **只改 `<style>` 里的视觉**:`.caption-pill` / `.caption-line` / `.caption-word{,.is-active,.is-spoken}` 换成你 preset 的 token(边框 / 阴影 / 圆角 / 字体 / active 高亮)。**别动**三个洞、`.caption-*` 类名、`data-composition-id`、`window.__timelines["captions"]`、`gsap.set(className)` 那套。
 3. 颜色只用 §B 的 `var(--*)`;字号 `clamp()` + flex-wrap 自适应,下沿落进底部字幕带(约 y900–1080)。
 
-**验证**:跑 §8 的 `build-design` + `emit-chunks` → design.html 滚到 **§C** 看实时效果;字幕产物跑 `build-captions-html.mjs`(见 `phases/captions/guide.md`),stdout 应打印 `skin: preset-skin (preset-local → …)` + `self-lint: OK`(自检覆盖上表所有契约项,任一不符响亮退 1)。
+**验证**:跑 §8 的 `build-design` + `emit-chunks` → design.html 滚到 **§C** 看实时效果;字幕产物跑 `captions.mjs html`(见 `phases/captions/guide.md`),stdout 应打印 `skin: preset-skin (preset-local → …)` + `self-lint: OK`(自检覆盖上表所有契约项,任一不符响亮退 1)。
 
-> registry 的两套 karaoke 皮肤(`caption-pill-karaoke` / `caption-highlight`)仍在,但只作为**运行期兜底** —— 本标准要求每个 preset 自带 `caption-skin.html`,缺了即**不合标准**(字幕风格会断裂成通用 SaaS pill)。`build-captions-html.mjs` 当前不会因缺皮肤而报错(回退而非退 1),所以这条**靠本标准约束、暂未机器强制**:你新建 preset 时必须把它补齐。
+> registry 的两套 karaoke 皮肤(`caption-pill-karaoke` / `caption-highlight`)仍在,但只作为**运行期兜底** —— 本标准要求每个 preset 自带 `caption-skin.html`,缺了即**不合标准**(字幕风格会断裂成通用 SaaS pill)。`captions.mjs html` 当前不会因缺皮肤而报错(回退而非退 1),所以这条**靠本标准约束、暂未机器强制**:你新建 preset 时必须把它补齐。
 
 ---
 
@@ -191,7 +191,7 @@ cd my-new-style
 - [ ] `components/*.md`:扫每个 `<style>` 的 font-size,全部 ≥24(标题>正文)。
 - [ ] 确保 ≥1 个 component;`§F` 没内联;`preset-meta` 合法。
 - [ ] 裸 hex → token 化。
-- [ ] 加 `caption-skin.html`(§3.5,必需):`cp block-frame/caption-skin.html` 后改 `<style>` 视觉成本风格、token 化零裸色;跑 `build-captions-html.mjs` 应打印 `self-lint: OK`。
+- [ ] 加 `caption-skin.html`(§3.5,必需):`cp block-frame/caption-skin.html` 后改 `<style>` 视觉成本风格、token 化零裸色;跑 `captions.mjs html` 应打印 `self-lint: OK`。
 - [ ] 按 §6 生成 + 验证。
 
 ## 7. 从"其它风格"(网页 / Figma / 品牌规范)转成 preset
@@ -232,11 +232,11 @@ grep -rhoE "font-size:[^;]+" <ds-dir>/chunks/components/*.html <ds-dir>/chunks/t
 **`caption-skin.html` 验证**(§4 规则 6,必需):每个 preset 应自带,跑
 
 ```bash
-node skills/product-launch-video/scripts/build-captions-html.mjs \
+node skills/product-launch-video/scripts/captions.mjs html \
   --hyperframes <ds-dir> --groups <caption_groups.json> \
   --tokens <ds-dir>/chunks/tokens.css --out <ds-dir>/compositions/captions.html
 ```
 
 stdout 应打印 `skin: preset-skin (preset-local → …)` + `self-lint: OK`。
 
-> builder 缺皮肤时会回退 registry 而非退 1,所以"必须自带 `caption-skin.html`"这条**靠本标准约束、暂未机器强制** —— 你新建 preset 时务必补齐;跑 `build-captions-html.mjs` 看到 `skin: preset-skin (preset-local …)` + `self-lint: OK` 才算到位。
+> builder 缺皮肤时会回退 registry 而非退 1,所以"必须自带 `caption-skin.html`"这条**靠本标准约束、暂未机器强制** —— 你新建 preset 时务必补齐;跑 `captions.mjs html` 看到 `skin: preset-skin (preset-local …)` + `self-lint: OK` 才算到位。

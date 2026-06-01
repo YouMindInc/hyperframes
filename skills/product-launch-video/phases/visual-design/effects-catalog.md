@@ -1,6 +1,6 @@
 在 `section_plan.md` 中按**名称**（用反引号包裹）引用这些动效。构建 agent（Phase 4）会将每个名称翻译为对应的 `hyperframes-animation/rules/<name>.md` 配方。
 
-Phase 3 的 `validate-section-plan.mjs` 实际校验的真值源是 **`hyperframes-animation/rules/` 目录下存在的 `.md`**（它 `readdirSync` 那个目录建集合），不是本 catalog。本 catalog 是"策划应当引用"的精选子集。两个差异点：rules/ 里有两条缺 frontmatter 的 rule（`css-marker-patterns`、`gsap-effects`，列在本文件末尾的「Skipped」段）—— 它们能通过 validator（rules/ 里有文件）但不在本 catalog，**不要引用**（它们在 Phase 4 仍解析为真实配方，所以 validator 故意不拦）。正常只从本 catalog 选。
+Phase 3 的 `validate.mjs section` 实际校验的真值源是 **`hyperframes-animation/rules/` 目录下存在的 `.md`**（它 `readdirSync` 那个目录建集合），不是本 catalog。本 catalog 是"策划应当引用"的精选子集。两个差异点：rules/ 里有两条缺 frontmatter 的 rule（`css-marker-patterns`、`gsap-effects`，列在本文件末尾的「Skipped」段）—— 它们能通过 validator（rules/ 里有文件）但不在本 catalog，**不要引用**（它们在 Phase 4 仍解析为真实配方，所以 validator 故意不拦）。正常只从本 catalog 选。
 
 ## SVG & Icons
 

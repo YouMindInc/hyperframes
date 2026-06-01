@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Phase 4c (pre-flight) — deterministic gate runner + brief writer.
 //
-// Sits between assemble-index.mjs / sfx-verify.mjs and the finalize subagent.
+// Sits between assemble-index.mjs / `verify-output.mjs sfx` and the finalize subagent.
 // Owns the work that doesn't need LLM judgment:
 //
 //   1. Pin hyperframes CLI version (read from PROJECT_DIR/package.json) and
@@ -26,7 +26,7 @@
 //      rules). Hand to the agent verbatim so it doesn't recompute, dedupe,
 //      or sort.
 //
-//   5. Run check-caption-keepout.mjs (when captions are enabled) — static
+//   5. Run `captions.mjs keepout` (when captions are enabled) — static
 //      scan of compositions/scene_*.html for foreground `position: absolute`
 //      elements with `bottom:` values inside the bottom-17% caption band.
 //      Findings include Edit-ready old_string / new_string so the finalize
@@ -50,7 +50,6 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync, spawnSync } from "node:child_process";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkCaptionKeepout } from "./check-caption-keepout.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -253,13 +252,134 @@ for (const t of groupSpec.transitions || []) {
 const snapshotTimes = [...tsSet].sort((a, b) => a - b);
 
 // ---------- 5. Caption keep-out static check ----------
-// Skipped automatically when group_spec.captions_enabled !== true. Findings
-// include Edit-ready old_string / new_string strings so the finalize agent
-// can patch each violation with one Edit call per scene file. No Read, no
-// search, no math — the brief encodes the full transform.
-const captionKeepout = checkCaptionKeepout({ groupSpec, hyperframesDir });
+// Runs the deterministic keepout gate (formerly check-caption-keepout.mjs, now
+// `captions.mjs keepout`) as a subprocess and parses its --json result — same
+// pure check, just out-of-process so this file doesn't import captions.mjs's
+// CLI dispatcher. Skipped automatically when group_spec.captions_enabled !==
+// true. Findings include Edit-ready old_string / new_string strings so the
+// finalize agent can patch each violation with one Edit call per scene file.
+// No Read, no search, no math — the brief encodes the full transform.
+let captionKeepout = {
+  enabled: groupSpec?.captions_enabled === true,
+  scenes_scanned: 0,
+  violations: [],
+};
+try {
+  const captionsScript = join(__dirname, "captions.mjs");
+  const res = spawnSync(
+    process.execPath,
+    [
+      captionsScript,
+      "keepout",
+      "--json",
+      "--group-spec",
+      groupSpecPath,
+      "--hyperframes",
+      hyperframesDir,
+    ],
+    { encoding: "utf8", timeout: 60000 },
+  );
+  if (res.stdout && res.stdout.trim()) captionKeepout = JSON.parse(res.stdout);
+} catch {
+  // keep the safe default; preflight always exits 0
+}
 const keepoutClean = captionKeepout.violations.length === 0;
-const preflightClean = gatesClean && keepoutClean;
+
+// ---------- 5.5. Rendered-perception check (Tier 1) ----------
+// Spawns check-rendered-perception.mjs which loads each composition in headless
+// Chrome, injects the brand @font-face block (so text is measured in the real
+// display face, not a fallback), seeks the registered timeline at 3 probe times
+// (40%/70%/92% of duration) with suppressEvents=false so discrete-text-sequence
+// onUpdate callbacks actually fire, then queries the live DOM for:
+//   - text-clipping (text natural bbox exceeds parent visible bbox)
+//   - depth-layer-ghost-on-long-word (offset depth-layer pair on ≥10-char word
+//     at display tier ≥60px)
+//   - primary-collision (two data-layout-role="primary" siblings in same act
+//     overlap with IoU > 0.05)
+//   - cross-text-collision (two DIFFERENT display-tier texts with overlapping
+//     bboxes — unannotated headline clash / depth-stack spilling into a neighbour)
+//   - primary-offscreen (display-tier text 15-85% clipped by the canvas due to a
+//     zoom/camera miscentre — checked EVEN under data-layout-allow-overflow)
+//   - font-too-small (rendered font-size < 24px on non-decorative text)
+//
+// Soft-skips if no headless browser is available (puppeteer / puppeteer-core +
+// cached Chrome). Always emits perception_report.json with `skipped: true` in
+// that case so this branch stays deterministic. Adds ~25-40s for 8 scenes; the
+// gate is informational (preflight always exit 0).
+const perceptionReportPath = join(hyperframesDir, "perception_report.json");
+let perception = {
+  skipped: false,
+  scanned: 0,
+  skipped_scenes: 0,
+  no_timeline: 0,
+  violations: [],
+  reason: null,
+};
+try {
+  const perceptionScript = join(__dirname, "check-rendered-perception.mjs");
+  const res = spawnSync(
+    process.execPath,
+    [
+      perceptionScript,
+      "--group-spec",
+      groupSpecPath,
+      "--hyperframes",
+      hyperframesDir,
+      "--out",
+      perceptionReportPath,
+    ],
+    { encoding: "utf8", timeout: 240000 },
+  );
+  if (existsSync(perceptionReportPath)) {
+    const r = JSON.parse(readFileSync(perceptionReportPath, "utf8"));
+    if (r.skipped) {
+      perception = {
+        skipped: true,
+        scanned: 0,
+        skipped_scenes: 0,
+        no_timeline: 0,
+        violations: [],
+        reason: r.reason || "browser unavailable",
+      };
+    } else {
+      perception = {
+        skipped: false,
+        scanned: r.scenes_scanned || 0,
+        skipped_scenes: r.scenes_skipped || 0, // in group_spec but no file/<template>
+        no_timeline: r.scenes_no_timeline || 0, // probed at t=0 only (no timeline registered)
+        violations: r.violations || [],
+        reason: null,
+      };
+    }
+  } else {
+    perception = {
+      skipped: true,
+      scanned: 0,
+      skipped_scenes: 0,
+      no_timeline: 0,
+      violations: [],
+      reason: `check-rendered-perception script error (exit ${res.status})`,
+    };
+  }
+} catch (e) {
+  perception = {
+    skipped: true,
+    scanned: 0,
+    skipped_scenes: 0,
+    no_timeline: 0,
+    violations: [],
+    reason: String(e.message || e),
+  };
+}
+
+// Critical perception violations block preflight_clean; font-too-small alone
+// doesn't (decorative chips/eyebrows commonly trip it).
+const criticalPerceptionViolations = perception.violations.filter(
+  (v) => v.type !== "font-too-small",
+);
+const perceptionClean = perception.skipped || criticalPerceptionViolations.length === 0;
+
+const preflightClean = gatesClean && keepoutClean && perceptionClean;
 
 // ---------- 5b. BGM status ----------
 // wait-bgm.mjs runs before assemble-index.mjs. Surface its verdict here so the
@@ -311,6 +431,15 @@ const brief = {
   gates,
   bgm,
   caption_keepout: captionKeepout,
+  perception: {
+    skipped: perception.skipped,
+    skip_reason: perception.reason,
+    scenes_scanned: perception.scanned,
+    scenes_not_scanned: perception.skipped_scenes, // no file/<template> → never measured
+    scenes_no_timeline: perception.no_timeline, // probed at t=0 only → late reveals unseen
+    violations: perception.violations,
+    critical_violations_count: criticalPerceptionViolations.length,
+  },
   preflight_clean: preflightClean,
   deterministic_fixes_applied: deterministicFixes,
   snapshot_times_s: snapshotTimes,
@@ -350,6 +479,50 @@ if (!captionKeepout.enabled) {
     );
   }
 }
+if (perception.skipped) {
+  console.log(`    perception: skipped (${perception.reason})`);
+} else if (perception.violations.length === 0) {
+  console.log(`    perception: ✓ (${perception.scanned} scene(s) scanned, 0 violations)`);
+} else if (criticalPerceptionViolations.length === 0) {
+  console.log(
+    `    perception: ✓ (${perception.scanned} scene(s) scanned, ${perception.violations.length} non-blocking font-too-small note(s))`,
+  );
+} else {
+  console.log(
+    `    perception: ✗ (${criticalPerceptionViolations.length} critical violation(s) across ${new Set(criticalPerceptionViolations.map((v) => v.scene_id)).size} scene(s)) — see brief.perception.violations[]`,
+  );
+  for (const v of criticalPerceptionViolations) {
+    const m = v.metric || {};
+    let tag;
+    switch (v.type) {
+      case "text-clipping":
+        tag = `overflow_right=${m.overflow_right_px || 0}px / natural=${m.natural_width_px}px in ${m.visible_width_px}px`;
+        if (v.fix_kind === "edit-ready")
+          tag += ` [edit-ready → font-size: ${v.recommended_font_size_px}px]`;
+        break;
+      case "depth-layer-ghost-on-long-word":
+        tag = `${m.char_count}-char @ ${m.font_size_px}px, offset=${m.leading_offset_px}px (max ${m.recommended_max_offset_px}px)`;
+        break;
+      case "primary-collision":
+        tag = `act=${m.act} IoU=${m.iou}`;
+        break;
+      case "cross-text-collision":
+        tag = `IoU=${m.iou}, overlap=${(m.overlap_of_smaller * 100).toFixed(0)}% of smaller (${m.a_bbox} ↔ ${m.b_bbox})`;
+        break;
+      case "primary-offscreen":
+        tag = `${m.clipped_pct}% clipped by canvas, center ${m.center_offset_px} (zoom miscentre)`;
+        break;
+      default:
+        tag = JSON.stringify(m);
+    }
+    console.log(`      [${v.scene_id}] ${v.type}: "${v.text}" — ${tag}`);
+  }
+}
+if (!perception.skipped && (perception.skipped_scenes || perception.no_timeline)) {
+  console.log(
+    `    perception coverage: ${perception.skipped_scenes} scene(s) not scanned (no file/template), ${perception.no_timeline} probed at t=0 only (no timeline) — clean ≠ fully covered`,
+  );
+}
 console.log(
   `  snapshot_times: ${snapshotTimes.length} timestamp(s)${transitionRows.length ? ` (incl. ${transitionRows.length} transition seam mid${transitionRows.length > 1 ? "s" : ""})` : ""}`,
 );
@@ -365,6 +538,11 @@ if (!preflightClean) {
   if (!keepoutClean) {
     console.log(
       `  ⚠ caption-keepout violations — finalize agent applies brief.caption_keepout.violations[].edit_old → edit_new in each file (one Edit per violation, no Read needed)`,
+    );
+  }
+  if (!perceptionClean) {
+    console.log(
+      `  ⚠ perception violations — finalize agent reviews brief.perception.violations[] (text-clip / depth-ghost / collision are visual bugs; suggestion field gives the fix direction)`,
     );
   }
 }
