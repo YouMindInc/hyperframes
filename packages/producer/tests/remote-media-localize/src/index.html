@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Remote Media Localize</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #000; }
+    #root {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      background: #000;
+      overflow: hidden;
+    }
+    #bg-video {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1280px;
+      height: 720px;
+      object-fit: cover;
+    }
+    .label {
+      position: absolute;
+      bottom: 40px;
+      left: 0; right: 0;
+      text-align: center;
+      font-family: monospace;
+      font-size: 28px;
+      color: #fff;
+      text-shadow: 0 2px 8px #000;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    Regression fixture for PR #1146 (remote media localization) and
+    PR #1140 (crossorigin strip on <audio>).
+
+    Before the fix:
+      - <video> src stayed as S3 URL → Puppeteer couldn't buffer within
+        pageReadyTimeout → all frames rendered black.
+      - <audio crossorigin="anonymous"> → CORS rejection in renderer →
+        audio stage silently dropped the track → no audio in output.
+
+    After the fix (htmlCompiler.localizeRemoteMediaSources):
+      - Remote <video>/<audio> src attrs are rewritten to _remote_media/
+        in compiled.html — the snapshot verifies this rewrite happened.
+      - crossorigin attrs are stripped from both elements.
+      - Video frames must not be black (PSNR > threshold vs baseline).
+      - Audio must be present (minAudioCorrelation).
+  -->
+  <div
+    id="root"
+    data-composition-id="main"
+    data-width="1280"
+    data-height="720"
+    data-start="0"
+    data-duration="3"
+  >
+    <!-- Remote video: must be localized to _remote_media/ and crossorigin stripped -->
+    <video
+      id="bg-video"
+      src="https://gen-os-static.s3.us-east-2.amazonaws.com/astral_assets/uploaded_assets/12ca139c_8bf35a3b61b84ab69251ad5091e4c69b.mp4"
+      crossorigin="anonymous"
+      data-start="0"
+      data-duration="3"
+      muted
+      playsinline
+    ></video>
+
+    <!-- Remote audio: src must be localized + crossorigin stripped -->
+    <audio
+      id="bg-audio"
+      src="https://gen-os-static.s3.us-east-2.amazonaws.com/astral_assets/generated_assets/f87f97d4_0c49f6fa95224cc3bd4f5ea3a0d937c5.wav"
+      crossorigin="anonymous"
+      data-start="0"
+      data-duration="3"
+      data-volume="0.7"
+    ></audio>
+
+    <div class="label">remote-media-localize regression</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Audio Multi-Track Mix</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #111; }
+    #root {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+      color: #fff;
+    }
+    .label {
+      position: absolute;
+      font-size: 32px;
+      font-weight: bold;
+      letter-spacing: 0.05em;
+    }
+    #t1 { top: 180px; color: #4fc3f7; }
+    #t2 { top: 300px; color: #81c784; }
+    #t3 { top: 420px; color: #ffb74d; }
+  </style>
+</head>
+<body>
+  <!--
+    Regression fixture for PR #1140 (amix normalize=0 crash on FFmpeg 4.x).
+
+    Three audio tracks at different start times and volumes.
+    The mixer must produce a non-silent output with all tracks audible —
+    this catches any regression where amix options break the filter graph
+    and the output becomes silent.
+  -->
+  <div
+    id="root"
+    data-composition-id="main"
+    data-width="1280"
+    data-height="720"
+    data-start="0"
+    data-duration="4"
+  >
+    <!-- Track 1: 440 Hz tone, full duration, volume 0.6 -->
+    <audio
+      id="track-1"
+      src="assets/tone-440hz.wav"
+      data-start="0"
+      data-duration="4"
+      data-volume="0.6"
+    ></audio>
+
+    <!-- Track 2: 660 Hz tone, starts at 0.5s, volume 0.8 -->
+    <audio
+      id="track-2"
+      src="assets/tone-660hz.wav"
+      data-start="0.5"
+      data-duration="3"
+      data-volume="0.8"
+    ></audio>
+
+    <!-- Track 3: 880 Hz tone, starts at 1.5s, volume 1.0 -->
+    <audio
+      id="track-3"
+      src="assets/tone-880hz.wav"
+      data-start="1.5"
+      data-duration="2"
+      data-volume="1.0"
+    ></audio>
+
+    <div class="label" id="t1">440 Hz — vol 0.6 (t=0s)</div>
+    <div class="label" id="t2">660 Hz — vol 0.8 (t=0.5s)</div>
+    <div class="label" id="t3">880 Hz — vol 1.0 (t=1.5s)</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "Audio Multi-Track Mix",
+  "description": "Regression for PR #1140: amix normalize=0 crash on FFmpeg 4.x causing silent output. Three local audio tracks with staggered start times and distinct volumes; all three must be audible in the mix.",
+  "tags": ["audio", "regression", "amix"],
+
+  "minPsnr": 25,
+  "maxFrameFailures": 0,
+
+  "minAudioCorrelation": 0.85,
+  "maxAudioLagWindows": 60,
+
+  "renderConfig": {
+    "fps": 30
+  }
+}

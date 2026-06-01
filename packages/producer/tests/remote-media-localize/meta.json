@@ -1,0 +1,15 @@
+{
+  "name": "Remote Media Localize",
+  "description": "Regression for PR #1146: remote S3 <video> and <audio> sources must be downloaded and rewritten to local paths before capture (skybound trailer: black frames + no audio). Also covers crossorigin strip on <audio> and <img> (PR #1140). The compiled.html snapshot verifies the src attributes are rewritten to _remote_media/.",
+  "tags": ["audio", "video", "regression", "remote-media", "crossorigin"],
+
+  "minPsnr": 25,
+  "maxFrameFailures": 3,
+
+  "minAudioCorrelation": 0.85,
+  "maxAudioLagWindows": 60,
+
+  "renderConfig": {
+    "fps": 30
+  }
+}
