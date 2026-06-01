@@ -1094,3 +1094,281 @@ export function removeAnimationFromScript(script: string, animationId: string): 
   }
   return recast.print(parsed.ast).code;
 }
+
+// ── Keyframe Mutation Functions ────────────────────────────────────────────
+
+/** Remove a named property from an ObjectExpression's properties array. */
+function removeVarsKey(varsArg: any, key: string): void {
+  if (varsArg?.type !== "ObjectExpression") return;
+  varsArg.properties = varsArg.properties.filter(
+    (p: any) => !(isObjectProperty(p) && propKeyName(p) === key),
+  );
+}
+
+/** Extract the numeric percentage from a key like "50%". Returns NaN for non-percentage keys. */
+function percentageFromKey(key: string): number {
+  const m = PERCENTAGE_KEY_RE.exec(key);
+  return m ? Number.parseFloat(m[1]!) : Number.NaN;
+}
+
+/** Build a keyframe value AST node from properties and optional ease. */
+function buildKeyframeValueNode(properties: Record<string, number | string>, ease?: string): any {
+  const entries = Object.entries(properties).map(([k, v]) => `${safeKey(k)}: ${valueToCode(v)}`);
+  if (ease) entries.push(`ease: ${JSON.stringify(ease)}`);
+  return parseExpr(`{ ${entries.join(", ")} }`);
+}
+
+/** Parse + locate a target animation, returning null on failure. */
+function locateAnimation(
+  script: string,
+  animationId: string,
+): { parsed: ParsedGsapAst; target: ParsedGsapAst["located"][number] } | null {
+  let parsed: ParsedGsapAst;
+  try {
+    parsed = parseGsapAst(script);
+  } catch {
+    return null;
+  }
+  const target = parsed.located.find((l) => l.id === animationId);
+  return target ? { parsed, target } : null;
+}
+
+/** Find the keyframes ObjectExpression node on a tween's varsArg, or null. */
+function findKeyframesObjectNode(varsArg: any): any | null {
+  const node = findPropertyNode(varsArg, "keyframes");
+  return node?.type === "ObjectExpression" ? node : null;
+}
+
+/** Filter percentage-keyed properties from a keyframes ObjectExpression. */
+function filterPercentageProps(kfNode: any): any[] {
+  return kfNode.properties.filter((p: any) => {
+    if (!isObjectProperty(p)) return false;
+    const key = propKeyName(p);
+    return typeof key === "string" && PERCENTAGE_KEY_RE.test(key);
+  });
+}
+
+/**
+ * Collapse a keyframes node to flat tween: apply `record` entries as vars keys,
+ * then remove `keyframes` and `easeEach` from varsArg. Skips the `ease` key
+ * from the record (per-keyframe ease, not a tween ease).
+ */
+function collapseKeyframesToFlat(varsArg: any, record: Record<string, unknown>): void {
+  for (const [k, v] of Object.entries(record)) {
+    if (k === "ease") continue;
+    if (typeof v === "number" || typeof v === "string") setVarsKey(varsArg, k, v);
+  }
+  removeVarsKey(varsArg, "keyframes");
+  removeVarsKey(varsArg, "easeEach");
+}
+
+/**
+ * Insert a keyframe at the given percentage in an existing percentage-keyframes
+ * object. If the percentage already exists, its value is replaced.
+ */
+export function addKeyframeToScript(
+  script: string,
+  animationId: string,
+  percentage: number,
+  properties: Record<string, number | string>,
+  ease?: string,
+): string {
+  const loc = locateAnimation(script, animationId);
+  if (!loc) return script;
+  const kfNode = findKeyframesObjectNode(loc.target.call.varsArg);
+  if (!kfNode) return script;
+
+  const pctKey = `${percentage}%`;
+  const newValueNode = buildKeyframeValueNode(properties, ease);
+
+  // Replace if this percentage already exists
+  const existingIdx = kfNode.properties.findIndex(
+    (p: any) => isObjectProperty(p) && propKeyName(p) === pctKey,
+  );
+  if (existingIdx !== -1) {
+    kfNode.properties[existingIdx].value = newValueNode;
+    return recast.print(loc.parsed.ast).code;
+  }
+
+  // Build the new property node with a quoted percentage key
+  const newProp = parseExpr(`{ ${JSON.stringify(pctKey)}: {} }`).properties[0];
+  newProp.value = newValueNode;
+
+  // Insert in sorted order by percentage
+  let insertIdx = kfNode.properties.length;
+  for (let i = 0; i < kfNode.properties.length; i++) {
+    const key = isObjectProperty(kfNode.properties[i])
+      ? propKeyName(kfNode.properties[i])
+      : undefined;
+    if (typeof key === "string" && percentageFromKey(key) > percentage) {
+      insertIdx = i;
+      break;
+    }
+  }
+  kfNode.properties.splice(insertIdx, 0, newProp);
+  return recast.print(loc.parsed.ast).code;
+}
+
+/**
+ * Remove a keyframe at the given percentage. If fewer than 2 keyframes remain
+ * after removal, collapse the keyframes object to a flat tween using the
+ * remaining keyframe's properties.
+ */
+export function removeKeyframeFromScript(
+  script: string,
+  animationId: string,
+  percentage: number,
+): string {
+  const loc = locateAnimation(script, animationId);
+  if (!loc) return script;
+  const kfNode = findKeyframesObjectNode(loc.target.call.varsArg);
+  if (!kfNode) return script;
+
+  const pctKey = `${percentage}%`;
+  const removeIdx = kfNode.properties.findIndex(
+    (p: any) => isObjectProperty(p) && propKeyName(p) === pctKey,
+  );
+  if (removeIdx === -1) return script;
+
+  kfNode.properties.splice(removeIdx, 1);
+
+  const remainingKfs = filterPercentageProps(kfNode);
+  if (remainingKfs.length < 2) {
+    const record =
+      remainingKfs.length === 1
+        ? objectExpressionToRecord(remainingKfs[0].value, loc.parsed.scope)
+        : {};
+    collapseKeyframesToFlat(loc.target.call.varsArg, record);
+  }
+
+  return recast.print(loc.parsed.ast).code;
+}
+
+/**
+ * Replace the properties (and optionally ease) at an existing keyframe percentage.
+ */
+export function updateKeyframeInScript(
+  script: string,
+  animationId: string,
+  percentage: number,
+  properties: Record<string, number | string>,
+  ease?: string,
+): string {
+  const loc = locateAnimation(script, animationId);
+  if (!loc) return script;
+  const kfNode = findKeyframesObjectNode(loc.target.call.varsArg);
+  if (!kfNode) return script;
+
+  const pctKey = `${percentage}%`;
+  const existing = kfNode.properties.find(
+    (p: any) => isObjectProperty(p) && propKeyName(p) === pctKey,
+  );
+  if (!existing) return script;
+
+  existing.value = buildKeyframeValueNode(properties, ease);
+  return recast.print(loc.parsed.ast).code;
+}
+
+/** Resolve from/to property maps for a tween being converted to keyframes. */
+function resolveConversionProps(
+  anim: GsapAnimation,
+  resolvedFromValues?: Record<string, number | string>,
+): { fromProps: Record<string, number | string>; toProps: Record<string, number | string> } {
+  if (anim.method === "to") {
+    return { fromProps: resolvedFromValues ?? {}, toProps: { ...anim.properties } };
+  }
+  if (anim.method === "from") {
+    return { fromProps: { ...anim.properties }, toProps: resolvedFromValues ?? {} };
+  }
+  // fromTo
+  return { fromProps: { ...(anim.fromProperties ?? {}) }, toProps: { ...anim.properties } };
+}
+
+/** Strip editable properties and ease/keyframes keys from a varsArg. */
+function stripEditableAndEase(varsArg: any): void {
+  if (varsArg?.type !== "ObjectExpression") return;
+  varsArg.properties = varsArg.properties.filter((p: any) => {
+    if (!isObjectProperty(p)) return true;
+    const key = propKeyName(p);
+    if (typeof key !== "string") return true;
+    if (key === "ease" || key === "keyframes") return false;
+    return !isEditablePropertyKey(key);
+  });
+}
+
+/** Build and prepend a keyframes property node onto varsArg. */
+function insertKeyframesProp(
+  varsArg: any,
+  fromProps: Record<string, number | string>,
+  toProps: Record<string, number | string>,
+): void {
+  const fromEntries = Object.entries(fromProps).map(([k, v]) => `${safeKey(k)}: ${valueToCode(v)}`);
+  const toEntries = Object.entries(toProps).map(([k, v]) => `${safeKey(k)}: ${valueToCode(v)}`);
+  const kfCode = `{ "0%": { ${fromEntries.join(", ")} }, "100%": { ${toEntries.join(", ")} } }`;
+  const kfProp = parseExpr(`{ keyframes: {} }`).properties[0];
+  kfProp.value = parseExpr(kfCode);
+  if (varsArg?.type === "ObjectExpression") varsArg.properties.unshift(kfProp);
+}
+
+/**
+ * Convert a flat tween (to/from/fromTo) to percentage-keyframes format.
+ * `resolvedFromValues` supplies the "from" state for `to()` tweens or
+ * the "to" state for `from()` tweens (the values the DOM would resolve to).
+ */
+export function convertToKeyframesInScript(
+  script: string,
+  animationId: string,
+  resolvedFromValues?: Record<string, number | string>,
+): string {
+  const loc = locateAnimation(script, animationId);
+  if (!loc) return script;
+
+  const anim = loc.target.animation;
+  if (anim.keyframes || anim.method === "set") return script;
+
+  const { fromProps, toProps } = resolveConversionProps(anim, resolvedFromValues);
+  const varsArg = loc.target.call.varsArg;
+  const originalEase = anim.ease;
+
+  stripEditableAndEase(varsArg);
+  insertKeyframesProp(varsArg, fromProps, toProps);
+
+  if (originalEase) {
+    setVarsKey(varsArg, "easeEach", originalEase);
+    setVarsKey(varsArg, "ease", "none");
+  }
+
+  // For from() or fromTo(), convert to to()
+  if (anim.method === "from" || anim.method === "fromTo") {
+    loc.target.call.node.callee.property.name = "to";
+    if (anim.method === "fromTo") loc.target.call.node.arguments.splice(1, 1);
+  }
+
+  return recast.print(loc.parsed.ast).code;
+}
+
+/**
+ * Remove all keyframes from a tween, collapsing to a flat tween with the
+ * last keyframe's properties.
+ */
+export function removeAllKeyframesFromScript(script: string, animationId: string): string {
+  const loc = locateAnimation(script, animationId);
+  if (!loc) return script;
+  const kfNode = findKeyframesObjectNode(loc.target.call.varsArg);
+  if (!kfNode) return script;
+
+  // Collect all percentage keyframe entries, sorted
+  const kfEntries = filterPercentageProps(kfNode)
+    .map((p: any) => ({ pct: percentageFromKey(propKeyName(p)!), prop: p }))
+    .filter((e) => !Number.isNaN(e.pct))
+    .sort((a, b) => a.pct - b.pct);
+  if (kfEntries.length === 0) return script;
+
+  const lastRecord = objectExpressionToRecord(
+    kfEntries[kfEntries.length - 1]!.prop.value,
+    loc.parsed.scope,
+  );
+  collapseKeyframesToFlat(loc.target.call.varsArg, lastRecord);
+
+  return recast.print(loc.parsed.ast).code;
+}
