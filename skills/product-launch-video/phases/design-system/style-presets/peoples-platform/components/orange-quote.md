@@ -1,11 +1,3 @@
----
-surface: orange
-role: quote
-composes: cream-frame, round-stamp, diamond-bullet
-slots: [quote, author, author_role]
-avoids_same_scene: ~
----
-
 ```html
 <div class="pp-orange-quote">
   <div class="pp-orange-quote-marks">"</div>

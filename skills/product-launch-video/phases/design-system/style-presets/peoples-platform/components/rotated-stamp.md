@@ -1,11 +1,3 @@
----
-surface: paper
-role: closer
-composes: round-stamp, cream-frame
-slots: [mark_big, mark_small, caption, script_word]
-avoids_same_scene: end-stamp, stamp-statement
----
-
 ```html
 <div class="pp-rotated-stamp">
   <div class="pp-rotated-stamp-stamp">

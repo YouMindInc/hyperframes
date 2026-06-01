@@ -1,6 +1,6 @@
 # 子代理提示词：hyperframes-scene（Step 6 worker）
 
-**INPUT:** Dispatch 上下文 —— top-level：`Worker ID` / `PROJECT_DIR` / `Captions: enabled|disabled`（决定底部 y900-1080 字幕带 keep-out，见约束 #13）；每个 scene：`scene_id` / `effects` / `rule_paths` / `assetCandidates` / `estimatedDuration_s` / `voicePath` / `blueprint` / `surface`（preset-declared surface 名 \| null，见约束 #11）/ `design_chunks` / `shared_element_bridge`（Tier-A 桥接 \| null，见约束 #14）/ `creative_brief`
+**INPUT:** Dispatch 上下文 —— top-level：`Worker ID` / `PROJECT_DIR` / `Captions: enabled|disabled`（决定底部 y900-1080 字幕带 keep-out，见约束 #13）；每个 scene：`scene_id` / `effects` / `rule_paths` / `assetCandidates` / `estimatedDuration_s` / `voicePath` / `blueprint` / `design_chunks`（含整份组件库——见资源 #6 与约束 #11）/ `shared_element_bridge`（Tier-A 桥接 \| null，见约束 #14）/ `creative_brief`
 **OUTPUT:** `<PROJECT_DIR>/compositions/<scene-id>.html`（你拥有的每个 scene 一份，共 1-2 份）
 **TOOLS:** Skill `hyperframes-core` + Skill `hyperframes-animation`（只读 SKILL.md）· Read 多份文件 · Write · Bash（grep 自检）
 **DONE:** 文件落盘 + 自检全过 → 每个 scene 一行汇报；**不写** `./context.log`
@@ -31,9 +31,9 @@
    - `tokens_file` —— **优先用 dispatch packet 的 `## Tokens/easings/voice` 段里 tokens.css 正文**（Step 0 Read packet 时已拿到，省一次额外 Read）；仅当该段缺失才 Read 此绝对路径，~1 KB。整段 `:root { ... }` 改写为 `#root { ... }` 粘进 scene `<style>`
    - `easings_file` —— **优先用 packet 段里的正文**（同上）；缺失才 Read，~0.5 KB。整段 `const EASE = { ... }; const DUR = { ... }` 粘进 scene `<script>` 顶部。creative_brief 只会引规范角色键（`EASE.entry/emphasis/exit/drift`、`DUR.snap/med/slow`）。**若 brief 引了某个粘入对象里没有的键**：用语义最近的现有角色键（如 `EASE.emphasis`→`EASE.entry`、`DUR.slow`→`DUR.med`），**并在完成报告里记一行 `ease-key fallback: <brief 键>→<实际键>`——不要静默 drop、也不要硬编码裸曲线**
    - `voice_file` —— **优先用 packet 段里的正文**（同上）；缺失才 Read，~0.5 KB。DOM 里**所有可见文字**（headline / chip / button / stat label）按这份 register 写：照 recipe（strip articles、UPPERCASE、句号断行等）改写 creative_brief 里出现的英文短句。**不要**改 `<audio>` 关联的 narrator script（Phase 2 已把它定型给 TTS，大写会毁掉语音节奏）
-   - `hints_file` —— 绝对路径 \| null。非 null 时必读，~1-3 KB。preset 的 surface contract / 60-30-10 / sound 钩子，**plus** "Surface `#root` CSS" 段（surface-aware preset）。§12 配色 + §3 60-30-10 都来自这里
+   - `hints_file` —— 绝对路径 \| null。非 null 时读，~1-3 KB。preset 的**构图 / 材质 / 配色偏好**（60-30-10 配比、招牌材质、可选的背景 / 表面处理 stanza）。当**样式参考**用：§3 60-30-10 + 约束 #11 的 `#root` 背景选择都参考它。这是品味指引，**不是**渲染硬契约
    - `type_roles_file` —— 绝对路径 \| null（指向单个 `type-roles.md` 文件，不是目录）。**按需读，用这条判据决定**：先扫 `components[]` 里有没有承载 creative_brief 所需文字的文本槽（hero display / lede / pill row / CTA button / closing end mark 等）；**有 → 不读**（直接用 component 的槽）；**没有 → 才读** type-roles.md，按 id 找 `t-trole-<id>` 段的 CSS 整段粘进 scene `<style>`（加 `s<N>-` 前缀重写 class 名）。这条判据避免两种浪费：每场都读（这份 catalog 文件几 KB，多场同读浪费 token）/ 该读不读（漏掉 type role 导致文字降级）
-   - `components[]` —— 0-N 个绝对路径（Phase 3 给本 scene 挑选的 design-system 组件 HTML 片段）。**全部 Read**（每份 0.3-1.5 KB），按 §3 token + §5 effect→asset 映射在 DOM 中粘贴并把所有 class 加 `s<N>-` 前缀避免 sibling 串扰
+   - `components[]` —— **整份 preset 组件库**的绝对路径列表（design-system 的全部可粘贴组件 HTML 片段）。**这是样式参考库，不是"必须全用"清单** —— 按 creative_brief 的角色描述（"a stat block"、"a framed quote"）**自己挑** 0-N 个真正贴合本场的组件，**只 Read 你要用的那几份**（每份 0.3-1.5 KB；不必读全部）。用到的按 §3 token + §5 effect→asset 映射粘进 DOM，所有 class 加 `s<N>-` 前缀避免 sibling 串扰。一场通常 **1 个清晰焦点组件 + 少量支撑**，别硬塞
    - **不要读** `./design-system/design.html` —— 已被 chunks 取代；如果 `design_chunks` 为 null（chunks 缺失），回退去读 `./design-system/design.html` 并自报一个 anomaly
 
 **不要加载**：`hyperframes-cli` / `hyperframes-creative` / `hyperframes-registry`（不在你的范围）。**不要读** `section_plan.md`（dispatch 已经嵌了对应 scene 的 `creative_brief`）。**不要打开** rule_paths / design_chunks 之外的 rule / 其他 component 文件 / sibling worker 的 scene 文件。
@@ -146,12 +146,10 @@ node <SKILL_DIR>/phases/visual-design/scripts/build-page-card.mjs "$PROJECT_DIR"
     - Primary 独占 center safe zone；supporting 必须更小、更低对比、更少运动，并避开 primary bbox。
     - 给主要组加 `data-layout-role="primary|supporting"` 和 `data-layout-act="<act-name>"`，方便人工和未来 CLI audit。
     - Timeline 顺序：先 `tl.to(previousPrimary, ...)` 做退场/降级，再 `tl.fromTo(newPrimary, ...)` 进场。
-11. **Surface-aware preset 的 `#root` 配色（dispatch `surface` 字段决定）**
-    - dispatch 里 `surface: <preset-declared-surface> | null`。**非 null 时**`#root` 背景**不要**默认走 `background: var(--canvas)` —— 真正的画布背景、文字色、装饰 frame / 纹理 overlay 由当前 surface 决定。
-    - **粘 surface 的 #root CSS**：Read `design_chunks.hints_file` 的 "Surface `#root` CSS" 段（preset 自己声明的 paste-ready stanza），按 dispatch 给的 surface 名挑对应那块整段粘进 scene `<style>`。所有 `var(--*)` 引用都已经在 tokens.css 里定义好，不要替换。
-    - **`::after` 装饰 frame 的 surface 必须 wrap 内容**：composition-hints 里某个 surface 的 CSS 含 `#root::after { ... }` 时，scene 内容必须包一层 `<div style="position:relative; z-index:1;">`（`::after` 是 z-index:0，DOM 默认 z-index:auto，不 wrap 会被 frame 盖住）。
-    - `surface: null` 或非 surface-aware preset —— 继续用 `background: var(--canvas)` 默认行为，不读 composition-hints 的 Surface #root CSS 段。
-    - 选错 surface 或漏装饰 → mp4 渲出来"普通 SaaS 配色"而不是 preset 的视觉签名。
+11. **`#root` 背景 / 表面处理（按视觉判断，非 dispatch 契约）**
+    - 默认：`#root { background: var(--canvas); }`（tokens.css 的画布色）。
+    - **preset 若在 `hints_file` 里给了多种背景 / 表面处理**（paste-ready `#root { ... }` stanza —— 如纸纹底、深色权威板、信号板），**可按本场情绪挑一种**整段粘进 scene `<style>`，让画面更像这个 preset 而非"普通 SaaS 配色"。这是**风格选择**，没人强制你选哪个；`var(--*)` 都已在 tokens.css 定义好，别替换。
+    - **`::after` 装饰 frame 必须 wrap 内容**：选用的 `#root` stanza 若含 `#root::after { ... }`（z-index:0 的边框 / 纹理），scene 内容必须包一层 `<div style="position:relative; z-index:1;">`，否则被 frame 盖住。
 12. **`data-duration` 必须 = dispatch 给的 `estimatedDuration_s`（一字不差）** —— Step 7 的 `assemble-index.mjs` 用 group_spec 的 `start_s` 排好全片时间轴，再逐个核对 scene root 的 `data-duration`；不符直接 **fatal**、整个 Step 7 卡住回来重派你。别用 `creative_brief` 里的约数、别自己 round。`voicePath` 非空时尤其照抄（voice / SFX / captions 的全局时刻都按这个值算）。
 13. **底部字幕带 keep-out（HARD 约束 —— 仅当 dispatch `Captions: enabled`，preflight 机器校验）**
 
@@ -418,7 +416,7 @@ done
 
 任一 FAIL / MISSING / bug-形态命中 → 修了再报。Step 7 finalize 有同样的 harness，先在这里拦住，省 8-13 分钟 round-trip。
 
-> **本地 grep 拦不住、但 check-compositions 会 fatal 的两类**（元数据在 `chunks/index.json`，worker 不读）：① 同 scene 引用 >1 个 rank-1 焦点 component；② 引用了一对 `forbidden_with` / `avoids_same_scene` 互斥 component。`design_chunks.components` 是 Phase 3 选好传给你的，你只负责粘；若拿到的组件明显冲突（多个焦点 hero / 互斥对），**STOP 报告让上游重选，别自己 drop 组件**。
+> **组件挑选是你的判断**：`design_chunks.components` 是整份 preset 组件库（不是 Phase 3 钦定的子集）。按 creative_brief 的角色描述自己挑贴合本场的几个；**一场只用一个清晰焦点组件**（多个 hero 级焦点同场会互相抢视线），其余作支撑。挑不出贴合的就少用 / 不用，靠 effects + type-roles 撑场，别硬塞。
 
 ## 汇报模板
 

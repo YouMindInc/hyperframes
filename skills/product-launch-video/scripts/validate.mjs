@@ -263,35 +263,6 @@ async function runSection(argv) {
     process.exit(1);
   }
 
-  // Load design-system/chunks/index.json (best-effort, relative to plan dir).
-  // Drives two preset-conditional checks:
-  //   1. Surface anchor is REQUIRED when any component declares a `surface` field
-  //      (surface-aware presets). Legacy presets ship components with no `surface`
-  //      field → check is skipped.
-  //   2. `avoids_same_scene` cross-check between cited components — preset
-  //      invariants like "single signature element per plate" live there. Missing
-  //      index.json → cross-check is skipped (prep.mjs still validates existence).
-  const chunksIndexPath = resolve(dirname(planPath), "design-system/chunks/index.json");
-  let chunksIndex = null;
-  try {
-    chunksIndex = JSON.parse(readFileSync(chunksIndexPath, "utf8"));
-  } catch {
-    // chunks/index.json absent or unreadable — surface / avoids_same_scene checks skipped.
-  }
-
-  const componentsById = new Map();
-  const knownSurfaces = new Set();
-  let surfaceRequired = false;
-  if (chunksIndex?.components) {
-    for (const c of chunksIndex.components) {
-      componentsById.set(c.id, c);
-      if (c.surface) {
-        surfaceRequired = true;
-        knownSurfaces.add(c.surface);
-      }
-    }
-  }
-
   // SFX manifest (self-located relative to this script, like the default rules dir
   // above). Used to validate that each cited `<file>.mp3` actually exists in the
   // library — turning what used to be a silent Phase-4a drop (prep.mjs only pushed
@@ -314,21 +285,19 @@ async function runSection(argv) {
 
   const errors = [];
   let totalEffectsCited = 0;
-  let totalComponentsCited = 0;
-  let totalSurfaceCommitments = 0;
   let totalSfxCited = 0;
 
   // ---- Per-scene anchor validation (Phase 4a contract) ----
   // Every "## Scene N:" block must have all three required anchors. Phase 4a's
   // prep.mjs reads these deterministically; missing anchors break the build.
-  // **Components:** and **Blueprint:** are optional (soft) anchors; if present
-  // they must parse cleanly. prep.mjs resolves Components ids against
-  // design-system/chunks/index.json — this validator only enforces the syntactic
-  // shape (backtick-wrapped ids), not the existence check.
+  // **Blueprint:** is an optional (soft) anchor; if present it must parse cleanly.
   const sceneHeadRe = /^## Scene\s+(\d+)\s*:\s*(.+?)\s*$/gm;
   const heads = [...plan.matchAll(sceneHeadRe)];
   const ANCHORS = ["Effects", "Duration", "Continuity"];
-  const OPTIONAL_ANCHORS = ["Blueprint", "Components"];
+  // Components/Surface anchors removed — the design system is a style REFERENCE,
+  // not a plan-time contract. Workers pick components by visual judgment from the
+  // forwarded library; surface is no longer a scene-level commitment.
+  const OPTIONAL_ANCHORS = ["Blueprint"];
 
   // Transition vocabulary — loaded from the single source of truth so this
   // validator never drifts from prep/injector. Absence of the anchor is fine
@@ -463,7 +432,7 @@ async function runSection(argv) {
     // PST/Handoff continuation lines (timecode-led) and bullets are NOT prose.
     {
       const ANCHOR_LINE_RE =
-        /^\*\*(Effects|Duration|Continuity|Surface|Blueprint|Components|Transition|Bridge|SFX|PrimarySubjectTimeline|Handoff):\*\*/;
+        /^\*\*(Effects|Duration|Continuity|Blueprint|Transition|Bridge|SFX|PrimarySubjectTimeline|Handoff):\*\*/;
       const blockLines = body.split("\n");
       let firstProse = -1;
       let lastAnchor = -1;
@@ -493,28 +462,6 @@ async function runSection(argv) {
         errors.push(`${sceneId}: missing **${a}:** anchor`);
       } else {
         found[a] = am[1].trim();
-      }
-    }
-
-    // Surface anchor (preset-conditional): required when chunks/index.json shows
-    // any component declares a `surface` field. Value must be one of those declared
-    // surfaces. Mixing surfaces within one scene breaks the preset's visual
-    // contract — surface registers are paired with specific component shapes that
-    // don't compose across surfaces.
-    const surfaceMatch = body.match(/^\*\*Surface:\*\*\s*(.*)$/m);
-    if (surfaceRequired && !surfaceMatch) {
-      errors.push(
-        `${sceneId}: missing **Surface:** anchor — preset declares surface-aware components (allowed: ${[...knownSurfaces].sort().join(", ")})`,
-      );
-    } else if (surfaceMatch) {
-      const v = surfaceMatch[1].trim().toLowerCase();
-      if (surfaceRequired && !knownSurfaces.has(v)) {
-        errors.push(
-          `${sceneId}: **Surface:** "${v}" not declared by any component (allowed: ${[...knownSurfaces].sort().join(", ")})`,
-        );
-      } else {
-        found.Surface = v;
-        totalSurfaceCommitments++;
       }
     }
 
@@ -731,75 +678,6 @@ async function runSection(argv) {
       }
     }
 
-    // Optional **Components:** anchor — list of backticked ids referencing
-    // design-system/chunks/components/<id>.html. Existence is enforced by
-    // prep.mjs (which has filesystem access to chunks/index.json); here we only
-    // require well-formed syntax if the anchor is present.
-    let pickedIds = [];
-    for (const a of OPTIONAL_ANCHORS) {
-      const re = new RegExp(`^\\*\\*${a}:\\*\\*\\s*(.*)$`, "m");
-      const am = body.match(re);
-      if (!am) continue;
-      const raw = am[1].trim();
-      if (a === "Components") {
-        const ids = [...raw.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-        if (raw && ids.length === 0) {
-          errors.push(
-            `${sceneId}: **Components:** present but has no backtick-wrapped ids (got "${raw}")`,
-          );
-        }
-        for (const id of ids) {
-          if (!/^[a-z0-9-]+$/.test(id)) {
-            errors.push(
-              `${sceneId}: **Components:** id "${id}" — must be lowercase + digits + dashes (matches design-system/chunks/components/<id>.html)`,
-            );
-          } else {
-            totalComponentsCited++;
-            pickedIds.push(id);
-          }
-        }
-      }
-    }
-
-    // avoids_same_scene cross-check: every pair of cited components is checked
-    // against each other's avoids_same_scene list (from chunks/index.json
-    // component frontmatter). Preset invariants like "single signature element
-    // per plate" live there; the specific mutex pairs are preset-declared.
-    // Skipped when chunks/index.json wasn't loaded.
-    if (chunksIndex && pickedIds.length > 1) {
-      for (let i = 0; i < pickedIds.length; i++) {
-        for (let j = i + 1; j < pickedIds.length; j++) {
-          const a = pickedIds[i];
-          const b = pickedIds[j];
-          const ca = componentsById.get(a);
-          const cb = componentsById.get(b);
-          if (!ca || !cb) continue; // unknown ids — prep.mjs will reject them
-          const aAvoidsB = (ca.avoids_same_scene || []).includes(b);
-          const bAvoidsA = (cb.avoids_same_scene || []).includes(a);
-          if (aAvoidsB || bAvoidsA) {
-            errors.push(
-              `${sceneId}: **Components:** "${a}" and "${b}" conflict (avoids_same_scene) — pick one and re-plan`,
-            );
-          }
-        }
-      }
-    }
-
-    // Surface ↔ component surface consistency: when scene commits to a surface
-    // and a cited component carries a different `surface` field, that's a visual
-    // contract break (e.g. paper-only component on a blue scene). Surface-agnostic
-    // components (no `surface` field) pass through.
-    if (found.Surface && chunksIndex) {
-      for (const id of pickedIds) {
-        const c = componentsById.get(id);
-        if (!c || !c.surface) continue;
-        if (c.surface !== found.Surface) {
-          errors.push(
-            `${sceneId}: **Components:** "${id}" is surface=${c.surface}, but scene **Surface:** is ${found.Surface} — surface mix breaks preset visual contract`,
-          );
-        }
-      }
-    }
   }
 
   // Sanity: if no scenes had any known effect, complain at the top level (per-scene
@@ -817,13 +695,9 @@ async function runSection(argv) {
     process.exit(1);
   }
 
-  const componentsNote =
-    totalComponentsCited > 0 ? `, ${totalComponentsCited} component citation(s)` : "";
-  const surfaceNote =
-    totalSurfaceCommitments > 0 ? `, ${totalSurfaceCommitments} surface commitment(s)` : "";
   const sfxNote = totalSfxCited > 0 ? `, ${totalSfxCited} SFX cue(s)` : "";
   console.log(
-    `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${componentsNote}${surfaceNote}${sfxNote} — OK`,
+    `✓ ${planPath}: ${heads.length} scene(s), ${totalEffectsCited} effect citation(s)${sfxNote} — OK`,
   );
 }
 

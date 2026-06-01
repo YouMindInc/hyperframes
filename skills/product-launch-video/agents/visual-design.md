@@ -13,15 +13,14 @@
 
 ## 动笔前先复述契约（强制）
 
-packet 一次读入、量大、容易被一眼扫过。开始写任何 scene 散文之前，先用 2-3 句话**复述**这几条本次必须遵守的硬契约（来自 `## Design chunks`），把它们从"在场但被略过"拉到前台：
+packet 一次读入、量大、容易被一眼扫过。开始写任何 scene 散文之前，先用 2-3 句话**复述**本次的定调（来自 `## Design chunks` 的样式参考），把它们从"在场但被略过"拉到前台：
 
-1. **Surface 契约** —— 本 preset 声明了哪些 surface？（`index.json.components[].surface` + `composition-hints.md`）。`composition-hints` 的规则是"违反 = scene 渲染失败"。
-2. **Voice register** —— `voice.md` 的 DOM 文字 recipe（strip / case / 断句 / inline 标签…）。每场散文第 4 条必须承诺它。
-3. **每场 Blueprint 决策** —— 逐场点名 `based-on <id>` / `extended <id>` / `composed`，各附一句理由（role+triggers+情感弧自然贴合 → 采纳；任一项要"创造性弯曲" → 自由组合）。
+1. **Voice register** —— `voice.md` 的 DOM 文字 recipe（strip / case / 断句 / inline 标签…）。worker 已通过专用通道拿到 voice.md 全文并默认应用；plan 不必逐场承诺，只在该场文字有**特殊**应用 / 风险时点一句。
+2. **每场 Blueprint 决策** —— 逐场点名 `based-on <id>` / `extended <id>` / `composed`，各附一句理由（role+triggers+情感弧自然贴合 → 采纳；任一项要"创造性弯曲" → 自由组合）。
 
 复述只为给自己定调，**绝不写进 `section_plan.md`**；复述完再逐场按 guide §2/§4 写锚点 + 散文。
 
-> **输出文件形状（强制）**：`section_plan.md` **只含**一行可选 H1 标题 + 一串 `## Scene N:` 块。**不要写任何项目级前言 / "Project-level system commitments" / "Surface 契约·Voice·Palette·Type·Motion·Transition 词汇" 汇总段 / 跨场景汇总**——下游一律不读它（prep 从第一个 `## Scene` 才开始切、worker 禁读本文件），写了 = 纯写不读的死字节，且 validator 会 fatal。全局规则该承诺时写进**相关那一场**的散文，不要提到文件顶部。这正是上面"复述不写进文件"的含义：复述的那三条（Surface/Voice/Blueprint）是你脑子里的定调，不是要落成一段前言。
+> **输出文件形状（强制）**：`section_plan.md` **只含**一行可选 H1 标题 + 一串 `## Scene N:` 块。**不要写任何项目级前言 / "Project-level system commitments" / "Voice·Palette·Type·Motion·Transition 词汇" 汇总段 / 跨场景汇总**——下游一律不读它（prep 从第一个 `## Scene` 才开始切、worker 禁读本文件），写了 = 纯写不读的死字节，且 validator 会 fatal。全局规则该承诺时写进**相关那一场**的散文，不要提到文件顶部。这正是上面"复述不写进文件"的含义：复述的那两条（Voice/Blueprint）是你脑子里的定调，不是要落成一段前言。
 
 ## 自校验
 

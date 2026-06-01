@@ -1,11 +1,3 @@
----
-surface: paper
-role: list
-composes: diamond-bullet, pill-chip
-slots: [headline, script_word, item_1, item_2, item_3]
-avoids_same_scene: stamp-statement, end-stamp
----
-
 ```html
 <div class="pp-diamond-list">
   <h3 class="pp-diamond-list-h">{HEADLINE} <em class="pp-diamond-list-em">{SCRIPT_WORD}</em></h3>

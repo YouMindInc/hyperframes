@@ -1,11 +1,3 @@
----
-surface: blue
-role: stat
-composes: triple-stamp, cream-frame, star-ribbon
-slots: [stat, unit, caption, lede, source]
-avoids_same_scene: stamp-statement, framed-stamp, end-stamp
----
-
 ```html
 <div class="pp-mega-stat">
   <div class="pp-mega-stat-big">

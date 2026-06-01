@@ -39,12 +39,25 @@
 //      `preflight_clean = gates_clean && caption_keepout has 0 violations`
 //      — the agent uses this for fast-path decision.
 //
-// Always exits 0. Gate failures are surfaced via brief.gates[].ok=false so
-// the agent can decide; this script doesn't gate the pipeline.
+// Exit codes:
+//   0 — brief written and (gates pass) OR (gates fail with `--allow-gate-failure`
+//       set, in which case finalize agent diagnoses from brief.gates[].output_tail)
+//   2 — brief written but at least one of lint / validate / inspect produced a
+//       hard error (gate exit_code != 0). Pipeline is BLOCKED — orchestrator
+//       must STOP and surface gates[].output_tail to the user; do NOT dispatch
+//       finalize subagent. Rationale: a worker emitted a real geometric / schema
+//       bug (e.g. text overflowing its container). Letting finalize patch over it
+//       masks the worker's mental-geometry error. Fix the upstream scene file
+//       (or re-dispatch the worker), then re-run preflight.
+//   1 — preflight itself crashed (bad arguments, group_spec missing, etc.)
+//
+// `--allow-gate-failure` flag opts back into the old "always exit 0, let finalize
+// decide" behaviour. Use only when you intentionally want finalize to chase
+// gate fails (e.g. debugging the agent's diagnostic flow).
 //
 // Usage:
 //   node preflight-finalize.mjs --group-spec ./group_spec.json --hyperframes . \
-//        [--out ./finalize_brief.json]
+//        [--out ./finalize_brief.json] [--allow-gate-failure]
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync, spawnSync } from "node:child_process";
@@ -59,10 +72,12 @@ const flag = (name, def) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
 };
+const boolFlag = (name) => argv.includes(`--${name}`);
 
 const groupSpecPath = resolve(flag("group-spec", "./group_spec.json"));
 const hyperframesDir = resolve(flag("hyperframes", "."));
 const outPath = resolve(flag("out", join(hyperframesDir, "finalize_brief.json")));
+const allowGateFailure = boolFlag("allow-gate-failure");
 
 if (!existsSync(groupSpecPath)) {
   console.error(`✗ preflight-finalize: group_spec.json missing at ${groupSpecPath}`);
@@ -145,18 +160,38 @@ function runGate(name, args, { timeoutMs = 90_000 } = {}) {
   const out = (res.stdout || "") + (res.stderr || "");
   const lines = out.split("\n");
   const tail = lines.slice(-60).join("\n");
+  // hyperframes inspect (and lint when there's structured output) prints a
+  // closing summary like "1 error(s), 11 warning(s), 2 info(s)". Parse it so
+  // brief.gates.<gate>.{errors,warnings,info} surfaces without a second CLI
+  // call. Absent / un-parseable → null fields; orchestrator falls back to
+  // exit_code for the block decision.
+  const summaryMatch = out.match(/(\d+)\s+error\(s\)(?:,\s+(\d+)\s+warning\(s\))?(?:,\s+(\d+)\s+info\(s\))?/i);
+  const errors = summaryMatch ? Number(summaryMatch[1]) : null;
+  const warnings = summaryMatch && summaryMatch[2] != null ? Number(summaryMatch[2]) : null;
+  const info = summaryMatch && summaryMatch[3] != null ? Number(summaryMatch[3]) : null;
   return {
     ok: res.status === 0,
     exit_code: res.status,
     duration_s: parseFloat(dur),
+    errors,
+    warnings,
+    info,
     output_tail: tail,
   };
 }
 
+// inspect's default --samples is 9. For a typical 30-60s product-launch video
+// with 8-12 scenes, that's ~1 sample per scene, which routinely misses
+// collisions that only become visible mid-phase animation (e.g. a CTA word
+// that overflows the canvas only after its discrete-text-sequence reveal
+// fires at local t≈1.9s of a 3.6s scene). 2 scenes × 3 phase-points each is a
+// reasonable density / cost tradeoff; on a 40s 10-scene project this catches
+// scene_10 CTA overflow that the 9-sample default missed.
+const INSPECT_SAMPLES = Math.max(18, (groupSpec.total_scenes || 0) * 2);
 const gates = {
   lint: runGate("lint", ["lint"]),
   validate: runGate("validate", ["validate"]),
-  inspect: runGate("inspect", ["inspect"]),
+  inspect: runGate("inspect", ["inspect", "--samples", String(INSPECT_SAMPLES)]),
 };
 const gatesClean = gates.lint.ok && gates.validate.ok && gates.inspect.ok;
 
@@ -420,6 +455,22 @@ const bgm = {
         : "No BGM path."),
 };
 
+// ---------- 5.6. Anomalies (loud, brief-level) ----------
+// Things the orchestrator / finalize agent should NOTICE even when they don't
+// block preflight. Skipped perception is the canonical example: the check
+// COULD have caught cross-text-collision but didn't run, so a "clean" brief
+// is misleadingly clean. Other phases can grow this list over time.
+const anomalies = [];
+if (perception.skipped) {
+  anomalies.push({
+    code: "perception_check_skipped",
+    severity: "warning",
+    message: `Rendered-perception check did not run (${perception.reason}). cross-text-collision / depth-layer-ghost / primary-offscreen / text-clipping checks are NOT covered for this run — finalize snapshot eye-check is the only remaining safety net for layout collisions.`,
+    actionable_install_command: `cd "${hyperframesDir}" && npm i puppeteer`,
+    actionable_alternative: `npm i puppeteer-core && npx hyperframes browser install`,
+  });
+}
+
 // ---------- 6. Write brief ----------
 const brief = {
   version: 2,
@@ -434,12 +485,16 @@ const brief = {
   perception: {
     skipped: perception.skipped,
     skip_reason: perception.reason,
+    // Surface the install command directly on the perception node so finalize
+    // doesn't have to cross-reference brief.anomalies[] to find it.
+    install_to_enable: perception.skipped ? `cd "${hyperframesDir}" && npm i puppeteer` : null,
     scenes_scanned: perception.scanned,
     scenes_not_scanned: perception.skipped_scenes, // no file/<template> → never measured
     scenes_no_timeline: perception.no_timeline, // probed at t=0 only → late reveals unseen
     violations: perception.violations,
     critical_violations_count: criticalPerceptionViolations.length,
   },
+  anomalies,
   preflight_clean: preflightClean,
   deterministic_fixes_applied: deterministicFixes,
   snapshot_times_s: snapshotTimes,
@@ -480,7 +535,17 @@ if (!captionKeepout.enabled) {
   }
 }
 if (perception.skipped) {
-  console.log(`    perception: skipped (${perception.reason})`);
+  // Loud anomaly (was silent in prior versions). Rendered-perception is the
+  // only check that catches cross-text-collision / depth-layer-ghost — without
+  // it, layout collisions only surface at finalize snapshot eye-check, which
+  // is fragile (single-agent, end-of-pipeline, rate-limit prone). Tell the
+  // user EXACTLY how to enable it.
+  console.log(
+    `    perception: ⚠ SKIPPED (${perception.reason}) — cross-text-collision / depth-layer-ghost / primary-offscreen checks DID NOT RUN`,
+  );
+  console.log(
+    `      enable with:  (cd "${hyperframesDir}" && npm i puppeteer)   # or:  npm i puppeteer-core  + install Chrome via \`npx hyperframes browser install\``,
+  );
 } else if (perception.violations.length === 0) {
   console.log(`    perception: ✓ (${perception.scanned} scene(s) scanned, 0 violations)`);
 } else if (criticalPerceptionViolations.length === 0) {
@@ -545,4 +610,33 @@ if (!preflightClean) {
       `  ⚠ perception violations — finalize agent reviews brief.perception.violations[] (text-clip / depth-ghost / collision are visual bugs; suggestion field gives the fix direction)`,
     );
   }
+}
+
+// ---------- 7. Blocking-exit gate (default — pre-finalize hard stop) ----------
+// When any of lint / validate / inspect produced a hard error (gate exit_code
+// != 0), we exit non-zero so the orchestrator stops BEFORE dispatching
+// finalize. Rationale (see top-of-file): a failing gate is upstream-worker
+// signal — text overflowing its container, schema breakage, broken selector
+// scope. Letting finalize patch over it masks the worker's mental-geometry
+// error and burns finalize tokens on bugs that should round-trip to the worker
+// instead. The brief is already on disk; the orchestrator can read
+// gates.<gate>.output_tail and decide whether to re-dispatch the worker or
+// hand-fix the scene file.
+//
+// `--allow-gate-failure` reverts to the pre-block behaviour (always exit 0,
+// finalize chases the failures). Use only when you intentionally want finalize
+// to diagnose gate output (e.g. agent-flow debugging).
+if (!gatesClean && !allowGateFailure) {
+  const failed = [];
+  if (!gates.lint.ok) failed.push(`lint (exit ${gates.lint.exit_code})`);
+  if (!gates.validate.ok) failed.push(`validate (exit ${gates.validate.exit_code})`);
+  if (!gates.inspect.ok) {
+    const cnt = gates.inspect.errors != null ? `${gates.inspect.errors} error(s)` : `exit ${gates.inspect.exit_code}`;
+    failed.push(`inspect (${cnt})`);
+  }
+  console.error(`\n✗ BLOCKED: ${failed.join(", ")} — pipeline must NOT proceed to finalize.`);
+  console.error(`  brief: ${outPath}`);
+  console.error(`  → read brief.gates.<gate>.output_tail to diagnose, then fix the upstream scene file (or re-dispatch the worker).`);
+  console.error(`  → re-run this script after fix. Override with --allow-gate-failure only if you want finalize to chase the gate errors itself.`);
+  process.exit(2);
 }

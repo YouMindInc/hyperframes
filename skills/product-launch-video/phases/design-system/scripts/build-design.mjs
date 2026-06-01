@@ -690,15 +690,15 @@ function brandFromBrandHtml(html) {
 }
 const brandFromHtml = brandFromBrandHtml(brandHtml);
 
-const primaryHex =
+let primaryHex =
   brandFromHtml?.primary || valueOf(primColors.brand?.primary) || allColors[0] || "#000000";
-const secondaryHex =
+let secondaryHex =
   brandFromHtml?.secondary ||
   valueOf(primColors.brand?.secondary) ||
   allColors.find((c) => c !== primaryHex) ||
   primaryHex;
 
-const accentHex =
+let accentHex =
   brandFromHtml?.accent ||
   (() => {
     // Fallback algorithm: highest-saturation color distinct from primary/secondary
@@ -714,8 +714,8 @@ const accentHex =
 // Background and text: prefer first entry of those buckets if present
 const bgList = gatherColors(primColors.background || {});
 const txList = gatherColors(primColors.text || {});
-const canvasHex = bgList[0] || (isLight(primaryHex) ? "#ffffff" : "#0f0f0f");
-const inkHex = txList[0] || (isLight(canvasHex) ? "#111111" : "#ffffff");
+let canvasHex = bgList[0] || (isLight(primaryHex) ? "#ffffff" : "#0f0f0f");
+let inkHex = txList[0] || (isLight(canvasHex) ? "#111111" : "#ffffff");
 
 // ─── 5-slot alias system (tertiary + costume) ────────────────────
 // designhtml-class presets (peoples-platform, etc.) reference 5 brand alias
@@ -727,7 +727,7 @@ const inkHex = txList[0] || (isLight(canvasHex) ? "#111111" : "#ffffff");
 //   1. brand.html declares brand-color-tertiary  → take it
 //   2. saturation-pick from full palette          → highest-sat non-overlap
 //   3. fallback to accentHex                      → degrades to accent-as-surface
-const tertiaryHex =
+let tertiaryHex =
   brandFromHtml?.tertiary ||
   (() => {
     const taken = new Set(
@@ -745,7 +745,7 @@ const tertiaryHex =
 //   1. brand.html declares brand-color-costume    → take it
 //   2. canvasHex                                  → degrades to canvas-equals-costume
 //      (preset §B can still synthesize a warm tint via color-mix in CSS)
-const costumeHex = brandFromHtml?.costume || canvasHex;
+let costumeHex = brandFromHtml?.costume || canvasHex;
 
 // ─── Decoration colors (used by brutalism + maximalist presets) ──────
 // Auto-pick 4 vibrant colors from the site's full palette, with hue diversity.
@@ -803,7 +803,7 @@ const intentLabel = intent?.pageIntent?.type || dna?.pageIntent?.type || "unknow
 // Signature gradient: synthesize a 3-color linear gradient from the brand
 // triplet. Conic / radial site gradients are too busy for video bg, so we
 // compose a fresh linear one here for downstream use.
-const signatureGradient = `linear-gradient(135deg, ${primaryHex} 0%, ${secondaryHex} 50%, ${accentHex} 100%)`;
+let signatureGradient = `linear-gradient(135deg, ${primaryHex} 0%, ${secondaryHex} 50%, ${accentHex} 100%)`;
 
 // Voice signals (used both in §5 and for auto-inference)
 const voiceTone = voice?.tone || "";
@@ -987,6 +987,10 @@ function parsePreset(presetDir) {
 
   return {
     name: meta.name,
+    // Preset-owned palette (R2). Slots: canvas/surface/ink/primary/accent/secondary,
+    // each { value, constraint?, lock?: "anchor", alias?: "<slot>" }. Consumed as a
+    // fallback when the capture yielded no colors — see the pickPreset() callsite.
+    palette: meta.palette || null,
     label: meta.label || meta.name,
     fingerprint: meta.fingerprint || {},
     matchSignals: meta.match_signals || [],
@@ -1195,6 +1199,37 @@ function pickPreset() {
 }
 
 const { preset, mode, scores, features } = pickPreset();
+
+// ═══════════════════ R2: preset-owned palette fallback ═══
+// When the capture yielded NO usable colors (text-only / no-URL path, or a
+// fully monochrome site), fall back to the chosen preset's declared palette
+// instead of collapsing onto #000000 / palette[0] (which made ink == canvas).
+// Extraction, when present, already populated the *Hex vars above — this only
+// fires when nothing was scraped, so a real URL capture stays byte-for-byte
+// unchanged (no golden-baseline drift). Slots resolve `alias` recursively;
+// `lock: "anchor"` values are emitted as-is (§B color-mix() does the tinting).
+// Trigger on the RAW captured palette (`hfTokens.colors`), NOT `allColors` —
+// the latter synthesizes black/white defaults from empty input, so it's never
+// 0. Empty `hfTokens.colors` is the true "nothing scraped" signal; a real URL
+// capture always populates it.
+if ((hfTokens.colors || []).length === 0 && preset.palette) {
+  const _pp = preset.palette;
+  const _ppGet = (slot, seen = new Set()) => {
+    const e = _pp[slot];
+    if (!e || seen.has(slot)) return null;
+    seen.add(slot);
+    if (e.alias) return _ppGet(e.alias, seen);
+    return e.value ? _normalizeHex(e.value) : null;
+  };
+  primaryHex = _ppGet("primary") || primaryHex;
+  secondaryHex = _ppGet("secondary") || secondaryHex;
+  accentHex = _ppGet("accent") || accentHex;
+  canvasHex = _ppGet("canvas") || canvasHex;
+  inkHex = _ppGet("ink") || inkHex;
+  tertiaryHex = _ppGet("tertiary") || tertiaryHex;
+  costumeHex = _ppGet("costume") || _ppGet("surface") || costumeHex;
+  signatureGradient = `linear-gradient(135deg, ${primaryHex} 0%, ${secondaryHex} 50%, ${accentHex} 100%)`;
+}
 
 // ═══════════════════ Font resolution (Google Fonts) ══════
 const GFONTS = new Set(

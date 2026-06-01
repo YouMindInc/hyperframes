@@ -20,14 +20,14 @@ This router knows ONLY top-level workflows. It does not load workflow-internal p
 
 ## Decision table
 
-| Length / Input   | URL                     | Brief / text | Pre-written script | Existing footage |
-| ---------------- | ----------------------- | ------------ | ------------------ | ---------------- |
-| < 15s hook       | —                       | —            | —                  | —                |
-| 15-30s ad        | —                       | —            | —                  | —                |
-| **30-90s promo** | `/product-launch-video` | —            | —                  | —                |
-| 2-5min tutorial  | —                       | —            | —                  | —                |
-| 5min+ deep dive  | —                       | —            | —                  | —                |
-| Static / loop    | —                       | —            | —                  | —                |
+| Length / Input   | URL                     | Brief / text            | Pre-written script      | Existing footage |
+| ---------------- | ----------------------- | ----------------------- | ----------------------- | ---------------- |
+| < 15s hook       | —                       | —                       | —                       | —                |
+| 15-30s ad        | —                       | —                       | —                       | —                |
+| **30-90s promo** | `/product-launch-video` | `/product-launch-video` | `/product-launch-video` | —                |
+| 2-5min tutorial  | —                       | —                       | —                       | —                |
+| 5min+ deep dive  | —                       | —                       | —                       | —                |
+| Static / loop    | —                       | —                       | —                       | —                |
 
 Currently `/product-launch-video` is the only workflow. Empty cells mean **no workflow exists for that combination** — tell the user so directly rather than picking a near-fit.
 
@@ -43,9 +43,9 @@ Currently `/product-launch-video` is the only workflow. Empty cells mean **no wo
 
 ### `/product-launch-video`
 
-- **Input:** Product URL (crawled with headless Chrome for assets, brand tokens, page structure)
+- **Input:** Product URL (crawled with headless Chrome for assets, brand tokens, page structure) **OR** a pre-written script / text brief with **no URL** (no-capture mode — you pick a style preset; the preset supplies the palette + design system, scenes are text/typography with no scraped assets)
 - **Output:** 60-90s product launch / SaaS explainer / promo video as a HyperFrames composition rendered to MP4
-- **Triggers:** "make me a launch video for X", "promo for our website", "explain my SaaS in a minute", "feature reveal for X.com", "marketing video for our product"
+- **Triggers:** "make me a launch video for X", "promo for our website", "explain my SaaS in a minute", "feature reveal for X.com", "marketing video for our product", "I have a script — turn it into a 60s promo", "make a text-only launch video, no website"
 - **Do NOT use for:** tutorials, customer interviews, social ads under 30s, motion graphics without a product context, static brand assets
 
 ## Out of scope for this router

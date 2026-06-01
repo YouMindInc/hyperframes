@@ -19,13 +19,10 @@
 //                      "composed" | absent (→ "composed"). Passed through to
 //                      group_spec.json so Phase 4b workers can consult the
 //                      blueprint when wiring effects.
-//   **Components:**  — optional (soft), backtick-wrapped component ids that
-//                      reference design-system/chunks/components/<id>.html.
-//                      Resolved against design-system/chunks/index.json; each
-//                      scene's design_chunks.components[] in group_spec.json
-//                      becomes the absolute paths the Phase 4b worker reads.
-//                      Empty / absent → worker still gets tokens.css + easings.js
-//                      but no component paste-snippets.
+//   (Components/Surface anchors removed — the design system is a style REFERENCE.
+//    Every available component path is forwarded to every worker in
+//    design_chunks.components[]; the Phase 4b worker self-picks by visual
+//    judgment. No scene-level surface commitment.)
 //   **SFX:**         — optional (soft), bullet list of "`<file>.mp3` at <T>s,
 //                      volume <V> — note" cues (T is scene-local). Resolved
 //                      against the SFX manifest; cues citing unknown files are
@@ -211,11 +208,10 @@ const heads = [...planText.matchAll(sceneHeadRe)];
 if (heads.length === 0) die("no '## Scene N: <name>' headings found in section_plan.md");
 
 const ANCHORS = ["Effects", "Duration", "Continuity"];
-// Surface is preset-conditional in the validator (required when chunks/index.json
-// shows surface-aware components). prep.mjs treats it as OPTIONAL here purely so
-// the anchor doesn't leak into creative_brief — its value is forwarded to
-// group_spec.json so the Step 6 dispatch can pass it to scene workers.
-const OPTIONAL_ANCHORS = ["Blueprint", "Components", "Surface", "Transition", "Bridge"];
+// Components/Surface anchors removed — the design system is a style REFERENCE,
+// not a plan-time contract (workers self-pick components from the forwarded
+// library; no scene-level surface commitment). Blueprint/Transition/Bridge stay.
+const OPTIONAL_ANCHORS = ["Blueprint", "Transition", "Bridge"];
 
 function anchorRe(name) {
   return new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`, "m");
@@ -261,18 +257,6 @@ function parseSceneBlock(body, sceneId, isFirst) {
   // Blueprint (soft): "based-on <id>" | "extended <id>" | "composed" | (absent → "composed")
   // 不做格式校验 —— validator 可后补；id 引用是松绑定，build agent 自行处理
   const blueprint = raw.Blueprint || "composed";
-
-  // Components (soft): backtick-wrapped ids referencing
-  // design-system/chunks/components/<id>.html. Existence is checked later
-  // against design-system/chunks/index.json. Absent → empty list.
-  const componentIds = raw.Components
-    ? [...raw.Components.matchAll(/`([^`]+)`/g)].map((m) => m[1])
-    : [];
-
-  // Surface (soft, preset-conditional): lower-cased single token (preset-declared)
-  // or null. Worker uses this to pick #root background style from the preset's
-  // composition-hints; validator enforces presence + allowed values upstream.
-  const surface = raw.Surface ? raw.Surface.trim().toLowerCase() : null;
 
   // Transition (OPTIONAL): how THIS scene is entered.
   //   **Transition:** <type> [DIRECTION] [<dur>s]
@@ -355,8 +339,6 @@ function parseSceneBlock(body, sceneId, isFirst) {
     estimatedDuration_s,
     continuity: cont,
     blueprint,
-    componentIds,
-    surface,
     transition,
     sfxCues,
     creative_brief: brief,
@@ -414,10 +396,8 @@ const anomalies = [];
 //   - chunks/index.json missing       → degrade gracefully: design_chunks = null
 //                                       for every scene, log an anomaly, and let
 //                                       the worker fall back to reading design.html.
-//   - index.json present              → every scene gets tokens_file + easings_file.
-//   - scene cites unknown component id → fatal (typo in section_plan that prep
-//                                        can catch up-front beats finalize rounding
-//                                        back to Phase 3 13 minutes later).
+//   - index.json present              → every scene gets tokens_file + easings_file
+//                                       + the FULL component library (worker picks).
 const chunksDir = join(designSystemDir, "chunks");
 const chunksIndexPath = join(chunksDir, "index.json");
 let chunksIndex = null;
@@ -472,17 +452,13 @@ for (const s of scenes) {
       `design_chunks: type_roles_file "${typeRolesAbs}" referenced by index.json but missing on disk`,
     );
 
-  const componentPaths = [];
-  for (const cid of s.componentIds) {
-    const abs = availableComponents.get(cid);
-    if (!abs)
-      die(
-        `${s.sceneId}: **Components:** id "${cid}" not in design-system/chunks/index.json. Known: [${[...availableComponents.keys()].join(", ")}]`,
-      );
-    if (!existsSync(abs))
-      die(`${s.sceneId}: component "${cid}" listed in index.json but file missing at ${abs}`);
-    componentPaths.push(abs);
-  }
+  // Components are a style REFERENCE library, not a plan-time citation. Forward
+  // EVERY available component to every worker; the worker picks which to use by
+  // visual judgment (see agents/hyperframes-scene.md). Existence is guaranteed by
+  // emit-chunks; filter defensively so a stale index entry never ships a missing path.
+  const componentPaths = availableComponents
+    ? [...availableComponents.values()].filter((abs) => existsSync(abs))
+    : [];
   s.design_chunks = {
     tokens_file: tokensAbs,
     easings_file: easingsAbs,
@@ -670,7 +646,6 @@ for (const s of scenes) {
     voicePath: s.voicePath,
     wordsPath: s.wordsPath,
     blueprint: s.blueprint,
-    surface: s.surface,
     design_chunks: s.design_chunks,
     creative_brief: s.creative_brief,
     // Tier-A shared-element bridge — back-filled in Step 6.6 after transitions[] is
@@ -1011,16 +986,13 @@ console.log(
   `  @font-face block: ${fontFaceCss ? `${fontFaceCss.length}B extracted (Phase 4c will inject into index.html <head>)` : "(none — design.html has no auto-injected block)"}`,
 );
 if (chunksIndex) {
-  const totalCompCitations = scenes.reduce(
-    (sum, s) => sum + (s.design_chunks?.components.length || 0),
-    0,
-  );
+  const libCount = chunksIndex.components?.length || 0;
   const uniqueComps = new Set();
   for (const s of scenes) {
     for (const p of s.design_chunks?.components || []) uniqueComps.add(basename(p, ".html"));
   }
   console.log(
-    `  design-chunks:    ${chunksIndex.components?.length || 0} components available, ${totalCompCitations} citation(s) across scenes (unique: ${[...uniqueComps].join(", ") || "none"})`,
+    `  design-chunks:    ${libCount} component(s) available, forwarded as a style-reference library to every worker (${[...uniqueComps].join(", ") || "none"})`,
   );
 } else {
   console.log(`  design-chunks:    none (workers will fall back to design.html)`);

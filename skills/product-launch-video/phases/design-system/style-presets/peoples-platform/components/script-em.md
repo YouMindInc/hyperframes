@@ -1,11 +1,3 @@
----
-surface: paper
-role: aside
-composes: triple-stamp, script-em
-slots: [script_before, script_word, script_after]
-avoids_same_scene: ~
----
-
 ```html
 <div class="pp-script-em">
   <div class="pp-script-em-line">

@@ -7,7 +7,7 @@
 ## 流程一览
 
 1. **输入已全部内联在 dispatch**（`## Effects catalog` / `## Blueprints index` / `## SFX library` / `## Design rules`〔4 个 rule 全文〕/ `## Design chunks`〔`index.json` + 实际存在的 hints/voice/tokens/easings〕/ `## Narrator scripts` / `## Audio meta`）—— **直接用，不从盘 Read**
-2. 每个场景：从 `## Effects catalog` 选 effects（timeline 分层序，数量见 §2）、（按 preset）从 `## Design chunks` 的 `index.json.components[]` 挑 component、决定 Continuity、写锚点 block + 散文 8 条
+2. 每个场景：从 `## Effects catalog` 选 effects（timeline 分层序，数量见 §2）、决定 Continuity、写锚点 block + 散文 8 条；散文里按**角色**描述想要的视觉构件（"a stat block"、"a framed quote"），具体组件由 worker 从 `## Design chunks` 的组件库自选
 3. 运行 validator 至 exit 0
 
 ---
@@ -23,54 +23,31 @@
 
 chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `## Design chunks` 块**：`index.json` 全文 + 实际存在的 `composition-hints.md` / `voice.md` / `tokens.css` / `easings.js`（preset 没声明的 chunk `*_file=null`，不会出现在块里）。
 
-**下面凡说"Read `chunks/X`"一律改为"在 `## Design chunks` 里找 X"——不从盘读**；plan 仍不碰 `design.html`、不碰组件 HTML 本体。Plan 对 chunks 做这几件事：
+**下面凡说"在 `## Design chunks` 里找 X"——不从盘读**；plan 不碰 `design.html`、不碰组件 HTML 本体。
 
-1. Read `chunks/index.json`（必读，~1-2 KB）→ 拿到 `preset` + `components[]` 清单。每个 component entry 形如：
+> **定位（核心，务必知悉）**：`## Design chunks` 是品牌的**样式参考库**，不是对 plan 的契约。它只回答「这个品牌长什么样」——调色（tokens）、运动曲线（easings）、DOM 文字 register（voice）、以及一组**可粘贴的组件**。视觉**主导权在 `## Effects catalog`（动效）+ `## Blueprints index`（场景骨架）+ `## Design rules`（设计判断）**；chunks 只负责让结果**看起来是这个品牌**。**plan 不预先 cite 组件、不声明 surface、不做组件过滤** —— 只在散文里按**角色 / 用途 / 意图**描述想要的构件，具体组件由 Phase 4b worker 从整份组件库里按视觉判断自选。
 
-   ```jsonc
-   {
-     "id": "framed-stamp",
-     "file": "chunks/components/framed-stamp.html",
-     // 以下字段仅当 preset 的 component .md 文件带 frontmatter 时存在
-     "surface": "blue", // 必须摆在哪种 surface 上
-     "role": "authority", // 在 scene 里承担的语义角色
-     "composes": ["cream-frame", "triple-stamp"], // 视觉签名是由哪些 material 组合
-     "slots": ["pill", "headline", "sub"], // 可填的内容槽位
-     "avoids_same_scene": ["stamp-statement"], // 不能与谁同 scene
-   }
-   ```
+Plan 对 chunks 做这几件事：
 
-单 surface preset 和 surface-aware preset 混在同一份 manifest 里：单 surface entry 只有 `{id, file}` 两键；surface-aware entry 多 5 个可选字段（具体 surface 名 / role 名 / 互斥关系全部由 preset 自己声明，例：peoples-platform 声明 `paper` / `blue` / `orange` 三个 surface，并把 `stamp-statement` ⊥ `framed-stamp` ⊥ `mega-stat` ⊥ `end-stamp` 列入 `avoids_same_scene`）。**只对带字段的 entry 启用下面的两级过滤；单 surface entry 退回纯按 id 选**。
+1. 看 `chunks/index.json`（~1-2 KB）→ 拿到 `preset` 名 + 组件库清单（`components[]`，每项 `{id, file}`）。**只用来知道这个 preset 有哪些组件可用**，好在散文里按角色点它们（"用一个 stat-stamp 式的数字块"）。不必逐个对应、不必 cite id、不必算 surface —— worker 看实际渲染挑。
+2. （可选）看 `chunks/composition-hints.md`（仅当 `index.json.hints_file != null`）→ preset 自己的**构图 / 材质 / 配色偏好**（这套风格喜欢怎么铺底、60-30-10 怎么分、招牌材质有哪些）。**当样式参考**融进散文的 palette / composition 描述；worker 落地时照它上色。（这是品味指引，**不是**"违反=渲染失败"的硬契约。）
+3. （可选）看 `chunks/tokens.css`（~1-2 KB）→ `:root` 里有哪些角色 token（`--canvas` / `--ink` / `--brand-*` / preset 私有别名如 `--paper` / `--blue` / `--cream`）—— 决定 30% 中间层 / 痛点场景的调色描述
+4. （可选）看 `chunks/easings.js`（~0.5 KB）→ `EASE.entry / emphasis / exit / drift` 角色键齐全度，决定散文引用哪些 ease 意图
+5. （可选）看 `chunks/voice.md`（~0.5 KB，仅当 `voice_file != null`）→ 本 preset 的 DOM 文字 register（strip / case / 断句 / inline `<em>`…）。**worker 已通过专用通道拿到 voice.md 全文并默认应用**，所以 plan **不必**逐场承诺它；只在该场文字有**特殊**应用 / 风险时点一句（如 "hero 落成单行 UPPERCASE 叠词"）。plan 不抄改写后的英文文案（worker 的活）。
 
-> **现状（务必知悉）**：目前 19 个 preset 里**只有 `peoples-platform` 一个**给组件写了 surface/role/avoids frontmatter（它有 paper/blue/orange 三块组件必须分别摆放的互斥画布）。其余 18 个（含 neo-grid-bold / editorial-forest / emerald-editorial / pin-and-paper 等）都是**单 surface 设计** —— 组件随便摆在唯一画布上都成立、靠 `color:inherit` / fill 变体自适应底色、无跨组件互斥对。它们的 component entry 因此只有 `{id, file}`，下面的三级过滤对它们**自然 no-op，plan agent 纯按 id 语义选** —— **这是预期行为，不是元数据缺失或 bug**，不要因为某 preset 没有 surface 字段就认为它"漏了"。判断标准：只有当组件确实必须摆特定 surface、或确实有不能同场的视觉互斥对时，preset 才需要 frontmatter（绝大多数 preset 不需要）。
+**不必读** `chunks/type-roles.md` → 命名 text role 目录（worker 挑 inline 文字样式时的查表）。plan 不 cite role id，只按角色名描述（"hero display"、"body lede"）。
 
-2. **挑 component 算法（component entry 带 `surface` 时强制走这套）**：
-   - 第 1 级 surface 过滤：决定这个 scene 走哪种 surface（看 narrative beat / 节奏），从 `components[]` 里 `filter(c => c.surface === sceneSurface || !c.surface)`
-   - 第 2 级 role 过滤：在剩下的里按 `role` 与 scene 意图匹配（statement / authority / stat / quote / list / timeline / closer / aside）
-   - 第 3 级互斥校验：选出的多个 component 之间，**任一对**若有 `a.id ∈ b.avoids_same_scene` 或 `b.id ∈ a.avoids_same_scene` → 拒绝组合，重选
-   - **同 scene 内不要混不同 surface 的 component**（即使 surface 字段未声明，也不要把"明显 paper 风格"和"明显 blue 风格"的混在一起 —— 视觉破坏）
-
-3. Read `chunks/composition-hints.md`（必读 if `index.json.hints_file != null`，~1-3 KB）→ preset 自己宣告的硬规则（surface contract / material 互斥 / 60-30-10 colour 配比）。**这是 preset 视觉契约的真理源 —— 违反 = scene 渲染失败**。`hints_file` 为 null 时跳过。
-
-4. （可选）Read `chunks/tokens.css`（~1-2 KB）→ 看 `:root` 里实际定义了哪些角色 token（`--canvas` / `--ink` / `--brand-*` / preset-internal 别名如 `--paper` / `--blue` / `--cream` / `--shadow-triple-*`）—— 决定 30% 中间层 / 痛点场景的调色描述
-
-5. （可选）Read `chunks/easings.js`（~0.5 KB）→ 看 `EASE.entry / emphasis / exit / drift` 角色键名齐全度，决定散文引用哪些 ease 意图
-
-6. **必读 `chunks/voice.md`**（~0.5 KB，仅当 `index.json.voice_file != null`）→ 本 preset 的 DOM 文字 register。散文第 4 条（品牌样式覆盖层）**必须**承诺该场可见文字走 voice.md 的 recipe（具体 recipe 由 preset 声明 —— strip / case / 断句 / inline `<em>` 等转换规则因 preset 而异）。具体英文改写是 Phase 4b worker 的事，**plan 不抄改写后的文案**。不承诺 = worker 接到的 brief 无引导 = DOM 文本走不到 preset 风格
-
-**不必读** `chunks/type-roles.md`（仅当 `index.json.type_roles_file != null`）→ 命名 text role 目录（preset 自己声明的 inline 文字 role 集合，可能十几个）。这是 **worker 自己挑 inline 文字样式时**的查表，plan 不要 cite role id，只在散文里按角色名描述（"hero display"、"body lede"）。
-
-**不读**：组件 HTML 本体（`chunks/components/<id>.html`）—— 那是 Phase 4b worker 的事；plan 只引 component **id**。**不读** legacy `design.html`（已被 chunks 取代）。
+**不读**：组件 HTML 本体（`chunks/components/<id>.html`）—— Phase 4b worker 的事。**不读** legacy `design.html`（已被 chunks 取代）。
 
 **Plan 的工作是按角色 / 用途 / 意图引用，不是按字面值复述。** 见下方 §3 的指导原则：
 
-| 你要点名                                            | 不要抄                           |
-| --------------------------------------------------- | -------------------------------- |
-| **角色**（canvas / surface / accent / ink）         | 具体 hex（`#e4ff97`）            |
-| **用途**（display / body / mono）                   | 具体字体名（`Instrument Serif`） |
-| **意图**（`EASE.entry` / `DUR.med`）                | 具体曲线（`power3.out`）         |
-| **Component id**（`hero` / `chip` / `dot-grid-bg`） | 内部 HTML / `<style>` 块         |
-| **Voice register**（"UPPERCASE 三段式"）            | 改写后的英文文案（worker 的活）  |
+| 你要点名                                          | 不要抄                                  |
+| ------------------------------------------------- | --------------------------------------- |
+| **角色**（canvas / surface / accent / ink）       | 具体 hex（`#e4ff97`）                   |
+| **用途**（display / body / mono）                 | 具体字体名（`Instrument Serif`）        |
+| **意图**（`EASE.entry` / `DUR.med`）              | 具体曲线（`power3.out`）                |
+| **组件角色**（"a stat block" / "a framed quote"） | component id / 内部 HTML / `<style>` 块 |
+| **Voice register**（"UPPERCASE 三段式"）          | 改写后的英文文案（worker 的活）         |
 
 ### 不读
 
@@ -96,9 +73,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 **Effects:** [`<rule-id>`, `<rule-id>`, ...]
 **Duration:** <X.XXs>
 **Continuity:** break | continue
-**Surface:** <preset-declared-surface> ← preset-conditional（surface-aware preset 必填；值见 chunks/index.json）
 **Blueprint:** based-on `<id>` | extended `<id>` | composed ← 可选（soft），见下方
-**Components:** [`<component-id>`, `<component-id>`, ...] ← 可选（soft），见下方
 **Transition:** <type> [DIRECTION] [<dur>s] ← 可选（soft）；这一场怎么被「进入」，见下方
 **Bridge:** `<bridge-id>` ← 仅当 **Transition:** shared-element（Tier-A morph）；跨场元素逻辑名，见下方
 **SFX:** ← 可选（soft）；不用音效就整段省略，多行 bullet list 见下方
@@ -116,11 +91,9 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 - **Duration**：浮点秒数（来源见 §1）
 - **Continuity**：`break` 或 `continue`；**Scene 1 永远是 `break`**。照抄 story-design 的 `transition.continuity`（已跟着 `intent` 定死：`morph` ⇒ `continue`，其余 ⇒ `break`）。**`continue` ⟺ 本场 `**Transition:** shared-element`**（见下方 Transition 硬契约）
 - 必选锚点各自独立成行，前后无其他文字；缺任一锚点 → 下游 fatal → 重派 Phase 3
-- **Surface**（preset-conditional）：当 `chunks/index.json.components[]` 中**任一** component 声明 `surface` 字段（surface-aware preset），所有场景**必填** `**Surface:**` 锚点；值必须出现在该 preset 声明过的 surface 集合里（运行时由 chunks/index.json 决定）。其他 preset（无 surface 字段）此锚点可省。**同一 scene 内 cited 的 component 若有 `surface` 字段且与 Surface 不一致 → validator fatal**（视觉契约破坏，不同 surface 的元素不可同 scene）
 - **PrimarySubjectTimeline + Handoff**：multi-act scene、或 action/payoff + proof/supporting subject 同屏的 scene 必写。缺任一 → validator fatal。**位置**：紧跟在 SFX 块之后、散文之前（机器原因见上方模板说明——它们要落进 `creative_brief` 给 worker）
 - **块内顺序**：所有 `**锚点:**` 行（含 SFX bullets、PrimarySubjectTimeline、Handoff）必须排在自由散文之前；散文开始后再出现任何 `**Word:**` 锚点行 → validator fatal（交错会让 worker 的 brief 形态不可预测）
 - **文件级**：第一个 `## Scene` 之前不得有项目级前言 / 承诺段（只允许一行 H1 标题）→ validator fatal（见本节开头"文件整体形状"）
-- **avoids_same_scene 互斥**（Components 锚点存在时）：每对 cited component 检查 `chunks/index.json.components[].avoids_same_scene` 列表；命中任一对 → validator fatal（具体互斥关系由 preset 自己声明）
 - **Transition**（soft / 出现才校验）：type 必须在 TRANSITION-REGISTRY 词汇内；方向只对 directional type（push-slide）合法；duration `0 < dur ≤ 2.0s`。**Continuity ⟺ Tier-A 双向强制**：`Continuity: break` 不可命名 Tier-A（`shared-element`）；反之 `Continuity: continue` **必须**命名 Tier-A `shared-element`（**省略 `**Transition:**` 走 Tier-B 默认也算违反**）→ 两向皆 validator fatal
 - **Bridge**（soft / 仅 Tier-A）：仅当 `**Transition:** shared-element` 时出现，值为单个反引号包裹的 kebab-case 逻辑名；`shared-element` 必须配 `**Continuity:** continue`（否则下游 prep fatal —— 两场要落同一 worker 才能写共享元素）。非 shared-element 的 scene 写了 Bridge → validator 警告/忽略
 
@@ -133,14 +106,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 写 Blueprint 锚点的价值：(1) 强制 plan agent 对"用 / 不用 blueprint"做出明确承诺，避免"既不想用又模糊使用"；(2) 审视 plan 时一眼能看出整片对 blueprint 的依赖程度；(3) build agent 看到 `based-on` / `extended` 时**可以**去读对应 blueprint 全文（plan 不让读，build 让读）。
 
-**Components 锚点（soft —— 强烈推荐写）**：
-
-- 列出该场景在视觉上**真的会用到**的 component id（来自 `chunks/index.json.components[].id`），反引号包裹，方括号包围
-- 例：`**Components:** [\`hero\`, \`dot-grid-bg\`, \`deco-pink-block\`]`
-- 不用任何 component 时整行省略
-- 列错 id（拼写错、组件不存在）→ 下游 fatal（重派 Phase 3）；validator 只校验语法
-
-写 Components 锚点的价值：让 plan agent 提前承诺"这个场景的中间层 = 哪个 component"，避免散文里说 "use the manifesto component palette logic" 但下游无法定位你指的是哪个组件。和 Blueprint 锚点一样，这是对自己决策的承诺，而不是对下游怎么用的描述。
+**组件（无锚点 —— worker 自选）**：plan **不再**用 `**Components:**` 锚点预先 cite 组件。整份组件库（`chunks/components/`）转发给 worker，worker 按视觉判断挑用。plan 只在散文里按**角色**点出想要的构件（"a framed stat block"、"a pill row of labels"），不点 id、不抄 HTML —— 和 palette / type 一样按角色 / 用途引用。
 
 **Transition 锚点（可选 / soft —— 命名「这一场怎么被进入」）**：
 
@@ -221,7 +187,7 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 **Continuity 直接来自 story-design**（不再反推）：`narrator_scripts.json` 的每个 scene `transition.continuity`（`break` | `continue`）是叙事层已经定好的判断 —— **照抄到 `**Continuity:**` 锚点**。`continuity` 已跟着 `intent` 定死（`morph` ⇒ `continue`，其余 ⇒ `break`），所以照抄即可；**凡 `continue` 的场必然 `intent: morph`，下游要求它命名 `shared-element`**（见 §2 双向硬契约）。Scene 1 永远 `break`。跨场景一致性见 §5 的"多样性"软指南。
 
-**Transition：把 story-design 的叙事 `intent` 翻译成具体 registry 类型**（这是 visual-design 的活 —— 你有 preset/palette/surface/energy 上下文，story-design 没有）。`narrator_scripts.json` 每个 scene 的 `transition.intent` 是 5 个叙事意图之一；按下表翻译成 `**Transition:**` 锚点的 registry 类型（完整词汇见 `<SKILL_DIR>/../hyperframes-animation/transitions/TRANSITION-REGISTRY.md`）：
+**Transition：把 story-design 的叙事 `intent` 翻译成具体 registry 类型**（这是 visual-design 的活 —— 你有 preset/palette/背景/energy 上下文，story-design 没有）。`narrator_scripts.json` 每个 scene 的 `transition.intent` 是 5 个叙事意图之一；按下表翻译成 `**Transition:**` 锚点的 registry 类型（完整词汇见 `<SKILL_DIR>/../hyperframes-animation/transitions/TRANSITION-REGISTRY.md`）：
 
 | story-design `intent`               | → `**Transition:**` registry 类型                       | 备注                                                                                  |
 | ----------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -281,14 +247,14 @@ chunks 由 Phase 1b 的 `emit-chunks.mjs` 切好、**已内联在 dispatch 的 `
 
 ## 4. 撰写散文（在三行 anchor 之后）
 
-**第 0 步（动笔前，强制）**：先向自己复述本次硬契约（Surface 契约 / Voice register / 每场 Blueprint 决策）——完整三条见 **agent 提示词的「动笔前先复述契约」一节**（那是常驻提示词，单一真源，此处不重复）。关键约束：复述**只在脑中定调，绝不写进 `section_plan.md`**（写进去 = 项目级前言 = §2"文件整体形状"禁止项 = validator fatal）。
+**第 0 步（动笔前，强制）**：先向自己复述本次定调（Voice register / 每场 Blueprint 决策）——完整见 **agent 提示词的「动笔前先复述契约」一节**（那是常驻提示词，单一真源，此处不重复）。关键约束：复述**只在脑中定调，绝不写进 `section_plan.md`**（写进去 = 项目级前言 = §2"文件整体形状"禁止项 = validator fatal）。
 
 然后按以下 8 条顺序写一段自由散文。这段散文会**原样**传给下游的 build agent —— 把自己当成在向一位没见过本品牌的资深动画师做 brief。
 
 1. **情感与节奏脚注** —— 一句话，点名本节拍的*感觉*和*节奏*（"frustrated, slightly-off comma"、"luminous launch-film slow build"）。**这是真 plan 与通用 AI 输出的分水岭。**
 2. **空间关系** —— composition 模板（centered / thirds / split / layered / asymmetric / triptych / strip）、主素材的画布占比（≥40%）、留白意图。**本片 dispatch 顶部 `Captions: enabled` 时（编排器从 audio_meta 算出的规划提示；prep.mjs 在 Step 5 会重算权威闸 `group_spec.captions_enabled`）**：字幕占底部 ~17% 保留带，凡把内容压低的概念（full-bleed cards、oversized hero、large CTA、stat stamp）必须**显式告诉 worker 把所有内容留在上 ~83%、底部 ~17% 当字幕领地**，垂直居中锚 ~0.42×高。措辞例："centered in the upper ~83%, caption band reserved below"、"bottom edge of card sits just above the caption band"、"CTA vertically centered around 42% of canvas height"。背景 / ambient 层不受限、照常 full-bleed。
 3. **Effect → asset 映射** —— 对 `**Effects:**` 中的每个 id，命名驱动它的素材（`public/<basename>`，来自本场景 `assetCandidates`）或文本标签，以及在场景 phase timeline 内*触发的时刻*。**默认把本场 `assetCandidates` 都用上**（story-design 已按覆盖率铺开过，这里别再砍）：焦点主体仍 ≥40% 画布、挑最贴叙事的那个，其余候选**降级共存**而非丢弃——supporting / ambient 层、triptych / strip / layered 模板让多素材并置（分主次，不是并列等大网格），或在不同 phase 先后出场。某候选确实塞不进本场 → 在第 7 条否定句里点名"本场不用 `public/X`、因为…"，**别静默忽略**（它若也没出现在别的 scene 就等于废掉）
-4. **品牌样式覆盖层（按角色，不按值）** —— Palette：点名 60% canvas / 30% surface（这份预设若无 surface token，用 hairline + canvas 重复并明确说出来）/ 10% accent，accent 绑定到哪个焦点元素；Type：display 用于什么、body 用于什么、是否有 mono eyebrow；Motion：只引**规范角色键** `EASE.entry` / `EASE.emphasis` / `EASE.exit` / `EASE.drift` 与 `DUR.snap` / `DUR.med` / `DUR.slow`（§1 第 5 条；这些是 `easings.js` 保证暴露的角色键）——不要自造别名键名，worker 是按这套规范键直接用的，引了它没有的键会落空。**完全不抄 hex / 字体名 / ease 曲线 / px / em / ms。** 如果 `chunks/tokens.css` 缺某 token（如 mono 字体未提取），点明并说预期 fallback
+4. **品牌样式覆盖层（按角色，不按值）** —— Palette：点名 60% canvas / 30% surface（这份预设若无 surface token，用 hairline + canvas 重复并明确说出来）/ 10% accent，accent 绑定到哪个焦点元素；Type：display 用于什么、body 用于什么、是否有 mono eyebrow；Motion：只引**规范角色键** `EASE.entry` / `EASE.emphasis` / `EASE.exit` / `EASE.drift` 与 `DUR.snap` / `DUR.med` / `DUR.slow`（§1 第 4 条；这些是 `easings.js` 保证暴露的角色键）——不要自造别名键名，worker 是按这套规范键直接用的，引了它没有的键会落空。**完全不抄 hex / 字体名 / ease 曲线 / px / em / ms。** 如果 `chunks/tokens.css` 缺某 token（如 mono 字体未提取），点明并说预期 fallback
 5. **多阶段编排** —— 阶段序列 `entry → ambient drift → major transition → stillness → emphasis → exit` 及粗略时长比例；明确点出 `stillness-before-climax` 节拍；每阶段命名弹簧意图（`entry` / `gentle` / `snappy` / `heavy` / `slam`）。若已通过 §3 选中某个 blueprint，phase 序列沿用该 blueprint index 描述里的 phase 骨架；本场景的情感节拍决定每阶段的时长比例与 ease 意图，**不必逐字复制 blueprint 的 timing 数值**（那是 build 的事）。phase 用 **scene-local 相对秒数 / 比例**（如 "0-0.45s 入场"、"~0.5s setup hold"）即可；**不要在散文里复述场景总时长 / 结束秒数**（如 "持续到 2.82s 退出"）——总时长在 `**Duration:**` 锚点，且 worker 的 `data-duration` 以 `estimatedDuration_s` 钉死，散文里再写一个约数只会和它冲突。块顺序（PST/Handoff 在散文前）见 §2。
 6. **持续 / 环境运动** —— entry 落定后是什么让场景持续活着：hero 乘性 breathing（±2-5% scale）、卡片正弦 drift（±6-8px 反相）、icon orbit、halftone 密度形变、CTA glow pulse
 7. **一条否定句** —— 本场景**不能**做什么，用 codex-plugin 的语气（"no halo behind the bell — Jake killed those"、"no neon glow, this is a workspace"）
@@ -319,20 +285,6 @@ Beat 2b — the spiral (frustrated, slightly-off comma). Centered chat-app compo
 ```
 
 —— `extended` 表示采纳了 `hook-counter-burst` 的全部 4 个 `uses`（前 4 个 effect），并额外补了 `sine-wave-loop` 加强持续运动。
-
-### Components 锚点样例
-
-```markdown
-## Scene 2: brand-reveal
-
-**Effects:** [`discrete-text-sequence`, `coordinate-target-zoom`, `3d-text-depth-layers`, `asr-keyword-glow`, `sine-wave-loop`]
-**Duration:** 8.26s
-**Continuity:** continue
-**Blueprint:** extended `brand-reveal-assemble-zoom`
-**Components:** [`hero`, `chip`, `dot-grid-bg`]
-```
-
-—— `Components` 锚点在散文之前。散文里继续按 component **角色**引用（"the chip outlines the keywords"），不抄组件 HTML。
 
 ### 散文样例（先读这个再动笔）
 

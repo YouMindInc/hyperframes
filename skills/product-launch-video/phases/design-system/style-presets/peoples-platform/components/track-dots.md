@@ -1,11 +1,3 @@
----
-surface: paper
-role: timeline
-composes: track-dot, pill-chip
-slots: [headline, label_1, label_2, label_3, label_4]
-avoids_same_scene: stamp-statement, end-stamp
----
-
 ```html
 <div class="pp-track-dots">
   <h3 class="pp-track-dots-h">{HEADLINE}</h3>

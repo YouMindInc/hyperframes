@@ -1,11 +1,3 @@
----
-surface: paper
-role: statement
-composes: triple-stamp, grain-tooth
-slots: [headline, script_word, sub]
-avoids_same_scene: framed-stamp, mega-stat, end-stamp
----
-
 ```html
 <div class="pp-stamp-statement">
   <h3 class="pp-stamp-statement-h">

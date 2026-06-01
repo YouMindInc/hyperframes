@@ -302,20 +302,12 @@ Apply ONLY to DOM-visible text (headlines, chips, button labels, stat captions).
 
 ## §H Scene composition hints
 
-**Surface contract** — every scene picks ONE surface from the start; never mix within a scene. Components are surface-tagged (see `chunks/index.json.components[].surface`):
+**Single surface — paper.** Every scene sits on the paper poster-board canvas (`#root` below). The blue authority plate and orange signal are **no longer full-bleed scene surfaces** — they live as **self-contained components**: `framed-stamp` / `mega-stat` / `end-stamp` carry their own `var(--blue)` fill + cream frame, `orange-quote` carries its own `var(--orange)` — dropped as cards onto the paper canvas. (A blue framed plate floating on paper-board reads MORE poster-like than a full-bleed blue scene.) Scene transitions go through hard cut, never fade.
 
-| surface  | components that work                                                | typical narrative role                              |
-| -------- | ------------------------------------------------------------------- | --------------------------------------------------- |
-| `paper`  | stamp-statement, script-em, diamond-list, track-dots, rotated-stamp | manifestos, ledes, lists, timelines, closing stamps |
-| `blue`   | framed-stamp, mega-stat, end-stamp                                  | authority moments, hero stats, closers              |
-| `orange` | orange-quote                                                        | customer voice / testimonial                        |
-
-Scene transitions go through hard cut, not surface fade.
-
-**Surface `#root` CSS** — paste-ready stanza for the Phase 4b scene worker. When `dispatch.surface` is set, the worker drops the matching block into the scene's `#root { ... }` instead of the default `background: var(--canvas)`. Missing the override → mp4 renders generic SaaS canvas, loses half the preset's visual signature.
+**`#root` CSS** — the one paste-ready paper stanza for the Phase 4b worker:
 
 ```css
-/* surface: paper —— poster-board base + paper grain */
+/* paper poster-board base + paper grain */
 #root {
   background: var(--paper);
   color: var(--ink);
@@ -325,39 +317,16 @@ Scene transitions go through hard cut, not surface fade.
   background-blend-mode: multiply;
   font-family: var(--font-body);
 }
-
-/* surface: blue —— authority plate + cream-frame inset.
-   ::after frame is z-index:0, so all scene content MUST be wrapped in
-   <div style="position:relative; z-index:1;"> to sit above the frame. */
-#root {
-  position: relative;
-  background: var(--blue);
-  color: var(--cream);
-  font-family: var(--font-body);
-}
-#root::after {
-  content: "";
-  position: absolute;
-  inset: 48px 64px;
-  border: var(--frame-cream);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* surface: orange —— signal plate (≤ 1 scene per video) */
-#root {
-  background: var(--orange);
-  color: var(--blue);
-  font-family: var(--font-body);
-}
 ```
 
-**Material composition rules** (peoples invariants — encoded in component frontmatter `avoids_same_scene`):
+(`--blue` / `--orange` / `--cream` stay defined in §B because the accent-card components use them — they're just no longer applied to `#root`.)
 
-- Single triple-stamp per plate. `stamp-statement` + `framed-stamp` in same scene → visual collision; pick one.
-- Single script-accent per stamp. Two `script-em` instances in one scene → register breaks.
-- Cream frame goes only on blue or orange surfaces, never paper. (Cream-on-paper has no contrast.)
-- Round stamps (`rotated-stamp`, `end-stamp`) belong to **closer beats** only — never opening/intro scenes.
+**Composition taste (soft — guidance, not a machine-enforced contract):**
+
+- Single triple-stamp per plate — reserve the drop for one focal phrase; never split focus.
+- Single script-accent (`script-em`) per scene — a second one breaks the register.
+- Round stamps (`rotated-stamp`, `end-stamp`) read as closer beats — keep them out of opening/intro scenes.
+- One focal accent card (blue/orange) per scene, paper breathing around it — don't crowd two authority plates together.
 
 **Focal sizing per 1920×1080** (rendered px, driven by component CSS `clamp()`):
 
@@ -368,9 +337,9 @@ Scene transitions go through hard cut, not surface fade.
 
 **Brand colour placement (60 / 30 / 10)**:
 
-- 60% — `var(--paper)` (paper scenes) or `var(--blue)` (framed scenes) — full-bleed background
-- 30% — `var(--cream)` for frame chrome, `var(--ink)` for type
-- 10% — `var(--orange)` for the stamp head — exactly one focal element per plate
+- 60% — `var(--paper)` — full-bleed poster-board background
+- 30% — `var(--ink)` for type, `var(--cream)` for accent-card frame chrome
+- 10% — `var(--orange)` for the stamp head / signal — one focal accent per plate
 
 ## §I Page-level CSS (makes design.html itself read as peoples)
 

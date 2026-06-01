@@ -1,11 +1,3 @@
----
-surface: blue
-role: closer
-composes: cream-frame, triple-stamp, round-stamp
-slots: [script_before, headline, credit, mark_big, mark_small]
-avoids_same_scene: framed-stamp, mega-stat, rotated-stamp, stamp-statement
----
-
 ```html
 <div class="pp-end-stamp">
   <span class="pp-end-stamp-pre">{SCRIPT_BEFORE}</span>

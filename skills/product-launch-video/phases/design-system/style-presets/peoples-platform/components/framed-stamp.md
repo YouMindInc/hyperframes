@@ -1,11 +1,3 @@
----
-surface: blue
-role: authority
-composes: cream-frame, triple-stamp, pill-chip
-slots: [pill, headline, sub]
-avoids_same_scene: stamp-statement, mega-stat, end-stamp
----
-
 ```html
 <div class="pp-framed-stamp">
   <span class="pp-framed-stamp-pill">{KICKER}</span>

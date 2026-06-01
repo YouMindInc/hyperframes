@@ -23,6 +23,14 @@
     "body": "Space Grotesk",
     "script": "Caveat",
     "mono": "DM Mono"
+  },
+  "palette": {
+    "primary": { "value": "#1F3A8A", "constraint": "deep desaturated ink — reads near-black on paper; carries every text fill, border, divider, pin illustration, and hard offset shadow" },
+    "accent": { "value": "#C2342B", "constraint": "single vivid warm — used in at most two spots (the rotated rubber stamp + the negative pill); never as body text, card fill, or chip" },
+    "secondary": { "value": "#C9A66B", "constraint": "muted earthy third tone (kraft / olive / orange from the source palette); structurally optional, used only when a scene needs a rare third tone" },
+    "canvas": { "value": "#EFE56A", "lock": "anchor", "constraint": "warm saturated legal-pad yellow — the page ground; brand DNA tints it via color-mix() in §B, never replaces it, so the paper register survives every brand palette" },
+    "surface": { "value": "#F8F1D6", "lock": "anchor", "constraint": "off-white cream — the pinned-card fill; brand DNA tints via color-mix() in §B, never replaces" },
+    "ink": { "alias": "primary" }
   }
 }
 ```
@@ -296,57 +304,6 @@ Take the brand's product description / value prop. Transform with:
 
 - IN: `Figma helps teams design products collaboratively in real time`
 - OUT: hero=`Designed together.` / chip=`FIELD REPORT 04` / stamp=`RECEIVED` / margin-note=`finally — one canvas, everyone home`
-
-## §H Scene composition hints (Phase 4b layout guidance)
-
-**Surface alternation across scenes**
-
-- Default surface: `paper-surface` (yellow paper + layered radial gradients + grain overlay at opacity 0.35 with multiply blend).
-- Cream variant: `cream-surface` for quieter scenes (quote panels, notice slides).
-- Ink-blue variant: section dividers and high-contrast moments. Background flips to `var(--brand-primary)`, text flips to `var(--surface-paper)`, grain overlay opacity drops to 0.25 with screen blend mode (multiply on ink turns the slide muddy).
-- Alternate paper → cream → paper → ink across the video. Two consecutive ink slides = broken pacing.
-
-**Hero text**
-
-- Cover scene: Space Grotesk 700 at ~196px, max-width ~14ch, mixed case, ink color. One pin illustration at 320–420px in the upper-right (rotated −8° to +14°), one Caveat marginal note in the lower-right (~38px, rotated −3°, right-aligned).
-- Section-divider scene (ink): Space Grotesk 700 at ~168px in paper color, large pin illustration (up to 640px) at +14° to +20° on the opposite corner. One Caveat scribble in the bottom margin.
-- Hero takes 50–60% of canvas width. Never two hero-tier elements per scene.
-
-**Card grids**
-
-- Notecard grid: 3 columns × 1 row, 32px gap, each card 36/28/28 padding, pin overlapping the top edge.
-- Process flow: 5 columns, 22px gap, pin centered on the top edge of each card.
-- Stats grid: 3 columns, 28px gap, Caveat `<small>` unit suffix on each big numeral.
-- Alternate card fills (`cream` / `paper-2` / `paper-extra`) to break adjacent same-tone cards.
-- Apply `--tilt-card-askew` to exactly **one** card per row for the pinned-askew effect — never to every card.
-
-**Brand color placement (role contract)**
-
-- `--brand-primary` carries the ink role: every text fill on yellow / cream surfaces, every border, every divider, every pin illustration, every hard offset shadow. It is the system's structural color.
-- `--brand-accent` carries the stamp / negative-pill role only. **Two roles, no others.** Never as general text, never as a card fill, never on a chip.
-- `--brand-secondary` is intentionally unused at the structural level — reserved for optional accent layers (kraft / olive / orange tertiaries from the source palette) when a scene calls for a third tone (rare).
-- Body text on ink surfaces flips to `var(--surface-paper)` at 0.85 opacity for muted lead.
-
-**Pin illustrations are non-optional decoration**
-
-- Every card carries a `safety-pin` overlay at the top edge (typical: width 96–120px, top −14 to −22px, left 28–90px, rotated −6° to −12°).
-- Cover and section-divider scenes carry an oversized pin (320–640px wide) as composition, not decoration.
-- Every pin is rotated off-axis. A pin at 0° reads as a UI icon, not a pinned object.
-
-**Stamp placement**
-
-- Status stamp in the upper area of one card per scene (max). Always at −4° rotation, always 3px solid red border + red mono uppercase. Never use red anywhere else.
-
-**Hairline + dashed borders are the universal frame**
-
-- 1.5px solid `var(--brand-primary)` on every card, every panel, every table container.
-- 1.5px dashed `color-mix(in srgb, var(--brand-primary) 45%, transparent)` for inter-row separators (agenda rows, CTA steps, in-card source notes).
-- Border widths never exceed 1.5px on cards, 3px on the stamp, 2px on the Caveat `.underline` span. No other border weights exist.
-
-**Transitions between scenes**
-
-- Short cross-dissolve at DUR.med (0.5s) with EASE.entry. Optional: a single pin-drop or stamp-slam beat on the inbound scene.
-- NEVER slide / wipe / zoom / page-flip — those read as digital chrome.
 
 ## §I Page-level CSS (overrides design.html's neutral chrome — makes the doc itself read as pin-and-paper)
 

@@ -93,7 +93,7 @@
 | **§T** Type-role atlas         | 可选(标准含) | ` ```type-roles ` JSON,命名文字角色                                              | → `chunks/type-roles.md`(worker 按 id 查)      |
 | **§E** Motion                  | **必需**     | `const EASE = {…}; const DUR = {…}` GSAP 常量                                    | → `MOTION` 标记 → `chunks/easings.js`          |
 | **§G** Voice transform recipe  | **必需**     | DOM 可见文字的改写 register(strip/case/断句)                                     | → `VOICE` 标记 → `chunks/voice.md`             |
-| **§H** Scene composition hints | 推荐         | surface 契约 / 材质互斥 / 60-30-10 配色                                          | → `HINTS` → `chunks/composition-hints.md`      |
+| **§H** Scene composition hints | 推荐         | 背景/材质偏好 / 60-30-10 配色(样式参考,非契约)                                   | → `HINTS` → `chunks/composition-hints.md`      |
 | **§I** Page-level CSS          | 可选(标准含) | design.html 外壳 CSS + `.preset-native-scope` + `.t-trole-*` 角色 CSS + 装饰 CSS | 注入 design.html `<style>`                     |
 
 **两条硬约束(parser 会直接报错退出):**
@@ -114,16 +114,7 @@
 - **一个 `.md` = 一个组件**;文件名(去 `.md`)= id,必须 `[a-z0-9-]+`。
 - 至少 **1 个**(零组件构建失败)。按文件名字母序 → 产物确定。
 - 文件体 = **裸 HTML + 可选 `<style>`**,用 `{SLOT}` 占位(如 `{HEADLINE}`/`{LEDE}`/`{NUM}`)。**不要**自己加 `<!-- COMPONENT -->` 标记(parser 加)。
-- 可选 YAML frontmatter(surface-aware preset 用),给 plan agent 过滤:
-  ```
-  ---
-  surface: pastel
-  role: statement
-  composes: offset-shadow
-  avoids_same_scene: end-stamp
-  slots: [headline, body]
-  ---
-  ```
+- 文件体只放裸 HTML + `<style>`,**不写 YAML frontmatter**。(历史上支持 `surface`/`role`/`composes`/`avoids_same_scene`/`slots` frontmatter 给 plan agent 做 surface 过滤 + 互斥校验——**该机器已移除**:design system 现在是纯样式参考,组件由 Phase 4b worker 按视觉判断自选,不再由 plan 按 surface/role 过滤,也没有 surface 锚点 / Components 锚点。emit-chunks 仍能解析旧 frontmatter 但下游不再消费;新组件别写。)
 - CSS 用 `var(--*)` 引品牌 token,class 加 preset 前缀(Block Frame 用 `.bf-*`)。Block Frame 现有 10 个:`hero / feature-card / stat-counter / timeline-step / quote-frame / button / chip / dot-grid-bg / corner-pins / star-burst`。
 
 ---
@@ -177,7 +168,7 @@ cd my-new-style
 ```
 
 1. 改 `preset.md` 的 `preset-meta`:`name`/`label`/`fingerprint`/`match_signals`/`best_for`/`avoid_for`/`chromeFonts`(换成新风格的原生字体 + Google Fonts href)。
-2. 逐节改写 §A→§I:换 §B token(色/字/几何)、§D 回退字体、§T 角色尺度(**px_min ≥24**)、§E 的 EASE/DUR、§G voice recipe、§H surface 规则、§I 外壳 + `.t-trole-*` + 装饰 CSS。
+2. 逐节改写 §A→§I:换 §B token(色/字/几何)、§D 回退字体、§T 角色尺度(**px_min ≥24**)、§E 的 EASE/DUR、§G voice recipe、§H 构图/配色 hints、§I 外壳 + `.t-trole-*` + 装饰 CSS。
 3. 重写 `components/*.md`(把 `.bf-` 前缀换成你的;**所有 font-size ≥24**)。
 4. 改 `caption-skin.html` 的 `<style>` 视觉为新风格(§3.5 契约:只动视觉,别碰三个洞 / `.caption-*` 钩子 / `data-composition-id` / `window.__timelines["captions"]` / `gsap.set` 那套)。`cp -r block-frame` 已把它带过来,改视觉即可。
 5. 按 §6 重新生成 + 验证。
@@ -199,7 +190,7 @@ cd my-new-style
 1. **抽 DNA**:主色/中性/强调 → §B token;字体族 → `chromeFonts` + §D;圆角/边框/阴影/间距 → §B 私有 token(`--xx-*`)。
 2. **定文字尺度** → §T 角色(**全部 ≥24**),含 hero/标题/正文/eyebrow/数字/计数器等。
 3. **招牌手势 → component**:把该风格"一眼认得出"的构件(卡片、引用框、stat、时间线、装饰)各做成一个 `components/<id>.md`。
-4. **填** §A 意图、§E 运动语言、§G voice、§H surface 规则。
+4. **填** §A 意图、§E 运动语言、§G voice、§H 构图/配色 hints。
 5. **字幕外观 → `caption-skin.html`**(§3.5,必需):把这套风格的下三分之一字幕按契约做出来(`cp` block-frame 改视觉)。
 6. 套 §4 不变量,按 §6 验证。
 
