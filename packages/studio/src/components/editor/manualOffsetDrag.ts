@@ -235,11 +235,9 @@ export function createManualOffsetDragMember(input: {
   const initialPathOffset = captureStudioPathOffset(input.element);
   const gestureToken = beginStudioManualEditGesture(input.element);
   const measured = measureManualOffsetDragScreenToOffsetMatrix(input.element, initialOffset);
-  if (!measured.ok) {
-    restoreStudioPathOffset(input.element, initialPathOffset);
-    endStudioManualEditGesture(input.element, gestureToken);
-    return { ok: false, reason: measured.reason, selection: input.selection };
-  }
+  const screenToOffset: ManualOffsetDragMatrix = measured.ok
+    ? measured.matrix
+    : { a: 1, b: 0, c: 0, d: 1 };
 
   return {
     ok: true,
@@ -250,7 +248,7 @@ export function createManualOffsetDragMember(input: {
       initialOffset,
       initialPathOffset,
       gestureToken,
-      screenToOffset: measured.matrix,
+      screenToOffset,
       originRect: input.rect,
     },
   };
