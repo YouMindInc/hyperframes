@@ -61,4 +61,9 @@ export const SUPPORTED_EASES = [
   "expo.in",
   "expo.out",
   "expo.inOut",
+  "spring-gentle",
+  "spring-bouncy",
+  "spring-stiff",
+  "spring-wobbly",
+  "spring-heavy",
 ];

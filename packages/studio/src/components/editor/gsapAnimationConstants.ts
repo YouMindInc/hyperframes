@@ -83,6 +83,11 @@ export const EASE_LABELS: Record<string, string> = {
   "expo.out": "Very snappy stop",
   "expo.in": "Very slow start",
   "expo.inOut": "Dramatic ease",
+  "spring-gentle": "Gentle spring",
+  "spring-bouncy": "Bouncy spring",
+  "spring-stiff": "Stiff spring",
+  "spring-wobbly": "Wobbly spring",
+  "spring-heavy": "Heavy spring",
 };
 
 export const EASE_CURVES: Record<string, [number, number, number, number]> = {
