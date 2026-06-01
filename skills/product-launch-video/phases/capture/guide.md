@@ -1,47 +1,47 @@
-# capture — how-to (Phase 1)
+# capture - how-to (Phase 1)
 
-抓取 marketing/landing page → 把全部产物写到视频项目根下的 `./capture/`。设计系统（Phase 1b）和视觉/故事 phase 都直接读 capture，不再有单独的 designlang 抓取。
+Capture a marketing/landing page -> write all artifacts under `./capture/` in the video project root. The design system (Phase 1b) and visual/story phases read capture output directly; there is no separate designlang capture anymore.
 
-## 启动
+## Start
 
 ```bash
 (cd "$PROJECT_DIR" && npx hyperframes capture "<TARGET_URL>" -o ./capture)
 ```
 
-可选 flag（默认不需要）：
+Optional flags (normally not needed):
 
-- `--timeout 60000` — JS-heavy 站点首屏未注入时，给 networkidle2 更多窗口
-- `--skip-assets` — 不下载图片 / SVG / 字体（仅 schema 探查时用，正常 pipeline 不要）
-- `--max-screenshots 12` — 减少滚动位截图数量
+- `--timeout 60000` - give `networkidle2` a longer window when the first viewport of a JS-heavy site has not injected yet
+- `--skip-assets` - do not download images / SVGs / fonts (only for schema probing; do not use in the normal pipeline)
+- `--max-screenshots 12` - reduce the number of scroll-position screenshots
 
-## 产物
+## Artifacts
 
 ```
 capture/
 ├── extracted/
-│   ├── tokens.json              # title / desc / cssVariables / fonts / colors / colorStats（品牌色分类信号）/ headings / ctas / svgs / page{width,height,viewport} / sections[].{type,rect(x,y,w,h),heading,text,callsToAction,layout,assetUrls(远程),assets(本地路径)}
+│   ├── tokens.json              # title / desc / cssVariables / fonts / colors / colorStats (brand-color classification signal) / headings / ctas / svgs / page{width,height,viewport} / sections[].{type,rect(x,y,w,h),heading,text,callsToAction,layout,assetUrls(remote),assets(local paths)}
 │   ├── design-styles.json       # typography roles / buttons / cards / nav / shadows / radius / spacing
-│   ├── animations.json          # CDP + Web Animations + CSS keyframes catalog（含 easing 字符串）
-│   ├── fonts-manifest.json      # OpenType name-table 反查的 family/weight/style
-│   ├── asset-descriptions.md    # 每张图一行（DOM 位置 + 可选 Gemini caption）
-│   ├── visible-text.txt         # 全文 plain text dump
-│   ├── video-manifest.json      # 每个 <video> 的截图 + 上下文（如有）
-│   ├── shaders.json             # WebGL 源码（如有 canvas）
-│   └── page.html                # 整页自包含再现（内联 CSS + data-URI 图）— page-card 重建的保真参照，不进渲染
+│   ├── animations.json          # CDP + Web Animations + CSS keyframes catalog (includes easing strings)
+│   ├── fonts-manifest.json      # family/weight/style reverse lookup from OpenType name-table
+│   ├── asset-descriptions.md    # one line per image (DOM position + optional Gemini caption)
+│   ├── visible-text.txt         # full plain text dump
+│   ├── video-manifest.json      # screenshots + context for each <video> (if any)
+│   ├── shaders.json             # WebGL source (if there is canvas)
+│   └── page.html                # self-contained full-page reproduction (inline CSS + data-URI images) - fidelity reference for page-card reconstruction, not used in render
 ├── assets/
 │   ├── *.svg / *.jpg / *.png / *.webp / *.mp4
-│   ├── fonts/                   # 站点字体 woff/woff2/otf
-│   ├── svgs/                    # inline SVG 单独落盘
-│   ├── videos/previews/         # <video> 截帧
-│   └── contact-sheet-*.jpg      # 资产接触表
+│   ├── fonts/                   # site fonts woff/woff2/otf
+│   ├── svgs/                    # inline SVGs written separately
+│   ├── videos/previews/         # <video> frame captures
+│   └── contact-sheet-*.jpg      # asset contact sheets
 ├── screenshots/
-│   ├── scroll-*.png             # 滚动位 viewport 截图
+│   ├── scroll-*.png             # viewport screenshots at scroll positions
 │   └── contact-sheet-*.jpg
 ├── meta.json
-└── CLAUDE.md / AGENTS.md / .cursorrules   # capture 自带的 agent scaffolding（本 skill 不强读）
+└── CLAUDE.md / AGENTS.md / .cursorrules   # agent scaffolding bundled by capture (this skill does not require reading it)
 ```
 
-## 验证
+## Validation
 
 ```bash
 [ -s ./capture/extracted/tokens.json ] && \
@@ -49,24 +49,24 @@ capture/
 [ -d ./capture/assets ] && echo ok || echo missing
 ```
 
-缺任一 → 报缺失项，停止。若 `./capture/BLOCKED.md` 存在：
+If any item is missing -> report the missing item and stop. If `./capture/BLOCKED.md` exists:
 
-- "Anti-bot protection detected" → 换站，或手动喂 HTML（暂不支持）
-- "Page navigation timed out" → 加 `--timeout 60000` 重跑
+- "Anti-bot protection detected" -> use a different site, or manually provide HTML (not supported yet)
+- "Page navigation timed out" -> rerun with `--timeout 60000`
 
-## 报告（回给用户）
+## Report (back to the user)
 
-- Final URL ← 优先 `meta.json.id`（若为 URL）；否则从 `capture/CLAUDE.md` 首部的 URL 行 grep
-- Page title ← `tokens.json.title`
-- Section candidates：`tokens.json.sections.length` + 简短列表
-- Assets：`ls capture/assets | wc -l`，按扩展名拆分
-- Fonts：`tokens.json.fonts` 列表（与 `fonts-manifest.json` 对齐情况）
-- 动画 / shader / Lottie / video：`animations.json.summary` + `shaders.json` 长度 + 是否有 `assets/lottie/`（如有）和 `extracted/video-manifest.json`
-- 异常（timeout / no assets / blank screenshot / 反爬）
+- Final URL <- prefer `meta.json.id` (if it is a URL); otherwise grep the URL line at the top of `capture/CLAUDE.md`
+- Page title <- `tokens.json.title`
+- Section candidates: `tokens.json.sections.length` + brief list
+- Assets: `ls capture/assets | wc -l`, split by extension
+- Fonts: `tokens.json.fonts` list (and alignment with `fonts-manifest.json`)
+- Animations / shader / Lottie / video: `animations.json.summary` + `shaders.json` length + whether `assets/lottie/` exists (if any) and `extracted/video-manifest.json`
+- Anomalies (timeout / no assets / blank screenshot / anti-bot)
 
-## 写日志
+## Write Log
 
-追加到视频项目根的 `./context.log`：
+Append to `./context.log` in the video project root:
 
 ```
 ## capture [done <ISO timestamp>]
@@ -75,8 +75,8 @@ Assets: <count>
 Notes: <one line>
 ```
 
-## 约束
+## Constraints
 
-- 所有命令用 `(cd "$PROJECT_DIR" && ...)` subshell；不要单独 `cd`。
-- 只写 `./capture/`，不碰 `./design-system/`。
-- 强制 English：capture 已默认设置 `Accept-Language: en-US,en;q=0.9`。如果 `tokens.json.headings` 仍是本地语言，在 `context.log` 的 Notes 行记一条 anomaly 并继续。
+- Run every command through a `(cd "$PROJECT_DIR" && ...)` subshell; do not run a standalone `cd`.
+- Only write `./capture/`; do not touch `./design-system/`.
+- Force English: capture already defaults to `Accept-Language: en-US,en;q=0.9`. If `tokens.json.headings` are still in a local language, note an anomaly in the `Notes` line of `context.log` and continue.

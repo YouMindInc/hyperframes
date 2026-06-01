@@ -1,63 +1,63 @@
-在 `section_plan.md` 中按**名称**（用反引号包裹）引用这些动效。构建 agent（Phase 4）会将每个名称翻译为对应的 `hyperframes-animation/rules/<name>.md` 配方。
+Reference these effects in `section_plan.md` by **name** (wrapped in backticks). The build agent (Phase 4) translates each name into the corresponding `hyperframes-animation/rules/<name>.md` recipe.
 
-Phase 3 的 `validate.mjs section` 实际校验的真值源是 **`hyperframes-animation/rules/` 目录下存在的 `.md`**（它 `readdirSync` 那个目录建集合），不是本 catalog。本 catalog 是"策划应当引用"的精选子集。两个差异点：rules/ 里有两条缺 frontmatter 的 rule（`css-marker-patterns`、`gsap-effects`，列在本文件末尾的「Skipped」段）—— 它们能通过 validator（rules/ 里有文件）但不在本 catalog，**不要引用**（它们在 Phase 4 仍解析为真实配方，所以 validator 故意不拦）。正常只从本 catalog 选。
+The actual source of truth checked by Phase 3 `validate.mjs section` is the set of `.md` files that exist under **`hyperframes-animation/rules/`** (the validator builds a set from `readdirSync` on that directory), not this catalog. This catalog is the curated subset that planners should cite. Two differences: the rules directory contains two rules missing frontmatter (`css-marker-patterns`, `gsap-effects`, listed in the "Skipped" section at the end of this file). They pass validator because files exist under rules/, but they are not in this catalog, so **do not cite them**. They still resolve as real recipes in Phase 4, so validator intentionally does not block them. Normally, choose only from this catalog.
 
 ## SVG & Icons
 
-| 动效                  | 描述                                                                                                |
-| --------------------- | --------------------------------------------------------------------------------------------------- |
-| `svg-icon-enrichment` | 让 SVG 内部元素动起来（旋转的指针、张开的叶片、脉冲圆点、虚线流动），无需替换图标就能让其充满生气。 |
-| `svg-path-draw`       | 使用 stroke-dasharray 和 stroke-dashoffset 让 SVG 路径渐进绘制。                                    |
+| Effect                | Description                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `svg-icon-enrichment` | Animate internal SVG elements (rotating needles, opening leaves, pulsing dots, dashed-line flow), making icons feel alive without replacing them. |
+| `svg-path-draw`       | Use stroke-dasharray and stroke-dashoffset to progressively draw SVG paths.                                                                       |
 
 ## Camera & Viewport
 
-| 动效                     | 描述                                                                                                        |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `camera-cursor-tracking` | 两阶段虚拟相机，将视口锁定在一个移动的焦点上，初始位置可配置。                                              |
-| `coordinate-target-zoom` | 通过将缩放与反向位移结合，放大某个非居中元素 —— 缩放完成后目标位于视口中心。                                |
-| `multi-phase-camera`     | 顺序相机缩放，包含 2-3 个不同阶段（拉远 / 聚焦 / 推近），并叠加持续的微漂移以营造有机的电影感。             |
-| `viewport-change`        | 虚拟相机 —— 通过对包裹所有场景内容的容器进行变换来模拟缩放 / 平移 / 焦点锁定。相机向右移动 → 世界向左平移。 |
+| Effect                   | Description                                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `camera-cursor-tracking` | Two-stage virtual camera that locks the viewport onto a moving focus point, with configurable initial position.                                |
+| `coordinate-target-zoom` | Zoom into an off-center element by combining scale with counter-translation, so the target ends centered in the viewport.                      |
+| `multi-phase-camera`     | Sequential camera zoom with 2-3 distinct phases (pull back / focus / push in) plus continuous micro-drift for organic cinematic feel.          |
+| `viewport-change`        | Virtual camera: transform a wrapper around all scene content to simulate zoom / pan / focus lock. Camera moves right -> world translates left. |
 
 ## Interaction & Click
 
-| 动效                     | 描述                                                                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `cursor-click-ripple`    | 动画鼠标光标移动到目标，点击时带有缩放下压效果和向外扩散的涟漪环。                                                              |
-| `physics-press-reaction` | 光标 + 元素通过减法式弹簧力同步按压 —— 光标落在元素上，二者一起被压缩，然后释放。与 press-release-spring 不同（后者没有光标）。 |
-| `press-release-spring`   | 有触感的按钮按压：线性压缩、基于弹簧的弹性恢复，以及分层的视觉反馈（阴影收缩 + 释放迸发 + 背景辉光）。                          |
+| Effect                   | Description                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cursor-click-ripple`    | Animate a mouse cursor moving to a target, with scale-down press feedback and an outward ripple ring on click.                                                                             |
+| `physics-press-reaction` | Cursor + element press together through subtractive spring force: the cursor lands on the element, both compress, then release. Different from press-release-spring (which has no cursor). |
+| `press-release-spring`   | Tactile button press: linear compression, spring-based recovery, and layered feedback (shadow compression + release burst + background glow).                                              |
 
 ## Text & Typography
 
-| 动效                       | 描述                                                                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `3d-text-depth-layers`     | 多层偏移文本叠加，在大号字体上形成堆叠的 3D 阴影 / 挤出效果 —— 比 CSS text-shadow 更具冲击力，因为每一层都是完整的 DOM 元素。               |
-| `asr-keyword-glow`         | 关键词在被"念出"时发光并放大 —— attack/sustain/release 包络与每个词的时间戳同步。即使没有真实音频，硬编码的时序也能营造出"解说员强调"效果。 |
-| `context-sensitive-cursor` | 光标颜色和样式随当前正在输入的文本片段而变化 —— 高亮处用强调色，占位符处变暗等。                                                            |
-| `counting-dynamic-scale`   | 计数动画中字体大小随计数值增长，形成逐级放大的视觉份量。                                                                                    |
-| `discrete-text-sequence`   | 在帧阈值处整体替换文本状态，实现非线性输入效果 —— 错字、批量添加、停顿、退格、模拟思考。                                                    |
-| `hacker-flip-3d`           | 字符级的 3D 旋转加上随机字形替换，营造一种解密揭示效果。                                                                                    |
-| `vertical-spring-ticker`   | 老虎机风格的垂直滚动，在带遮罩的容器内使用叠加式弹簧物理 —— 每个弹簧贡献一"步"滚动。                                                        |
+| Effect                     | Description                                                                                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `3d-text-depth-layers`     | Stack multiple offset text layers to create a 3D shadow / extrusion effect on large type - more impactful than CSS text-shadow because each layer is a full DOM element.             |
+| `asr-keyword-glow`         | Keywords glow and scale when "spoken" - attack/sustain/release envelopes sync to each word timestamp. Even without real audio, hard-coded timing creates a narrator-emphasis effect. |
+| `context-sensitive-cursor` | Cursor color and style change with the currently typed text segment - accent color on highlighted segments, dimmed on placeholders, etc.                                             |
+| `counting-dynamic-scale`   | During count animation, font size grows with the count value, giving numbers increasing visual weight.                                                                               |
+| `discrete-text-sequence`   | Replace whole text states at frame thresholds for nonlinear typing effects - typos, bulk add, pauses, backspace, simulated thinking.                                                 |
+| `hacker-flip-3d`           | Character-level 3D rotation plus random glyph substitution for a decrypted-reveal effect.                                                                                            |
+| `vertical-spring-ticker`   | Slot-machine-style vertical scrolling inside a masked container using additive spring physics - each spring contributes one scroll "step."                                           |
 
 ## Layout & 3D
 
-| 动效                       | 描述                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------- |
-| `3d-page-scroll`           | 整个网页作为倾斜的 3D 卡片渲染，滚动以揭示特定区域。                                   |
-| `ai-tracking-box`          | 带 L 形角标的动画包围框沿振荡路径跟随 —— 模拟 AI 物体检测 / 跟踪。                     |
-| `avatar-cloud-network`     | 头像分布在椭圆环上，通过 SVG 虚线连接到中心枢纽 —— 错开入场的社交认同"社区"揭示。      |
-| `center-outward-expansion` | 元素从屏幕中心聚集开始，由共享的进度值驱动向外展开到各自的最终位置。                   |
-| `orbit-3d-entry`           | 元素从 3D 空间翻入，随后落定为围绕焦点持续运行的椭圆轨道。                             |
-| `split-tilt-cards`         | 两张卡片并排放置，Y 轴旋转方向相反，形成对称的 3D 分屏布局，适合做对比或功能配对展示。 |
+| Effect                     | Description                                                                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `3d-page-scroll`           | Render an entire webpage as a tilted 3D card, then scroll it to reveal a specific region.                                                       |
+| `ai-tracking-box`          | Animated bounding box with L-shaped corners follows an oscillating path, simulating AI object detection / tracking.                             |
+| `avatar-cloud-network`     | Avatars distributed on an elliptical ring, connected to a central hub with SVG dashed lines - staggered social-proof "community" reveal.        |
+| `center-outward-expansion` | Elements start clustered at screen center, then expand outward to final positions driven by a shared progress value.                            |
+| `orbit-3d-entry`           | Elements flip in from 3D space, then settle into continuous elliptical orbits around a focal point.                                             |
+| `split-tilt-cards`         | Two cards placed side by side with opposite Y-axis rotations, creating a symmetrical 3D split-screen layout for comparisons or paired features. |
 
 ## Transition & Motion
 
-| 动效                         | 描述                                                                                                      |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `card-morph-anchor`          | 容器在不同镜头间变形尺寸和圆角，作为视觉过渡的锚点。                                                      |
-| `dynamic-content-sequencing` | 根据内容长度 + 每项时长配置自动计算时间轴起止时间 —— 内容越长展示时间越多，无需硬编码数字。               |
-| `reactive-displacement`      | 物理碰撞：进入元素的弹簧驱动离场元素的位移 —— 单一真值源使得动作具有因果关联。                            |
-| `scale-swap-transition`      | 协调的缩小退出 + 弹簧弹入，在两个元素间实现类形变过渡 —— 无需 SVG 路径插值。                              |
-| `sine-wave-loop`             | 使用三角函数实现持续的呼吸 / 待机环境运动 —— 让元素在入场落定后仍然鲜活。几乎可以与任何入场规则搭配使用。 |
+| Effect                       | Description                                                                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `card-morph-anchor`          | Container morphs size and border radius across shots, acting as a visual transition anchor.                                                            |
+| `dynamic-content-sequencing` | Automatically computes timeline start/end times from content length + per-item duration; longer content receives more time without hard-coded numbers. |
+| `reactive-displacement`      | Physical collision: incoming element's spring drives outgoing element displacement - one source of truth creates causal motion.                        |
+| `scale-swap-transition`      | Coordinated shrink-out + spring-in between two elements, creating a morph-like transition without SVG path interpolation.                              |
+| `sine-wave-loop`             | Continuous breathing / idle ambient motion using trigonometry - keeps elements alive after entry. Pairs well with almost any entry rule.               |
 
 ## Skipped (frontmatter problems)
 

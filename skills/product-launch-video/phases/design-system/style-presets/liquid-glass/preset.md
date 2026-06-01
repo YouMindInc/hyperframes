@@ -83,7 +83,7 @@ Three archetypes are declared here with archetype-namespaced keys
 (`--lg-widget-*`, `--lg-notif-*`, `--lg-menu-*`). Each component selects
 its archetype by aliasing the raw keys, e.g. `--lg-blur: var(--lg-widget-blur)`.
 Tune a knob here → all panels of that archetype move together. Brand-DNA
-联动 (e.g. saturation tracking brand vibrancy) goes here too — anchored
+coupling (e.g. saturation tracking brand vibrancy) goes here too — anchored
 on `--brand-*` and resolved once, consumed by every component.
 
 ```css

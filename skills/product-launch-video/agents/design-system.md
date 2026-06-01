@@ -1,25 +1,25 @@
-# 子代理提示词：design-system（Phase 1b）
+# Subagent Prompt: design-system (Phase 1b)
 
-**INPUT:** Phase 1 `<PROJECT_DIR>/capture/` 产物（hyperframes capture 写好的 extracted/ + assets/）
+**INPUT:** Phase 1 `<PROJECT_DIR>/capture/` artifacts (`extracted/` + `assets/` written by `hyperframes capture`)
 **OUTPUT:** `<PROJECT_DIR>/design-system/design.html` + `<PROJECT_DIR>/design-system/chunks/` + `<PROJECT_DIR>/design-system/inference.json`
 **TOOLS:** Bash · Read
-**DONE:** chunks/ 就位，汇报含 `preset review:` 块 + 两段 stdout
+**DONE:** `chunks/` are in place; report includes a `preset review:` block + two stdout sections
 
-**Path contract**：Dispatch 给 `PROJECT_DIR`（视频项目根，如 `./videos/heygen-promo`）。所有输出写到 `PROJECT_DIR/design-system/`；Bash 用 `(cd "$PROJECT_DIR" && <guide.md 命令>)` subshell；不在 `PROJECT_DIR` 下建 `hyperframes/` 子目录。**不再调用 designlang** —— build-design.mjs 直接读 Phase 1 写好的 `capture/extracted/`。
+**Path contract:** Dispatch provides `PROJECT_DIR` (the video project root, e.g. `./videos/heygen-promo`). Write all output to `PROJECT_DIR/design-system/`; run Bash through a `(cd "$PROJECT_DIR" && <guide.md command>)` subshell; do not create a `hyperframes/` subdirectory under `PROJECT_DIR`. **Do not call designlang anymore** — `build-design.mjs` reads the `capture/extracted/` output already written by Phase 1 directly.
 
-按 `<SKILL_DIR>/phases/design-system/guide.md` §1 的命令模板逐步执行。
+Follow the command templates in `<SKILL_DIR>/phases/design-system/guide.md` §1 step by step.
 
-## 流程
+## Flow
 
-1. **Step 1**：**优先用 dispatch 的 `## Inference decision inputs`（或内联的 inference.json 正文）**选 preset —— Phase 1 capture 阶段已确定性跑过 `build-design.mjs --no-emit` 生成 `inference.json`，**你不必再跑**，正常也**不必再 Read**（编排器已把它内联进 dispatch）。仅当 dispatch 里没有该内联、或 inference.json 缺失、或 capability auto-install 后需重新验证候选时，才 Read `<PROJECT_DIR>/design-system/inference.json` / 自己跑 `build-design.mjs ./design-system --no-emit`。（注意：本步只省 inference.json 的 Read；§1 命令模板 / §3b 截图流程 / §4 报告模板 / §5 硬契约仍需 Read `guide.md`。）
-2. **Step 2**：按 guide.md §3 决策表选 chosen preset。capability_gated 选优时若 `auto_install` 非 null 就在 `PROJECT_DIR` 内跑，跑完重跑 `--no-emit` 验证；`auto_install: null` 改选别的。`brand.needs_review=true` 时按 §3b 看截图裁品牌色
-3. **Step 3**：用 chosen 跑 `build-design.mjs --style <chosen> [--brand-primary <hex>]`
-4. **Step 4**：跑 `emit-chunks.mjs`
+1. **Step 1:** **Prefer the dispatch `## Inference decision inputs` section (or the inline `inference.json` body)** to choose the preset. The Phase 1 capture stage already deterministically ran `build-design.mjs --no-emit` to generate `inference.json`, so **you do not need to run it again**, and normally you **do not need to Read it again** either (the orchestrator already inlined it into the dispatch). Only Read `<PROJECT_DIR>/design-system/inference.json` / run `build-design.mjs ./design-system --no-emit` yourself if the dispatch does not contain the inline data, `inference.json` is missing, or you need to revalidate candidates after capability auto-install. (Note: this step only skips the Read of `inference.json`; you still need to Read `guide.md` for the §1 command template / §3b screenshot workflow / §4 report template / §5 hard contracts.)
+2. **Step 2:** Choose the selected preset according to the decision table in `guide.md` §3. When choosing among `capability_gated` options, if `auto_install` is non-null, run it inside `PROJECT_DIR`, then rerun `--no-emit` to validate; if `auto_install: null`, choose another preset. When `brand.needs_review=true`, inspect screenshots and sample/crop the brand color according to §3b.
+3. **Step 3:** Run `build-design.mjs --style <chosen> [--brand-primary <hex>]` with the chosen preset.
+4. **Step 4:** Run `emit-chunks.mjs`.
 
-## 自检
+## Self-Check
 
-emit-chunks 退 0 后用一行 `node -e` 抽查 `chunks/index.json` 含 `preset` / `tokens_file` / `easings_file` / `voice_file` / `components[]`。失败 → 排查 build-design.mjs 的注释锚点，不要改 emit-chunks。
+After `emit-chunks` exits 0, use a one-line `node -e` check to verify that `chunks/index.json` contains `preset` / `tokens_file` / `easings_file` / `voice_file` / `components[]`. Failure → investigate the comment anchors in `build-design.mjs`; do not modify `emit-chunks`.
 
-## 汇报
+## Report
 
-按 guide.md §4 的模板。
+Use the template from `guide.md` §4.

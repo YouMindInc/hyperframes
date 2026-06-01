@@ -42,7 +42,7 @@ The three color planes of 60‑30‑10 plus the brand hues:
 ```
 
 - **`value`** — the preset's native/original color (harvest from the source template's `:root`, e.g. `tmp/templates/<preset>/template.html`). This is the default used when no capture / no confident extraction.
-- **`constraint`** (R4 "声明色彩约束") — a one‑line description of the slot's **color personality** so a remixed brand color can be harmonized into range (e.g. "deep desaturated ink — reads near‑black on paper"). Not machine‑enforced yet; it's the authoring contract + future harmonizer input.
+- **`constraint`** (R4 "declare color constraints") — a one-line description of the slot's **color personality** so a remixed brand color can be harmonized into range (e.g. "deep desaturated ink — reads near-black on paper"). Not machine-enforced yet; it's the authoring contract + future harmonizer input.
 - **`lock: "anchor"`** — this slot is a **structural signature**, not a palette choice. Brand DNA only **tints** it (via `color-mix()` declared in `§B`), never replaces it. Use for surfaces that define the preset's identity (e.g. pin‑and‑paper's yellow paper + cream card — without them the layered gradients / grain / contrast all fail).
 - **`alias: "<slot>"`** — this slot equals another. Use when a preset collapses two roles (pin‑and‑paper: `ink` ≡ `primary`, the ink‑blue is both the brand hue and the structural ink).
 

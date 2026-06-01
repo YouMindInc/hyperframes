@@ -4,172 +4,172 @@ description: "Color design decisions for HyperFrames videos — palette roles, 6
 category: visual-design
 ---
 
-# 视频色彩系统 —— 设计判断层
+# Video Color System - Design-Judgment Layer
 
-**本文件只负责 plan 层的设计判断** —— 角色、60-30-10 分配逻辑、跨场景一致性、危险组合。具体 hex 值、对比度 4.5:1 计算、暗场 saturation 补偿、双层 glow 配方都属于 build agent 在写 CSS 时查 `chunks/tokens.css` 与 `/hyperframes-core` 的事；plan 不抄。
+**This file only covers plan-layer design judgment** - roles, 60-30-10 allocation logic, cross-scene consistency, and dangerous combinations. Concrete hex values, contrast ratio 4.5:1 math, dark-scene saturation compensation, and double-layer glow recipes belong to the build agent when writing CSS and consulting `chunks/tokens.css` plus `/hyperframes-core`; plan does not copy them.
 
-## 调色板来源
+## Palette Source
 
-**Hex 值来自 `## Design chunks` 的 `tokens.css`**（`:root` 里的命名 token，按品牌不同会有 `--brand-primary` / `--brand-accent` / `--canvas` / `--ink` 等；已内联在 Phase 3 dispatch）。Plan 里按**角色**引用，**不要**抄具体 hex —— build agent 自己会从 `chunks/tokens.css` 读。
+**Hex values come from `tokens.css` in `## Design chunks`** (named tokens in `:root`, varying by brand: `--brand-primary` / `--brand-accent` / `--canvas` / `--ink`, etc.; already inlined into Phase 3 dispatch). Plan references by **role**; **do not** copy concrete hex values - the build agent reads them from `chunks/tokens.css`.
 
-> **预设规范优先于本文件的通用规则**。preset 名在 `## Design chunks` 的 `index.json.preset`；它的颜色纪律在 `composition-hints.md`（§H surface contract / accent 预算）—— 例如 editorial 明确"accent ≤ 5% frame area、primary 不做背景填充、canvas is the hero"。如果通用规则（如"背景用 dual-radial swell"）与预设的 §H 颜色纪律冲突，**预设胜出**。Plan 从 `index.json.preset` 拿 preset 名、从 `composition-hints.md` 拿其规范来约束本片调色板使用（**不读 design.html**，已被 chunks 取代）。
+> **Preset rules take priority over this file's generic rules.** Preset name is in `## Design chunks` `index.json.preset`; its color discipline is in `composition-hints.md` (§H surface contract / accent budget) - for example, editorial explicitly says "accent <= 5% frame area, primary is not a background fill, canvas is the hero." If a generic rule (such as "use dual-radial swell background") conflicts with the preset's §H color discipline, **the preset wins**. Plan gets preset name from `index.json.preset` and its rules from `composition-hints.md` to constrain palette use for this film (**do not read design.html**; chunks have replaced it).
 
-### 痛点 / 凝重场景
+### Pain / Serious Scenes
 
-如果某场景的 `emotionalBeat` 需要刻意的调色板转换：
+If a scene's `emotionalBeat` needs an intentional palette shift:
 
-- `chunks/tokens.css` / `composition-hints.md` **有** `[data-theme="dark"]` 块或暗 surface → 用它（反转 canvas / ink），不引入外来调色板
-- **没有**暗主题块（editorial 等亮色预设常见）→ **不要**自创暗色。改用：accent 灰化（去饱和）+ 低对比（用 `--paper-warm` 替代 `--canvas` 把场景压暗一档）+ 收紧留白 + 静止节拍承担凝重感
+- If `chunks/tokens.css` / `composition-hints.md` **has** a `[data-theme="dark"]` block or dark surface -> use it (invert canvas / ink), without introducing an external palette.
+- If there is **no** dark theme block (common in bright presets like editorial) -> **do not invent dark colors**. Instead use: desaturated accent + lower contrast (use `--paper-warm` instead of `--canvas` to darken the scene by one step) + tighter whitespace + stillness to carry the serious mood.
 
-### 当 `--ink` / `--canvas` 是纯黑 / 纯白
+### When `--ink` / `--canvas` Are Pure Black / Pure White
 
-某些预设（editorial / Swiss / brutalist / 报刊风）的 `--ink: #000` / `--canvas: #fff` 是**风格选择**，不是缺陷 —— "印在白纸上的黑墨"是这些预设的核心美学。
+For some presets (editorial / Swiss / brutalist / newspaper styles), `--ink: #000` / `--canvas: #fff` is a **style choice**, not a defect - "black ink on white paper" is core to those aesthetics.
 
-- **`--ink: #000`** —— 这些预设里 OK，保留作为 ink 使用
-- **`--canvas: #fff`** —— 视频远观时纯白会"开花"，**优先用预设提供的 `--paper-warm`**（editorial 预设主动注释了 "fallback if canvas is pure white"）；如果没有 fallback token，build agent 自己合成一档暖白
-- 其他预设（saas / material 等）若出现纯黑纯白，按通用规则处理（用 off-black / off-white）
+- **`--ink: #000`** - OK in these presets; preserve as ink.
+- **`--canvas: #fff`** - pure white blooms at video viewing distance; **prefer the preset-provided `--paper-warm`** (the editorial preset explicitly notes "fallback if canvas is pure white"). If no fallback token exists, the build agent synthesizes one step of warm white.
+- Other presets (saas / material, etc.) should follow the generic off-black/off-white rules if pure black/white appears.
 
-判定路径：先读 preset 名 → 若是 editorial / brutalist 系列接受纯黑作 ink + 优先 `--paper-warm` 作 canvas；其他预设遵循 off-black/off-white 通用规则。
+Decision path: read preset name first -> if editorial / brutalist family, accept pure black as ink + prefer `--paper-warm` as canvas; otherwise follow generic off-black/off-white guidance.
 
-## 角色映射
+## Role Mapping
 
-每个 token 在 60-30-10 里扮演一个角色：
+Each token plays a role in 60-30-10:
 
-| 角色                    | 典型 token 名（按品牌而异）                                                 | 视觉权重                                   |
-| ----------------------- | --------------------------------------------------------------------------- | ------------------------------------------ |
-| **中性背景（canvas）**  | `--canvas` / `--paper` / 最浅 neutral                                       | **60%** —— 占主导，不与内容争注意力        |
-| **中性表面（surface）** | `--paper-2` / `--surface` / 次浅 neutral；**不存在则用 hairline rule 分层** | **~20%** —— 面板、卡片、边界               |
-| **前景文本（ink）**     | `--ink` / `--ink-soft` / off-black 或 off-white                             | **~10%**                                   |
-| **主强调（accent）**    | `--brand-primary` / `--brand-accent`                                        | **~10%** —— **只用在每个节拍的焦点元素上** |
-| **次强调**              | `--brand-secondary`（若存在）                                               | **~5%** —— 与主强调绑不同语义              |
-| **克制第三色**          | 中性或纸调                                                                  | **<2%** —— 偶尔出现                        |
-| **语义色**              | 成功/错误/警告（从品牌色相派生）                                            | 节制使用                                   |
+| Role                            | Typical token names (brand-dependent)                                                                | Visual weight                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Neutral background (canvas)** | `--canvas` / `--paper` / lightest neutral                                                            | **60%** - dominant, does not compete with content |
+| **Neutral surface**             | `--paper-2` / `--surface` / second-lightest neutral; **if absent, layer with hairline rule instead** | **~20%** - panels, cards, boundaries              |
+| **Foreground text (ink)**       | `--ink` / `--ink-soft` / off-black or off-white                                                      | **~10%**                                          |
+| **Primary accent**              | `--brand-primary` / `--brand-accent`                                                                 | **~10%** - **only on the current focal element**  |
+| **Secondary accent**            | `--brand-secondary` (if present)                                                                     | **~5%** - bound to a different semantic role      |
+| **Restrained third color**      | neutral or paper tone                                                                                | **<2%** - occasional                              |
+| **Semantic colors**             | success/error/warning derived from brand hue                                                         | use sparingly                                     |
 
-> **当 `chunks/tokens.css` 缺 `--surface` 这一档** —— 这份预设用 hairline rule 分层而非 surface 色 —— plan 应明确说"30% 用 hairline + canvas 重复"，而不是编一个假的中间色。
+> **When `chunks/tokens.css` lacks a `--surface` tier** - this preset layers with hairline rules rather than a surface color - plan should explicitly say "30% uses hairline + repeated canvas," instead of inventing a fake middle color.
 
-## 60-30-10 是**视觉权重**，不是像素数量
+## 60-30-10 Is **Visual Weight**, Not Pixel Count
 
-- 60% canvas —— 占主导，不抢戏
-- 30% surface + 文本 —— 面板、边框、辅助文案
-- 10% accent —— 只用在**当下的焦点元素**上
+- 60% canvas - dominant, not attention-grabbing
+- 30% surface + text - panels, borders, supporting copy
+- 10% accent - used only on the **current focal element**
 
-**头号错误**：因为品牌色是"品牌的标识"就到处涂。Accent 之所以有效，是因为它**稀有**。Archive 中最强示例（codex-plugin）把每个 accent 绑定到一个**语义**：cyan = HyperFrames moment、lime = render、amber = Codex —— 三种 accent，每种只在自己负责的节拍出现，从不重叠。
+**Top mistake:** applying brand color everywhere because it is "the brand identifier." Accent works because it is **rare**. In the strongest archive example (codex-plugin), each accent is bound to a **semantic role**: cyan = HyperFrames moment, lime = render, amber = Codex - three accents, each appearing only in its own beat, never overlapping.
 
-更极致：vercel-intro 整片只用一种品牌红 + 一次 RGB 色差，立刻切回干净黑底白字。**一种颜色，一次效果，极致克制。**
+Even more restrained: vercel-intro uses one brand red + one RGB aberration moment, then immediately returns to clean black-ground white text. **One color, one effect, maximal restraint.**
 
-## 带色调的中性色
+## Tinted Neutrals
 
-纯灰没有个性。中性色必须向品牌色调偏移：
+Pure gray has no personality. Neutrals should shift subtly toward the brand hue:
 
-- 暖品牌（红 / 橙 / 黄）→ 灰加微妙暖铸调
-- 冷品牌（蓝 / 紫 / 绿 / 青）→ 灰加微妙冷铸调
+- warm brands (red / orange / yellow) -> gray with a subtle warm cast
+- cool brands (blue / purple / green / cyan) -> gray with a subtle cool cast
 
-色调要几乎不可察觉，但在潜意识层创造一致性。这通常已经在 `chunks/tokens.css` 的 `--canvas` / `--paper-2` token 里编码好了；plan 只需引用角色，不需要算 OKLCH。
+The cast should be nearly invisible, but it creates subconscious cohesion. This is usually already encoded in `chunks/tokens.css` `--canvas` / `--paper-2` tokens; plan only references roles and does not calculate OKLCH.
 
-## 调色板四层结构
+## Four-Layer Palette Structure
 
-完整视频调色板有四层（不需要的可跳过，**不要**多加）：
+A complete video palette has four layers (skip layers you do not need; **do not** add extras):
 
-1. **主强调** —— 1-2 种，绑定语义，10-15% 权重
-2. **中性阶梯** —— canvas → surface → surface-raised 三档（亮色或暗色皆然），60% + 20%
-3. **前景** —— 1-2 个 off-white 或 off-ink 用于文本，10%
-4. **语义色** —— 成功 / 错误 / 警告，从品牌色相派生
+1. **Primary accent** - 1-2 colors, semantically bound, 10-15% weight
+2. **Neutral ladder** - canvas -> surface -> surface-raised, three tiers (light or dark), 60% + 20%
+3. **Foreground** - 1-2 off-white or off-ink text colors, 10%
+4. **Semantic colors** - success / error / warning, derived from brand hue
 
-**逐节拍隔离调色板也是合法的**（fadeglow-v4 在 Beat 2 / 4 / 7 用完全不同的色感）—— 由情感弧线决定，不强求一致。
+**Per-beat palette isolation is also valid** (fadeglow-v4 uses completely different color moods in Beat 2 / 4 / 7) - emotional arc decides; consistency is not mandatory.
 
-## 跨场景一致性
+## Cross-Scene Consistency
 
-视频每个场景必须感觉属于同一视觉系统（除非明确做"每场一个宇宙"的模式）。
+Every scene in a video should feel like it belongs to the same visual system (unless explicitly doing "one universe per scene").
 
-- 背景调色板在项目级定义一次（`:root` / 共享 `<style>`），不要逐场景临时写死 hex
-- 各场景可在**明度**上变化（暗 → 亮形成节奏），但共享相同**色相家族**
-- Accent 用途必须一致：场景 1 的 cyan 是 HyperFrames moment 颜色 → 场景 5 它就不能变成背景渐变
-- 数据可视化颜色从品牌调色板派生，不要任意选
+- Background palette is defined once at project level (`:root` / shared `<style>`); do not hard-code hex per scene.
+- Scenes may vary in **lightness** (dark -> bright rhythm), while sharing the same **hue family**.
+- Accent purpose must stay consistent: if cyan is the HyperFrames moment color in scene 1, it cannot become a background gradient in scene 5.
+- Data visualization colors derive from the brand palette; do not pick arbitrary colors.
 
-**限度内变化 OK**：暗/亮交替做节奏、去饱和（平静）↔ 饱和（强调）、品牌相近色之间渐变。
+**Variation within limits is OK:** dark/light alternation for rhythm, desaturated (calm) <-> saturated (emphasis), gradients between neighboring brand hues.
 
-## 永远不要纯黑 / 纯白
+## Never Pure Black / Pure White
 
-纯 `#000` / `#fff` 在自然界不存在 —— 对比刺眼、显合成、压缩破细节。永远用 `chunks/tokens.css` 提供的 off-black / off-white token（典型名 `--ink` / `--canvas`）。
+Pure `#000` / `#fff` does not exist in nature - contrast is harsh, feels synthetic, and compression destroys detail. Always use off-black / off-white tokens from `chunks/tokens.css` (typical names `--ink` / `--canvas`).
 
-例外：强调时刻的纯白 `text-shadow` / `drop-shadow` 光环（点击涟漪峰值）是 OK 的 —— 用 build agent 的低不透明度叠加，不直接当文本色。
+Exception: pure white `text-shadow` / `drop-shadow` halos at emphasis moments (click-ripple peak) are OK - build agent uses low-opacity overlays, not direct text color.
 
-## 危险组合（禁用模式）
+## Dangerous Combinations (Forbidden Patterns)
 
-- **白底浅灰文字** —— 对比塌陷，小屏幕崩
-- **彩色背景上的灰色** —— 读起来像褪色 / 脏污；应改用**背景色相的更深色调**
-- **图像上的细体浅色文本** —— 即使加阴影也不可靠；上遮罩 + 加重字重，或两者并用
-- **`#000` 上的纯饱和霓虹** —— AI 默认套娃外观。改用 off-black + 强调色降到 0.20-0.35 glow 不透明度（这是 build 的事；plan 只需点名"避免霓虹"）
-- **紫到蓝的 AI 渐变** —— codex-plugin / hermes 都明确禁过 ("no generic purple-blue AI gradients")。需要深度感时用品牌色调的径向膨胀替代
+- **Light gray text on white** - contrast collapses, small screens fail.
+- **Gray on colored background** - reads faded / dirty; use a darker tone of the background hue instead.
+- **Thin light text on image** - unreliable even with shadow; add overlay + weight, or both.
+- **Pure saturated neon on `#000`** - default AI nesting-doll look. Use off-black + accent glow reduced to 0.20-0.35 opacity (build work; plan only needs to say "avoid neon").
+- **Purple-to-blue AI gradient** - codex-plugin / hermes explicitly banned this ("no generic purple-blue AI gradients"). Use brand-hued radial swell for depth instead.
 
-## 背景：brand-color mesh background 是项目默认
+## Background: Brand-Color Mesh Background Is the Project Default
 
-**本项目级决策（覆盖所有预设的默认背景规则）**：
+**Project-level decision (overrides default background rules for all presets):**
 
-- **每个场景默认背景 = brand-color mesh background**（多个 brand 色 blob + 高斯模糊 + canvas veil 的氛围底盘）
-- **Veil 重 —— mesh 作为"背景里隐约的品牌色氛围"**，远观仍读作克制底盘，前景文字清晰可读；不喧宾夺主
-- **Mesh 是单一背景层** —— 不再叠 dual-radial swell、scanline、半色调、建筑感网格。**只有粒子层**（品牌色稀疏浮粒）可与 mesh 共存
-- **前景 accent 不受预设约束** —— 走标准 60-30-10，editorial 的"accent ≤ 5%"纪律**已被明确放开**：前景文字、CTA、卡片可以更自由地使用品牌色
+- **Every scene default background = brand-color mesh background** (multiple brand-color blobs + Gaussian blur + canvas veil as atmospheric base)
+- **Heavy veil** - mesh reads as "subtle brand-color atmosphere in the background"; at viewing distance it still reads as a restrained base, and foreground text remains clear. It does not compete.
+- **Mesh is a single background layer** - do not also stack dual-radial swell, scanline, halftone, or architectural grid. **Only particle layer** (sparse brand-color float particles) may coexist with mesh.
+- **Foreground accent is not constrained by preset rules** - use standard 60-30-10; editorial's "accent <= 5%" discipline is **explicitly relaxed**: foreground text, CTA, and cards may use brand color more freely.
 
-> **关于 component 实现**：多数预设把它实现为 `gradient-mesh-bg` component（editorial.md 已注册）—— build agent 优先复用该 component；预设未提供同名 component 时，build agent 按"brand 色 blob + 高斯模糊 + canvas veil"功能描述合成同等效果。Plan **不需要**知道具体哪个预设有这个 component —— 写功能名即可。
+> **Component implementation:** most presets implement this as a `gradient-mesh-bg` component (registered in editorial.md) - build agent prefers reusing that component. If a preset does not provide a component with that name, build agent synthesizes an equivalent effect from the functional description "brand color blobs + Gaussian blur + canvas veil." Plan **does not need** to know which preset has the component - write the function name.
 
-### 与预设规范的关系
+### Relationship to Preset Rules
 
-本项目级 mesh 默认**覆盖以下 preset 的 §H 背景纪律**（"canvas is the hero"、"accent ≤ 5%"、"primary 不做背景填充"等），把它们的印刷克制感偏向品牌化 marketing 视频方向：
+This project-level mesh default **overrides the §H background discipline** of these presets ("canvas is the hero", "accent <= 5%", "primary is not a background fill", etc.), shifting their print restraint toward a brand-forward marketing video direction:
 
-**走 mesh 默认（D 类，8 个）**：
+**Use mesh default (D class, 8 presets):**
 `editorial` · `capsule` · `soft-editorial` · `daisy-days` · `block-frame` · `playful` · `neo-grid-bold` · `emerald-editorial`
 
-> 命中以上 preset 时，plan agent **必须**在每个 scene 散文里写出 mesh 句式（见下方"Plan 引用样例"），不要因为 preset §H 写了 "canvas is the hero" 就退回纯 canvas。
+> When matching any of the above presets, plan agent **must** include the mesh wording in every scene prose (see "Plan Reference Example" below); do not fall back to pure canvas because preset §H says "canvas is the hero."
 
-> **收尾 / CTA 场也走 mesh（D 类）**：项目 mesh 默认同样覆盖 preset 的 **close-frame 背景纪律**——例如 `block-frame` 的 preset.md 写 "close-frame = ink ground / canvas text"，在 D 类项目默认下**被 mesh 覆盖**，收尾场同样用 mesh 浅底。品牌收束的冲击靠**前景**（wordmark 揭幕 + hero 双层 glow + CTA pill），**不是**靠把整场背景翻黑。（这条专门修掉"全片浅色、唯独最后一场突然全黑"的明暗跳变。）
+> **Closing / CTA scenes also use mesh (D class):** the project mesh default also overrides preset **close-frame background discipline** - for example, `block-frame` preset.md says "close-frame = ink ground / canvas text"; under the D-class project default this is **overridden by mesh**, and closing scenes also use the light mesh base. Brand closure impact comes from the **foreground** (wordmark reveal + hero double-layer glow + CTA pill), **not** from flipping the whole scene background black. (This specifically fixes "the entire film is light, but only the final scene suddenly turns black.")
 
-**不走 mesh 默认（保留 preset 自带背景设计）**：
+**Do not use mesh default (keep preset-native background design):**
 
-- 显式反对渐变 / 网格 / 软光晕：`neo-brutalism` · `editorial-forest`
-- 自带核心背景介质：`liquid-glass`（aurora 着色器）· `8-bit-orbit`（CRT 显象管）· `sakura-chroma`（半色调暖纸）· `scatterbrain`（cork / paper / warm 三变体）
-- Paper-grain 系（mesh 与 grain 美学冲突）：`pin-and-paper` · `retro-zine` · `peoples-platform` · `creative-mode` · `stencil-tablet`
+- explicitly opposes gradients / grids / soft halos: `neo-brutalism` · `editorial-forest`
+- has core background medium: `liquid-glass` (aurora shader) · `8-bit-orbit` (CRT tube) · `sakura-chroma` (halftone warm paper) · `scatterbrain` (cork / paper / warm variants)
+- paper-grain family (mesh conflicts with grain aesthetic): `pin-and-paper` · `retro-zine` · `peoples-platform` · `creative-mode` · `stencil-tablet`
 
-以上 11 个 preset 命中时，plan agent **保留 preset 自己的背景设计**——按 preset §H 写，**且全片一致、不做每场 surface 即兴偏移**（同一条"背景由 preset 系统决定、plan 不即兴"的硬规则）。注意区分：surface-aware preset（如 `peoples-platform` 的 paper / blue / orange 组件-surface 绑定）是 **preset 声明的 surface 系统**，照常遵守——那是 preset 的规则，不是 plan 的每场即兴，本规则不动它。原生暗介质 preset（`8-bit-orbit` CRT 等）的暗底同理是 preset 声明的，保留。
+When any of these 11 presets match, plan agent **keeps the preset's own background design** - write according to preset §H, **and keep it consistent across the film, without per-scene surface improvisation** (the same hard rule: background is determined by preset system, not improvised by plan). Note the distinction: surface-aware presets (e.g. `peoples-platform` paper / blue / orange component-surface bindings) are **preset-declared surface systems** and remain valid - they are preset rules, not per-scene improvisation. Native dark-medium presets (`8-bit-orbit` CRT, etc.) similarly keep their declared dark base.
 
-> 若未来要回归严格 editorial：把 mesh 仅保留给 1-2 个高潮节拍、其他场景换回纯 canvas + hairline + 12-col 网格暗示、前景 accent ≤ 5%。**当前 D 类默认是放开的。**
+> If you want to return to strict editorial later: keep mesh for only 1-2 climax beats, use pure canvas + hairline + 12-col grid hint elsewhere, foreground accent <= 5%. **Current D-class default is relaxed.**
 
-### 背景统一规则（无每场 surface 偏移）
+### Background Unification Rule (no per-scene surface drift)
 
-**项目级硬规则：场景背景只由 preset 背景系统 + mesh 默认决定，plan 不做每场 surface 即兴。** D 类 mesh 默认对**每一个场景一致生效，含结尾 / CTA 收尾场**；全片保持一致的浅色氛围底盘，**不得**为戏剧性把某场换成 off-black / ink 暗底——那正是明暗跳变的根源。需要高潮冲击时用**前景手段**（hero 词双层 glow、accent 饱和释放、scale / impact 节拍、wordmark 揭幕），**背景始终不变**。
+**Project-level hard rule: scene backgrounds are determined only by the preset background system + mesh default; plan does not improvise per-scene surfaces.** D-class mesh default applies consistently to **every scene, including closing / CTA scenes**; the film keeps a consistent light atmospheric base, and **must not** switch a scene to off-black / ink dark ground for drama - that is exactly what causes lightness jumps. For climax impact, use **foreground techniques** (hero word double-layer glow, accent saturation release, scale / impact beat, wordmark reveal), while **background remains unchanged**.
 
-仅剩两类允许的 flex（都**必须保持浅色、mesh 不切暗**）：
+Only two flex cases remain (both **must stay light; mesh must not switch dark**):
 
-- **品牌揭幕高潮** —— mesh veil 临时调轻让品牌色饱和释放、配合 hero 词双层 glow。这是 mesh **强度**的释放，**底盘仍是 mesh**（light→lighter，不是换底）。
-- **纯工作区演示**（整帧屏幕录制 / UI 截图占帧 ≥60%）—— 可改 `--canvas` + 建筑感网格，避免 mesh 与 UI 截图色彩竞争；**仍是浅地、绝不变暗**，下一场回归 mesh。
+- **Brand reveal climax** - temporarily lighten the mesh veil to release brand-color saturation, paired with hero-word double-layer glow. This is a release of mesh **intensity**, while the **base is still mesh** (light -> lighter, not a ground swap).
+- **Pure workspace demo** (full-frame screen recording / UI screenshot occupies >=60% of frame) - may switch to `--canvas` + architectural grid to avoid mesh competing with UI screenshot colors; **still light ground, never dark**, and the next scene returns to mesh.
 
-**已废止**（不再允许，因为它制造每场明暗跳变）：~~暗场氛围 / 痛点节拍 → off-black 底~~。暗底只在 preset **原生**就是暗介质时成立（见下方"暗场景规则"），不是 plan 在 D 类 mesh preset 上的每场可选项。
+**Deprecated** (no longer allowed because it creates per-scene light/dark jumps): ~~serious/pain beat -> off-black ground~~. Dark ground only applies when the preset is **natively** a dark medium (see "Dark Scene Rules" below), not as a per-scene option on D-class mesh presets.
 
-Plan 写："默认 brand-color mesh 背景（veil 重，三 blob，氛围底盘）——本片每场一致，含收尾场"。**不要**写整场 off-black / ink 底，**不要**写 `opacity: 0.7` / `blur(140px)`（build 的事）。
+Plan writes: "default brand-color mesh background (heavy veil, three blobs, atmospheric base) - consistent across the film, including closing scene." **Do not** write whole-scene off-black / ink ground, and **do not** write `opacity: 0.7` / `blur(140px)` (build work).
 
-## 暗场景规则（仅限原生暗底 preset）
+## Dark Scene Rules (native dark-background presets only)
 
-> **适用范围（自"背景统一规则"起收窄）**：暗场**不再是 D 类 mesh preset 上的每场可选项**——plan 不得在 mesh preset 上把某场（含收尾）改成暗底。下面只适用于 preset **原生**背景就是暗的情况（如 `8-bit-orbit` CRT、或非 mesh preset 的 §H 本就声明暗底）。在那些 preset 里，暗是全片基调、不是 plan 的每场跳变。
+> **Scope (narrowed by "Background Unification Rule"):** dark scenes are **no longer a per-scene option on D-class mesh presets** - plan must not turn any scene (including close) dark on a mesh preset. The following applies only when the preset's **native** background is dark (e.g. `8-bit-orbit` CRT, or a non-mesh preset whose §H declares dark ground). In those presets, darkness is the film's baseline, not a per-scene jump.
 
-命中上述情形时，暗场不只是反转：
+When that condition applies, a dark scene is more than inversion:
 
-- 用带色调的 off-black（`chunks/tokens.css` 的 dark token），**不要**纯 `#000`
-- 文字字重比亮场降一级（这是 build 的事，plan 知道存在即可）
-- 强调色去饱和（build 处理；plan 只说"暗场氛围"）
-- Hero 词上的 glow 通常**双层**（紧 + 广）—— plan 点名"hero 加双层 glow"
+- use tinted off-black (`chunks/tokens.css` dark token), **not** pure `#000`
+- text weight is one level lighter than in bright scenes (build work; plan only needs awareness)
+- accents desaturate (build handles; plan only says "dark-scene atmosphere")
+- hero word glow is usually **double-layer** (tight + broad) - plan names "hero gets double-layer glow"
 
-## Plan 引用样例
+## Plan Reference Examples
 
-**标准场景（mesh 默认背景，适用于 D 类全部 8 个 preset：editorial / capsule / soft-editorial / daisy-days / block-frame / playful / neo-grid-bold / emerald-editorial）**：
+**Standard scene (mesh default background, applies to all 8 D-class presets: editorial / capsule / soft-editorial / daisy-days / block-frame / playful / neo-grid-bold / emerald-editorial):**
 
-> "Background: brand-color mesh 默认（veil 重，brand-primary + secondary + accent 三 blob 作为隐约氛围，远观仍读作克制底盘）。Palette 60-30-10：60% canvas（mesh veil 之上仍读作 canvas）+ 30% hairline + chapter-label rule 分层（无 surface token）+ 10% accent 用在 hero 词与 CTA underline。`--ink` 纯黑保留作为印刷感墨色。"
+> "Background: brand-color mesh default (heavy veil, brand-primary + secondary + accent as three subtle atmospheric blobs, still reading as a restrained base from distance). Palette 60-30-10: 60% canvas (still reads as canvas over mesh veil) + 30% hairline + chapter-label rule layering (no surface token) + 10% accent on hero word and CTA underline. `--ink` pure black remains as print-like ink."
 
-**例外：工作区演示场景**：
+**Exception: workspace demo scene:**
 
-> "本场景跳出 mesh 默认 —— 屏幕录制 + UI 截图占帧 60%，mesh 会与 UI 色彩竞争。改用 `--paper-warm` 60% + 12-col 建筑感网格暗示 30% + `--brand-primary` underline 标章节 10%。下一场景回归 mesh 默认。"
+> "This scene steps out of mesh default - screen recording + UI screenshot occupy 60% of frame, and mesh would compete with UI colors. Use `--paper-warm` 60% + 12-col architectural grid hint 30% + `--brand-primary` underline for chapter marker 10%. Next scene returns to mesh default."
 
-**例外：品牌揭幕高潮**：
+**Exception: brand reveal climax:**
 
-> "Beat 6 hero 揭幕：mesh veil 临时调轻让品牌色饱和释放，hero 词加双层 glow（紧 + 广）。这是整片唯一让 mesh 强度释放的节拍。下一场景回归默认重 veil。"
+> "Beat 6 hero reveal: mesh veil temporarily lightens to release brand-color saturation, hero word gets double-layer glow (tight + broad). This is the only beat where mesh intensity releases. Next scene returns to the default heavy veil."
 
-不写具体 hex / opacity / saturation 百分比 —— 那是 build 的事。
+Do not write concrete hex / opacity / saturation percentages - those are build work.

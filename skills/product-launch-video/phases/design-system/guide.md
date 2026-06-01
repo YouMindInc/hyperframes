@@ -1,56 +1,61 @@
 # Design System (Phase 1b)
 
-合成 `design.html` + 切碎为 `chunks/`。两步确定性脚本（站点 DNA 直接吃 Phase 1 的 `capture/`）。agent 有两个决策点：**preset 选择**（必做，§3）和**品牌色裁决**（仅当 `inference.json.brand.needs_review=true` 时，§3b——看截图从候选里选）。
+Compose `design.html` + split it into `chunks/`. This is a two-step deterministic script flow (site DNA reads Phase 1 `capture/` directly). The agent has two decision points: **preset selection** (required, §3) and **brand color adjudication** (only when `inference.json.brand.needs_review=true`, §3b — inspect the screenshot and choose from the candidates).
 
-## 1. 命令模板
+## 1. Command Template
 
 ```bash
 mkdir -p design-system
 
-# Step 1 — 用已生成的 inference.json（Phase 1 capture 阶段已确定性跑过 --no-emit）。
-#          正常情况编排器已把 inference.json 正文内联进 dispatch 的 `## Inference decision inputs`，
-#          你既不必 Read 也不必重跑下面这行；仅当 dispatch 没内联 / inference.json 缺失 /
-#          capability auto-install 后需重验候选时，才 Read 它或重跑。
-#          build-design.mjs 默认读 <design-system-dir>/../capture/，与 Phase 1 hyperframes capture 的输出对齐。
+# Step 1 - use the already generated inference.json
+#          (Phase 1 capture already deterministically ran --no-emit).
+#          Normally the orchestrator has inlined the inference.json body into
+#          the dispatch `## Inference decision inputs`, so you do not need to
+#          Read it or rerun the command below. Only Read/rerun when dispatch did
+#          not inline it, inference.json is missing, or capability auto-install
+#          requires candidate revalidation.
+#          build-design.mjs defaults to reading <design-system-dir>/../capture/,
+#          aligned with Phase 1 hyperframes capture output.
 node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system --no-emit
 
-# Step 2  — preset 决策（§3）
-# Step 2b — 品牌色裁决（§3b）：仅当 inference.json.brand.needs_review=true 时
+# Step 2  - preset decision (§3)
+# Step 2b - brand color adjudication (§3b): only when inference.json.brand.needs_review=true
 
-# Step 3 — 用 chosen preset 落 design.html（如做了裁决，加 --brand-primary <hex>）
+# Step 3 - write design.html with the chosen preset
+#          (if adjudicated, add --brand-primary <hex>)
 node <SKILL_DIR>/phases/design-system/scripts/build-design.mjs ./design-system --style <chosen> [--brand-primary <hex>]
 
-# Step 4 — 切碎为 chunks/
+# Step 4 - split into chunks/
 node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
 ```
 
-> **Captions（自动，无需判断）**：选中的 preset 若带 `style-presets/<preset>/caption-skin.html`，`build-design` 会把它内嵌成 design.html 的 **§C 实时预览**（循环播放），`emit-chunks` 把它拷成 `chunks/caption-skin.html`（并记进 `index.json.caption_skin_file`）。Step 5.5 的 `captions.mjs html` 便优先用它，否则回退 registry 皮肤。agent 不为此做任何决策。
+> **Captions (automatic, no judgment needed):** if the selected preset has `style-presets/<preset>/caption-skin.html`, `build-design` embeds it into design.html as **§C live preview** (looping), and `emit-chunks` copies it to `chunks/caption-skin.html` (also recording it in `index.json.caption_skin_file`). Step 5.5 `captions.mjs html` then prefers it; otherwise it falls back to registry skins. The agent makes no decision here.
 
-可选 flag：
+Optional flags:
 
-- `build-design --capture <dir>` — 覆盖默认 `<design-system-dir>/../capture/` 路径
-- `build-design --out-scores <file>` — 改 inference.json 落盘路径（默认 `<dir>/inference.json`）
-- `build-design --brand-primary <hex>` — 覆盖自动推断的品牌主色（agent 看截图裁决后用，见 §3b）。hex 必须取自 `inference.json.brand.candidates[]`
+- `build-design --capture <dir>` - override the default `<design-system-dir>/../capture/` path
+- `build-design --out-scores <file>` - change where `inference.json` is written (default `<dir>/inference.json`)
+- `build-design --brand-primary <hex>` - override the automatically inferred brand primary color (used after the agent adjudicates from screenshot; see §3b). The hex must come from `inference.json.brand.candidates[]`
 
-## 2. inference.json 字段（agent 读这些）
+## 2. `inference.json` Fields (agent reads these)
 
 ```jsonc
 {
   "confidence": "high" | "medium" | "low" | "forced",
-  "brand": {                      // 自动推断的品牌色（§3b 裁决用）
+  "brand": {                      // automatically inferred brand color (for §3b adjudication)
     "primary": "#XXXXXX",
     "secondary": "#XXXXXX",
     "accent": "#XXXXXX",
     "source": "signals" | "agent-override" | "legacy",
     "confidence": "high" | "medium" | "low" | "agent-override" | "legacy",
-    "needs_review": true | false, // true = 自动选的不确定，agent 必须看截图裁决
-    "screenshot": "capture/screenshots/scroll-0.png", // 相对 PROJECT_DIR
-    "candidates": [               // 按 score 降序，--brand-primary 只能从这里选
+    "needs_review": true | false, // true = automatic choice is uncertain; agent must inspect screenshot
+    "screenshot": "capture/screenshots/scroll-0.png", // relative to PROJECT_DIR
+    "candidates": [               // descending by score; --brand-primary must choose from here
       { "hex": "#XXXXXX", "score": 0.X, "bgCount": N, "interactiveBg": N, "on_button": true }
     ]
   },
   "baseline_winner": { "name": "...", "combined": 0.XX },
-  "top_candidates": [           // 已满足 capability 的候选，按 combined 降序
+  "top_candidates": [           // capability-satisfied candidates, descending by combined
     {
       "name": "...",
       "combined": 0.XX,
@@ -70,19 +75,19 @@ node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
     "voice_heading_style": "Title Case|UPPERCASE|...",
     "voice_heading_length": "tight|loose"
   },
-  "capability_gated_presets": [ // 因 runtime / env 缺失被 0 分；可在装齐 capability 后升回 top_candidates
+  "capability_gated_presets": [ // scored 0 because runtime/env capability is missing; can return to top_candidates after capability is installed
     {
       "name": "liquid-glass",
       "combined_pre_capability": 0.42,
       "capabilities_missing": [
         {
           "kind": "block_installed",
-          "auto_install": "npx hyperframes add liquid-glass-widgets" // 非 null 时 agent 可跑
+          "auto_install": "npx hyperframes add liquid-glass-widgets" // agent may run when non-null
         },
         {
           "kind": "env_var_set",
           "var": "PRODUCER_HEADLESS_SHELL_PATH",
-          "auto_install": null // null = 不能自动装
+          "auto_install": null // null = cannot be auto-installed
         }
       ]
     }
@@ -90,74 +95,73 @@ node <SKILL_DIR>/phases/design-system/scripts/emit-chunks.mjs ./design-system
 }
 ```
 
-## 3. 决策规则（Step 2）
+## 3. Decision Rules (Step 2)
 
-按 `confidence` 决定：
+Decide by `confidence`:
 
-| confidence       | 动作                                |
-| ---------------- | ----------------------------------- |
-| `high`           | 用 `baseline_winner.name` 跑 Step 3 |
-| `medium` / `low` | 进入下面的 override 判据            |
-| `forced`         | 已传 `--style`，跳过 review         |
+| confidence       | Action                                 |
+| ---------------- | -------------------------------------- |
+| `high`           | Run Step 3 with `baseline_winner.name` |
+| `medium` / `low` | Enter the override criteria below      |
+| `forced`         | `--style` was passed; skip review      |
 
-**override 判据**（按优先级）：
+**Override criteria** (in priority order):
 
-1. **避坑**：top_candidates 中任一 preset 的 `avoid_for` 命中 `site_dna` 关键词 → 从候选剔除
-2. **best_for 命中**：剩下的里挑 `best_for` 与 `site_dna` 关键词重合最多的
-3. **capability_gated 选优**：如果某个 gated preset 的 `combined_pre_capability` 已能进 top-3 且 `site_dna` 明显契合（典型 `material: "glass"` → liquid-glass），处理 `capabilities_missing[]`：
-   - `auto_install` 非 null → 跑这条命令 → 重跑 `build-design.mjs --no-emit` 验证它已进 top_candidates → 用 `--style` 选它
-   - `auto_install: null` → 写进 anomaly 汇报，**改选别的 preset**
-4. **无明显赢家** → 保留 baseline_winner
+1. **Avoid pitfalls:** if any preset in `top_candidates` has `avoid_for` matching `site_dna` keywords, remove it from consideration.
+2. **best_for match:** from the remaining candidates, choose the preset whose `best_for` overlaps the most with `site_dna` keywords.
+3. **capability_gated preference:** if a gated preset's `combined_pre_capability` would place it in the top 3 and `site_dna` clearly fits it (typical `material: "glass"` -> liquid-glass), handle `capabilities_missing[]`:
+   - `auto_install` non-null -> run that command -> rerun `build-design.mjs --no-emit` to verify it entered `top_candidates` -> select it with `--style`
+   - `auto_install: null` -> include in anomaly report and **choose a different preset**
+4. **No clear winner** -> keep `baseline_winner`
 
-**禁止**：选择必须出自 `top_candidates[]` 或 `capability_gated_presets[]`，不能发明新名字。
+**Forbidden:** the choice must come from `top_candidates[]` or `capability_gated_presets[]`; do not invent a new name.
 
-## 3b. 品牌色裁决（Step 2b — 仅当 `brand.needs_review=true`）
+## 3b. Brand Color Adjudication (Step 2b - only when `brand.needs_review=true`)
 
-`brand.primary` 默认由确定性信号打分选出（用作交互/重复填充的彩色），多数站点直接可用。
-但**多色品牌**（如 figma）和**品牌色藏在大色块/logo**（如 asana 的珊瑚 logo 被大面板地色盖过）这类站点，
-CSS 统计分不清"品牌 hero"和"section 地色"——这时 `needs_review=true`，**必须看截图裁决**：
+`brand.primary` defaults to a deterministic signal-scored choice (the color used for interactive / repeated fills), and works directly for most sites.
+However, for **multicolor brands** (such as figma) and sites where the **brand color is hidden inside a large color block/logo** (such as asana's coral logo being outweighed by a large panel ground), CSS statistics cannot distinguish "brand hero" from "section ground". In those cases `needs_review=true`, and you **must inspect the screenshot to adjudicate**:
 
-1. 用 Read 打开 `brand.screenshot`（首屏截图）
-2. 对照 `brand.candidates[]`：判断哪个候选 hex 是**真正的品牌色**，剔除这些误判：
-   - 顶部公告条 / 横幅的背景色（细长条 = 地色，不是品牌）
-   - section 大面板 / 卡片容器的背景色（大色块 = 地色）
-   - 浅色 section 底色（淡色铺底 = 地色）
-   - 品牌色通常出现在：**logo、主 CTA 按钮、强调元素**（`on_button:true` 是强信号）
-3. 选定后 → Step 3 加 `--brand-primary <选中的hex>` 重跑（hex **必须**是某个 `candidates[].hex`）
-4. 若截图里的真品牌色**不在** `candidates[]` 里（典型：品牌色只在 logo SVG，如 reddit/gitlab 的橙）→
-   候选里挑不出 → 记入 anomaly 汇报，保留自动选的 primary 不强行覆盖
+1. Use Read to open `brand.screenshot` (first viewport screenshot).
+2. Compare against `brand.candidates[]`: determine which candidate hex is the **true brand color**, excluding these false positives:
+   - background color of the top announcement bar / banner (thin horizontal strip = ground color, not brand)
+   - background color of a large section panel / card container (large color block = ground color)
+   - pale section background colors (light wash = ground color)
+   - brand color usually appears in: **logo, primary CTA button, emphasis elements** (`on_button:true` is a strong signal)
+3. After choosing -> rerun Step 3 with `--brand-primary <chosen hex>` (hex **must** be one of the `candidates[].hex` values).
+4. If the true brand color visible in the screenshot is **not in** `candidates[]` (typical: brand color only appears in logo SVG, e.g. reddit/gitlab orange) ->
+   no valid candidate can be chosen -> record this in anomaly report, keep the automatically selected primary, and do not force an override.
 
-`needs_review=false`（confidence=high）时**跳过本步**，直接用 `brand.primary`。
+When `needs_review=false` (`confidence=high`), **skip this step** and use `brand.primary` directly.
 
-## 4. 汇报模板
+## 4. Report Template
 
 ```
 preset review:
   baseline: <name> (combined=<X>, confidence=<...>)
   chosen:   <name>
-  reason:   <一句话，引用 site_dna / best_for / avoid_for 的具体关键词>
+  reason:   <one sentence citing concrete site_dna / best_for / avoid_for keywords>
   alternates_considered: [<name1>, <name2>]
-  capability_actions: [<装了什么 block / 哪个 env var 没设>]  # 没动作就写 none
+  capability_actions: [<installed block / missing env var>]  # write none if no action
 brand review:
   primary: <hex> (source=<signals|agent-override|legacy>, confidence=<...>)
-  reviewed: <yes 看了截图选 X / no 自动选已 high / n/a 候选里没真品牌色>
+  reviewed: <yes inspected screenshot and chose X / no automatic high-confidence choice / n/a true brand color not in candidates>
 ```
 
-外加 build-design 和 emit-chunks 两段 stdout 原样贴。
+Also paste the two stdout sections from build-design and emit-chunks verbatim.
 
-## 5. 硬契约
+## 5. Hard Contracts
 
-- **`chunks/` 与 `design.html` 同源** — Step 3 重跑后必须重跑 Step 4，否则下游读旧 chunk
-- **Read 范围**：`./design-system/inference.json` + 验合成结果时 `./design-system/design.html` + **品牌裁决时 `brand.screenshot`（截图）**。**不读 capture 的 extracted/ 原始 JSON** —— inference.json 已经按 site_dna 摘要了关键信号
-- **不要自己设计 palette / typography / 字体 / decoration** — 全部由 build-design 写定。品牌色裁决也只是**从 `candidates[]` 里选**（`--brand-primary`），不发明 hex
-- `--style` 是 deliberate override，agent 必须在跑它之前满足 capability；build-design 在 forced mode 下不再 gate
+- **`chunks/` and `design.html` must share the same source** - after rerunning Step 3, rerun Step 4, otherwise downstream reads stale chunks.
+- **Read scope:** `./design-system/inference.json` + `./design-system/design.html` when verifying the composed result + **`brand.screenshot` (screenshot) when adjudicating brand color**. **Do not read raw JSON under capture extracted/** - `inference.json` already summarizes the key signals as `site_dna`.
+- **Do not design palette / typography / fonts / decoration yourself** - build-design writes all of it. Brand color adjudication is only **choosing from `candidates[]`** (`--brand-primary`), not inventing a hex.
+- `--style` is a deliberate override; the agent must satisfy capability before running it. In forced mode, build-design no longer gates.
 
-## 6. 排查
+## 6. Troubleshooting
 
-| 现象                                  | 修法                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 抓回非英语 hero                       | 已默认 `Accept-Language: en-US,en;q=0.9`；若仍是本地语言，重跑 Phase 1 capture                                                                                                                                                                                                                                                                              |
-| 抓回空 hero / 占位文字                | 给 capture 加 `--timeout 60000` 重跑；或确认 capture/BLOCKED.md 是否提示反爬                                                                                                                                                                                                                                                                                |
-| Step 4 报缺锚点                       | 重跑 Step 3，确认 design.html 含 ROOT-START / MOTION-START / VOICE-START / COMPONENT 注释；不要修 emit-chunks                                                                                                                                                                                                                                               |
-| `chunks/index.json` 缺 `components[]` | 看 build-design stdout `components: N paste-ready`；N=0 可接受（下游退化为 tokens + easings）                                                                                                                                                                                                                                                               |
-| 推断的 brand primary 颜色不对         | build-design 用 capture 的 `colorStats` 信号给品牌色打分（最常用作交互/重复填充的彩色 = primary，详见脚本注释）；多数情况已准确。若仍不对：① 品牌色只在 logo SVG 里（如 reddit/gitlab 的橙）→ capture 无法作为填充色捕获，目前无法自动取到；② 多色品牌（如 figma）primary 本就模糊。两种情况可手改 `--style` 强制 preset，品牌色由 design.html 退化路径处理 |
+| Symptom                                    | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Captured non-English hero                  | Capture already defaults to `Accept-Language: en-US,en;q=0.9`; if it is still in a local language, rerun Phase 1 capture                                                                                                                                                                                                                                                                                                                                                                         |
+| Captured blank hero / placeholder text     | Rerun capture with `--timeout 60000`; or check whether capture/BLOCKED.md reports anti-bot protection                                                                                                                                                                                                                                                                                                                                                                                            |
+| Step 4 reports missing anchors             | Rerun Step 3 and confirm design.html contains ROOT-START / MOTION-START / VOICE-START / COMPONENT comments; do not fix emit-chunks                                                                                                                                                                                                                                                                                                                                                               |
+| `chunks/index.json` missing `components[]` | Check build-design stdout `components: N paste-ready`; N=0 is acceptable (downstream degrades to tokens + easings)                                                                                                                                                                                                                                                                                                                                                                               |
+| Inferred brand primary is wrong            | build-design scores brand color from capture `colorStats` signals (the color most often used for interactive/repeated fills = primary; see script comments). Usually this is accurate. If still wrong: 1. brand color appears only in logo SVG (e.g. reddit/gitlab orange) -> capture cannot catch it as a fill color yet; 2. multicolor brands (e.g. figma) have ambiguous primary. In both cases, you may force the preset with `--style`; brand color falls back through design.html handling |

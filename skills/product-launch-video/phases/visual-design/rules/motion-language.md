@@ -4,156 +4,156 @@ description: "Motion design decisions for HyperFrames videos — spring intents,
 category: visual-design
 ---
 
-# 视频运动语言 —— 设计判断层
+# Video Motion Language - Design-Judgment Layer
 
-好的宣传视频感觉像一个连续整体，不是一堆毫无关联动画的幻灯片。这需要一致的运动语言：相同的缓动曲线意图、相同的节奏时序、相同的弹簧手感。
+A good promo video feels like one continuous whole, not a pile of unrelated animated slides. That requires a consistent motion language: the same ease intent, the same rhythmic timing, and the same spring feel.
 
-**本文件只负责 plan 层的设计判断** —— 弹簧意图、节拍结构、停留、静默节拍、过渡词汇。具体 GSAP ease 名称（`back.out(1.4)`）、ms / 帧映射、stagger 公式、cut-the-curve 精确 JS 代码、乘性 breathing 公式都属于 build agent 在写 timeline 时查 `/hyperframes-animation` 与 `chunks/easings.js` 的事；plan 不写代码。
+**This file only covers plan-layer design judgment** - spring intent, beat structure, holds, silent beats, and transition vocabulary. Concrete GSAP ease names (`back.out(1.4)`), ms/frame mapping, stagger formulas, exact cut-the-curve JS, and multiplicative breathing formulas are build-agent territory when writing timelines and consulting `/hyperframes-animation` plus `chunks/easings.js`; plan does not write code.
 
-> **`EASE` / `DUR` 的 JS 常量来自 `chunks/easings.js`**（已内联在 Phase 3 dispatch 的 `## Design chunks`，不读 design.html）。Plan 按**意图角色**引用（`EASE.entry` / `EASE.emphasis` / `EASE.exit`、`DUR.fast` / `DUR.med` / `DUR.slow`，但典型预设里的实际键名可能略不同 —— 比如 editorial 预设用 `DUR.snap` 代替 `DUR.fast`）。Plan 写"用 entry 弹簧"或"参考 `EASE.entry`"，build agent 自己映射到具体曲线。
+> **`EASE` / `DUR` JS constants come from `chunks/easings.js`** (already inlined into Phase 3 dispatch `## Design chunks`; do not read design.html). Plan references by **intent role** (`EASE.entry` / `EASE.emphasis` / `EASE.exit`, `DUR.fast` / `DUR.med` / `DUR.slow`, though actual keys may vary by preset - e.g. editorial uses `DUR.snap` instead of `DUR.fast`). Plan writes "use entry spring" or "reference `EASE.entry`"; build agent maps it to the concrete curve.
 
-## 弹簧意图（按角色，不按曲线）
+## Spring Intent (by role, not curve)
 
-HyperFrames 基于 GSAP。下表是 plan 用的**意图**；build agent 用 `/hyperframes-animation` 把意图翻成具体 GSAP ease + duration：
+HyperFrames uses GSAP. The table below is the **intent** vocabulary for plans; the build agent uses `/hyperframes-animation` to translate intent into concrete GSAP ease + duration:
 
-| Intent     | 手感                   | 适用场景                  |
-| ---------- | ---------------------- | ------------------------- |
-| **entry**  | 自信轻微过冲，迅速归位 | 主要元素入场（默认）      |
-| **gentle** | 柔和滑入，无过冲       | 背景元素、细微动作        |
-| **snappy** | 紧凑过冲，近乎瞬时     | UI 元素、小图标、按钮     |
-| **heavy**  | 带重量的减速           | 大图、原型截图、hero 视觉 |
-| **slam**   | 弹跳过冲，刻意感强     | Logo / 钟声等冲击瞬间     |
+| Intent     | Feel                                        | Use case                                          |
+| ---------- | ------------------------------------------- | ------------------------------------------------- |
+| **entry**  | confident slight overshoot, settles quickly | primary element entry (default)                   |
+| **gentle** | soft slide-in, no overshoot                 | background elements, subtle motion                |
+| **snappy** | tight overshoot, nearly instant             | UI elements, small icons, buttons                 |
+| **heavy**  | weighted deceleration                       | large images, prototype screenshots, hero visuals |
+| **slam**   | bouncy overshoot, intentionally loud        | logo / bell / impact moments                      |
 
-**一致性规则**：相似元素共享同一意图。一个场景里所有图标都 `snappy`，所有 hero 图都 `heavy`。**不要**为每个元素发明独有的 ease + duration。
+**Consistency rule:** similar elements share the same intent. In one scene, all icons are `snappy`, all hero images are `heavy`. **Do not** invent a unique ease + duration for every element.
 
-## 禁用项
+## Forbidden
 
-- **`bounce.out` / `elastic.out`** —— 显得过时，把注意力从内容转移到动画。真实物体平滑减速，不反弹。`entry` 意图的低过冲（archive 典型 back.out 1.4-1.7 范围）是 OK 的；更高过冲只保留给明确"俏皮感"瞬间
-- **每个元素一个独有 ease + duration** —— 视觉噪声
+- **`bounce.out` / `elastic.out`** - feels dated and pulls attention away from content. Real objects decelerate smoothly; they do not bounce. Low overshoot for `entry` intent (archive typical back.out 1.4-1.7) is OK; higher overshoot is reserved for clearly playful moments.
+- **Unique ease + duration per element** - visual noise.
 
-## 时长意图（100 / 300 / 500 / 800 概念）
+## Duration Intent (100 / 300 / 500 / 800 concepts)
 
-Plan 按**意图档位**引用（"瞬时反馈"、"状态变化"、"布局变化"、"入场动画"）；具体 ms / 帧由 build agent 在 30fps 下按 `/hyperframes-animation` 落数。
+Plan references by **intent tier** ("instant feedback", "state change", "layout change", "entry animation"); the build agent maps concrete ms / frames at 30fps using `/hyperframes-animation`.
 
-- **瞬时反馈** —— 微交互、状态闪动
-- **状态变化** —— 元素入场、图标切换
-- **布局变化** —— 场景入场、主要过渡
-- **入场动画** —— Hero 揭幕、开场序列
+- **Instant feedback** - micro-interaction, state flash
+- **State change** - element entry, icon swap
+- **Layout change** - scene entry, major transition
+- **Entry animation** - hero reveal, opening sequence
 
-**单个入场不超过 ~800ms**。需要更长铺陈 → 用多元素 stagger，不要延单元素时长。
+**A single entry should not exceed ~800ms.** If you need a longer buildup, use multi-element stagger instead of lengthening one element.
 
-## 退出 = 入场的 75%
+## Exit = 75% of Entry
 
-退出动画约为入场的 75%（不是 50%、不是 100%）。到达审慎，离场迅捷但不突兀。
+Exit animation is about 75% of entry duration (not 50%, not 100%). Arrival is deliberate; departure is swift but not abrupt.
 
-- 退出太快 → 闪屏
-- 退出 = 入场 → 迟钝，阻塞下一场景
+- Exit too fast -> flash
+- Exit = entry -> sluggish, blocks the next scene
 
-这是 plan 知道并能在散文里点名的规则；build agent 自己算具体帧数。
+This is a rule the plan can name in prose; the build agent computes concrete frames.
 
-> Cut-the-curve 的入场 / 退出比是**刻意反转**（入场约 127% 退出长度）—— 入场要花更长清掉 blur。这是过渡的招牌例外，plan 引用过渡名称即可。
+> Cut-the-curve deliberately reverses the ratio (entry ~127% of exit length) - entry takes longer to clear blur. This is the signature transition exception; plan only needs to cite the transition name.
 
-## Stagger 总上限
+## Stagger Total Cap
 
-N 个元素 stagger 时，**总 stagger 时长 ≤ 500ms**（远超就显得拖）。具体公式（`(N-1) × per-item delay`）和"前 6-8 个 stagger，其余与最后一个一起入场"的策略是 build 的事；plan 只需知道：
+When staggering N elements, **total stagger duration <= 500ms** (much longer feels dragged out). Concrete formula (`(N-1) × per-item delay`) and the strategy "stagger the first 6-8, enter the rest with the last item" are build work; plan only needs to know:
 
-- **3-7 个元素** —— 正常 stagger，总在 300-700ms 内
-- **8+ 个元素** —— 收紧单项延迟，或只 stagger 前几个
-- **永远不要让 stagger 超过 500ms 还在继续展开**
+- **3-7 elements** - normal stagger, total 300-700ms
+- **8+ elements** - tighten per-item delay, or stagger only the first few
+- **Never let stagger continue past 500ms**
 
-## 节拍结构（plan 核心工具）
+## Beat Structure (core plan tool)
 
-节奏好的视频有节拍：紧张 → 释放 → 紧张 → 释放。Archive 最干净的参考是 playground-launch 的 46 秒方案：
+Rhythmic videos have beats: tension -> release -> tension -> release. The cleanest archive reference is playground-launch's 46-second plan:
 
-| 阶段           | 时长   | 节奏       | 场景类型                     |
-| -------------- | ------ | ---------- | ---------------------------- |
-| **缓慢铺垫**   | 6-10s  | 慢速建立   | Hero 建立，VO 还未出现       |
-| **快速蒙太奇** | 6-10s  | 每段约 2s  | 每 1.5-2s 一次 cut-the-curve |
-| **过程展示**   | 12-18s | 持续无切   | 屏幕录制、真实工作流         |
-| **收束**       | 3-5s   | 静止可呼吸 | Logo、URL、CTA               |
+| Phase              | Duration | Rhythm               | Scene type                         |
+| ------------------ | -------- | -------------------- | ---------------------------------- |
+| **Slow setup**     | 6-10s    | slow build           | hero establish, VO not yet present |
+| **Fast montage**   | 6-10s    | ~2s each             | cut-the-curve every 1.5-2s         |
+| **Process reveal** | 12-18s   | continuous no cut    | screen recording, real workflow    |
+| **Closure**        | 3-5s     | still and breathable | logo, URL, CTA                     |
 
-**场景内部按能量分配运动**：
+**Allocate motion by energy inside each scene:**
 
-- **高能场景**（hook、CTA）—— 更快入场、更紧 stagger、`snappy` 弹簧
-- **可呼吸场景**（品牌揭示、情感节拍）—— 较慢入场、`gentle` 弹簧、较长停留
-- **数据场景**（统计、特性）—— 中等节奏、干净 stagger、count-up
+- **High-energy scenes** (hook, CTA) - faster entry, tighter stagger, `snappy` spring
+- **Breathable scenes** (brand reveal, emotional beat) - slower entry, `gentle` spring, longer hold
+- **Data scenes** (statistic, feature) - medium rhythm, clean stagger, count-up
 
-## 停留时间（Hold time）
+## Hold Time
 
-元素入场后必须停留足够长才被读到。Plan 按**内容类型**引用最小停留（build 落具体帧数）：
+After an element enters, it must hold long enough to be read. Plan references minimum hold by **content type** (build maps concrete frames):
 
-| 内容                     | 最小停留意图 |
-| ------------------------ | ------------ |
-| 展示性文字（1-3 词）     | ~1s          |
-| 短句                     | ~1.5s        |
-| 数据 / 统计              | ~1.5s        |
-| 产品截图                 | ~2s          |
-| 复杂视觉（示意图、对比） | ~2.5s        |
-| Hero / 高潮词            | ~1-1.4s      |
+| Content                              | Minimum hold intent |
+| ------------------------------------ | ------------------- |
+| display text (1-3 words)             | ~1s                 |
+| short sentence                       | ~1.5s               |
+| data / statistic                     | ~1.5s               |
+| product screenshot                   | ~2s                 |
+| complex visual (diagram, comparison) | ~2.5s               |
+| hero / climax word                   | ~1-1.4s             |
 
-旁白时长 < 所需停留 → 扩展场景填充时间。
+Narration duration shorter than needed hold -> extend the scene to fill time.
 
-## "高潮前静默"节拍 ⭐
+## "Stillness Before Climax" Beat
 
-Archive 反复出现的招牌：主要动作和确认/结果之间留一段 **0.3-0.75s 的停顿**。这段静默在落点前营造叙事张力。
+Archive signature repeated often: leave a **0.3-0.75s pause** between the major action and confirmation/result. This silence creates narrative tension before the landing.
 
-- 图标在 2.2s 收拢，但 demo 直到 2.95s 才弹出（0.75s 间隙）
-- 步骤 3 在 3.33s 激活，按钮在 3.52s 进入（0.19s 缓冲）
-- "在最后一个挫败节拍上停住：光标静止，聊天框塞满，SFX 仍然有点对不上节奏"
+- Icons collapse at 2.2s, but demo does not pop out until 2.95s (0.75s gap)
+- Step 3 activates at 3.33s, button enters at 3.52s (0.19s buffer)
+- "Hold on a final frustrated beat: cursor still, chat full, SFX slightly off-rhythm"
 
-**Plan 必须明确规划这个节拍** —— 在散文的"多阶段编排"里点名 `stillness-before-climax`。一个直接从动作跳到结果的场景会失去那个戏剧性的逗号。
+**Plan must explicitly schedule this beat** - name `stillness-before-climax` in the prose "multi-phase choreography." A scene that jumps directly from action to result loses that dramatic comma.
 
-## 持续运动 —— 入场后元素必须保持运动
+## Continuous Motion - Elements Must Keep Moving After Entry
 
-静止元素 = 死视频。Plan 必须为每个元素点名"入场后用什么持续运动"（具体公式和代码是 build 的事）：
+Static elements = dead video. Plan must name what keeps each element alive after entry (concrete formulas and code are build work):
 
-| 模式               | 适用场景                                                         |
-| ------------------ | ---------------------------------------------------------------- |
-| **慢速漂移**       | 所有元素（默认）                                                 |
-| **Sine 浮动**      | 图标、装饰元素（反相浮动避免同步）                               |
-| **乘性 breathing** | Hero 图、背景（在最终 scale 上做轻微 ±2-5% 呼吸，**不是 yoyo**） |
-| **旋转漂移**       | 3D 卡片、hero logo                                               |
-| **轨道**           | 环绕图标                                                         |
-| **光晕脉冲**       | CTA、点击目标                                                    |
-| **Halftone 呼吸**  | 氛围场景（按节拍变形密度）                                       |
+| Pattern                      | Use case                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| **Slow drift**               | all elements (default)                                                       |
+| **Sine float**               | icons, decorative elements (counter-phase floats avoid sync)                 |
+| **Multiplicative breathing** | hero images, background (small ±2-5% breathing on final scale, **not yoyo**) |
+| **Rotational drift**         | 3D cards, hero logo                                                          |
+| **Orbit**                    | surrounding icons                                                            |
+| **Glow pulse**               | CTA, click target                                                            |
+| **Halftone breathing**       | atmospheric scenes (density deforms with beat)                               |
 
-**乘性 breathing 是被重复最多、也被忽略最多的技巧** —— plan 默认每个 hero 都点名"乘性 breathing"。**禁用** yoyo tween（覆盖入场 scale）。具体公式（`scale = final * (1 + Math.sin(t * freq) * amp)`、`onUpdate` 读 `tl.time()`）是 build 的事。
+**Multiplicative breathing is the most repeated and most often missed technique** - by default, plan names "multiplicative breathing" for every hero. **Forbid** yoyo tweens (they overwrite entry scale). Concrete formula (`scale = final * (1 + Math.sin(t * freq) * amp)`, `onUpdate` reads `tl.time()`) is build work.
 
-**最小振幅 ±6px 或 ±2-5% scale** —— 3px 微浮 = 不算运动。
+**Minimum amplitude ±6px or ±2-5% scale** - 3px micro-float does not count as motion.
 
-## 过渡词汇 —— 整片只用 2-3 种
+## Transition Vocabulary - Use Only 2-3 Across the Film
 
-场景间过渡遵循有限词汇。整片只挑 2-3 种反复用 —— 过渡类型的重复创造专业整体感。Archive 中最干净参考：playground-launch 在 8 个截然不同视觉宇宙中**只用 cut-the-curve**，正是这一点让整片凝聚。
+Inter-scene transitions follow a limited vocabulary. Choose only 2-3 and repeat them - repetition creates professional cohesion. Cleanest archive reference: playground-launch uses **only cut-the-curve** across 8 distinct visual universes, which is what makes the film cohere.
 
-> **这 2-3 个名额只数 `break` 边界的 Tier-B（场景间）过渡**（crossfade / blur-crossfade / push-slide / zoom-through / squeeze 里挑 2-3）。`shared-element`（morph，Tier-A）是 worker 在两场内部手写的共享元素桥接，**不属于这套词汇、不占名额** —— 它由叙事 `intent: morph` 驱动，按故事需要随便用（如一段 demo sequence 连着几对 morph）。
+> **These 2-3 slots count only Tier-B transitions on `break` boundaries** (choose 2-3 from crossfade / blur-crossfade / push-slide / zoom-through / squeeze). `shared-element` (morph, Tier-A) is a shared-element bridge hand-written by the worker inside two scenes, **not part of this vocabulary and not counted** - it is driven by narrative `intent: morph`, and may be used freely where the story needs it (e.g. several morph pairs in a demo sequence).
 
-### Cut-the-curve（archive 招牌，多数情况默认）
+### Cut-the-curve (archive signature; default for most cases)
 
-当前场景 blur + 滑出 → 下一场景 blur + 滑入。两侧用相同 blur 量级、方向逐缝交替（右→左→上→下）、背景比前景内容提前少许触发、内部 reveal 等舞台落定后才动。Plan 点名方向（"cut-the-curve LEFT"）即可，具体 0.33s / 0.42s / 8-10px blur 是 build 的事。
+Current scene blurs + slides out -> next scene blurs + slides in. Both sides use the same blur magnitude; direction alternates across seams (right -> left -> up -> down); background triggers slightly before foreground content; internal reveals occur after the stage settles. Plan only names direction ("cut-the-curve LEFT"); concrete 0.33s / 0.42s / 8-10px blur is build work.
 
-### Scale + fade（zoom-through）
+### Scale + fade (zoom-through)
 
-一边淡出一边向画面中心拉近，相机向前推进到下一句标题。
+One scene fades while pulling toward frame center; camera pushes forward into the next headline.
 
 ### Slide
 
-方向性滑动（匹配叙事流向），可配合视差。
+Directional slide (matches narrative flow), optionally with parallax.
 
-### Morph（最强叙事衔接）
+### Morph (strongest narrative seam)
 
-共享元素在场景间变换（手机簇 → 圆形头像 = 同时 scale + borderRadius tween）。
+Shared element transforms between scenes (phone cluster -> circular avatar = scale + borderRadius tween).
 
 ### Hard cut
 
-瞬时 opacity 翻转，用于高能瞬间（网格完全填满地出现、无 build-in）。**慎用** —— cut-the-curve 是默认；硬切保留给类型 / 调性的切换。
+Instant opacity flip, used for high-energy moments (grid appears fully filled with no build-in). **Use sparingly** - cut-the-curve is default; hard cuts are reserved for type/tone shifts.
 
-**Plan 必须为每场点名 transition** —— 决定下一场景的 Continuity（见 guide.md "硬契约"小节）：
+**Plan must name a transition for every scene** - it determines Continuity for the next scene (see guide.md "Hard Contracts"):
 
-- `hard cut` / `jump cut` → Continuity `break`
-- 同素材上的 `cut-the-curve` / `morph` / `scale+fade` → Continuity `continue`
+- `hard cut` / `jump cut` -> Continuity `break`
+- `cut-the-curve` / `morph` / `scale+fade` on the same material -> Continuity `continue`
 
-## Plan 引用样例
+## Plan Reference Example
 
-> "Multi-phase: entry 用 `EASE.entry` 弹簧（heavy 意图，hero 图）→ ambient drift（乘性 breathing ±3%）→ major transition: 图标 snappy stagger 入场（5 个，总 stagger ~400ms）→ **stillness-before-climax 0.6s**（光标静止，背景仍呼吸）→ result emphasis: 文字 gentle 入场 + 双层 glow → idle breathing → exit cut-the-curve LEFT 进入下一场景。"
+> "Multi-phase: entry uses `EASE.entry` spring (heavy intent, hero image) -> ambient drift (multiplicative breathing ±3%) -> major transition: icons enter with snappy stagger (5 items, total stagger ~400ms) -> **stillness-before-climax 0.6s** (cursor still, background still breathing) -> result emphasis: text gentle entry + double-layer glow -> idle breathing -> exit cut-the-curve LEFT into next scene."
 
-不写具体 ease 曲线名 / ms 数 / stagger 公式 / JS 代码。
+Do not write concrete ease curve names / ms values / stagger formulas / JS code.

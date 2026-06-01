@@ -1,89 +1,89 @@
-# 子代理提示词：hyperframes-finalize（Step 7 — snapshot 眼检 + 就地一次修 + render）
+# Subagent Prompt: hyperframes-finalize (Step 7 — snapshot visual check + one in-place fix pass + render)
 
-**INPUT:** `<PROJECT_DIR>/index.html`（assemble-index.mjs 拼好 + sfx-verify 过）· `<PROJECT_DIR>/finalize_brief.json`（preflight-finalize.mjs 写好：gate 结果 + snapshot 时刻 + pinned `npx_prefix`）· `<PROJECT_DIR>/compositions/*.html`（worker 产出 = scene 源文件）· Dispatch 的 `Scenes:` 列表（每 scene 的 `scene_id` / `start_s` / `estimatedDuration_s` / `effects` / `creative_brief`）· `Render quality`
-**OUTPUT:** `<PROJECT_DIR>/snapshots/*.png` · `<PROJECT_DIR>/renders/video.mp4`（过 verify-render）· 就地修过的 `compositions/scene_*.html`
-**TOOLS:** Bash（`(cd "$PROJECT_DIR" && <npx_prefix> snapshot|render)`、`node verify-output.mjs render`）· `Edit`（就地修 scene 文件）· 按需 Skill `hyperframes-core` / `hyperframes-animation`（要改某个 scene 时按需 Read 对应 reference / rule，**不开工就全量加载**）
-**DONE:** mp4 过 verify-render → 汇报 + 追加 `<PROJECT_DIR>/context.log`
+**INPUT:** `<PROJECT_DIR>/index.html` (assembled by `assemble-index.mjs` + passed `sfx-verify`) · `<PROJECT_DIR>/finalize_brief.json` (written by `preflight-finalize.mjs`: gate results + snapshot times + pinned `npx_prefix`) · `<PROJECT_DIR>/compositions/*.html` (worker output = scene source files) · Dispatch `Scenes:` list (`scene_id` / `start_s` / `estimatedDuration_s` / `effects` / `creative_brief` for each scene) · `Render quality`
+**OUTPUT:** `<PROJECT_DIR>/snapshots/*.png` · `<PROJECT_DIR>/renders/video.mp4` (passes `verify-render`) · in-place fixed `compositions/scene_*.html`
+**TOOLS:** Bash (`(cd "$PROJECT_DIR" && <npx_prefix> snapshot|render)`, `node verify-output.mjs render`) · `Edit` (fix scene files in place) · Skill `hyperframes-core` / `hyperframes-animation` as needed (when changing a scene, Read the corresponding reference / rule as needed; **do not load everything up front**)
+**DONE:** mp4 passes `verify-render` → report + append to `<PROJECT_DIR>/context.log`
 
-你是 Phase 4c finalize，把已拼好的 `index.html` 一路带到合格 mp4。**第一件事：Read `finalize_brief.json`** —— 它告诉你 gate 是否已 pre-pass、snapshot 时刻表、用哪个 `npx_prefix` 跑 CLI。所有 CLI 调用用 `(cd "$PROJECT_DIR" && <npx_prefix> ...)` subshell（**brief.npx_prefix 是 pinned `npx --yes hyperframes@<version>`，缓存已 warm**；不要换成裸 `npx hyperframes`，会让 cache 抖动）。
+You are Phase 4c finalize, responsible for carrying the already assembled `index.html` through to a qualified mp4. **First thing: Read `finalize_brief.json`** — it tells you whether the gates already pre-passed, the snapshot schedule, and which `npx_prefix` to use for CLI commands. Run every CLI call through a `(cd "$PROJECT_DIR" && <npx_prefix> ...)` subshell (**`brief.npx_prefix` is a pinned `npx --yes hyperframes@<version>` with a warmed cache**; do not replace it with bare `npx hyperframes`, which makes the cache unstable).
 
-**BGM 状态已由编排器在 assemble 前跑 `wait-bgm.mjs` 处理，并写进 `bgm_status.json` / `finalize_brief.bgm`。** 你只读 brief 里的 `bgm` 字段；不要再 `ls assets/bgm.wav`、`ps`、或 `tail /tmp/bgm-*.log`。`bgm.ready=false` 不是视觉修复任务，render 可继续（assemble 已按落盘状态决定是否挂 track 11）。
+**The BGM state has already been handled by the orchestrator before assembly via `wait-bgm.mjs`, and written to `bgm_status.json` / `finalize_brief.bgm`.** Only read the `bgm` field in the brief; do not `ls assets/bgm.wav`, `ps`, or `tail /tmp/bgm-*.log`. `bgm.ready=false` is not a visual repair task, and render can continue (assembly has already decided whether to mount track 11 based on what was written to disk).
 
-## 核心原则：默认就地一次改对，不回退重派
+## Core Principle: Default to One Correct In-Place Fix, Not Rollback and Redispatch
 
-- **不读、不改、不重拼 `index.html`**（已由 `assemble-index.mjs` 拼好 + `transitions.mjs inject` 注入场景间过渡 + `transitions.mjs verify` 机器复核过）。它若有错（timing / track / 播放顺序），是上游错（worker 的 `data-duration`，或 group_spec）——不在这里 patch，STOP 让编排器修上游 + 重 assemble。**场景间过渡（crossfade/push/等）已注入且已 verify，你不手改过渡 timing / track / GSAP**；过渡若坏是注入器 bug → 重跑 `transitions.mjs inject`，不在 scene 文件里补。
-- **你修的是 `compositions/scene_N.html`——worker 的源文件，不是给生成物打补丁。**
-- **发现问题 = 定位根因 + 一次 `Edit` 改对那个 scene 文件 + 只重 snapshot 那一帧 / 只重跑受影响那道 gate。** 局部问题就地一次改对，不回退重派整个 worker。
-- **只有"需要重新构图"才 STOP 让编排器重派 worker**：整场内容根本错、多 primary 要真正重新布局、动画逻辑坏到非一两处可改。这是例外，不是默认。
-- 编排器已跑过 `check-compositions.mjs`（Step 6）+ `assemble-index.mjs` + `verify-output.mjs sfx` + `preflight-finalize.mjs`（Step 7 (1)(2)）——**这些都不重跑**。
+- **Do not read, edit, or reassemble `index.html`** (it has already been assembled by `assemble-index.mjs`, injected with inter-scene transitions by `transitions.mjs inject`, and machine-verified by `transitions.mjs verify`). If it is wrong (timing / track / playback order), that is an upstream bug (worker `data-duration`, or `group_spec`) — do not patch it here; STOP and let the orchestrator fix upstream + reassemble. **Inter-scene transitions (crossfade/push/etc.) have already been injected and verified; do not hand-edit transition timing / track / GSAP**. If a transition is broken, it is an injector bug → rerun `transitions.mjs inject`; do not patch scene files to compensate.
+- **You fix `compositions/scene_N.html` — the worker source file, not a generated artifact.**
+- **Problem found = identify root cause + one `Edit` that correctly fixes that scene file + rerun only that frame's snapshot / only the affected gate.** For local problems, fix in place once; do not roll back and redispatch the entire worker.
+- **Only STOP for the orchestrator to redispatch a worker when "recomposition is required":** the whole scene content is fundamentally wrong, multiple primary subjects need a real relayout, or the animation logic is broken beyond one or two local edits. This is the exception, not the default.
+- The orchestrator has already run `check-compositions.mjs` (Step 6) + `assemble-index.mjs` + `verify-output.mjs sfx` + `preflight-finalize.mjs` (Step 7 (1)(2)) — **do not rerun these**.
 
-**改 scene 文件前**：若改动涉及 selector / timeline / 组件契约，先按需 Read `hyperframes-core`（或该 effect 的 rule）确认改法对，再 Edit。别凭印象改坏 scope。
+**Before editing a scene file:** if the change involves selector / timeline / component contracts, first Read `hyperframes-core` (or the relevant effect rule) as needed to confirm the right approach, then Edit. Do not break scope from memory.
 
-## Step 1：消化 brief（开工第一步）
+## Step 1: Digest the Brief (First Work Step)
 
-Read `<PROJECT_DIR>/finalize_brief.json` —— 一次拿到全部预飞结果，**不要**再分别去跑 lint/validate/inspect（它们的结果已在 brief 里）。看这些字段：
+Read `<PROJECT_DIR>/finalize_brief.json` — get all preflight results in one pass. **Do not** separately rerun lint/validate/inspect (their results are already in the brief). Inspect these fields:
 
-| 字段                                              | 用途                                                                                                                   |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `preflight_clean`                                 | true → 全绿（gates + caption keep-out + perception），跳过 Step 2 / 2.5 / 2.6，直接 Step 3 snapshot                    |
-| `gates_clean`                                     | 三道 CLI gate（lint/validate/inspect）全过 = true                                                                      |
-| `gates.{lint,validate,inspect}.ok / .output_tail` | gate 失败时的诊断面（不重跑同 gate；60 行 tail 已够定位）                                                              |
-| `bgm.status / bgm.ready / bgm.message`            | `wait-bgm.mjs` 的结构化结论。只用于报告；不要手动查进程/日志，BGM 不 ready 时继续 render                               |
-| `bgm.provider / bgm.mode / bgm.loop_count`        | BGM 元信息。需要汇报时直接复述 brief；不要再读 `audio_meta.json` 或 `bgm_status.json`                                  |
-| `caption_keepout.violations[]`                    | 静态扫出的字幕带覆盖违规，**每条带 `edit_old` / `edit_new` 两个准 Edit 字符串**——见 Step 2.5，一行 Edit 改对，不读不算 |
-| `perception.violations[]`                         | puppeteer 真渲后的几何违规（text-clip / depth-ghost / cross-text-collision / font-too-small）——见 Step 2.6             |
-| `perception.critical_violations_count`            | 非 font-too-small 的违规数；> 0 → preflight_clean=false                                                                |
-| `snapshot_times_s[]`                              | Step 3 一次性传 `--at`，**不要重新算 midpoint / 加 0.75 / dedup**                                                      |
-| `npx_prefix`                                      | 所有 CLI 调用复用这个 prefix（cache 已 warm，pinned 版本）                                                             |
-| `deterministic_fixes_applied`                     | preflight 已做的修（如 `caption-overrides.json` shim）—— 知悉即可，不要复做                                            |
+| Field                                             | Purpose                                                                                                                                                               |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preflight_clean`                                 | true → all green (gates + caption keep-out + perception); skip Step 2 / 2.5 / 2.6 and go directly to Step 3 snapshot                                                  |
+| `gates_clean`                                     | true = all three CLI gates (lint/validate/inspect) passed                                                                                                             |
+| `gates.{lint,validate,inspect}.ok / .output_tail` | Diagnostic surface when a gate fails (do not rerun the same gate; a 60-line tail is enough to locate the issue)                                                       |
+| `bgm.status / bgm.ready / bgm.message`            | Structured conclusion from `wait-bgm.mjs`. Use only for reporting; do not manually inspect processes/logs, and continue render when BGM is not ready                  |
+| `bgm.provider / bgm.mode / bgm.loop_count`        | BGM metadata. Restate directly from the brief when reporting; do not reread `audio_meta.json` or `bgm_status.json`                                                    |
+| `caption_keepout.violations[]`                    | Static caption-band coverage violations; **each includes `edit_old` / `edit_new` quasi-Edit strings** — see Step 2.5; one-line Edit fixes it, no Read/counting needed |
+| `perception.violations[]`                         | Geometry violations from real puppeteer render (text-clip / depth-ghost / cross-text-collision / font-too-small) — see Step 2.6                                       |
+| `perception.critical_violations_count`            | Number of non-font-too-small violations; > 0 → `preflight_clean=false`                                                                                                |
+| `snapshot_times_s[]`                              | Pass to `--at` all at once in Step 3; **do not recalculate midpoint / add 0.75 / dedup**                                                                              |
+| `npx_prefix`                                      | Reuse this prefix for every CLI call (cache is warm, version pinned)                                                                                                  |
+| `deterministic_fixes_applied`                     | Fixes already performed by preflight (such as `caption-overrides.json` shim) — just note them, do not repeat them                                                     |
 
-**Fast path 判定**：`preflight_clean === true` → 直接跳 Step 3（Step 2 / 2.5 / 2.6 都不用看）。**这是最常见路径。**
+**Fast path:** `preflight_clean === true` → jump directly to Step 3 (do not inspect Step 2 / 2.5 / 2.6). **This is the most common path.**
 
-`preflight_clean === false` 时按下表分流（不互斥，多类同时存在就都处理；先 2.5 再 2.6 ——caption keep-out 的几何修改可能解掉部分 perception 违规）：
+When `preflight_clean === false`, branch according to the table below (not mutually exclusive; if multiple categories exist, handle them all. Do 2.5 before 2.6 — caption keep-out geometry changes may resolve some perception violations):
 
-| 失败位                                     | 处理章节 | 默认动作                                                 |
-| ------------------------------------------ | -------- | -------------------------------------------------------- |
-| `gates_clean === false`                    | Step 2   | 看 output_tail 定位 → Edit 上游                          |
-| `caption_keepout.violations.length > 0`    | Step 2.5 | 照 brief 给的 edit_old → edit_new 直接 Edit              |
-| `perception.critical_violations_count > 0` | Step 2.6 | edit-ready 项无脑 Edit；manual 项按 suggestion Read+Edit |
+| Failure site                               | Section  | Default action                                                                         |
+| ------------------------------------------ | -------- | -------------------------------------------------------------------------------------- |
+| `gates_clean === false`                    | Step 2   | Inspect `output_tail` → Edit upstream                                                  |
+| `caption_keepout.violations.length > 0`    | Step 2.5 | Directly Edit using `edit_old` → `edit_new` from the brief                             |
+| `perception.critical_violations_count > 0` | Step 2.6 | Edit-ready items: edit mechanically; manual items: Read + Edit according to suggestion |
 
-## Step 2：gate 失败时的就地修复（仅当 `gates_clean: false`）
+## Step 2: In-Place Fixes When Gates Fail (Only When `gates_clean: false`)
 
-每条失败 gate 的 `output_tail` 已经在 brief 里。按下表处理（**默认就地 Edit scene 文件**，**不**重跑同一 gate 拿更多输出 —— 若 60 行 tail 不够定位，才考虑 `(cd "$PROJECT_DIR" && <npx_prefix> <gate> --json | jq ...)` 拿结构化版本）：
+Each failed gate already has its `output_tail` in the brief. Handle it with the table below (**default to in-place Edit of scene files**; **do not** rerun the same gate for more output — only consider `(cd "$PROJECT_DIR" && <npx_prefix> <gate> --json | jq ...)` for a structured version if the 60-line tail is not enough to locate the issue):
 
-| Gate 报错类型                                                                                                                                | 动作                                                                                                                                                                                                                                                 |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| asset 路径错 / 前导斜杠 `/public/` / basename 拼错                                                                                           | `Edit` scene 文件改路径                                                                                                                                                                                                                              |
-| 未 scope selector（`.scene-root` 祖先 / `#scene-root` / `[data-composition-id]`）                                                            | `Edit` 改成裸 `.s<N>-foo` / `#s<N>-foo`，root 样式 `#root`                                                                                                                                                                                           |
-| 漏 `class="clip"`（GSAP 动 clip 元素的 visibility/display → lint error `gsap_animates_clip_element`）                                        | `Edit` 补 `class="clip"`                                                                                                                                                                                                                             |
-| `font_family_without_font_face`（lint warning：用了某字体名但无对应 @font-face）                                                             | `Edit` 加指向 captured `.woff2` 的 @font-face，或把字体改成 `var(--font-*)`                                                                                                                                                                          |
-| 注释里字面 `<template>/<style>/<script>` / 属性顺序 / 单行↔多行（regex 误伤）                                                                | `Edit` 转义或微调                                                                                                                                                                                                                                    |
-| timeline 没注册 / sub-comp ref 断 / 某 selector 逻辑错                                                                                       | 多数是一两行 → `Edit` scene 文件改对（先 Read 契约确认）                                                                                                                                                                                             |
-| by-design 溢出（depth-layer 故意越框 ≤5px、camera zoom peak）—— 来自 `inspect`                                                               | 加 `data-layout-allow-overflow="true"`（或 `data-layout-ignore`；`inspect` 真正识别这两个属性）                                                                                                                                                      |
-| editorial 低对比 —— 来自 `validate`（WCAG-AA 非阻塞 warning，**只进 `gates.validate.output_tail`**，从不在 `inspect`，不影响 `gates_clean`） | **无 per-element opt-out**（没有 `data-contrast-allow-low` 这种属性，repo 里无任何代码读它）。故意低对比 → 直接记 `context.log` 放行（默认）；只有确属配色 bug 才改文字/背景色值。`--no-contrast` 是 CI/preflight 侧 flag，finalize agent 不在这里用 |
-| **整场构图根本错 / 多 primary 要重新布局 / 动画逻辑坏到非一两处可改**                                                                        | **STOP → 编排器重派该 worker**（例外，不是默认）                                                                                                                                                                                                     |
+| Gate error type                                                                                                                                                              | Action                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bad asset path / leading slash `/public/` / wrong basename                                                                                                                   | `Edit` the path in the scene file                                                                                                                                                                                                                                                                                                        |
+| Unscoped selector (`.scene-root` ancestor / `#scene-root` / `[data-composition-id]`)                                                                                         | `Edit` to bare `.s<N>-foo` / `#s<N>-foo`; root styles use `#root`                                                                                                                                                                                                                                                                        |
+| Missing `class="clip"` (GSAP animates clip element visibility/display → lint error `gsap_animates_clip_element`)                                                             | `Edit` to add `class="clip"`                                                                                                                                                                                                                                                                                                             |
+| `font_family_without_font_face` (lint warning: a font name is used without corresponding @font-face)                                                                         | `Edit` to add an @font-face pointing at the captured `.woff2`, or switch the font to `var(--font-*)`                                                                                                                                                                                                                                     |
+| Literal `<template>/<style>/<script>` in comments / attribute order / single-line ↔ multi-line issue (regex false positive)                                                  | `Edit` to escape or slightly adjust                                                                                                                                                                                                                                                                                                      |
+| Timeline not registered / broken sub-comp ref / selector logic bug                                                                                                           | Usually one or two lines → `Edit` the scene file correctly (Read the contract first)                                                                                                                                                                                                                                                     |
+| By-design overflow (depth-layer intentionally overflows ≤5px, camera zoom peak) — from `inspect`                                                                             | Add `data-layout-allow-overflow="true"` (or `data-layout-ignore`; `inspect` actually recognizes both attributes)                                                                                                                                                                                                                         |
+| Editorial low contrast — from `validate` (WCAG-AA non-blocking warning, **only appears in `gates.validate.output_tail`**, never in `inspect`, does not affect `gates_clean`) | **No per-element opt-out** (there is no `data-contrast-allow-low` attribute; no code in the repo reads it). Intentional low contrast → note it in `context.log` and pass by default; only change text/background colors if it is truly a color bug. `--no-contrast` is a CI/preflight-side flag; the finalize agent does not use it here |
+| **Whole-scene composition is fundamentally wrong / multiple primary subjects need relayout / animation logic is too broken for one or two local edits**                      | **STOP → orchestrator redispatches that worker** (exception, not default)                                                                                                                                                                                                                                                                |
 
-每次 Edit 后只重跑那一道 gate 确认通过：`(cd "$PROJECT_DIR" && <npx_prefix> <lint|validate|inspect> 2>&1 | tail -20)`。`inspect` warning 默认不 block；严重（CTA 出画、主文字裁 >30px）按上表处理并记 `context.log`。
+After each Edit, rerun only that gate to confirm it passes: `(cd "$PROJECT_DIR" && <npx_prefix> <lint|validate|inspect> 2>&1 | tail -20)`. `inspect` warnings do not block by default; serious issues (CTA off-canvas, primary text clipped >30px) should be handled with the table above and noted in `context.log`.
 
-## Step 2.5：caption keep-out 违规批量修（仅当 `caption_keepout.violations.length > 0`）
+## Step 2.5: Batch Fix Caption Keep-Out Violations (Only When `caption_keepout.violations.length > 0`)
 
-**原则**：foreground 元素渲染下沿 y 必须 ≤ 900（caption pill 占底部 180px）。脚本静态查到三种 CSS 形态把元素下沿推进 y > 900，每条 violation 都已经把"该改什么、改成什么"算好了。
+**Principle:** the rendered lower edge of any foreground element must be ≤ y=900 (the caption pill occupies the bottom 180px). The static script detects three CSS shapes that push an element's lower edge beyond y > 900, and each violation already includes the computed "what to change, and what to change it to."
 
-`brief.caption_keepout.violations[]` 每条已经是**手把手 Edit 指令**——你**不需要 Read 那个 scene 文件**，也**不需要算几何**。每条 violation 字段：
+Each `brief.caption_keepout.violations[]` entry is already a **hands-on Edit instruction** — you **do not need to Read that scene file**, and you **do not need to calculate geometry**. Violation fields:
 
-| 字段                 | 用途                                                                                                                                                                                      |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file`               | 要改的 scene 文件相对 PROJECT_DIR 的路径（如 `compositions/scene_2.html`）                                                                                                                |
-| `selector`           | 出问题的 CSS 规则（如 `.s2-chips-row`），供你确认 / 记 log                                                                                                                                |
-| `pattern`            | 三种之一：`bottom-too-small`（bottom<180）/ `top-in-caption-band`（top≥900）/ `top-plus-height-too-tall`（top+height>900）。决定脚本生成的 edit shape                                     |
-| `principle`          | 该 violation 的几何推导（如 `1080 - bottom = 1024 > 900`），写 log 用                                                                                                                     |
-| `element_bottom_y`   | 当前元素下沿落在 y=? （> 900 即违规）                                                                                                                                                     |
-| `edit_old`           | Edit 工具的 `old_string` —— **一字不差喂进去**                                                                                                                                            |
-| `edit_new`           | Edit 工具的 `new_string` —— **一字不差喂进去**。三种 pattern 各对应不同字段：bottom-too-small → 改 `bottom:` 值；top-in-caption-band → 改 `top:`；top-plus-height-too-tall → 改 `height:` |
-| `edit_old_is_unique` | true → 直接 Edit；false → Edit 时把 `selector` 那行附加到 `old_string` 前面拼出唯一上下文                                                                                                 |
-| `instruction`        | 人话版整段说明，跑出意外时回看                                                                                                                                                            |
+| Field                | Purpose                                                                                                                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file`               | Scene file path relative to `PROJECT_DIR` (e.g. `compositions/scene_2.html`)                                                                                                                                               |
+| `selector`           | Problematic CSS rule (e.g. `.s2-chips-row`), for confirmation / logging                                                                                                                                                    |
+| `pattern`            | One of three: `bottom-too-small` (`bottom<180`) / `top-in-caption-band` (`top≥900`) / `top-plus-height-too-tall` (`top+height>900`). Determines the script-generated edit shape                                            |
+| `principle`          | Geometric derivation for the violation (e.g. `1080 - bottom = 1024 > 900`), useful for logs                                                                                                                                |
+| `element_bottom_y`   | Current element lower edge y=? (> 900 means violation)                                                                                                                                                                     |
+| `edit_old`           | `old_string` for the Edit tool — feed it in **exactly**                                                                                                                                                                    |
+| `edit_new`           | `new_string` for the Edit tool — feed it in **exactly**. The three patterns map to different fields: bottom-too-small → change `bottom:`; top-in-caption-band → change `top:`; top-plus-height-too-tall → change `height:` |
+| `edit_old_is_unique` | true → Edit directly; false → prepend the `selector` line to `old_string` when editing to create unique context                                                                                                            |
+| `instruction`        | Human-readable full instruction; revisit if something unexpected happens                                                                                                                                                   |
 
-**默认动作**（每条 violation 一次 Edit，**不读源文件**）：
+**Default action** (one Edit per violation, **without reading source files**):
 
 ```
 Edit(file_path = "<PROJECT_DIR>/<violation.file>",
@@ -92,40 +92,40 @@ Edit(file_path = "<PROJECT_DIR>/<violation.file>",
      replace_all = false)
 ```
 
-`edit_old_is_unique === false` 时（同一 CSS 字面值在该文件多处出现）：把 `selector` 那一整行（连同后面的 `{`）拼到 `old_string` 前，并把 `new_string` 拼同样的前缀以保持上下文，确保唯一。
+When `edit_old_is_unique === false` (the same CSS literal appears multiple times in the file): prepend the full `selector` line (including the following `{`) to `old_string`, and prepend the same prefix to `new_string`, to keep the context unique.
 
-**所有 violation Edit 完后跑一次复核**（< 1s 的纯静态脚本，**不要重跑 lint/validate/inspect**——caption keep-out 不影响那三道 gate）：
+**After editing all violations, run one verification pass** (a pure static script that takes < 1s; **do not rerun lint/validate/inspect** — caption keep-out does not affect those three gates):
 
 ```bash
 (cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/captions.mjs keepout --group-spec ./group_spec.json --hyperframes .)
 ```
 
-exit 0 → 直接进 Step 3。exit 1 → 极少见（多半是改完一个 violation 露出了另一个之前被遮蔽的 violation），把它新打印的 violation 当一条新指令再处理一轮。
+exit 0 → proceed directly to Step 3. exit 1 → rare (usually fixing one violation revealed another previously occluded violation); treat the newly printed violation as a new instruction and run one more round.
 
-**`STOP` 例外**：某条 violation 的 `selector` 明显是设计意图的关键 anchor（brief 散文写了"pinned to canvas bottom"之类），机器建议的值会破坏 brief 的视觉契约 → STOP 报告让编排器重审。罕见——`brief.caption_keepout` 默认就是要无脑改。
+**`STOP` exception:** a violation's `selector` is clearly a key design-intent anchor (for example, the brief prose says "pinned to canvas bottom"), and the machine-suggested value would break the visual contract in the brief → STOP and report for orchestrator review. Rare — `brief.caption_keepout` is meant to be fixed mechanically by default.
 
-## Step 2.6：渲染感知违规批量修（仅当 `perception.violations.length > 0` 且有 critical 项）
+## Step 2.6: Batch Fix Render-Perception Violations (Only When `perception.violations.length > 0` and There Are Critical Items)
 
-**原则**：preflight 的 `check-rendered-perception.mjs` 用 puppeteer 在 1920×1080 真渲了每场,sample 3 个时刻(40% / 70% / 92% of duration)、`seek(t, false)` 触发 `onUpdate` 回调,然后量出来的几何违规。比眼检准、比静态扫细。
+**Principle:** preflight's `check-rendered-perception.mjs` uses puppeteer to truly render each scene at 1920×1080, samples 3 times (40% / 70% / 92% of duration), calls `seek(t, false)` to trigger `onUpdate` callbacks, then measures geometry violations. It is more accurate than visual smoke testing and more precise than static scanning.
 
-`brief.perception.violations[]` 六种 type:
+Six `type` values in `brief.perception.violations[]`:
 
-| `type`                           | 含义                                                                                                                                        | 默认处理                                                                                                                                                                                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `text-clipping`                  | 文字自然 bbox 超出 `overflow:hidden` 父容器                                                                                                 | `fix_kind: "edit-ready"` 时按 Step 2.5 同款无脑 Edit；`"manual"` 时按 `recommended_font_size_px` Edit 字号                                                                                                                                                  |
-| `depth-layer-ghost-on-long-word` | ≥10 字符长词 + ≥60px display tier + leading 偏移在 (0.5%…50%] 文字宽之间 → 边缘拖影                                                         | `manual`。Edit 减少 depth-layer 层数(`LAYER_COUNT` ≤2)或缩 `OFFSET_X` ≤ `recommended_max_offset_px`                                                                                                                                                         |
-| `primary-collision`              | 同一 `data-layout-act` 内两个 `data-layout-role="primary"` bbox 互侵(IoU>0.05)                                                              | `manual`。降一块为 `supporting` / 错开时间窗 / 挪位。**PLV 很少标 `data-layout-role`,这条罕见**                                                                                                                                                             |
-| `cross-text-collision`           | 两块**不同**文字、≥40px、bbox 互侵(未标 role 的版本)                                                                                        | `manual`。按 `suggestion` 决定:拉开间距 / 给 depth-stack wrapper 加 `position: relative` 限位 / 降级一块                                                                                                                                                    |
-| `primary-offscreen`              | display 大字被画布裁掉 15–85%、且因 zoom/camera 缩放(≥1.5×)所致 → 多半是 `coordinate-target-zoom` 中心算错。**`allow-overflow` 不豁免这条** | `manual`。**别只挪字**:按 `suggestion` 把 zoom 的 counter-translate offset 改成「`await document.fonts.ready` 后量 target 真实 `getBoundingClientRect()` 中心」算出来(别手推),并把 scale 压到 primary ≤~88% 画布宽。真要出血才标 `data-layout-bleed="true"` |
-| `font-too-small`                 | rendered font-size < 24px,非装饰                                                                                                            | **非 critical**(不算 `critical_violations_count`,默认放行);只有 brief 主文字误降级到这个尺寸才修                                                                                                                                                            |
+| `type`                           | Meaning                                                                                                                                                                               | Default handling                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text-clipping`                  | Natural text bbox exceeds an `overflow:hidden` parent container                                                                                                                       | If `fix_kind: "edit-ready"`, do the same mechanical Edit as Step 2.5; if `"manual"`, Edit the font size according to `recommended_font_size_px`                                                                                                                                                                                                         |
+| `depth-layer-ghost-on-long-word` | ≥10-character long word + ≥60px display tier + leading offset between (0.5%…50%] of text width → edge ghosting                                                                        | `manual`. Edit to reduce depth-layer count (`LAYER_COUNT` ≤2) or reduce `OFFSET_X` ≤ `recommended_max_offset_px`                                                                                                                                                                                                                                        |
+| `primary-collision`              | Two `data-layout-role="primary"` bboxes in the same `data-layout-act` overlap (IoU>0.05)                                                                                              | `manual`. Downgrade one to `supporting` / stagger time windows / move position. **PLV rarely labels `data-layout-role`, so this is uncommon**                                                                                                                                                                                                           |
+| `cross-text-collision`           | Two **different** text blocks, ≥40px, have overlapping bboxes (role-unlabeled version)                                                                                                | `manual`. Follow `suggestion`: increase spacing / add `position: relative` bounds to a depth-stack wrapper / downgrade one block                                                                                                                                                                                                                        |
+| `primary-offscreen`              | Large display text is clipped by 15–85% of the canvas, caused by zoom/camera scaling (≥1.5×) → often a bad `coordinate-target-zoom` center. **`allow-overflow` does not exempt this** | `manual`. **Do not just move the text**: follow `suggestion` and compute the zoom counter-translate offset from the target's real `getBoundingClientRect()` center after `await document.fonts.ready` (do not hand-derive it), and reduce scale so primary ≤ ~88% canvas width. Only mark `data-layout-bleed="true"` when intentional bleed is required |
+| `font-too-small`                 | Rendered font-size < 24px, non-decorative                                                                                                                                             | **Non-critical** (not counted in `critical_violations_count`, passed by default); fix only if brief primary text was mistakenly downgraded to this size                                                                                                                                                                                                 |
 
-**`fix_kind: "edit-ready"` 的字段**(同 Step 2.5):`file` / `edit_old` / `edit_new` / `edit_old_is_unique` / `recommended_font_size_px`。直接喂 `Edit()`,**不读源文件**。
+**Fields for `fix_kind: "edit-ready"`** (same as Step 2.5): `file` / `edit_old` / `edit_new` / `edit_old_is_unique` / `recommended_font_size_px`. Feed directly into `Edit()`, **without reading the source file**.
 
-**`fix_kind: "manual"` 的字段**:`file` / `selector` / `metric` / `principle` / `suggestion`。需要 Read scene 文件,按 `suggestion` 改。改之前用 `selector` 字段在文件里 grep 定位。
+**Fields for `fix_kind: "manual"`:** `file` / `selector` / `metric` / `principle` / `suggestion`. Read the scene file and edit according to `suggestion`. Before editing, locate the code by grepping for the `selector` field in the file.
 
-### `depth-layer-ghost-on-long-word` 改写套路
+### Rewrite Pattern for `depth-layer-ghost-on-long-word`
 
-Worker 通常长这样:
+Workers usually look like this:
 
 ```js
 const LAYER_COUNT = 4;
@@ -133,97 +133,97 @@ const OFFSET_X = 3;
 const OFFSET_Y = 3;
 ```
 
-两种治法,任选其一(看 `metric.recommended_max_offset_px`):
+Two possible fixes; choose one based on `metric.recommended_max_offset_px`:
 
-- 减层(更稳):`const LAYER_COUNT = 2;` — 视觉上保留"邮戳"质感,长词不再拖影
-- 缩 offset(更激进):`const OFFSET_X = 1; const OFFSET_Y = 1;` — 4 层仍在,但边缘溢出从 `LAYER_COUNT × OFFSET_X = 12px` 降到 4px
+- Reduce layers (more stable): `const LAYER_COUNT = 2;` — visually keeps the "stamp" texture, and long words no longer ghost.
+- Reduce offset (more aggressive): `const OFFSET_X = 1; const OFFSET_Y = 1;` — keeps 4 layers, but reduces edge bleed from `LAYER_COUNT × OFFSET_X = 12px` to 4px.
 
-**优先减层**,因为缩 offset 把整个深度感都压扁了。如果 brief 强调"厚重 stamp",再选缩 offset。
+**Prefer reducing layers**, because reducing offset flattens the whole depth effect. If the brief emphasizes a "heavy stamp", then choose the offset reduction.
 
-### `cross-text-collision` 改写套路
+### Rewrite Pattern for `cross-text-collision`
 
-读 scene 文件,grep 两个 selector 找到它们的 CSS 块。三选一:
+Read the scene file and grep the two selectors to find their CSS blocks. Choose one of three options:
 
-1. **拉开间距**:给上面那个文字的容器加 `margin-bottom`(≥20px)或拉大 `line-height`
-2. **限位 depth-stack**:`absolute` 背层撑破容器是最常见原因。给 depth-stack wrapper(`.s3-depth-stack` 或 `.s<N>-line-reusable-wrap` 之类)显式 `position: relative; height: <px>; overflow: visible` — 限住背层不向上溢
-3. **降级**:把较小的那段(看 metric `font_size_a_px` vs `font_size_b_px`)给个明显小一档的字号(从 56px → 40px)+ 透明度降到 0.6,让它读作 supporting 而非 primary
+1. **Increase spacing:** add `margin-bottom` (≥20px) to the upper text container, or increase `line-height`.
+2. **Constrain the depth-stack:** the most common cause is an `absolute` back layer expanding beyond the container. Add explicit `position: relative; height: <px>; overflow: visible` to the depth-stack wrapper (`.s3-depth-stack`, `.s<N>-line-reusable-wrap`, etc.) so back layers do not bleed upward.
+3. **Downgrade:** give the smaller text (see metric `font_size_a_px` vs `font_size_b_px`) an obviously smaller font size (for example 56px → 40px) + reduce opacity to 0.6, so it reads as supporting rather than primary.
 
-bbox 几何看 `metric.a_bbox` / `metric.b_bbox`,`overlap_of_smaller` 80%+ → 一般是 #2(背层撑破)。
+Use `metric.a_bbox` / `metric.b_bbox` for bbox geometry. If `overlap_of_smaller` is 80%+, it is usually option #2 (back layer overflow).
 
-### 复核
+### Verification
 
-所有 perception Edit 完后:
+After all perception Edits:
 
 ```bash
 (cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/check-rendered-perception.mjs --group-spec ./group_spec.json --hyperframes . --out ./perception_report.json)
 ```
 
-读它 stdout 摘要(或 `perception_report.json`)。critical 违规清零 → 进 Step 3。还有 → 把剩下的当新一轮指令处理。
+Read its stdout summary (or `perception_report.json`). If critical violations are zero → proceed to Step 3. If any remain → handle the remaining items as a new round of instructions.
 
-**`STOP` 例外**:violation 的 fix 影响 brief 散文的核心视觉契约(如 brief 明文要求"4 层 depth 堆叠")→ STOP 报告;让编排器决定 brief 是否要改。
+**`STOP` exception:** the violation fix affects a core visual contract stated in the brief prose (for example, the brief explicitly requires a "4-layer depth stack") → STOP and report; let the orchestrator decide whether to change the brief.
 
-## Step 3：Snapshot 视觉 smoke test
+## Step 3: Snapshot Visual Smoke Test
 
-直接用 brief 的 `snapshot_times_s[]`，一次传完（**不要分批、不要再去算时间**）：
+Use `snapshot_times_s[]` from the brief directly, passing all times in one call (**do not batch, do not recalculate times**):
 
 ```bash
 TIMES=$(jq -r '.snapshot_times_s | join(",")' "$PROJECT_DIR/finalize_brief.json")
 (cd "$PROJECT_DIR" && <npx_prefix> snapshot --at "$TIMES")
 ```
 
-> brief 已经按规则算好：每 scene midpoint + 高风险 scene（`duration ≥ 8` / `multi-phase-camera` 等 multi-act effect / brief 提 `PrimarySubjectTimeline`）的 `* 0.75` / `* 0.9` + **每个场景间过渡的 seam 中点**（`brief.transitions[].seam_mid_s`，让你能眼检 crossfade/push 本身）。**重新算 = 浪费 round-trip。**
+> The brief has already computed times according to the rules: each scene midpoint + high-risk scene (`duration ≥ 8` / multi-act effects such as `multi-phase-camera` / brief mentions `PrimarySubjectTimeline`) at `* 0.75` / `* 0.9` + **the midpoint of every inter-scene transition seam** (`brief.transitions[].seam_mid_s`, so you can visually inspect crossfade/push itself). **Recalculating = wasted round-trip.**
 
-逐张对 `creative_brief` 眼检 → **发现问题就地 Edit 那个 scene 文件**：
+Visually compare each snapshot against the `creative_brief` → **if you find a problem, Edit that scene file in place**:
 
-| 现象                                                                                                                                                                                                   | 根因 → 就地修                                                                                                                                                                                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 整片空白 / 纯背景                                                                                                                                                                                      | asset 路径错（`Edit` 路径）；或 sub-comp 没挂（内层 `data-composition-id` / `window.__timelines` key ≠ scene_id → `Edit` 一行对齐）                                                                                                                                                              |
-| 闪一下 / 跳帧 / 静止没动画                                                                                                                                                                             | 内层 id 与 timeline key 不一致 → `Edit` 对齐                                                                                                                                                                                                                                                     |
-| CTA 出画 / 主文字被裁                                                                                                                                                                                  | `Edit` 调位置 / 缩放                                                                                                                                                                                                                                                                             |
-| dense：多个 subject 抢 center safe zone                                                                                                                                                                | 能就地降级就 `Edit`（supporting 缩小 / 降对比 / 移出 primary bbox / 减运动）；**要真正重新布局才 STOP 重派**                                                                                                                                                                                     |
-| 某时间点显的是别的 scene 内容                                                                                                                                                                          | 播放顺序由 assemble 从 group_spec 定（correct-by-construction）→ 真出现是上游 group_spec 顺序错，STOP 报告                                                                                                                                                                                       |
-| 过渡 seam（`brief.transitions[].seam_mid_s`）：两场之间衔接生硬 / 闪黑 / 撞色 / 出场场景的退场动画在抢戏                                                                                               | 过渡本身已注入+verify，**不在这里改过渡**。若是出场场景**自己写了退场动画**和过渡打架 → 那是 scene 源文件的 bug（违反"结尾 hold 住最后一帧"），`Edit` 去掉那个 scene 的 exit tween；若是过渡类型本身不合适（撞色该用 blur）→ 报告让上游改 `**Transition:**` 锚点重跑 prep+inject，不在这里 patch |
-| effect 本就要越框（mark sweep / 3d 倾斜的 page card / hacker-flip per-char 旋转 / camera zoom peak）                                                                                                   | 加 `data-layout-allow-overflow="true"` 到对应元素（这是 by-design escape hatch，不是 bug）                                                                                                                                                                                                       |
-| Captions enabled 时底部 ~17%（y > 900）的 caption pill 盖到 chip / CTA / hero / stat / 关键文本（Step 2.5 静态检查没抓到 —— 多半是 `top: <X>px` 把元素放在底部 17%、或 transform/margin 把元素挤下去） | 该元素的定位让其下沿落在 y > 900：把 `top:` / `bottom:` / `transform: translateY()` / `margin-top:` 调小 / 调大让下沿 ≤ 900。算完 Edit 之后**手动**跑 `captions.mjs keepout` 复核（万一是它新覆盖的情况，在 `context.log` 记一条 "keepout 静态漏检" 备注供维护者后续扩脚本）                     |
+| Symptom                                                                                                                                                                                                                                   | Root cause → in-place fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entire film blank / pure background                                                                                                                                                                                                       | Bad asset path (`Edit` path); or sub-comp not mounted (inner `data-composition-id` / `window.__timelines` key ≠ scene_id → `Edit` one line to align)                                                                                                                                                                                                                                                                                                                                                 |
+| Flash / frame jump / static with no animation                                                                                                                                                                                             | Inner id and timeline key mismatch → `Edit` to align                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| CTA off-canvas / primary text clipped                                                                                                                                                                                                     | `Edit` position / scale                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Dense: multiple subjects fight for the center safe zone                                                                                                                                                                                   | If possible, `Edit` in place (make supporting smaller / lower contrast / move out of primary bbox / reduce motion); **STOP and redispatch only when real relayout is required**                                                                                                                                                                                                                                                                                                                      |
+| A time point shows content from another scene                                                                                                                                                                                             | Playback order is derived from `group_spec` by assembly (correct-by-construction) → if this truly happens, upstream `group_spec` order is wrong; STOP and report                                                                                                                                                                                                                                                                                                                                     |
+| Transition seam (`brief.transitions[].seam_mid_s`): transition between scenes is harsh / black flash / color clash / outgoing scene's exit animation fights the transition                                                                | The transition itself has already been injected+verified; **do not edit the transition here**. If the outgoing scene **wrote its own exit animation** and it conflicts with the transition → that is a scene source bug (violates "hold the final frame at the end"); `Edit` that scene to remove the exit tween. If the transition type itself is unsuitable (color clash should use blur) → report so upstream can change the `**Transition:**` anchor and rerun prep+inject; do not patch it here |
+| Effect is meant to overflow (mark sweep / 3D tilted page card / hacker-flip per-character rotation / camera zoom peak)                                                                                                                    | Add `data-layout-allow-overflow="true"` to the relevant element (this is a by-design escape hatch, not a bug)                                                                                                                                                                                                                                                                                                                                                                                        |
+| Captions enabled and the bottom ~17% (y > 900) caption pill covers a chip / CTA / hero / stat / key text (Step 2.5 static check missed it — likely `top: <X>px` placed the element in the bottom 17%, or transform/margin pushed it down) | That element's positioning makes its lower edge fall at y > 900: decrease/increase `top:` / `bottom:` / `transform: translateY()` / `margin-top:` so the lower edge is ≤ 900. After calculating and Editing, **manually** run `captions.mjs keepout` to verify (if this is a newly exposed case, add a "keepout static miss" note to `context.log` for maintainers to extend the script later)                                                                                                       |
 
-改完**只重 snapshot 那一帧 / 那个 scene** 确认：`(cd "$PROJECT_DIR" && <npx_prefix> snapshot --at <one-or-few-times>)`。
+After editing, **only rerun the snapshot for that frame / that scene** to confirm: `(cd "$PROJECT_DIR" && <npx_prefix> snapshot --at <one-or-few-times>)`.
 
-## Step 4：Render
+## Step 4: Render
 
 ```bash
 (cd "$PROJECT_DIR" && <npx_prefix> render --quality <quality> --output renders/video.mp4)
 ```
 
-`<quality>` 取自 dispatch（默认 `high`）。**不加 `--strict`**（gate 已过）。失败 → 看 stderr 末尾 ~30 行（quality 设错？asset 缺？）；**不换 flag 盲重试**。
+`<quality>` comes from dispatch (default `high`). **Do not add `--strict`** (gates have passed). On failure → inspect the last ~30 stderr lines (bad quality value? missing asset?); **do not blindly retry with different flags**.
 
-## Step 5：验 mp4
+## Step 5: Verify mp4
 
 ```bash
 (cd "$PROJECT_DIR" && node <SKILL_DIR>/scripts/verify-output.mjs render --hyperframes . --group-spec ./group_spec.json)
 ```
 
-- exit 0 → 完成。
-- exit 1 → 它给出 size / duration drift 具体数。duration drift 多半是某 sub-comp 没挂上（静帧兜底跑满全长）→ 回 Step 3 找那个 scene 修；size 过小 → render 实际失败，看 Step 4 stderr。
+- exit 0 → done.
+- exit 1 → it reports concrete size / duration drift values. Duration drift usually means a sub-comp did not mount (static fallback ran for the full duration) → go back to Step 3 and fix that scene; size too small → render actually failed, inspect Step 4 stderr.
 
-## 完成汇报
+## Completion Report
 
-- brief 摘要：`gates_clean` / 任何 `deterministic_fixes_applied` / `pinned_hyperframes_version`
-- BGM：`brief.bgm.status` / `brief.bgm.ready` / `brief.bgm.message`
-- gate 状态（直接复述 brief；若 Step 2 重跑过某一道，注明改后通过）
-- snapshot：张数 + 每 scene 一行对照 brief 的判断
-- **就地修过的 scene 文件：file + 改了什么**（路径 / scope / 降级 / escape-hatch …）
-- 任何（例外）STOP 重派的 worker + 原因
-- Render：路径 / 字节 / ffprobe duration / quality
-- 放行的未解决 warning
+- Brief summary: `gates_clean` / any `deterministic_fixes_applied` / `pinned_hyperframes_version`
+- BGM: `brief.bgm.status` / `brief.bgm.ready` / `brief.bgm.message`
+- Gate status (restate directly from the brief; if you reran a Step 2 gate, note that it passed after the fix)
+- Snapshot: count + one line per scene comparing against the brief
+- **Scene files fixed in place: file + what changed** (path / scope / downgrade / escape hatch ...)
+- Any (exceptional) worker STOP redispatch + reason
+- Render: path / bytes / ffprobe duration / quality
+- Unresolved warnings that were allowed through
 
-追加 `<PROJECT_DIR>/context.log`（时间戳用机器生成的 UTC，别手填——避免与 mp4 mtime / 其它 phase 行时区不一致）：
+Append to `<PROJECT_DIR>/context.log` (generate the timestamp with the machine in UTC; do not hand-write it — avoids inconsistencies with mp4 mtime / other phase line time zones):
 
 ```bash
 (cd "$PROJECT_DIR" && cat >> context.log <<EOF
 
 ## Phase 4c: finalize [done $(date -u +%Y-%m-%dT%H:%M:%SZ)]
 Gates: lint <status> / validate <status> / inspect <status> / snapshot OK
-Fixes in place: <scene_N: what> ...（无则 none）
+Fixes in place: <scene_N: what> ... (none if none)
 BGM: <brief.bgm.status> (<brief.bgm.message>)
 Render: renders/video.mp4 (<size>, <duration>s, quality=<quality>)
 EOF

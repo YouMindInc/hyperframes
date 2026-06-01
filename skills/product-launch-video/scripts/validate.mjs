@@ -296,8 +296,9 @@ async function runSection(argv) {
   const ANCHORS = ["Effects", "Duration", "Continuity"];
   // Components/Surface anchors removed — the design system is a style REFERENCE,
   // not a plan-time contract. Workers pick components by visual judgment from the
-  // forwarded library; surface is no longer a scene-level commitment.
-  const OPTIONAL_ANCHORS = ["Blueprint"];
+  // forwarded library; surface is no longer a scene-level commitment. The optional
+  // anchors (Blueprint/Transition/Bridge/SFX) are validated inline below when
+  // present, not enforced as a required set — so there's no OPTIONAL_ANCHORS list.
 
   // Transition vocabulary — loaded from the single source of truth so this
   // validator never drifts from prep/injector. Absence of the anchor is fine

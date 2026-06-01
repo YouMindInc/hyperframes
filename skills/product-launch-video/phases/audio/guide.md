@@ -1,35 +1,35 @@
-# Audio (Phase 2.5) — workflow guide
+# Audio (Phase 2.5) - workflow guide
 
-Phase 2.5 由 **`scripts/audio.mjs`** 一把跑完：narrator_scripts → 每 scene voice + word JSON + audio_meta.json，外加（可选）detached BGM。Step 3 编排器直接 `node audio.mjs`，**没有 subagent**。脚本先 ffprobe TTS 输出得到实测总时长，再让本地 MusicGen fallback 单次生成一条 ~28s 种子片（一次 `generate()`，控制在模型 ~30s 位置编码上限内），然后：目标短于种子就裁切，目标长于种子就用 ~0.3s crossfade 把种子循环平铺到等长 `assets/bgm.wav`，最后整体首淡入尾淡出。比旧的逐段拼接没有硬接缝。
+Phase 2.5 is handled end-to-end by **`scripts/audio.mjs`**: `narrator_scripts` -> per-scene voice + word JSON + `audio_meta.json`, plus optional detached BGM. In Step 3, the orchestrator runs `node audio.mjs` directly; there is **no subagent**. The script first uses ffprobe on TTS output to get the measured total duration, then asks the local MusicGen fallback to generate one ~28s seed clip in a single call (one `generate()`, kept within the model's ~30s positional-encoding limit). After that: if the target is shorter than the seed, it trims the seed; if the target is longer than the seed, it uses an ~0.3s crossfade to loop and tile the seed into an equal-length `assets/bgm.wav`; finally it applies overall fade-in and fade-out. Compared with the old segment-by-segment stitching, this avoids hard seams.
 
-完整 flag 见 SKILL.md Step 3 / `audio.mjs --help`。本文件只描述 schema 和失败模式。
+For the full flag list, see SKILL.md Step 3 / `audio.mjs --help`. This file only describes the schema and failure modes.
 
-## 产物
+## Artifacts
 
 ```
-./audio_meta.json                       # 给 prep.mjs 的 index（PROJECT_DIR 根）
-assets/voice/scene_<N>.wav              # 每 scene narration（PROJECT_DIR/assets/，无 hyperframes/ 子目录）
-assets/voice/scene_<N>_words.json       # 每 scene word-level timestamp
-assets/bgm.wav                          # BGM（可选；可能 audio.mjs 退出时还没落盘）
+./audio_meta.json                       # index for prep.mjs (PROJECT_DIR root)
+assets/voice/scene_<N>.wav              # per-scene narration (PROJECT_DIR/assets/, no hyperframes/ subdirectory)
+assets/voice/scene_<N>_words.json       # per-scene word-level timestamp JSON
+assets/bgm.wav                          # BGM (optional; may not be written yet when audio.mjs exits)
 ```
 
-`audio_meta.json` schema（被 `prep.mjs` 消费）：
+`audio_meta.json` schema (consumed by `prep.mjs`):
 
 ```json
 {
   "tts_provider": "heygen" | "elevenlabs" | "kokoro",
-  "voice_id": "<provider-specific voice id>",   // 实际用的 TTS voice id（顶层）
+  "voice_id": "<provider-specific voice id>",   // actual TTS voice id used (top-level)
   "bgm_provider": "lyria" | "musicgen" | null,
   "bgm_enabled": true | false,
-  "bgm_pending": true | false,        // detached BGM 可能还在渲染；Step 7 wait-bgm.mjs 复核
+  "bgm_pending": true | false,        // detached BGM may still be rendering; Step 7 wait-bgm.mjs verifies it
   "bgm_path": "assets/bgm.wav" | null,
   "bgm_log": "/tmp/bgm-<timestamp>.log" | null,
   "bgm_pid": 12345 | null,
   "bgm_mode": "detached-single" | "detached-seed-loop" | "detached-seed-trim" | null,
-  "bgm_target_duration_s": 62.4 | null,  // BGM 目标时长（= 实测 voice 总时长；裁切/循环到此）
-  "bgm_seed_duration_s": 28 | null,    // MusicGen: 单条种子片长(≤30s 规避位置编码上限)
-  "bgm_loop_count": 3 | null,          // 种子 crossfade-loop 平铺到目标时长的圈数(trim 时为 1)
-  "total_duration_s": <Σ 成功场景实测 voice 时长（失败场景不计）>,
+  "bgm_target_duration_s": 62.4 | null,  // BGM target duration (= measured total voice duration; trim/loop to this)
+  "bgm_seed_duration_s": 28 | null,    // MusicGen: single seed clip length (<=30s to avoid the positional-encoding limit)
+  "bgm_loop_count": 3 | null,          // number of seed crossfade-loop tiles needed to reach target duration (1 when trimming)
+  "total_duration_s": <sum of measured voice durations for successful scenes (failed scenes excluded)>,
   "scenes": {
     "scene_1": {
       "voicePath": "assets/voice/scene_1.wav",
@@ -41,15 +41,15 @@ assets/bgm.wav                          # BGM（可选；可能 audio.mjs 退出
 }
 ```
 
-Provider 链 / voice id / mood prompt / env detection 全部 audio.mjs 内部处理；orchestrator 不挑。强制 provider 用 `--provider <name>`，覆盖 BGM mood 用 `--bgm-prompt "<text>"`。底层能力文档见 `hyperframes-media` skill。
+Provider chain / voice id / mood prompt / environment detection are all handled inside `audio.mjs`; the orchestrator does not choose them. Force a provider with `--provider <name>`, and override the BGM mood with `--bgm-prompt "<text>"`. See the `hyperframes-media` skill for the underlying capability documentation.
 
-## Failure modes
+## Failure Modes
 
-| Failure                  | 行为                                                                                                                                          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Single scene TTS exits 1 | 该 scene 不进 `audio_meta.scenes`，其他继续。Phase 4a 用 group_spec 的 `estimatedDuration_s`（源自 narrator_scripts.estimatedDuration）兜底。 |
-| BGM pending              | `bgm_enabled: true` + `bgm_pending: true`。Step 7 先跑 `wait-bgm.mjs`，ready 才挂 track 11。                                                  |
-| BGM exits 1              | `wait-bgm.mjs`（Step 7 finalize 阶段产 `bgm_status.json { status: "failed" }`，本 phase 不产）；voice 完成，Phase 4c 跳 `<audio>` 元素。      |
-| All scenes fail          | audio.mjs 退 1，stderr 报错，pipeline 停。                                                                                                    |
+| Failure                  | Behavior                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Single scene TTS exits 1 | That scene is omitted from `audio_meta.scenes`; the rest continue. Phase 4a falls back to `group_spec` `estimatedDuration_s` (from `narrator_scripts.estimatedDuration`).            |
+| BGM pending              | `bgm_enabled: true` + `bgm_pending: true`. Step 7 runs `wait-bgm.mjs` first, and mounts track 11 only when ready.                                                                    |
+| BGM exits 1              | `wait-bgm.mjs` produces `bgm_status.json { status: "failed" }` during Step 7 finalize (this phase does not produce it); voice is complete, and Phase 4c skips the `<audio>` element. |
+| All scenes fail          | `audio.mjs` exits 1, reports an error on stderr, and the pipeline stops.                                                                                                             |
 
-BGM 失败永不阻塞；只有"零场景拿到 voice"是 fatal。
+BGM failure never blocks; only "zero scenes received voice" is fatal.
