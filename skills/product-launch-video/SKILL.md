@@ -63,10 +63,9 @@ cwd is the agent workspace root (for example `/tmp/launch-video-202347`) and sho
 PROJECT_DIR="${LAUNCH_VIDEO_DIR:-videos/<project-name>}"
 mkdir -p "$(dirname "$PROJECT_DIR")"
 npx hyperframes init "$PROJECT_DIR" --non-interactive --skip-skills --example=blank
-rm -f "$PROJECT_DIR/AGENTS.md" "$PROJECT_DIR/CLAUDE.md"   # Workflow constraints live in this skill; do not rely on project-local helper docs
 ```
 
-> `AGENTS.md` / `CLAUDE.md` are generated only once during `hyperframes init` - deleting them once above is enough. **Later capture / build-design / any phase will not regenerate them**, so do not repeat `rm` in later Bash blocks.
+> `hyperframes init` drops a generic `AGENTS.md` / `CLAUDE.md` into `$PROJECT_DIR`; **leave them in place** — they are agent scaffolding for whoever opens the finished project later. This skill (not those files) is the source of truth for the workflow, so do not treat their generic guidance as run-time constraints. (The website-capture phase writes its own `capture/CLAUDE.md` holding the source URL — a different file, still used to recover the URL downstream.)
 
 **Constraints** (violating any one of these makes later phases unable to find artifacts or triggers lint errors):
 

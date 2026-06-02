@@ -135,8 +135,6 @@ if (!existsSync(hyperframesDir)) {
     { stdio: "inherit" },
   );
   if (r.status !== 0) die("npx hyperframes init failed");
-  rmSync(join(hyperframesDir, "AGENTS.md"), { force: true });
-  rmSync(join(hyperframesDir, "CLAUDE.md"), { force: true });
 }
 const voiceDir = join(hyperframesDir, "assets", "voice");
 mkdirSync(voiceDir, { recursive: true });
@@ -225,7 +223,7 @@ if (provider === "elevenlabs" && !process.env.ELEVENLABS_API_KEY)
 const voiceId =
   userVoice ||
   (provider === "heygen"
-    ? "1bd001e7e50f421d891986aad5158bc8" // HeyGen default (mirrors CLI heygen.ts DEFAULT_VOICE)
+    ? "Iy6A3TSbs6Qjl2wihrey" // HeyGen default — account-owned narrator voice (public STARFISH voices like 1bd001e7… 400 on accounts without the STARFISH engine; override with --voice)
     : provider === "elevenlabs"
       ? "21m00Tcm4TlvDq8ikWAM" // Rachel (ElevenLabs default)
       : lang === "en"

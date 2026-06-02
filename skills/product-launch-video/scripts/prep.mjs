@@ -45,7 +45,6 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -107,8 +106,6 @@ if (!existsSync(hyperframesDir)) {
     { stdio: "inherit" },
   );
   if (r.status !== 0) die("npx hyperframes init failed");
-  rmSync(join(hyperframesDir, "AGENTS.md"), { force: true });
-  rmSync(join(hyperframesDir, "CLAUDE.md"), { force: true });
 }
 
 // ---------- Step 2: copy capture assets → public/ ----------
