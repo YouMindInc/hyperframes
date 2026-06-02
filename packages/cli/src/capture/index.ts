@@ -141,9 +141,17 @@ export async function captureWebsite(
 
     // Intercept network responses to detect Lottie JSON files
     const discoveredLotties: DiscoveredLottie[] = [];
+    // Layer 1 (passive video discovery): every direct-video URL the page fetches
+    // over the whole session (load / scroll / carousel rotation), independent of
+    // whether a <video> for it exists at snapshot time. captureVideoManifest
+    // downloads these (guarded) and merges them into the manifest.
+    const discoveredVideoUrls = new Set<string>();
     page1.on("response", async (response) => {
       try {
         const responseUrl = response.url();
+        if (/\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(responseUrl)) {
+          discoveredVideoUrls.add(responseUrl);
+        }
         const contentType = response.headers()["content-type"] || "";
         const isJsonUrl = responseUrl.endsWith(".json");
         const isLottieUrl = responseUrl.endsWith(".lottie");
@@ -423,7 +431,10 @@ export async function captureWebsite(
     // Generate video manifest — screenshot each <video> element + extract surrounding context
     // so Claude Code can SEE what each video shows and WHERE it was used on the page.
     try {
-      await captureVideoManifest(page1, outputDir, progress);
+      await captureVideoManifest(page1, outputDir, progress, {
+        networkVideoUrls: discoveredVideoUrls, // Layer 1 (live Set, read after sampling)
+        sampleMs: 12000, // Layer 2: poll DOM ≤12s so auto-rotating carousels reveal each slide
+      });
     } catch {
       /* non-blocking — video manifest is best-effort */
     }
