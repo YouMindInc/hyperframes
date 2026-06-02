@@ -1284,20 +1284,116 @@ async function runKeepout(argv) {
       const top = propPx("top");
       const height = propPx("height");
 
+      // 4a. Transform-aware Y offset.
+      //    `transform: translate(-50%, -50%)` (centering trick) shifts the element
+      //    upward by half its height — without accounting for it, a card visually
+      //    centered in the upper canvas can be falsely flagged as overflowing the
+      //    caption band. Parses translateY / translate / translate3d Y-component
+      //    and returns:
+      //      - `{ frac, knownPx }` where frac is the Y translate as a fraction
+      //        of element height (e.g. -0.5 for translate(-50%, -50%)), and
+      //        knownPx is a literal px offset when the transform was authored in
+      //        px (overrides frac).
+      //      - null when the transform contains a Y component but we cannot
+      //        statically resolve it (matrix, calc(), CSS variable). The caller
+      //        falls back to "skip violation" because firing when we can't tell
+      //        is the path that led to the bad-Edit incident.
+      //    Returns `{ frac: 0, knownPx: 0 }` when there is no transform or it
+      //    has no Y component — the simple case, fully equivalent to the old
+      //    behaviour.
+      const parseTransformY = () => {
+        const tm = body.match(/(?:^|[;{\s])transform\s*:\s*([^;]+);/i);
+        if (!tm) return { frac: 0, knownPx: 0 };
+        const tx = tm[1].trim();
+        // matrix / calc / var → can't statically resolve → caller skips.
+        if (/\b(?:matrix3?d?|calc\(|var\()/i.test(tx)) return null;
+        // First scan for a Y-affecting translate; only the first one is parsed
+        // here (composition of multiple translates is rare in PLV scenes).
+        let m;
+        if ((m = tx.match(/\btranslateY\(\s*(-?\d+(?:\.\d+)?)(%|px)\s*\)/i))) {
+          const val = parseFloat(m[1]);
+          return m[2] === "%" ? { frac: val / 100, knownPx: 0 } : { frac: 0, knownPx: val };
+        }
+        if (
+          (m = tx.match(
+            /\btranslate3d\(\s*[^,)]+,\s*(-?\d+(?:\.\d+)?)(%|px)\s*,/i,
+          ))
+        ) {
+          const val = parseFloat(m[1]);
+          return m[2] === "%" ? { frac: val / 100, knownPx: 0 } : { frac: 0, knownPx: val };
+        }
+        if (
+          (m = tx.match(/\btranslate\(\s*[^,)]+,\s*(-?\d+(?:\.\d+)?)(%|px)\s*\)/i))
+        ) {
+          const val = parseFloat(m[1]);
+          return m[2] === "%" ? { frac: val / 100, knownPx: 0 } : { frac: 0, knownPx: val };
+        }
+        // translate(x) with only one arg → Y is 0; translateX(…) → Y is 0.
+        return { frac: 0, knownPx: 0 };
+      };
+      const transformY = parseTransformY();
+      // Unresolvable transform → conservative skip (don't false-positive).
+      if (transformY === null) continue;
+
+      // Compute the element's visual bottom y AFTER applying the transform. The
+      // shift in px = height × frac + knownPx; for frac to be applied we need
+      // the element height. When `height` is missing AND frac ≠ 0, we don't
+      // know the real shift → conservative skip (matches the unresolvable case).
+      const transformShiftPx = (h) =>
+        h !== null
+          ? h * transformY.frac + transformY.knownPx
+          : transformY.frac !== 0
+            ? null
+            : transformY.knownPx;
+
       // Pattern A: `bottom: <X>px` with X < 180  →  element bottom y > 900.
-      const hitsA = bottom && Number.isFinite(bottom.val) && bottom.val < FAIL_THRESHOLD_BOTTOM_PX;
+      //    Transform shift adjusts the visual bottom: visualBottom = (1080-X) + shift.
+      //    If shift is unresolvable but transform has a % component, conservative skip.
+      let hitsA = false;
+      let aVisualBottom = null;
+      if (bottom && Number.isFinite(bottom.val)) {
+        const shift = transformShiftPx(height ? height.val : null);
+        if (shift === null) {
+          // can't resolve shift; if there's no transform we already get 0; only here
+          // when transform has %-Y but no height — conservative skip.
+          /* skip pattern A */
+        } else {
+          aVisualBottom = CANVAS_HEIGHT_PX - bottom.val + shift;
+          hitsA = bottom.val < FAIL_THRESHOLD_BOTTOM_PX && aVisualBottom > CAPTION_BAND_TOP_Y;
+        }
+      }
       // Pattern B: `top: <X>px` with X >= 900    →  element top inside caption band.
-      const hitsB = top && Number.isFinite(top.val) && top.val >= CAPTION_BAND_TOP_Y;
-      // Pattern C: `top + height` with sum > 900 →  element bottom inside caption band.
+      //    Transform shift adjusts the visual top: visualTop = X + shift.
+      //    When shift is unresolvable, conservative skip.
+      let hitsB = false;
+      let bVisualTop = null;
+      if (top && Number.isFinite(top.val)) {
+        const shift = transformShiftPx(height ? height.val : null);
+        if (shift === null) {
+          /* skip pattern B — would need height to resolve % shift */
+        } else {
+          bVisualTop = top.val + shift;
+          hitsB = bVisualTop >= CAPTION_BAND_TOP_Y;
+        }
+      }
+      // Pattern C: `top + height` with bottom edge > 900 (transform-aware).
+      //    visualBottom = top + height + shift; shift uses the same height we
+      //    already know, so it is always resolvable here.
       //    (Skipped when pattern A is already hitting on the same rule — we don't
       //    want to double-fire on `top: 80; bottom: 120; height: ignored`.)
-      const hitsC =
+      let hitsC = false;
+      let cVisualBottom = null;
+      if (
         !hitsA &&
         top &&
         height &&
         Number.isFinite(top.val) &&
-        Number.isFinite(height.val) &&
-        top.val + height.val > CAPTION_BAND_TOP_Y;
+        Number.isFinite(height.val)
+      ) {
+        const shift = transformShiftPx(height.val);
+        cVisualBottom = top.val + height.val + shift;
+        hitsC = cVisualBottom > CAPTION_BAND_TOP_Y;
+      }
 
       if (!hitsA && !hitsB && !hitsC) continue;
 
@@ -1316,33 +1412,67 @@ async function runKeepout(argv) {
 
         // Pick the most reliable pattern to report (prefer A > C > B because A/C
         // pin the element bottom y exactly, B only the top y).
+        //
+        // Transform-aware math: the *VisualBottom / *VisualTop computed above
+        // already account for `transform: translate*` Y components. The
+        // suggested Edit values below derive their target so that, AFTER
+        // applying the same transform, the element bottom lands at
+        // y ≤ CAPTION_BAND_TOP_Y - 20 (= 880; 20px safety clearance).
         let pattern, oldStr, newStr, elementBottomY, overlapPx, principle;
+        const transformNote =
+          transformY.frac !== 0 || transformY.knownPx !== 0
+            ? ` (with transform Y shift ${(transformY.frac * 100).toFixed(0)}% + ${transformY.knownPx}px)`
+            : "";
         if (hitsA) {
           pattern = "bottom-too-small";
-          elementBottomY = CANVAS_HEIGHT_PX - bottom.val;
+          elementBottomY = Math.round(aVisualBottom);
           overlapPx = elementBottomY - CAPTION_BAND_TOP_Y;
+          // visual_bottom = (1080 - bottom) + shift; target visual_bottom = 880.
+          //   shift = height * frac + knownPx; height is whatever the rule has
+          //   today; so target bottom = 200 + shift (shift is signed).
+          const shift = transformShiftPx(height ? height.val : 0) || 0;
+          const targetBottom = Math.max(
+            0,
+            CANVAS_HEIGHT_PX - (CAPTION_BAND_TOP_Y - 20) + shift,
+          );
           oldStr = `bottom: ${bottom.raw}px;`;
-          newStr = `bottom: ${SUGGESTED_MIN_BOTTOM_PX}px;`;
-          principle = `1080 - bottom = ${elementBottomY} > 900 (caption band starts at y=900)`;
+          newStr = `bottom: ${targetBottom}px;`;
+          principle = `visual bottom y = ${elementBottomY} > 900${transformNote}`;
         } else if (hitsC) {
           pattern = "top-plus-height-too-tall";
-          elementBottomY = top.val + height.val;
+          elementBottomY = Math.round(cVisualBottom);
           overlapPx = elementBottomY - CAPTION_BAND_TOP_Y;
-          // Suggested fix: shrink height to land bottom at y=CAPTION_BAND_TOP_Y-20=880.
-          const suggestedHeight = Math.max(0, CAPTION_BAND_TOP_Y - 20 - top.val);
+          // visual_bottom = top + height + shift; shift depends on height when
+          // frac != 0. Solve for new height H' so visual_bottom = 880:
+          //   top + H' + H'*frac + knownPx = 880
+          //   H' = (880 - top - knownPx) / (1 + frac)
+          // For frac > -1 (which covers `translate(*, -50%)` and the vast
+          // majority of layouts); otherwise fall back to the non-transform formula.
+          const denom = 1 + transformY.frac;
+          const suggestedHeight =
+            denom > 0
+              ? Math.max(
+                  0,
+                  Math.floor(
+                    (CAPTION_BAND_TOP_Y - 20 - top.val - transformY.knownPx) / denom,
+                  ),
+                )
+              : Math.max(0, CAPTION_BAND_TOP_Y - 20 - top.val);
           oldStr = `height: ${height.raw}px;`;
           newStr = `height: ${suggestedHeight}px;`;
-          principle = `top(${top.val}) + height(${height.val}) = ${elementBottomY} > 900`;
+          principle = `top(${top.val}) + height(${height.val}) + shift → visual bottom y = ${elementBottomY} > 900${transformNote}`;
         } else {
           // hitsB
           pattern = "top-in-caption-band";
-          elementBottomY = top.val; // we only know top — bottom is at least this
+          elementBottomY = Math.round(bVisualTop); // we only know top — bottom is at least this
           overlapPx = elementBottomY - CAPTION_BAND_TOP_Y;
-          // Suggested fix: move element up so top lands at y=820 (=900-80, leaves room for ≤80px element).
-          const suggestedTop = Math.max(0, CAPTION_BAND_TOP_Y - 80);
+          // visual_top = top + shift; target visual_top = 820. shift is the
+          // same regardless of top, so: new_top = 820 - shift.
+          const shift = transformShiftPx(height ? height.val : 0) || 0;
+          const suggestedTop = Math.max(0, CAPTION_BAND_TOP_Y - 80 - shift);
           oldStr = `top: ${top.raw}px;`;
           newStr = `top: ${suggestedTop}px;`;
-          principle = `top(${top.val}) >= 900 (element top already in caption band)`;
+          principle = `visual top y = ${elementBottomY} >= 900${transformNote}`;
         }
 
         const oldUniqueInFile = countOccurrences(html, oldStr) === 1;

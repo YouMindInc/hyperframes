@@ -59,6 +59,7 @@ if (!tokens) die("extracted/tokens.json missing — run 'npx hyperframes capture
 const visibleText = readText(path.join(captureDir, "extracted", "visible-text.txt"));
 const assetDescriptions = readText(path.join(captureDir, "extracted", "asset-descriptions.md"));
 const meta = readJSON(path.join(captureDir, "meta.json"), {});
+const videoManifest = readJSON(path.join(captureDir, "extracted", "video-manifest.json"), []);
 
 // Discover source URL from CLAUDE.md / AGENTS.md scaffolding (shared with
 // build-design.mjs via lib/capture-meta.mjs so the two stay in lockstep).
@@ -78,6 +79,33 @@ if (fs.existsSync(assetsDir)) {
     localAssets.push(ent.name);
   }
 }
+
+// Contact sheets: labeled montage thumbnails (raster / SVG / screenshots). The
+// inventory walk above SKIPS them (they aren't individual usable assets), but a
+// vision-capable Phase 2 agent benefits from VIEWING them — the text inventory
+// frequently describes look-alikes identically, while the montage shows which
+// assets are visually distinct. Collected recursively; paths are project-dir-
+// relative (prefixed with the capture dir's name) so the agent can Read them.
+const captureName = path.basename(captureDir);
+const contactSheets = [];
+(function findSheets(dir) {
+  let ents = [];
+  try {
+    ents = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const ent of ents) {
+    const p = path.join(dir, ent.name);
+    if (ent.isDirectory()) findSheets(p);
+    else if (ent.isFile() && /^contact-sheet.*\.jpe?g$/i.test(ent.name)) {
+      contactSheets.push(
+        `${captureName}/${path.relative(captureDir, p).split(path.sep).join("/")}`,
+      );
+    }
+  }
+})(captureDir);
+contactSheets.sort();
 
 // Parse asset-descriptions.md into a Map<filename, description-line> so each
 // asset can show its DOM-context description (and Gemini caption if present)
@@ -161,6 +189,24 @@ for (let i = 0; i < (tokens.sections || []).length; i++) {
   lines.push("");
 }
 
+if (contactSheets.length > 0) {
+  lines.push("## Contact Sheets");
+  lines.push("");
+  lines.push(
+    "_Labeled montage thumbnails of the captured assets. **View these images** — Read each at the path shown (relative to the project dir) — to SEE what each numbered asset looks like. The text Asset Inventory below often repeats descriptions for visually-distinct files (e.g. several near-identical hero lines); the montage shows which differ, so you can spread different assets across scenes and write an accurate `description`. Labels in the montage map to the Asset Inventory entries._",
+  );
+  lines.push("");
+  for (const s of contactSheets) {
+    const label = /\/svgs\//.test(s)
+      ? "inline SVG thumbnails"
+      : /\/screenshots\//.test(s)
+        ? "full-page scroll screenshots (page layout at a glance)"
+        : "downloaded raster images (photos / UI / logos)";
+    lines.push(`- ${s}  — ${label}, labeled grid`);
+  }
+  lines.push("");
+}
+
 lines.push("## Asset Inventory");
 lines.push("");
 lines.push(
@@ -181,6 +227,28 @@ for (const fname of localAssets) {
         : ext;
   lines.push(`- ${n}. [${kind}] assets/${fname}${desc ? "  — " + desc : ""}`);
 }
+
+// <video> elements: capture screenshots each into a preview PNG and, when the
+// body is a direct downloadable file, saves the video itself (video-manifest.json
+// `localPath`). Surface BOTH so story-design can pick the moving clip when present
+// or the still frame otherwise. Use the FLAT basename because prep.mjs flattens
+// capture/assets/** into public/ (nested dirs collapse to basename), matching the
+// "drop the assets/ prefix → public/<basename>" rule noted above.
+for (const v of Array.isArray(videoManifest) ? videoManifest : []) {
+  const dims = v.width && v.height ? ` (${v.width}×${v.height})` : "";
+  const cap = clean(v.caption || v.heading || v.ariaLabel || "", 160);
+  if (v.localPath) {
+    n++;
+    lines.push(
+      `- ${n}. [video] assets/${path.basename(v.localPath)}${dims} — embedded demo video (motion).${cap ? " " + cap : ""}`,
+    );
+  } else if (v.preview) {
+    n++;
+    lines.push(
+      `- ${n}. [video-still] assets/${path.basename(v.preview)}${dims} — still frame of an embedded <video> (no motion; body not downloaded).${cap ? " " + cap : ""}`,
+    );
+  }
+}
 lines.push("");
 
 lines.push("## Visible Text Excerpt");
@@ -194,3 +262,5 @@ console.log(`  source: ${sourceUrl}`);
 console.log(`  sections: ${(tokens.sections || []).length}`);
 console.log(`  headings: ${(tokens.headings || []).length}`);
 console.log(`  assets: ${localAssets.length}`);
+console.log(`  videos: ${Array.isArray(videoManifest) ? videoManifest.length : 0}`);
+console.log(`  contact-sheets: ${contactSheets.length}`);

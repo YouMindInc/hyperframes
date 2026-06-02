@@ -55,9 +55,16 @@
 // decide" behaviour. Use only when you intentionally want finalize to chase
 // gate fails (e.g. debugging the agent's diagnostic flow).
 //
+// `--require-perception` (or env `PLV_REQUIRE_PERCEPTION=1`) escalates a SKIPPED
+// rendered-perception check (no puppeteer / no Chrome binary) from a soft
+// anomaly to a hard exit-2 block. Use when the run cannot afford to lose the
+// only machine check that catches cross-text-collision / cramped-container /
+// low-contrast-foreground. CI surfaces will typically set this; interactive
+// runs can leave it off so the pipeline still completes without puppeteer.
+//
 // Usage:
 //   node preflight-finalize.mjs --group-spec ./group_spec.json --hyperframes . \
-//        [--out ./finalize_brief.json] [--allow-gate-failure]
+//        [--out ./finalize_brief.json] [--allow-gate-failure] [--require-perception]
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync, spawnSync } from "node:child_process";
@@ -78,6 +85,8 @@ const groupSpecPath = resolve(flag("group-spec", "./group_spec.json"));
 const hyperframesDir = resolve(flag("hyperframes", "."));
 const outPath = resolve(flag("out", join(hyperframesDir, "finalize_brief.json")));
 const allowGateFailure = boolFlag("allow-gate-failure");
+const requirePerception =
+  boolFlag("require-perception") || process.env.PLV_REQUIRE_PERCEPTION === "1";
 
 if (!existsSync(groupSpecPath)) {
   console.error(`✗ preflight-finalize: group_spec.json missing at ${groupSpecPath}`);
@@ -336,6 +345,12 @@ const keepoutClean = captionKeepout.violations.length === 0;
 //   - primary-offscreen (display-tier text 15-85% clipped by the canvas due to a
 //     zoom/camera miscentre — checked EVEN under data-layout-allow-overflow)
 //   - font-too-small (rendered font-size < 24px on non-decorative text)
+//   - content-cramped-container (a foreground child is pressed against its parent
+//     container's border, OR container reports scrollHeight > clientHeight — the
+//     signature of a card whose interior was not retuned after the parent shrank)
+//   - low-contrast-foreground (text or inline-SVG with WCAG contrast < 2.5:1
+//     against the first non-transparent background ancestor — the signature of
+//     an asset placed on the wrong surface)
 //
 // Soft-skips if no headless browser is available (puppeteer / puppeteer-core +
 // cached Chrome). Always emits perception_report.json with `skipped: true` in
@@ -412,7 +427,14 @@ try {
 const criticalPerceptionViolations = perception.violations.filter(
   (v) => v.type !== "font-too-small",
 );
-const perceptionClean = perception.skipped || criticalPerceptionViolations.length === 0;
+// When perception was skipped we treat it as "clean enough to proceed" by
+// default (no puppeteer is a common state during local dev), unless the caller
+// explicitly required it via `--require-perception` / `PLV_REQUIRE_PERCEPTION=1`.
+// In that mode skipped is NOT clean — preflight_clean turns false and the
+// blocking-exit gate below promotes the run to exit 2.
+const perceptionClean = perception.skipped
+  ? !requirePerception
+  : criticalPerceptionViolations.length === 0;
 
 const preflightClean = gatesClean && keepoutClean && perceptionClean;
 
@@ -464,8 +486,8 @@ const anomalies = [];
 if (perception.skipped) {
   anomalies.push({
     code: "perception_check_skipped",
-    severity: "warning",
-    message: `Rendered-perception check did not run (${perception.reason}). cross-text-collision / depth-layer-ghost / primary-offscreen / text-clipping checks are NOT covered for this run — finalize snapshot eye-check is the only remaining safety net for layout collisions.`,
+    severity: requirePerception ? "error" : "warning",
+    message: `Rendered-perception check did not run (${perception.reason}). text-clipping / depth-layer-ghost / cross-text-collision / primary-offscreen / content-cramped-container / low-contrast-foreground checks are NOT covered for this run${requirePerception ? " — and --require-perception was set, so this BLOCKS preflight" : " — finalize snapshot eye-check is the only remaining safety net for layout collisions, contrast issues, and cramped interiors"}.`,
     actionable_install_command: `cd "${hyperframesDir}" && npm i puppeteer`,
     actionable_alternative: `npm i puppeteer-core && npx hyperframes browser install`,
   });
@@ -577,6 +599,12 @@ if (perception.skipped) {
       case "primary-offscreen":
         tag = `${m.clipped_pct}% clipped by canvas, center ${m.center_offset_px} (zoom miscentre)`;
         break;
+      case "content-cramped-container":
+        tag = `container ${m.container_height_px}px tall, ${m.child_count} foreground children, top clearance=${m.top_clearance_px}px, bottom clearance=${m.bottom_clearance_px}px${m.overflowing ? ", overflowing" : ""}`;
+        break;
+      case "low-contrast-foreground":
+        tag = `kind=${m.kind} contrast=${m.contrast_ratio}:1 (fg=${m.foreground_rgb || m.dominant_fill_rgb} on surface ${m.surface_rgb} @ ${m.surface_host_selector})`;
+        break;
       default:
         tag = JSON.stringify(m);
     }
@@ -638,5 +666,23 @@ if (!gatesClean && !allowGateFailure) {
   console.error(`  brief: ${outPath}`);
   console.error(`  → read brief.gates.<gate>.output_tail to diagnose, then fix the upstream scene file (or re-dispatch the worker).`);
   console.error(`  → re-run this script after fix. Override with --allow-gate-failure only if you want finalize to chase the gate errors itself.`);
+  process.exit(2);
+}
+
+// ---------- 7b. Blocking-exit gate (perception, opt-in) ----------
+// When `--require-perception` (or `PLV_REQUIRE_PERCEPTION=1`) is set AND
+// rendered-perception was skipped, refuse to proceed. This is the explicit
+// CI-grade safety mode — without perception, content-cramped-container /
+// low-contrast-foreground / cross-text-collision are uncovered, so a
+// "preflight_clean" brief misrepresents reality. Default behaviour is
+// unchanged (no flag → skipped is a soft warning, just like before).
+if (requirePerception && perception.skipped) {
+  console.error(
+    `\n✗ BLOCKED: rendered-perception was SKIPPED (${perception.reason}) and --require-perception is set.`,
+  );
+  console.error(`  brief: ${outPath}`);
+  console.error(`  → install puppeteer to enable the check:`);
+  console.error(`     (cd "${hyperframesDir}" && npm i puppeteer)`);
+  console.error(`  → or rerun without --require-perception / unset PLV_REQUIRE_PERCEPTION to fall back to snapshot-only safety net.`);
   process.exit(2);
 }

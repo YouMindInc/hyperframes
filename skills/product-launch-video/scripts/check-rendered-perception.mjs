@@ -23,6 +23,18 @@
 //                                    EVEN under data-layout-allow-overflow
 //   5. font-too-small             — rendered viewport font-size < 24px on
 //                                    non-decorative text
+//   6. content-cramped-container  — a foreground child's bbox is pressed against
+//                                    its parent container's border (within 6px of
+//                                    content-box bottom AND content-box top), OR
+//                                    a container reports scrollHeight > clientHeight.
+//                                    The signature of a card whose interior was
+//                                    not retuned after the parent shrank.
+//   7. low-contrast-foreground    — a non-decorative text element (≥24px) AND
+//                                    inline-SVG asset has WCAG contrast < 2.5:1
+//                                    against the first non-transparent background
+//                                    ancestor. The signature of an asset / wordmark
+//                                    placed on a surface it was not authored for
+//                                    (e.g. a dark-glyph svg on a dark card).
 //
 // All thresholds live in one CFG block below so they are tunable in one place.
 // Writes a JSON report (schema-compatible with check-caption-keepout violations
@@ -81,6 +93,20 @@ const CFG = {
   primaryClipMaxFrac: 0.85, // …but ≤85% (fully-off text is an intentional slide/park, not a cut)
   primaryZoomMinScale: 1.5, // …and only when a scaled ancestor caused it (zoom miscentre, NOT a
   //                            headline the layout deliberately bleeds off the margin)
+  crampedClearancePx: 6, // content-cramped-container: child bbox edge within this many px
+  //                            of parent's content-box edge counts as "pressed"
+  crampedMinContainerHeightPx: 200, // skip tiny containers (probes, chips) — only flag
+  //                            substantial card / panel / stage containers
+  crampedMinChildHeightPx: 24, // skip 1-2px decorative children when scanning for "pressed"
+  contrastMinRatio: 2.5, // low-contrast-foreground: WCAG contrast below this is borderline
+  //                            invisible at video resolution. AA = 3.0 for large text;
+  //                            2.5 catches the worst cases (truly hidden) without
+  //                            re-firing on every editorial low-contrast warning that
+  //                            `validate` already issues separately.
+  contrastMinTextFontPx: 24, // skip body chrome smaller than this — it's caught by
+  //                            font-too-small or by validate's WCAG-AA rail
+  contrastMinAssetSizePx: 96, // …and skip tiny SVGs (icon glyphs) — only flag wordmark-
+  //                            scale assets (≥96×40 ish)
 };
 
 // ─────────────────────────────────────────── browser bootstrap ───
@@ -656,6 +682,319 @@ const PROBE = function probe(sid, compRel, cfg) {
       },
       principle: `Display-tier text is ${Math.round(clippedFrac * 100)}% clipped by the 1920×1080 canvas (center off by x=${offX} y=${offY}). data-layout-allow-overflow does NOT exempt primary text.`,
       suggestion: `Almost always a coordinate-target-zoom error. MEASURE the target's real center (getBoundingClientRect after document.fonts.ready) and bake the counter-translate offset — don't hand-derive it (the equal-cards formula gets the sign wrong on asymmetric layouts). Cap zoom scale so the text stays ≤~88% of canvas width. If the bleed is truly intentional, mark the text element data-layout-bleed="true".`,
+      fix_kind: "manual",
+    });
+  }
+
+  // ── Check 6: content-cramped-container (a foreground child is pressed against
+  //    its parent's border — the signature of a card whose interior was not
+  //    re-tuned after a height shrink, leaving the last flex child with zero
+  //    clearance to the bottom border) ──
+  // Calibration: the check fires only when the layout was *meant* to leave
+  // breathing room at the bottom but no longer does. Concretely:
+  //   - `scrollHeight > clientHeight + 1` (children literally don't fit), OR
+  //   - bottom child pressed (clearance < cfg.crampedClearancePx) AND the
+  //     container's `justify-content` is one of {flex-start, normal, start,
+  //     left, undefined} — i.e. the column flows top-down, so the slack space
+  //     was designed to live at the bottom; zero slack = bug.
+  // Containers with `justify-content: center | space-* | flex-end` distribute
+  // slack on purpose; pressed edges there are by design and we skip them.
+  // Containers in a `data-layout-allow-overflow` ancestor are skipped wholesale
+  // (slot-machine tickers, etc.).
+  const reportedCramp = new Set();
+  const flexContainers = Array.from(root.querySelectorAll("*")).filter((el) => {
+    if (!isVisible(el)) return false;
+    const cs = getComputedStyle(el);
+    if (cs.display !== "flex" && cs.display !== "grid" && cs.display !== "inline-flex") return false;
+    const r = el.getBoundingClientRect();
+    if (r.height < cfg.crampedMinContainerHeightPx) return false;
+    if (isInDecor(el)) return false;
+    if (hasAllowOverflow(el)) return false; // slot-machine tickers etc.
+    // Skip the root canvas itself + the scene-root wrapper — those are full-frame
+    // and naturally touch every edge.
+    if (el === root) return false;
+    if (el.id === "root") return false;
+    return true;
+  });
+  // `justify-content` values that put slack at the BOTTOM (= a pressed bottom
+  // implies real cramping). Anything else (center / space-* / flex-end /
+  // stretch-with-equal-height-grids) is a layout where edges-touching is by
+  // design and we skip.
+  const TOP_DOWN_JUSTIFY = new Set([
+    "flex-start",
+    "start",
+    "normal",
+    "left",
+    "stretch",
+  ]);
+  for (const container of flexContainers) {
+    const cs = getComputedStyle(container);
+    const cr = container.getBoundingClientRect();
+    const padTop = parseFloat(cs.paddingTop) || 0;
+    const padBottom = parseFloat(cs.paddingBottom) || 0;
+    const contentTop = cr.top + padTop;
+    const contentBottom = cr.bottom - padBottom;
+    const justifyContent = cs.justifyContent || "normal";
+    const flowsTopDown = TOP_DOWN_JUSTIFY.has(justifyContent);
+
+    // True overflow: scrollHeight beyond clientHeight by >1px.
+    const overflowing = container.scrollHeight - container.clientHeight > 1;
+
+    const kids = Array.from(container.children).filter((k) => {
+      if (!isVisible(k)) return false;
+      if (isInDecor(k)) return false;
+      if (hasAriaHidden(k)) return false;
+      const kr = k.getBoundingClientRect();
+      return kr.height >= cfg.crampedMinChildHeightPx;
+    });
+    if (!kids.length && !overflowing) continue;
+
+    // Find the topmost and bottommost foreground kids by their visible y range.
+    let topKid = null,
+      botKid = null,
+      topY = Infinity,
+      botY = -Infinity;
+    for (const k of kids) {
+      const kr = k.getBoundingClientRect();
+      if (kr.top < topY) {
+        topY = kr.top;
+        topKid = k;
+      }
+      if (kr.bottom > botY) {
+        botY = kr.bottom;
+        botKid = k;
+      }
+    }
+    const topClearance = topKid ? topY - contentTop : Infinity;
+    const botClearance = botKid ? contentBottom - botY : Infinity;
+    const pressedBottom = botClearance < cfg.crampedClearancePx;
+
+    // Asymmetry guard: a true "cramping" signature is asymmetric clearance —
+    // the layout was designed to keep slack at one end but no longer does.
+    // When BOTH ends are pressed AND there's no real overflow, the layout
+    // packs intentionally (chip columns, equal-stretch grids, slot-machine
+    // strips). Require either real overflow OR clear top-slack so a pressed
+    // bottom reads unambiguously as "something got crushed at the bottom".
+    const TOP_SLACK_THRESHOLD_PX = 12;
+    const hasTopSlack = topClearance >= TOP_SLACK_THRESHOLD_PX;
+    if (!overflowing && !(pressedBottom && flowsTopDown && hasTopSlack)) continue;
+
+    const why = overflowing
+      ? `scrollHeight ${container.scrollHeight} > clientHeight ${container.clientHeight}`
+      : `bottom child pressed (clearance ${Math.round(botClearance)}px) with ${Math.round(topClearance)}px top-slack and justify-content=${justifyContent} — slack was meant to live at the bottom but isn't`;
+
+    const key = `${sid}|cramped|${selectorFor(container)}`;
+    if (reportedCramp.has(key)) continue;
+    reportedCramp.add(key);
+
+    v.push({
+      type: "content-cramped-container",
+      scene_id: sid,
+      file: compRel,
+      selector: selectorFor(container),
+      text: "",
+      metric: {
+        container_height_px: Math.round(cr.height),
+        content_height_px: Math.round(cr.height - padTop - padBottom),
+        scroll_height_px: container.scrollHeight,
+        client_height_px: container.clientHeight,
+        top_clearance_px: Math.round(topClearance),
+        bottom_clearance_px: Math.round(botClearance),
+        child_count: kids.length,
+        justify_content: justifyContent,
+        pressed_bottom: pressedBottom,
+        overflowing,
+        topmost_child_selector: topKid ? selectorFor(topKid) : null,
+        bottommost_child_selector: botKid ? selectorFor(botKid) : null,
+      },
+      principle: `Container "${selectorFor(container)}" reports: ${why} (top clearance ${Math.round(topClearance)}px, bottom clearance ${Math.round(botClearance)}px, container height ${Math.round(cr.height)}px with ${kids.length} foreground children). Visual result is squeezed/crushed interior.`,
+      suggestion: `Either increase the container's height so children have ≥${cfg.crampedClearancePx * 2}px clearance on the pressed edge(s), OR reduce a child (shrink padding / gap / one font size / drop a non-essential child like a sign-off mark), OR loosen flex gap. Do NOT just remove the bottom child — preserve the brief's content but resize the container to fit. If the cramping was caused upstream by a caption-keepout "shrink height" Edit, re-derive the target height using the real bbox (with transform) before applying.`,
+      fix_kind: "manual",
+    });
+  }
+
+  // ── Check 7: low-contrast-foreground (text / inline-svg asset placed on
+  //    a background it cannot read against — the signature of a wordmark
+  //    that was authored for one surface and dropped onto another) ──
+  // WCAG luminance + contrast ratio. Walks ancestors for the first
+  // non-transparent background-color; if none, treats the canvas root as
+  // the surface (its `background` may be a token; for color-only backgrounds
+  // it resolves to a literal rgba). Skips elements whose background ancestor
+  // also has a `background-image` (gradients / textures often defeat a flat
+  // color contrast check; the visual-eye snapshot owns those).
+  const parseRgb = (s) => {
+    if (!s) return null;
+    let m = s.match(/^rgba?\((\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*(?:,\s*([\d.]+))?\)$/i);
+    if (m) {
+      const a = m[4] === undefined ? 1 : parseFloat(m[4]);
+      return { r: +m[1], g: +m[2], b: +m[3], a };
+    }
+    m = s.match(/^#([0-9a-f]{3,8})$/i);
+    if (m) {
+      let hex = m[1];
+      if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+      if (hex.length === 6 || hex.length === 8) {
+        return {
+          r: parseInt(hex.slice(0, 2), 16),
+          g: parseInt(hex.slice(2, 4), 16),
+          b: parseInt(hex.slice(4, 6), 16),
+          a: hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1,
+        };
+      }
+    }
+    return null;
+  };
+  const relLuminance = (rgb) => {
+    const ch = [rgb.r, rgb.g, rgb.b].map((v) => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  };
+  const contrastRatio = (fg, bg) => {
+    const l1 = relLuminance(fg);
+    const l2 = relLuminance(bg);
+    const hi = Math.max(l1, l2),
+      lo = Math.min(l1, l2);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  // Walk to the first element (starting WITH `el` itself, then ancestors) whose
+  // background-color is opaque enough to "set the surface". Starting with `el`
+  // matters for button-like patterns where the text-bearing element IS the
+  // button and its own background paints the surface for its text (a parent
+  // walk would skip past it and pick up the card behind, falsely claiming the
+  // text sits on the card).
+  // `rgba(0,0,0,0)` is transparent / inherits, skip it. If the resolved
+  // ancestor uses a background-image (gradient/texture/url), mark the surface
+  // as unresolved → skip the check (false positives are worse than missed ones
+  // on gradient backgrounds).
+  const surfaceFor = (el) => {
+    let p = el;
+    while (p) {
+      const cs = getComputedStyle(p);
+      const bg = parseRgb(cs.backgroundColor);
+      const bgImg = cs.backgroundImage;
+      if (bg && bg.a > 0.3) {
+        if (bgImg && bgImg !== "none") return { rgb: null, unresolved: true, host: p };
+        return { rgb: bg, unresolved: false, host: p };
+      }
+      p = p.parentElement;
+    }
+    // Fallback: page body / html background — almost always #fff in our probe
+    // shell, so default to white.
+    return { rgb: { r: 255, g: 255, b: 255, a: 1 }, unresolved: false, host: document.body };
+  };
+  // Inline-SVG dominant fill: walks paths / shapes, picks the most-common
+  // non-none, non-url() fill. Returns null when every shape uses gradients
+  // (the dominant color is then unknowable without rendering — visual-eye
+  // owns it).
+  const inlineSvgDominantFill = (svgEl) => {
+    const shapes = svgEl.querySelectorAll(
+      "path, rect, circle, ellipse, polygon, polyline, text, line",
+    );
+    const tally = new Map();
+    for (const s of shapes) {
+      let fill = s.getAttribute("fill");
+      if (!fill || fill === "none" || fill === "transparent") {
+        // CSS computed fill as fallback
+        fill = getComputedStyle(s).fill;
+      }
+      if (!fill || fill === "none" || fill === "transparent") continue;
+      if (/url\(/.test(fill)) continue; // gradient / pattern — skip
+      // Normalize named colors via a throwaway computed-style trick
+      const probe = document.createElement("span");
+      probe.style.color = fill;
+      document.body.appendChild(probe);
+      const rgb = parseRgb(getComputedStyle(probe).color);
+      probe.remove();
+      if (!rgb) continue;
+      const key = `${rgb.r},${rgb.g},${rgb.b}`;
+      tally.set(key, (tally.get(key) || 0) + 1);
+    }
+    if (!tally.size) return null;
+    let bestKey = null,
+      bestCount = 0;
+    for (const [k, c] of tally) {
+      if (c > bestCount) {
+        bestCount = c;
+        bestKey = k;
+      }
+    }
+    const [r, g, b] = bestKey.split(",").map(Number);
+    return { r, g, b, a: 1 };
+  };
+
+  // 7a. Large-text contrast.
+  for (const c of candidates) {
+    if (c.deco) continue;
+    if (hasAriaHidden(c.el)) continue;
+    if (c.fs < cfg.contrastMinTextFontPx) continue;
+    const cs = getComputedStyle(c.el);
+    const fg = parseRgb(cs.color);
+    if (!fg) continue;
+    const surf = surfaceFor(c.el);
+    if (surf.unresolved) continue;
+    if (!surf.rgb) continue;
+    const ratio = contrastRatio(fg, surf.rgb);
+    if (ratio >= cfg.contrastMinRatio) continue;
+    v.push({
+      type: "low-contrast-foreground",
+      scene_id: sid,
+      file: compRel,
+      selector: c.sel,
+      text: c.txt.length > 60 ? c.txt.slice(0, 57) + "…" : c.txt,
+      metric: {
+        kind: "text",
+        font_size_px: Math.round(c.fs * 10) / 10,
+        foreground_rgb: `rgb(${fg.r},${fg.g},${fg.b})`,
+        surface_rgb: `rgb(${surf.rgb.r},${surf.rgb.g},${surf.rgb.b})`,
+        surface_host_selector: selectorFor(surf.host),
+        contrast_ratio: Math.round(ratio * 100) / 100,
+        wcag_aa_large_required: 3.0,
+      },
+      principle: `Text "${c.txt.slice(0, 30)}" (${Math.round(c.fs)}px) on surface ${selectorFor(surf.host)} has WCAG contrast ${(Math.round(ratio * 100) / 100).toFixed(2)} : 1 — below ${cfg.contrastMinRatio}:1 (borderline-invisible at video resolution).`,
+      suggestion: `Either (a) swap the text \`color\` to a token that contrasts with the surface (e.g. var(--hud-text) on canvas-void, var(--ink) on light surfaces); (b) change the surface (this scene's card may be on the wrong token); (c) if the asset is correct and the SURFACE was unintentionally chosen, re-pick the surface token (e.g. a dark wordmark belongs on canvas not on canvas-navy).`,
+      fix_kind: "manual",
+    });
+  }
+
+  // 7b. Inline-SVG asset contrast (catches wordmark / logo placed on the
+  //     wrong surface; for `<img src="*.svg">` the SVG is opaque to DOM
+  //     introspection — the visual-eye snapshot inspection in the finalize
+  //     agent is the only safety net there, which is why the checklist in
+  //     `agents/hyperframes-finalize.md` calls it out explicitly).
+  const inlineSvgs = Array.from(root.querySelectorAll("svg")).filter((s) => {
+    if (!isVisible(s)) return false;
+    if (isInDecor(s)) return false;
+    if (hasAriaHidden(s)) return false;
+    const r = s.getBoundingClientRect();
+    return r.width >= cfg.contrastMinAssetSizePx && r.height >= 40;
+  });
+  for (const svg of inlineSvgs) {
+    const dominant = inlineSvgDominantFill(svg);
+    if (!dominant) continue;
+    const surf = surfaceFor(svg);
+    if (surf.unresolved || !surf.rgb) continue;
+    const ratio = contrastRatio(dominant, surf.rgb);
+    if (ratio >= cfg.contrastMinRatio) continue;
+    const r = svg.getBoundingClientRect();
+    v.push({
+      type: "low-contrast-foreground",
+      scene_id: sid,
+      file: compRel,
+      selector: selectorFor(svg),
+      text: "(inline svg asset)",
+      metric: {
+        kind: "inline-svg",
+        bbox: `(${Math.round(r.left)},${Math.round(r.top)}) ${Math.round(r.width)}x${Math.round(r.height)}`,
+        dominant_fill_rgb: `rgb(${dominant.r},${dominant.g},${dominant.b})`,
+        surface_rgb: `rgb(${surf.rgb.r},${surf.rgb.g},${surf.rgb.b})`,
+        surface_host_selector: selectorFor(surf.host),
+        contrast_ratio: Math.round(ratio * 100) / 100,
+        wcag_aa_large_required: 3.0,
+      },
+      principle: `Inline SVG dominant fill rgb(${dominant.r},${dominant.g},${dominant.b}) against surface rgb(${surf.rgb.r},${surf.rgb.g},${surf.rgb.b}) on ${selectorFor(surf.host)} has WCAG contrast ${(Math.round(ratio * 100) / 100).toFixed(2)} : 1 — borderline-invisible.`,
+      suggestion: `The SVG was likely authored for the inverse surface tone. Either (a) swap the asset for the surface-appropriate variant (e.g. dark-on-light → light-on-dark variant) — many capture libraries ship two; (b) move the asset onto a contrasting plate token; (c) recolor inline (only when you own the SVG paths). Check the capture's asset-descriptions for a sibling variant before defaulting to recolor.`,
       fix_kind: "manual",
     });
   }
