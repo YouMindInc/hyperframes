@@ -269,6 +269,7 @@ export function StudioApp() {
   const domEditDeleteBridge = (s: DomEditSelection) => handleDomEditElementDeleteRef.current(s);
   const resetKeyframesRef = useRef<() => boolean>(() => false);
   const deleteSelectedKeyframesRef = useRef<() => void>(() => {});
+  const invalidateGsapCacheRef = useRef<() => void>(() => {});
   const { handleCopy, handlePaste, handleCut } = useClipboard({
     projectId,
     activeCompPath,
@@ -302,8 +303,8 @@ export function StudioApp() {
     handleCut,
     onResetKeyframes: () => resetKeyframesRef.current(),
     onDeleteSelectedKeyframes: () => deleteSelectedKeyframesRef.current(),
+    onAfterUndoRedo: () => invalidateGsapCacheRef.current(),
   });
-
   const selectSidebarTabStable = useCallback(
     (tab: SidebarTab) => leftSidebarRef.current?.selectTab(tab),
     [],
@@ -348,11 +349,11 @@ export function StudioApp() {
     selectSidebarTab: selectSidebarTabStable,
     getSidebarTab: getSidebarTabStable,
   });
-
   domEditSelectionBridgeRef.current = domEditSession.domEditSelection;
   clearDomSelectionRef.current = domEditSession.clearDomSelection;
   handleDomEditElementDeleteRef.current = domEditSession.handleDomEditElementDelete;
   resetKeyframesRef.current = domEditSession.handleResetSelectedElementKeyframes;
+  invalidateGsapCacheRef.current = domEditSession.invalidateGsapCache;
   deleteSelectedKeyframesRef.current = () => {
     const sk = usePlayerStore.getState().selectedKeyframes;
     const a = domEditSession.selectedGsapAnimations.find((x) => x.keyframes);
@@ -482,9 +483,8 @@ export function StudioApp() {
     timelineVisible,
     toggleTimelineVisibility,
   });
-  if (resolving || waitingForServer || !projectId) {
+  if (resolving || waitingForServer || !projectId)
     return <StudioSplash waiting={waitingForServer} />;
-  }
   const timelineToolbar = (
     <TimelineToolbar
       toggleTimelineVisibility={toggleTimelineVisibility}

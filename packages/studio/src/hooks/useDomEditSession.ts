@@ -572,5 +572,6 @@ export function useDomEditSession({
     handleGsapConvertToKeyframes,
     handleGsapRemoveAllKeyframes,
     handleResetSelectedElementKeyframes,
+    invalidateGsapCache: bumpGsapCache,
   };
 }

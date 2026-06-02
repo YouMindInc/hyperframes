@@ -70,6 +70,7 @@ export function DomEditProvider({
     handleGsapConvertToKeyframes,
     handleGsapRemoveAllKeyframes,
     handleResetSelectedElementKeyframes,
+    invalidateGsapCache,
   },
   children,
 }: {
@@ -135,6 +136,7 @@ export function DomEditProvider({
       handleGsapConvertToKeyframes,
       handleGsapRemoveAllKeyframes,
       handleResetSelectedElementKeyframes,
+      invalidateGsapCache,
     }),
     [
       domEditSelection,
@@ -194,6 +196,7 @@ export function DomEditProvider({
       handleGsapConvertToKeyframes,
       handleGsapRemoveAllKeyframes,
       handleResetSelectedElementKeyframes,
+      invalidateGsapCache,
     ],
   );
   return <DomEditContext value={stable}>{children}</DomEditContext>;

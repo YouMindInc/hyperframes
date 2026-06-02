@@ -79,6 +79,7 @@ interface UseAppHotkeysParams {
   handleCut: () => Promise<boolean>;
   onResetKeyframes: () => boolean;
   onDeleteSelectedKeyframes: () => void;
+  onAfterUndoRedo?: () => void;
 }
 
 // ── Hook ──
@@ -102,6 +103,7 @@ export function useAppHotkeys({
   handleCut,
   onResetKeyframes,
   onDeleteSelectedKeyframes,
+  onAfterUndoRedo,
 }: UseAppHotkeysParams) {
   const previewHotkeyWindowRef = useRef<Window | null>(null);
   const handleAppKeyDownRef = useRef<((event: KeyboardEvent) => void) | undefined>(undefined);
@@ -149,6 +151,7 @@ export function useAppHotkeys({
     }
     if (result.ok && result.label) {
       await syncHistoryPreviewAfterApply(result.paths);
+      onAfterUndoRedo?.();
       showToast(`Undid ${result.label}`, "info");
     }
   }, [
@@ -158,6 +161,7 @@ export function useAppHotkeys({
     syncHistoryPreviewAfterApply,
     waitForPendingDomEditSaves,
     writeHistoryProjectFile,
+    onAfterUndoRedo,
   ]);
 
   const handleRedo = useCallback(async () => {
@@ -172,6 +176,7 @@ export function useAppHotkeys({
     }
     if (result.ok && result.label) {
       await syncHistoryPreviewAfterApply(result.paths);
+      onAfterUndoRedo?.();
       showToast(`Redid ${result.label}`, "info");
     }
   }, [
@@ -181,6 +186,7 @@ export function useAppHotkeys({
     syncHistoryPreviewAfterApply,
     waitForPendingDomEditSaves,
     writeHistoryProjectFile,
+    onAfterUndoRedo,
   ]);
 
   // ── Stable refs for the consolidated keydown handler ──
