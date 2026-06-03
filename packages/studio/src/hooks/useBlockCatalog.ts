@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import type { RegistryItem } from "@hyperframes/core/registry";
 import { type BlockCategory, resolveBlockCategory } from "../utils/blockCategories";
+import { buildStudioApiPath } from "../utils/projectRouting";
 
 export type CatalogItem = RegistryItem & {
   category: BlockCategory;
@@ -28,7 +29,7 @@ export function useBlockCatalog() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/registry/blocks");
+        const res = await fetch(buildStudioApiPath("/registry/blocks"));
         if (!res.ok) throw new Error("Failed to load catalog");
         const data = (await res.json()) as RegistryItem[];
         if (cancelled) return;

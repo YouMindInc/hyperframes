@@ -1,6 +1,7 @@
 import type { TimelineElement } from "../player";
 import type { DomEditSelection } from "../components/editor/domEditing";
 import type { TimelineAssetKind } from "./timelineAssetDrop";
+import { buildProjectApiPath } from "./projectRouting";
 
 export interface EditingFile {
   path: string;
@@ -190,7 +191,7 @@ export async function resolveDroppedAssetDuration(
 
   const media = document.createElement(kind === "video" ? "video" : "audio");
   media.preload = "metadata";
-  media.src = `/api/projects/${projectId}/preview/${assetPath}`;
+  media.src = buildProjectApiPath(projectId, `/preview/${assetPath}`);
 
   const duration = await new Promise<number>((resolve) => {
     const timeout = window.setTimeout(() => resolve(DEFAULT_TIMELINE_ASSET_DURATION[kind]), 3000);

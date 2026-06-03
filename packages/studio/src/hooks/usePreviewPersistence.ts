@@ -7,6 +7,7 @@ import {
 } from "../components/editor/manualEdits";
 import { STUDIO_MOTION_PATH } from "../components/editor/studioMotion";
 import type { EditHistoryKind } from "../utils/editHistory";
+import { buildStudioApiPath } from "../utils/projectRouting";
 
 // ── Types ──
 
@@ -181,7 +182,7 @@ export function usePreviewPersistence({
       return () => import.meta.hot?.off?.("hf:file-change", handler);
     }
     // SSE fallback for embedded studio server
-    const es = new EventSource("/api/events");
+    const es = new EventSource(buildStudioApiPath("/events"));
     es.addEventListener("file-change", handler);
     return () => es.close();
   });

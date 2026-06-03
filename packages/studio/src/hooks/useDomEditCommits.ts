@@ -34,6 +34,7 @@ import { fontFamilyFromAssetPath, type ImportedFontAsset } from "../components/e
 import type { DomEditGroupPathOffsetCommit } from "../components/editor/DomEditOverlay";
 import type { EditHistoryKind } from "../utils/editHistory";
 import { useDomEditTextCommits } from "./useDomEditTextCommits";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 // ── Types ──
 
@@ -122,7 +123,7 @@ export function useDomEditCommits({
       return {
         family: fontFamilyFromAssetPath(asset),
         path: asset,
-        url: `/api/projects/${projectId}/preview/${asset}`,
+        url: projectId ? buildProjectApiPath(projectId, `/preview/${asset}`) : "",
       };
     },
     [fileTree, projectId, importedFontAssetsRef],
@@ -140,7 +141,7 @@ export function useDomEditCommits({
       const targetPath = selection.sourceFile || activeCompPath || "index.html";
 
       const readResponse = await fetch(
-        `/api/projects/${pid}/files/${encodeURIComponent(targetPath)}`,
+        buildProjectApiPath(pid, `/files/${encodeURIComponent(targetPath)}`),
       );
       if (!readResponse.ok) throw new Error(`Failed to read ${targetPath}`);
       const readData = (await readResponse.json()) as { content?: string };
@@ -163,7 +164,7 @@ export function useDomEditCommits({
       domEditSaveTimestampRef.current = Date.now();
 
       const patchResponse = await fetch(
-        `/api/projects/${pid}/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
+        buildProjectApiPath(pid, `/file-mutations/patch-element/${encodeURIComponent(targetPath)}`),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -427,7 +428,7 @@ export function useDomEditCommits({
       const targetPath = selection.sourceFile || activeCompPath || "index.html";
       try {
         const response = await fetch(
-          `/api/projects/${pid}/files/${encodeURIComponent(targetPath)}`,
+          buildProjectApiPath(pid, `/files/${encodeURIComponent(targetPath)}`),
         );
         if (!response.ok) throw new Error(`Failed to read ${targetPath}`);
 
@@ -451,7 +452,10 @@ export function useDomEditCommits({
 
         domEditSaveTimestampRef.current = Date.now();
         const removeResponse = await fetch(
-          `/api/projects/${pid}/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
+          buildProjectApiPath(
+            pid,
+            `/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
+          ),
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

@@ -8,6 +8,7 @@ import { insertTimelineAssetIntoSource } from "../utils/timelineAssetDrop";
 import { saveProjectFilesWithHistory } from "../utils/studioFileHistory";
 import type { EditHistoryKind } from "../utils/editHistory";
 import { formatTimelineAttributeNumber } from "../player/components/timelineEditing";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 interface RecordEditInput {
   label: string;
@@ -32,7 +33,7 @@ interface UseClipboardOptions {
 
 async function readFileContent(projectId: string, targetPath: string): Promise<string> {
   const response = await fetch(
-    `/api/projects/${projectId}/files/${encodeURIComponent(targetPath)}`,
+    buildProjectApiPath(projectId, `/files/${encodeURIComponent(targetPath)}`),
   );
   if (!response.ok) throw new Error(`Failed to read ${targetPath}`);
   const data = (await response.json()) as { content?: string };

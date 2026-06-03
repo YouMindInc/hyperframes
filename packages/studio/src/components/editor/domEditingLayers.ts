@@ -3,6 +3,7 @@
  * for dom editing.
  */
 import type { PatchOperation } from "../../utils/sourcePatcher";
+import { buildProjectApiPath } from "../../utils/projectRouting";
 import type {
   DomEditCapabilities,
   DomEditContextOptions,
@@ -293,7 +294,10 @@ async function probeSourceElement(
 ): Promise<boolean> {
   try {
     const response = await fetch(
-      `/api/projects/${projectId}/file-mutations/probe-element/${encodeURIComponent(sourceFile)}`,
+      buildProjectApiPath(
+        projectId,
+        `/file-mutations/probe-element/${encodeURIComponent(sourceFile)}`,
+      ),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

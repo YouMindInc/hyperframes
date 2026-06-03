@@ -3,6 +3,7 @@ import { copyTextToClipboard } from "../utils/clipboard";
 import { readTagSnippetByTarget } from "../utils/sourcePatcher";
 import { toProjectAbsolutePath, type AgentModalAnchorPoint } from "../utils/studioHelpers";
 import { buildElementAgentPrompt, type DomEditSelection } from "../components/editor/domEditing";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 // ── Types ──
 
@@ -54,7 +55,7 @@ export function useAskAgentModal({
       const targetPath = selection.sourceFile || activeCompPath || "index.html";
       try {
         const response = await fetch(
-          `/api/projects/${pid}/files/${encodeURIComponent(targetPath)}`,
+          buildProjectApiPath(pid, `/files/${encodeURIComponent(targetPath)}`),
         );
         if (!response.ok) return;
 

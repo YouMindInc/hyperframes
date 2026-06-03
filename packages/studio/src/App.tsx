@@ -49,12 +49,21 @@ import {
   normalizeStudioCompositionPath,
   readStudioUrlStateFromWindow,
 } from "./utils/studioUrlState";
+import { buildProjectApiPath, configureStudioApiBaseUrl } from "./utils/projectRouting";
 import { trackStudioSessionStart } from "./telemetry/events";
 import { hasFiredSessionStart, markSessionStartFired } from "./telemetry/config";
 
+export interface StudioAppProps {
+  apiBaseUrl?: string;
+  projectId?: string | null;
+}
+
 // fallow-ignore-next-line complexity
-export function StudioApp() {
-  const { projectId, resolving, waitingForServer } = useServerConnection();
+export function StudioApp({ apiBaseUrl, projectId: explicitProjectId }: StudioAppProps = {}) {
+  configureStudioApiBaseUrl(apiBaseUrl);
+  const { projectId, resolving, waitingForServer } = useServerConnection({
+    projectId: explicitProjectId,
+  });
   const initialUrlStateRef = useRef(readStudioUrlStateFromWindow());
 
   // Fire once per browser tab session — sessionStorage-backed so HMR
@@ -99,9 +108,10 @@ export function StudioApp() {
   const timelineDuration = usePlayerStore((s) => s.duration);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isMasterView = !activeCompPath || activeCompPath === "index.html";
-  const activePreviewUrl = activeCompPath
-    ? `/api/projects/${projectId}/preview/comp/${activeCompPath}`
-    : null;
+  const activePreviewUrl =
+    projectId && activeCompPath
+      ? buildProjectApiPath(projectId, `/preview/comp/${activeCompPath}`)
+      : null;
   const effectiveTimelineDuration = useMemo(() => {
     const maxEnd =
       timelineElements.length > 0
@@ -397,9 +407,10 @@ export function StudioApp() {
   );
   const handleSelectComposition = useCallback(
     (comp: string) => {
+      if (!projectId) return;
       setActiveCompPath(comp.endsWith(".html") ? comp : null);
       fileManager.setEditingFile({ path: comp, content: null });
-      fetch(`/api/projects/${projectId}/files/${comp}`)
+      fetch(buildProjectApiPath(projectId, `/files/${comp}`))
         .then((r) => r.json())
         .then((data) => fileManager.setEditingFile({ path: comp, content: data.content }))
         .catch(() => {});

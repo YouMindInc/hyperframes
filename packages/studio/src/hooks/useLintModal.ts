@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import type { LintFinding } from "../components/LintModal";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 export function useLintModal(projectId: string | null) {
   const [lintModal, setLintModal] = useState<LintFinding[] | null>(null);
@@ -9,7 +10,7 @@ export function useLintModal(projectId: string | null) {
     if (!projectId) return;
     setLinting(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/lint`);
+      const res = await fetch(buildProjectApiPath(projectId, "/lint"));
       const data = await res.json();
       setLintModal(
         (data.findings ?? []).map(

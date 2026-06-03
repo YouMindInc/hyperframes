@@ -8,6 +8,7 @@ import { collectHtmlIds } from "./studioHelpers";
 import { formatTimelineAttributeNumber } from "../player/components/timelineEditing";
 import { saveProjectFilesWithHistory } from "./studioFileHistory";
 import type { EditHistoryKind } from "./editHistory";
+import { buildProjectApiPath } from "./projectRouting";
 
 function getMaxZIndexFromIframe(iframe: HTMLIFrameElement | null): number {
   try {
@@ -73,7 +74,7 @@ export async function addBlockToProject(
   } = opts;
 
   try {
-    const res = await fetch(`/api/projects/${projectId}/registry/install`, {
+    const res = await fetch(buildProjectApiPath(projectId, "/registry/install"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ blockName }),

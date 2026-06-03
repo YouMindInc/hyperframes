@@ -4,6 +4,7 @@ import { CompositionThumbnail, VideoThumbnail } from "../player";
 import type { TimelineElement } from "../player";
 import { AudioWaveform } from "../player/components/AudioWaveform";
 import { getTimelineElementLabel } from "../utils/studioHelpers";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 export function normalizeCompositionSrc(
   compSrc: string,
@@ -12,7 +13,7 @@ export function normalizeCompositionSrc(
 ): string {
   try {
     const parsed = new URL(compSrc, origin);
-    const previewPrefix = `/api/projects/${projectId}/preview/`;
+    const previewPrefix = new URL(buildProjectApiPath(projectId, "/preview/"), origin).pathname;
     if (parsed.pathname.startsWith(previewPrefix)) {
       return parsed.pathname.slice(previewPrefix.length);
     }
@@ -56,7 +57,7 @@ export function useRenderClipContent({
       // instead of capturing the master at a time when the comp is fading in.
       if (compSrc) {
         return createElement(CompositionThumbnail, {
-          previewUrl: `/api/projects/${pid}/preview/comp/${compSrc}`,
+          previewUrl: buildProjectApiPath(pid, `/preview/comp/${compSrc}`),
           label: getTimelineElementLabel(el),
           labelColor: style.label,
 
@@ -88,20 +89,28 @@ export function useRenderClipContent({
 
       // Audio clips — waveform visualization
       if (el.tag === "audio") {
-        const previewBase = `/api/projects/${pid}/preview/`;
-        const previewIdx = el.src?.startsWith("http") ? el.src.indexOf(previewBase) : -1;
+        const previewBase = new URL(buildProjectApiPath(pid, "/preview/"), window.location.origin)
+          .pathname;
+        let parsedSrcPath: string | null = null;
+        if (el.src?.startsWith("http")) {
+          try {
+            parsedSrcPath = new URL(el.src).pathname;
+          } catch {
+            parsedSrcPath = null;
+          }
+        }
         const srcRelative = el.src
-          ? previewIdx !== -1
-            ? decodeURIComponent(el.src.slice(previewIdx + previewBase.length))
+          ? parsedSrcPath?.startsWith(previewBase)
+            ? decodeURIComponent(parsedSrcPath.slice(previewBase.length))
             : el.src.startsWith("http")
               ? null
               : el.src
           : null;
         const audioUrl = srcRelative
-          ? `/api/projects/${pid}/preview/${srcRelative}`
+          ? buildProjectApiPath(pid, `/preview/${srcRelative}`)
           : (el.src ?? "");
         const waveformUrl = srcRelative
-          ? `/api/projects/${pid}/waveform/${srcRelative}`
+          ? buildProjectApiPath(pid, `/waveform/${srcRelative}`)
           : undefined;
         return createElement(AudioWaveform, {
           audioUrl,
@@ -114,7 +123,7 @@ export function useRenderClipContent({
       if ((el.tag === "video" || el.tag === "img") && el.src) {
         const mediaSrc = el.src.startsWith("http")
           ? el.src
-          : `/api/projects/${pid}/preview/${el.src}`;
+          : buildProjectApiPath(pid, `/preview/${el.src}`);
         return createElement(VideoThumbnail, {
           videoSrc: mediaSrc,
           label: getTimelineElementLabel(el),
@@ -125,7 +134,7 @@ export function useRenderClipContent({
 
       if (htmlPreviewEligible) {
         return createElement(CompositionThumbnail, {
-          previewUrl: `/api/projects/${pid}/preview`,
+          previewUrl: buildProjectApiPath(pid, "/preview"),
           label: getTimelineElementLabel(el),
           labelColor: style.label,
 

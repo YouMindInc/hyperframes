@@ -19,6 +19,7 @@ import {
   TIMELINE_TOGGLE_SHORTCUT_LABEL,
   getTimelineToggleTitle,
 } from "../../utils/timelineDiscovery";
+import { buildProjectApiPath } from "../../utils/projectRouting";
 
 interface NLELayoutProps {
   projectId: string;
@@ -221,7 +222,7 @@ export const NLELayout = memo(function NLELayout({
   compIdToSrcRef.current = compIdToSrc;
 
   useMountEffect(() => {
-    fetch(`/api/projects/${projectId}/files/index.html`)
+    fetch(buildProjectApiPath(projectId, "/files/index.html"))
       .then((r) => r.json())
       .then((data: { content?: string }) => {
         const html = data.content || "";

@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlayerStore } from "../../player";
 import type { CompositionLevel } from "./CompositionBreadcrumb";
+import { buildProjectApiPath } from "../../utils/projectRouting";
 
 interface UseCompositionStackOptions {
   projectId: string;
@@ -25,7 +26,7 @@ export function useCompositionStack({
   onCompositionChange,
 }: UseCompositionStackOptions): UseCompositionStackResult {
   const [compositionStack, setCompositionStack] = useState<CompositionLevel[]>([
-    { id: "master", label: "Master", previewUrl: `/api/projects/${projectId}/preview` },
+    { id: "master", label: "Master", previewUrl: buildProjectApiPath(projectId, "/preview") },
   ]);
 
   const onCompositionChangeRef = useRef(onCompositionChange);
@@ -84,7 +85,7 @@ export function useCompositionStack({
             .split("/")
             .pop()
             ?.replace(/\.html$/, "") || resolvedPath;
-        const previewUrl = `/api/projects/${projectId}/preview/comp/${resolvedPath}`;
+        const previewUrl = buildProjectApiPath(projectId, `/preview/comp/${resolvedPath}`);
         return [...prev, { id: resolvedPath, label, previewUrl }];
       });
     },
@@ -100,12 +101,12 @@ export function useCompositionStack({
       updateCompositionStack((prev) => (prev.length > 1 ? [prev[0]] : prev));
     } else if (activeCompositionPath && activeCompositionPath.startsWith("compositions/")) {
       const label = activeCompositionPath.replace(/^compositions\//, "").replace(/\.html$/, "");
-      const previewUrl = `/api/projects/${projectId}/preview/comp/${activeCompositionPath}`;
+      const previewUrl = buildProjectApiPath(projectId, `/preview/comp/${activeCompositionPath}`);
       usePlayerStore.getState().setElements([]);
       updateCompositionStack((prev) => {
         if (prev[prev.length - 1]?.id === activeCompositionPath) return prev;
         return [
-          { id: "master", label: "Master", previewUrl: `/api/projects/${projectId}/preview` },
+          { id: "master", label: "Master", previewUrl: buildProjectApiPath(projectId, "/preview") },
           { id: activeCompositionPath, label, previewUrl },
         ];
       });

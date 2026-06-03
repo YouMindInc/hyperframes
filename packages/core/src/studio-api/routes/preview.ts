@@ -7,6 +7,7 @@ import { isSafePath } from "../helpers/safePath.js";
 import { getMimeType } from "../helpers/mime.js";
 import { buildSubCompositionHtml } from "../helpers/subComposition.js";
 import { createProjectSignature } from "../helpers/projectSignature.js";
+import { buildStudioApiPath } from "../helpers/apiBase.js";
 import {
   createStudioMotionRenderBodyScript,
   STUDIO_MOTION_PATH,
@@ -227,7 +228,7 @@ export function registerPreviewRoutes(api: Hono, adapter: StudioApiAdapter): voi
       }
 
       // Inject <base> for relative asset resolution
-      const baseHref = `/api/projects/${project.id}/preview/`;
+      const baseHref = buildStudioApiPath(adapter, `/projects/${project.id}/preview/`);
       if (!bundled.includes("<base")) {
         bundled = bundled.replace(/<head>/i, `<head><base href="${baseHref}">`);
       }
@@ -281,7 +282,7 @@ export function registerPreviewRoutes(api: Hono, adapter: StudioApiAdapter): voi
       return new Response(null, { status: 304, headers: previewCacheHeaders(etag) });
     }
 
-    const baseHref = `/api/projects/${project.id}/preview/`;
+    const baseHref = buildStudioApiPath(adapter, `/projects/${project.id}/preview/`);
     let html = buildSubCompositionHtml(project.dir, compPath, adapter.runtimeUrl, baseHref);
     if (!html) return c.text("not found", 404);
     html = await transformPreviewHtml(html, adapter, project, compPath);

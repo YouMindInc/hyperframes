@@ -19,6 +19,7 @@ import {
   resolveDroppedAssetDuration,
 } from "../utils/studioHelpers";
 import type { EditHistoryKind } from "../utils/editHistory";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 // ── Types ──
 
@@ -148,7 +149,7 @@ async function persistTimelineEdit(input: PersistTimelineEditInput): Promise<voi
 
 async function readFileContent(projectId: string, targetPath: string): Promise<string> {
   const response = await fetch(
-    `/api/projects/${projectId}/files/${encodeURIComponent(targetPath)}`,
+    buildProjectApiPath(projectId, `/files/${encodeURIComponent(targetPath)}`),
   );
   if (!response.ok) {
     throw new Error(`Failed to read ${targetPath}`);
@@ -288,7 +289,10 @@ export function useTimelineEditing({
         }
 
         const removeResponse = await fetch(
-          `/api/projects/${pid}/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
+          buildProjectApiPath(
+            pid,
+            `/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
+          ),
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

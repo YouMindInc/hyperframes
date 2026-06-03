@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useCaptionStore } from "../captions/store";
 import { useCaptionSync } from "../captions/hooks/useCaptionSync";
 import { parseCaptionComposition } from "../captions/parser";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 interface UseCaptionDetectionParams {
   projectId: string | null;
@@ -86,7 +87,7 @@ export function useCaptionDetection({
 
       activating = true;
       const srcPath = captionSrcPath;
-      fetch(`/api/projects/${projectId}/files/${encodeURIComponent(srcPath)}`)
+      fetch(buildProjectApiPath(projectId, `/files/${encodeURIComponent(srcPath)}`))
         .then((r) => r.json())
         .then((data: { content?: string }) => {
           if (!data.content || !doc || !win || useCaptionStore.getState().isEditMode) return;

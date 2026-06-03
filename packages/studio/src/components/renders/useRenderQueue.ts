@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { trackStudioRenderStart } from "../../telemetry/events";
+import { buildProjectApiPath, buildStudioApiPath } from "../../utils/projectRouting";
 
 export interface RenderJob {
   id: string;
@@ -43,7 +44,7 @@ export function useRenderQueue(projectId: string | null) {
   const loadRenders = useCallback(async () => {
     if (!projectId) return;
     try {
-      const res = await fetch(`/api/projects/${projectId}/renders`);
+      const res = await fetch(buildProjectApiPath(projectId, "/renders"));
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data.renders)) {
@@ -118,7 +119,7 @@ export function useRenderQueue(projectId: string | null) {
       if (composition) body.composition = composition;
       let res: Response;
       try {
-        res = await fetch(`/api/projects/${projectId}/render`, {
+        res = await fetch(buildProjectApiPath(projectId, "/render"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -162,7 +163,7 @@ export function useRenderQueue(projectId: string | null) {
       activeJobRef.current = jobId;
 
       // Track progress via SSE
-      const es = new EventSource(`/api/render/${jobId}/progress`);
+      const es = new EventSource(buildStudioApiPath(`/render/${jobId}/progress`));
       eventSourceRef.current = es;
 
       es.addEventListener("progress", (event) => {
@@ -219,7 +220,7 @@ export function useRenderQueue(projectId: string | null) {
 
   const deleteRender = useCallback(async (jobId: string) => {
     try {
-      await fetch(`/api/render/${jobId}`, { method: "DELETE" });
+      await fetch(buildStudioApiPath(`/render/${jobId}`), { method: "DELETE" });
     } catch {
       // ignore
     }

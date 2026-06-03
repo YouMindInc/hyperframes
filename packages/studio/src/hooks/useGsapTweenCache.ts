@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GsapAnimation, ParsedGsap } from "@hyperframes/core/gsap-parser";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 /** The selected element's identity for matching tweens to it. */
 export interface GsapElementTarget {
@@ -34,7 +35,7 @@ async function fetchParsedAnimations(
 ): Promise<ParsedGsap | null> {
   try {
     const res = await fetch(
-      `/api/projects/${encodeURIComponent(projectId)}/gsap-animations/${encodeURIComponent(sourceFile)}`,
+      buildProjectApiPath(projectId, `/gsap-animations/${encodeURIComponent(sourceFile)}`),
     );
     return res.ok ? ((await res.json()) as ParsedGsap) : null;
   } catch {

@@ -1,7 +1,8 @@
 import { IMAGE_EXT, VIDEO_EXT, AUDIO_EXT } from "../utils/mediaTypes";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 export function MediaPreview({ projectId, filePath }: { projectId: string; filePath: string }) {
-  const serveUrl = `/api/projects/${projectId}/preview/${filePath}`;
+  const serveUrl = buildProjectApiPath(projectId, `/preview/${filePath}`);
   const name = filePath.split("/").pop() ?? filePath;
 
   if (IMAGE_EXT.test(filePath)) {

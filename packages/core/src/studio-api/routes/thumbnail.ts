@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import type { StudioApiAdapter } from "../types.js";
 import { STUDIO_MANUAL_EDITS_PATH } from "../helpers/manualEditsRenderScript.js";
 import { STUDIO_MOTION_PATH } from "../helpers/studioMotionRenderScript.js";
+import { buildStudioApiPath } from "../helpers/apiBase.js";
 
 const THUMBNAIL_CACHE_VERSION = "v4";
 
@@ -65,10 +66,13 @@ export function registerThumbnailRoutes(api: Hono, adapter: StudioApiAdapter): v
       sourceMtime = Math.max(sourceMtime, Math.round(statSync(motionFile).mtimeMs));
     }
 
-    const previewUrl =
+    const origin = `http://${c.req.header("host") || "localhost"}`;
+    const previewUrl = new URL(
       compPath === "index.html"
-        ? `http://${c.req.header("host")}/api/projects/${project.id}/preview`
-        : `http://${c.req.header("host")}/api/projects/${project.id}/preview/comp/${compPath}`;
+        ? buildStudioApiPath(adapter, `/projects/${project.id}/preview`)
+        : buildStudioApiPath(adapter, `/projects/${project.id}/preview/comp/${compPath}`),
+      origin,
+    ).toString();
 
     // Cache
     const cacheDir = join(project.dir, ".thumbnails");

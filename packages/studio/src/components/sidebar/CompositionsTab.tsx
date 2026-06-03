@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { buildProjectApiPath } from "../../utils/projectRouting";
 
 interface CompositionsTabProps {
   projectId: string;
@@ -151,7 +152,7 @@ function CompCard({
     setHovered(false);
   };
   const name = comp.replace(/^compositions\//, "").replace(/\.html$/, "");
-  const previewUrl = `/api/projects/${projectId}/preview/comp/${comp}`;
+  const previewUrl = buildProjectApiPath(projectId, `/preview/comp/${comp}`);
   const previewScale = resolveCompositionPreviewScale({
     cardWidth: CARD_W,
     cardHeight: CARD_H,

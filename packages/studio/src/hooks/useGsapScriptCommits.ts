@@ -3,6 +3,7 @@ import type { ParsedGsap } from "@hyperframes/core/gsap-parser";
 import type { DomEditSelection } from "../components/editor/domEditingTypes";
 import type { EditHistoryKind } from "../utils/editHistory";
 import { applySoftReload } from "../utils/gsapSoftReload";
+import { buildProjectApiPath } from "../utils/projectRouting";
 
 const PROPERTY_DEFAULTS: Record<string, number> = {
   opacity: 1,
@@ -56,7 +57,7 @@ async function mutateGsapScript(
 ): Promise<MutationResult | null> {
   try {
     const res = await fetch(
-      `/api/projects/${encodeURIComponent(projectId)}/gsap-mutations/${encodeURIComponent(sourceFile)}`,
+      buildProjectApiPath(projectId, `/gsap-mutations/${encodeURIComponent(sourceFile)}`),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -234,7 +235,10 @@ export function useGsapScriptCommits({
         const targetPath = selection.sourceFile || activeCompPath || "index.html";
         if (!pid) return;
         const res = await fetch(
-          `/api/projects/${encodeURIComponent(pid)}/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
+          buildProjectApiPath(
+            pid,
+            `/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
+          ),
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

@@ -53,6 +53,9 @@ export interface StudioApiAdapter {
   /** URL to the hyperframe runtime JS (injected into preview HTML). */
   runtimeUrl: string;
 
+  /** Public mount path for this Studio API. Defaults to /api. */
+  apiBaseUrl?: string;
+
   /**
    * Optional: post-process preview HTML before Studio augments it.
    * Useful when preview must mirror render-time compilation steps.

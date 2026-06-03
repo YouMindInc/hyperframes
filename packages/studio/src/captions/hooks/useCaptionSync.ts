@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import { useCaptionStore } from "../store";
 import { useMountEffect } from "../../hooks/useMountEffect";
 import type { CaptionStyle } from "../types";
+import { buildProjectApiPath } from "../../utils/projectRouting";
 
 interface CaptionOverrideEntry {
   wordId?: string;
@@ -74,7 +75,7 @@ export function useCaptionSync(projectId: string | null) {
 
     const overrides = buildOverrides(state.model);
 
-    fetch(`/api/projects/${pid}/files/${encodeURIComponent("caption-overrides.json")}`, {
+    fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent("caption-overrides.json")}`), {
       method: "PUT",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(overrides, null, 2),
@@ -113,7 +114,7 @@ export function useCaptionSync(projectId: string | null) {
 
     try {
       const res = await fetch(
-        `/api/projects/${pid}/files/${encodeURIComponent("caption-overrides.json")}`,
+        buildProjectApiPath(pid, `/files/${encodeURIComponent("caption-overrides.json")}`),
       );
       if (!res.ok) return;
       const data = await res.json();

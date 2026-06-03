@@ -14,6 +14,7 @@ import {
   type FontOption,
   type LocalFontData,
 } from "./propertyPanelHelpers";
+import { buildStudioApiPath } from "../../utils/projectRouting";
 
 /* ------------------------------------------------------------------ */
 /*  Font helper functions                                              */
@@ -163,7 +164,7 @@ export function FontFamilyField({
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/fonts")
+    void fetch(buildStudioApiPath("/fonts"))
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { fonts?: string[] } | null) => {
         if (cancelled || !Array.isArray(data?.fonts)) return;
@@ -178,7 +179,7 @@ export function FontFamilyField({
   useEffect(() => {
     let cancelled = false;
     setLoadingGoogleFonts(true);
-    void fetch("/api/fonts/google")
+    void fetch(buildStudioApiPath("/fonts/google"))
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { fonts?: string[] } | null) => {
         if (cancelled || !Array.isArray(data?.fonts)) return;

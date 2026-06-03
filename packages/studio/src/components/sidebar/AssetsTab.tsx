@@ -3,6 +3,7 @@ import { VideoFrameThumbnail } from "../ui/VideoFrameThumbnail";
 import { MEDIA_EXT, IMAGE_EXT, VIDEO_EXT, AUDIO_EXT } from "../../utils/mediaTypes";
 import { TIMELINE_ASSET_MIME } from "../../utils/timelineAssetDrop";
 import { copyTextToClipboard } from "../../utils/clipboard";
+import { buildProjectApiPath } from "../../utils/projectRouting";
 
 interface AssetsTabProps {
   projectId: string;
@@ -102,7 +103,7 @@ function AssetCard({
   const [renameName, setRenameName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const name = asset.split("/").pop() ?? asset;
-  const serveUrl = `/api/projects/${projectId}/preview/${asset}`;
+  const serveUrl = buildProjectApiPath(projectId, `/preview/${asset}`);
   const isVideo = VIDEO_EXT.test(asset);
 
   return (
