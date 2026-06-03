@@ -160,7 +160,7 @@ export function syncRuntimeMedia(params: {
     if (!el.isConnected) continue;
     let relTime = (params.timeSeconds - clip.start) * clip.playbackRate + clip.mediaStart;
     const isActive =
-      params.timeSeconds >= clip.start && params.timeSeconds < clip.end && relTime >= 0;
+      params.timeSeconds >= clip.start && params.timeSeconds <= clip.end && relTime >= 0;
     if (isActive) {
       // Loop wrapping: when media reaches end, restart from mediaStart
       if (clip.loop && clip.sourceDuration != null && clip.sourceDuration > 0) {
