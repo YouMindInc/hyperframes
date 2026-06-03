@@ -708,7 +708,7 @@ describe("initSandboxRuntimeModular", () => {
     window.__timelines = { root: tl };
     initSandboxRuntimeModular();
 
-    expect(seekTimes.length).toBeGreaterThan(0);
-    expect(seekTimes[0]).toBe(0);
+    expect(seekTimes.length).toBeGreaterThanOrEqual(2);
+    expect(seekTimes[seekTimes.length - 1]).toBe(0);
   });
 });

@@ -950,7 +950,41 @@ export function initSandboxRuntimeModular(): void {
       state.capturedTimeline.pause();
       const seekTime = Math.max(0, state.currentTime || 0);
       if (typeof state.capturedTimeline.totalTime === "function") {
+        // GSAP 3.x skips rendering when totalTime equals the current _tTime.
+        // A freshly created paused timeline has _tTime=0, so seeking to 0 is a
+        // no-op — percentage-keyframe values at 0% are never applied. Nudge to
+        // a micro-offset first to force GSAP to dirty its internal state, then
+        // seek to the real time so the render produces exact values.
+        state.capturedTimeline.totalTime(seekTime + 0.001, true);
         state.capturedTimeline.totalTime(seekTime, false);
+      }
+
+      // Strip stale CSS offset artifacts from GSAP-targeted elements.
+      // These leak into the HTML when the CSS offset path fires for a
+      // GSAP-animated element (stale cache race). On reload, both the
+      // offset and GSAP transform stack, doubling the visual position.
+      const staleEls = document.querySelectorAll("[data-hf-studio-path-offset]");
+      if (staleEls.length > 0 && state.capturedTimeline.getChildren) {
+        const tweenTargets = new Set<Element>();
+        try {
+          for (const child of state.capturedTimeline.getChildren(true)) {
+            if (typeof child.targets === "function") {
+              for (const t of child.targets()) tweenTargets.add(t);
+            }
+          }
+        } catch {
+          /* timeline access guard */
+        }
+        for (const el of staleEls) {
+          if (!tweenTargets.has(el)) continue;
+          const htmlEl = el as HTMLElement;
+          htmlEl.removeAttribute("data-hf-studio-path-offset");
+          htmlEl.removeAttribute("data-hf-studio-original-translate");
+          htmlEl.removeAttribute("data-hf-studio-original-inline-translate");
+          htmlEl.style.removeProperty("--hf-studio-offset-x");
+          htmlEl.style.removeProperty("--hf-studio-offset-y");
+          htmlEl.style.removeProperty("translate");
+        }
       }
     }
     if (resolution.diagnostics) {
