@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   buildProjectHash,
   buildStudioApiPath,
+  configureStudioApiBaseUrl,
   parseProjectIdFromHash,
 } from "../utils/projectRouting";
 import { useMountEffect } from "./useMountEffect";
@@ -10,10 +11,6 @@ interface ServerConnectionState {
   projectId: string | null;
   resolving: boolean;
   waitingForServer: boolean;
-}
-
-interface UseServerConnectionOptions {
-  projectId?: string | null;
 }
 
 /**
@@ -27,9 +24,10 @@ interface UseServerConnectionOptions {
  * Cleans up pending timers on unmount so it is safe under React StrictMode.
  */
 export function useServerConnection(
-  options: UseServerConnectionOptions = {},
+  explicitProjectId: string | null = null,
+  apiBaseUrl?: string,
 ): ServerConnectionState {
-  const explicitProjectId = options.projectId ?? null;
+  configureStudioApiBaseUrl(apiBaseUrl);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
   const [waitingForServer, setWaitingForServer] = useState(false);
@@ -37,7 +35,10 @@ export function useServerConnection(
   useMountEffect(() => {
     const hashProjectId = parseProjectIdFromHash(window.location.hash);
     let cancelled = false;
-    let retryTimer: ReturnType<typeof window.setTimeout> | null = null;
+    // Explicitly `number` (the DOM return of window.setTimeout) rather than
+    // ReturnType<typeof window.setTimeout> — with @types/node present, that infers
+    // NodeJS.Timeout and clashes with the DOM number the call actually returns.
+    let retryTimer: number | null = null;
 
     function scheduleRetry() {
       setWaitingForServer(true);

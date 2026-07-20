@@ -1,14 +1,16 @@
+import { buildProjectApiPath } from "./projectRouting";
 import type { RegistryItem } from "@hyperframes/core/registry";
 import type { TimelineElement } from "../player";
 import {
   insertTimelineAssetIntoSource,
-  resolveTimelineAssetInitialGeometry,
+  resolveTimelineAssetCompositionSize,
 } from "./timelineAssetDrop";
 import { collectHtmlIds } from "./studioHelpers";
+import { generateId } from "./generateId";
 import { formatTimelineAttributeNumber } from "../player/components/timelineEditing";
 import { saveProjectFilesWithHistory } from "./studioFileHistory";
 import type { EditHistoryKind } from "./editHistory";
-import { buildProjectApiPath } from "./projectRouting";
+import { extendRootDurationInSource } from "./rootDuration";
 
 function getMaxZIndexFromIframe(iframe: HTMLIFrameElement | null): number {
   try {
@@ -74,7 +76,7 @@ export async function addBlockToProject(
   } = opts;
 
   try {
-    const res = await fetch(buildProjectApiPath(projectId, "/registry/install"), {
+    const res = await fetch(buildProjectApiPath(projectId, `/registry/install`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ blockName }),
@@ -120,7 +122,9 @@ export async function addBlockToProject(
       );
 
       const isBlock = block.type === "hyperframes:block";
-      const hostDims = resolveTimelineAssetInitialGeometry(originalContent);
+      const { width: hostWidth, height: hostHeight } =
+        resolveTimelineAssetCompositionSize(originalContent);
+      const hostDims = { left: 0, top: 0, width: hostWidth, height: hostHeight };
 
       const currentTime = opts.currentTime ?? 0;
       const start = placement
@@ -152,6 +156,11 @@ export async function addBlockToProject(
 
       const subCompHtml = [
         `<div`,
+        // A stable id (+ hf-id) is what authored sub-comps carry; without it the
+        // timeline can't dedup the host and renders duplicate clips that multiply
+        // on every interaction. Matches the authored-comp shape.
+        `  id="${compId}"`,
+        `  data-hf-id="hf-${generateId()}"`,
         `  data-composition-id="${compId}"`,
         `  data-composition-src="${compositionFile}"`,
         `  data-start="${formatTimelineAttributeNumber(start)}"`,
@@ -164,20 +173,7 @@ export async function addBlockToProject(
       ].join("\n");
 
       let patchedContent = insertTimelineAssetIntoSource(originalContent, subCompHtml);
-
-      const newEnd = start + duration;
-      const rootDurMatch = patchedContent.match(
-        /(<[^>]*data-composition-id="[^"]*"[^>]*data-duration=")([^"]*)(")/,
-      );
-      if (rootDurMatch) {
-        const rootDur = parseFloat(rootDurMatch[2]!);
-        if (newEnd > rootDur) {
-          patchedContent = patchedContent.replace(
-            rootDurMatch[0],
-            `${rootDurMatch[1]}${formatTimelineAttributeNumber(newEnd)}${rootDurMatch[3]}`,
-          );
-        }
-      }
+      patchedContent = extendRootDurationInSource(patchedContent, start + duration);
 
       await saveProjectFilesWithHistory({
         projectId,

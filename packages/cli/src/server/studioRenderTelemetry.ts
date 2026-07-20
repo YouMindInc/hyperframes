@@ -9,13 +9,21 @@
 import { freemem } from "node:os";
 import type { Fps } from "@hyperframes/core";
 import { fpsToNumber } from "@hyperframes/core";
-import type { RenderPerfSummary } from "@hyperframes/producer";
+import type { RenderJob, RenderPerfSummary } from "@hyperframes/producer";
 import { trackRenderComplete, trackRenderError } from "../telemetry/events.js";
+import {
+  renderJobObservabilityTelemetryPayload,
+  renderObservabilityTelemetryPayload,
+} from "../telemetry/renderObservability.js";
 import { bytesToMb } from "../telemetry/system.js";
 
 export interface StudioRenderOpts {
   fps: Fps;
   quality: string;
+  // Telemetry id of the browser user who triggered the render, so the render
+  // outcome joins their studio_session_start / studio_render_start events.
+  // Undefined for older studio clients → falls back to the install anonymousId.
+  distinctId?: string;
 }
 
 type RenderCompleteProps = Parameters<typeof trackRenderComplete>[0];
@@ -33,6 +41,8 @@ function stagesPayload(stages: Record<string, number>): Partial<RenderCompletePr
     stageVideoExtractMs: stages.videoExtractMs,
     stageAudioProcessMs: stages.audioProcessMs,
     stageCaptureMs: stages.captureMs,
+    stageCaptureSetupMs: stages.captureSetupMs,
+    stageCaptureFrameMs: stages.captureFrameMs,
     stageEncodeMs: stages.encodeMs,
     stageAssembleMs: stages.assembleMs,
   };
@@ -78,6 +88,7 @@ function perfPayload(
     tmpPeakBytes: perf.tmpPeakBytes,
     ...stagesPayload(perf.stages),
     ...extractPayload(perf.videoExtractBreakdown),
+    ...renderObservabilityTelemetryPayload(perf.observability),
   };
 }
 
@@ -86,6 +97,7 @@ export function emitStudioRenderError(
   elapsedMs: number,
   failedStage: string | undefined,
   err: unknown,
+  job: RenderJob | undefined,
 ): void {
   // `workers` is intentionally omitted: studio renders don't accept a
   // user-supplied worker count (the producer picks its default), so on early
@@ -99,6 +111,8 @@ export function emitStudioRenderError(
     failedStage,
     errorMessage: err instanceof Error ? err.message : String(err),
     elapsedMs,
+    distinctId: opts.distinctId,
+    ...renderJobObservabilityTelemetryPayload(job),
     ...memSnapshot(),
   });
 }
@@ -115,6 +129,7 @@ export function emitStudioRenderComplete(
     docker: false,
     gpu: false,
     source: "studio",
+    distinctId: opts.distinctId,
     ...perfPayload(perf, elapsedMs),
     ...memSnapshot(),
   });

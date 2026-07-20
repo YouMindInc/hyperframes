@@ -21,6 +21,9 @@ import { pathToFileURL } from "url";
 import { CLI_SEMVER_PATTERN } from "./cli-options.ts";
 
 const PACKAGES = [
+  "packages/parsers",
+  "packages/lint",
+  "packages/studio-server",
   "packages/core",
   "packages/engine",
   "packages/player",
@@ -29,6 +32,8 @@ const PACKAGES = [
   "packages/studio",
   "packages/cli",
   "packages/aws-lambda",
+  "packages/gcp-cloud-run",
+  "packages/sdk",
 ];
 
 const PLUGINS = [".claude-plugin", ".codex-plugin", ".cursor-plugin"];
@@ -40,6 +45,7 @@ type ReleaseOptions = {
   version: string;
   skipTag: boolean;
   skipChangelogCheck: boolean;
+  skipMonotonicityCheck: boolean;
 };
 
 function main() {
@@ -60,7 +66,7 @@ function main() {
     return;
   }
 
-  createReleaseCommitAndTag(options.version);
+  createReleaseCommitAndTag(options.version, options.skipMonotonicityCheck);
   printReleaseNextSteps(options.version);
 }
 
@@ -68,9 +74,12 @@ export function parseReleaseOptions(args: string[]): ReleaseOptions {
   const version = args.find((a) => !a.startsWith("--"));
   const skipTag = args.includes("--no-tag");
   const skipChangelogCheck = args.includes("--skip-changelog-check");
+  const skipMonotonicityCheck = args.includes("--skip-monotonicity-check");
 
   if (!version) {
-    console.error("Usage: bun run set-version <version> [--no-tag] [--skip-changelog-check]");
+    console.error(
+      "Usage: bun run set-version <version> [--no-tag] [--skip-changelog-check] [--skip-monotonicity-check]",
+    );
     console.error("Example: bun run set-version 0.1.1");
     process.exit(1);
   }
@@ -80,7 +89,7 @@ export function parseReleaseOptions(args: string[]): ReleaseOptions {
     process.exit(1);
   }
 
-  return { version, skipTag, skipChangelogCheck };
+  return { version, skipTag, skipChangelogCheck, skipMonotonicityCheck };
 }
 
 function updatePackageVersions(version: string) {
@@ -108,13 +117,13 @@ function updatePluginVersions(version: string) {
   }
 }
 
-function createReleaseCommitAndTag(version: string) {
-  const status = execFileSync("git", ["status", "--porcelain"], {
-    cwd: ROOT,
-    encoding: "utf-8",
-  }).trim();
+function createReleaseCommitAndTag(version: string, skipMonotonicityCheck: boolean = false) {
+  if (!skipMonotonicityCheck) {
+    assertTagMonotonicity(version);
+  }
+
   const allowedPaths = releaseAllowedPaths(version);
-  assertNoUnexpectedChanges(status, allowedPaths);
+  assertNoUnexpectedChanges(collectChangedPaths(), allowedPaths);
 
   // Pass git arguments as an array (execFileSync, no shell) so the interpolated
   // version and paths can never be interpreted as shell commands.
@@ -124,8 +133,88 @@ function createReleaseCommitAndTag(version: string) {
     cwd: ROOT,
     stdio: "inherit",
   });
-  execFileSync("git", ["tag", `v${version}`], { cwd: ROOT, stdio: "inherit" });
+  // Annotated tag (-a -m): works regardless of a contributor's git config; a
+  // lightweight `git tag` fails ("no tag message?") when tag.forceSignAnnotated
+  // or similar is set globally.
+  execFileSync("git", ["tag", "-a", `v${version}`, "-m", `v${version}`], {
+    cwd: ROOT,
+    stdio: "inherit",
+  });
   console.log(`\nCreated commit and tag v${version}`);
+}
+
+export function compareSemver(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  }
+  return 0;
+}
+
+function tagReachableFromHead(tag: string): boolean {
+  // `merge-base --is-ancestor` exits 0 when v<tag> is an ancestor of HEAD, 1
+  // otherwise. Orphan tags (abandoned release attempts on dead branches) are
+  // NOT ancestors, so they return false and are ignored by the guard below.
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", `v${tag}`, "HEAD"], {
+      cwd: ROOT,
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tags that would hijack a tag-sorting installer for this line: BOTH
+ * semver-higher than the release AND reachable from the release commit. A
+ * higher tag that isn't an ancestor of HEAD (e.g. a stray `chore: release`
+ * commit on a dead branch that was never published) can't appear in this
+ * history and is excluded — it should not block a legitimate release.
+ */
+export function findBlockingTags(
+  stableVersions: string[],
+  version: string,
+  isReachable: (tag: string) => boolean,
+): string[] {
+  return stableVersions.filter((t) => compareSemver(t, version) > 0 && isReachable(t));
+}
+
+function assertTagMonotonicity(version: string) {
+  if (isPrerelease(version)) return;
+
+  let tags: string;
+  try {
+    tags = execFileSync("git", ["tag", "--list", "v[0-9]*"], {
+      cwd: ROOT,
+      encoding: "utf-8",
+    });
+  } catch {
+    return;
+  }
+
+  const stableVersions = tags
+    .trim()
+    .split("\n")
+    .filter((t) => t && !t.includes("-"))
+    .map((t) => t.replace(/^v/, ""));
+
+  const blocking = findBlockingTags(stableVersions, version, tagReachableFromHead);
+  if (blocking.length === 0) return;
+
+  const existing = blocking[0];
+  console.error(
+    `\nTag v${existing} already exists, is reachable from HEAD, and is semver-higher than v${version}.`,
+  );
+  console.error(`Tag-sorting installers (npx skills, etc.) would resolve the wrong version.`);
+  console.error(`\nOptions:`);
+  console.error(
+    `  Delete the stale tag: git tag -d v${existing} && git push origin :refs/tags/v${existing}`,
+  );
+  console.error(`  Skip this check:     bun run set-version ${version} --skip-monotonicity-check`);
+  process.exit(1);
 }
 
 export function releaseRequiresChangelog(options: ReleaseOptions) {
@@ -208,7 +297,7 @@ export function docsChangelogEntryHasGeneratedTodo(content: string, marker: stri
   return hasGeneratedChangelogTodo(entry);
 }
 
-function releaseAllowedPaths(version: string) {
+export function releaseAllowedPaths(version: string) {
   return [
     ...PACKAGES.map((pkg) => join(pkg, "package.json")),
     ...PLUGINS.map((plugin) => join(plugin, "plugin.json")),
@@ -217,16 +306,40 @@ function releaseAllowedPaths(version: string) {
   ];
 }
 
-function assertNoUnexpectedChanges(status: string, allowedPaths: string[]) {
-  const unexpected = status
-    .split("\n")
-    .filter(
-      (line) => line && !allowedPaths.some((allowedPath) => gitStatusPath(line) === allowedPath),
-    );
+// Collect every uncommitted path (modified-tracked + untracked) as clean,
+// repo-relative paths. We deliberately use `diff --name-only` and `ls-files`
+// with `-z` rather than parsing `git status --porcelain`: the porcelain
+// "XY <path>" prefix width shifts with stage state, and a fixed-width slice
+// of it once mis-read a legitimate release file (`.claude-plugin/plugin.json`)
+// as an unexpected change, falsely blocking a release. These two commands
+// emit bare NUL-separated paths with no status column to misparse.
+function collectChangedPaths(): string[] {
+  const tracked = execFileSync("git", ["diff", "--name-only", "-z", "HEAD"], {
+    cwd: ROOT,
+    encoding: "utf-8",
+  });
+  const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "-z"], {
+    cwd: ROOT,
+    encoding: "utf-8",
+  });
+  return [...splitNulList(tracked), ...splitNulList(untracked)];
+}
+
+export function splitNulList(output: string): string[] {
+  return output.split("\0").filter(Boolean);
+}
+
+export function findUnexpectedChanges(changedPaths: string[], allowedPaths: string[]): string[] {
+  const allowed = new Set(allowedPaths);
+  return changedPaths.filter((path) => !allowed.has(path));
+}
+
+function assertNoUnexpectedChanges(changedPaths: string[], allowedPaths: string[]) {
+  const unexpected = findUnexpectedChanges(changedPaths, allowedPaths);
 
   if (unexpected.length > 0) {
     console.error("\nUnexpected uncommitted changes:");
-    unexpected.forEach((line) => console.error(`  ${line}`));
+    unexpected.forEach((path) => console.error(`  ${path}`));
     console.error("Commit or stash these before releasing.");
     process.exit(1);
   }
@@ -239,12 +352,13 @@ function printReleaseNextSteps(version: string) {
     console.log(`Consumers install with: npm install @hyperframes/core@${distTag}`);
     console.log(`\nRun 'git push origin v${version}' to trigger the publish workflow.`);
   } else {
-    console.log(`Run 'git push origin main --tags' to trigger the publish workflow.`);
+    console.log(`\nRun the following to trigger the publish workflow:`);
+    console.log(`  git push origin main`);
+    console.log(`  git push origin v${version}`);
+    console.log(
+      `(push the specific tag, NOT 'git push --tags' — that fails on any pre-existing tag).`,
+    );
   }
-}
-
-export function gitStatusPath(line: string) {
-  return line.slice(3).replace(/^"|"$/g, "");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

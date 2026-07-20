@@ -40,10 +40,36 @@ export type {
   CaptureResult,
   CaptureBufferResult,
   CapturePerfSummary,
+  CaptureWarning,
+  CaptureWarningCode,
+  SubTimelineWaitOutcome,
 } from "./types.js";
 
 // ── Configuration ──────────────────────────────────────────────────────────────
-export { resolveConfig, DEFAULT_CONFIG, type EngineConfig } from "./config.js";
+export {
+  resolveConfig,
+  validateEngineConfigSnapshot,
+  DEFAULT_CONFIG,
+  scaleProtocolTimeoutForComposition,
+  shouldClampToScreenshotForConcreteGpu,
+  applyConcreteGpuScreenshotClamp,
+  resolveExtractCacheDir,
+  defaultExtractCacheDir,
+  EXTRACT_CACHE_DIR_DISABLED_ALIASES,
+  type EngineConfig,
+  type ExtractCacheDirResolution,
+} from "./config.js";
+export {
+  DEFAULT_VP9_CPU_USED,
+  MAX_VP9_CPU_USED,
+  MIN_VP9_CPU_USED,
+  normalizeVp9CpuUsed,
+} from "./services/vp9Options.js";
+export {
+  getSystemTotalMb,
+  isLowMemorySystem,
+  LOW_MEMORY_TOTAL_MB_THRESHOLD,
+} from "./services/systemMemory.js";
 
 // ── Browser management ─────────────────────────────────────────────────────────
 export {
@@ -54,10 +80,23 @@ export {
   resolveBrowserGpuMode,
   buildChromeArgs,
   ENABLE_BROWSER_POOL,
+  BrowserLeasePool,
   type BuildChromeArgsOptions,
+  type BrowserLaunchFingerprint,
+  type BrowserLease,
+  type BrowserPoolState,
   type CaptureMode,
   type AcquiredBrowser,
 } from "./services/browserManager.js";
+export {
+  augmentProtocolTimeoutError,
+  isProtocolTimeoutError,
+} from "./services/protocolTimeoutErrorHint.js";
+export {
+  augmentPageNavigationTimeoutError,
+  isPageNavigationTimeoutError,
+  type NavigationTimeoutHintContext,
+} from "./services/pageNavigationTimeoutErrorHint.js";
 
 // ── Frame capture pipeline ──────────────────────────────────────────────────────
 export {
@@ -66,14 +105,33 @@ export {
   closeCaptureSession,
   captureFrame,
   captureFrameToBuffer,
+  captureFrameToBufferPipelined,
+  captureFramesBatchPipelined,
+  DrawElementVerificationError,
+  isDrawElementVerificationError,
+  getDrawElementVerificationDetails,
+  type DrawElementVerificationDetails,
+  recaptureDrawElementFrameForVerify,
+  completeDeferredDrawElementInit,
+  writeCapturedFrame,
   discardWarmupCapture,
   getCompositionDuration,
   getCapturePerfSummary,
+  percentileOf,
   prepareCaptureSessionForReuse,
   type CaptureSession,
+  isTransientBrowserError,
+  isMemoryExhaustionError,
   type BeforeCaptureHook,
   type DiscardWarmupInnerCapture,
 } from "./services/frameCapture.js";
+export {
+  CaptureFailure,
+  classifyCaptureFailure,
+  isFatalCaptureFailure,
+  type CaptureFailureKind,
+  type CaptureWorkerDiagnostic,
+} from "./services/captureFailure.js";
 
 // ── Screenshot (BeginFrame) ─────────────────────────────────────────────────────
 export {
@@ -83,6 +141,7 @@ export {
   injectVideoFramesBatch,
   syncVideoFrameVisibility,
   cdpSessionCache,
+  probeBeginFrameLiveness,
   initTransparentBackground,
   captureAlphaPng,
   applyDomLayerMask,
@@ -124,12 +183,16 @@ export {
   getFrameAtTime,
   createFrameLookupTable,
   FrameLookupTable,
+  analyzeClipMediaFit,
   type VideoElement,
   type ImageElement,
   type ExtractedFrames,
   type ExtractionOptions,
   type ExtractionResult,
   type ExtractionPhaseBreakdown,
+  type VideoFrameFormat,
+  VIDEO_FRAME_FORMATS,
+  isVideoFrameFormat,
 } from "./services/videoFrameExtractor.js";
 
 export { createVideoFrameInjector } from "./services/videoFrameInjector.js";
@@ -146,6 +209,7 @@ export type {
 export {
   calculateOptimalWorkers,
   distributeFrames,
+  distributeFramesInterleaved,
   executeParallelCapture,
   mergeWorkerFrames,
   getSystemResources,
@@ -183,13 +247,26 @@ export {
   type KeyframeAnalysis,
 } from "./utils/ffprobe.js";
 
-export { downloadToTemp, isHttpUrl } from "./utils/urlDownloader.js";
+export { assertPublicHttpsUrl, downloadToTemp, isHttpUrl } from "./utils/urlDownloader.js";
 export {
   runFfmpeg,
   formatFfmpegError,
   type RunFfmpegOptions,
   type RunFfmpegResult,
 } from "./utils/runFfmpeg.js";
+export {
+  ManagedChildProcess,
+  type ManagedChildProcessOptions,
+  type ManagedChildProcessOutcome,
+  type ManagedProcessTerminationReason,
+} from "./utils/managedChildProcess.js";
+export {
+  assertConfiguredFfmpegBinariesExist,
+  getFfmpegBinary,
+  getFfprobeBinary,
+  FFMPEG_PATH_ENV,
+  FFPROBE_PATH_ENV,
+} from "./utils/ffmpegBinaries.js";
 
 export { trackChildProcess, killTrackedProcesses } from "./utils/processTracker.js";
 
@@ -207,6 +284,17 @@ export {
 } from "./utils/alphaBlit.js";
 
 export { groupIntoLayers, type CompositeLayer } from "./utils/layerCompositor.js";
+
+export {
+  diffGpuParityFrames,
+  diffGpuParityPngs,
+  verifyGpuParity,
+  type RgbaFrame,
+  type GpuParityDiffOptions,
+  type GpuParityDiffResult,
+  type BlackOnlyInARegion,
+  type VerifyGpuParityResult,
+} from "./utils/gpuParityDiff.js";
 
 // ── Shader transitions ────────────────────────────────────────────────────────
 export {

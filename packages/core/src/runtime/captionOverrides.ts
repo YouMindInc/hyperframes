@@ -10,7 +10,7 @@
  * 2. `wordIndex` — fallback, DOM traversal order across .caption-group > span
  */
 
-export interface CaptionOverride {
+interface CaptionOverride {
   wordId?: string;
   wordIndex?: number;
   x?: number;
@@ -135,7 +135,7 @@ export function applyCaptionOverrides(): void {
 
           // Use the first tween's color as the dim baseline — if no tweens,
           // fall back to computed style.
-          const dimBaseline = colorTweens.length > 0 ? String(colorTweens[0].vars.color) : "";
+          const dimBaseline = colorTweens[0] ? String(colorTweens[0].vars.color) : "";
 
           for (const tw of colorTweens) {
             const tweenColor = String(tw.vars.color);

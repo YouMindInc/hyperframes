@@ -6,8 +6,11 @@
  *      `--url`).
  *   2. Zip the project (reuses `createPublishArchive` so the
  *      file-ignore set matches the existing `publish` command exactly).
- *   3. Upload the zip via `POST /v3/assets` (multipart) — the server
- *      branches on the detected `application/zip` MIME.
+ *   3. Upload the zip via the direct-to-S3 flow: `POST /v3/assets/
+ *      direct-uploads` returns a presigned URL, we PUT the zip bytes
+ *      to it, then `POST /v3/assets/{asset_id}/complete` finalizes.
+ *      Cap: 200 MB. See `../../cloud/upload.ts` for the three-step
+ *      contract. (The legacy `POST /v3/assets` proxy path was 32 MB.)
  *   4. Submit the render via `POST /v3/hyperframes/renders` with a
  *      `project: {type:"asset_id", asset_id}` shape.
  *   5. If `--no-wait`: print the `render_id` and exit immediately.
@@ -32,8 +35,13 @@ import {
 } from "../../cloud/detectAspectRatio.js";
 import { c } from "../../ui/colors.js";
 import { errorBox, formatBytes, formatDuration } from "../../ui/format.js";
-import { resolveProject } from "../../utils/project.js";
-import { createPublishArchive } from "../../utils/publishProject.js";
+import { resolveProject, type ProjectDir } from "../../utils/project.js";
+import { normalizeErrorMessage } from "../../utils/errorMessage.js";
+import {
+  buildPublishFileMap,
+  type PublishArchiveResult,
+  zipPublishFileMap,
+} from "../../utils/publishProject.js";
 import {
   reportVariableIssues,
   resolveVariablesArg,
@@ -52,24 +60,30 @@ import {
 } from "../../cloud/index.js";
 import { reportApiError } from "../../cloud/errors.js";
 import { parseEnumFlag, parseIntFlag, parseNumericFlag } from "../../cloud/parsing.js";
+import { uploadZipViaDirectUpload } from "../../cloud/upload.js";
 import { colorStatus } from "../../cloud/statusColor.js";
 import type {
   CreateHyperframesRenderRequest,
   HyperframesCloudClient,
   HyperframesRenderDetail,
 } from "../../cloud/index.js";
-import { isAbsolute, resolve as resolvePath } from "node:path";
+import { isAbsolute, relative, resolve as resolvePath } from "node:path";
 import { existsSync } from "node:fs";
 
 const VALID_QUALITY = ["draft", "standard", "high"] as const;
 const VALID_FORMAT = ["mp4", "webm", "mov"] as const;
 const VALID_RESOLUTION = ["1080p", "4k"] as const;
 const VALID_ASPECT_RATIO = ["16:9", "9:16", "1:1"] as const;
+// Mirrors the binary-byte max_bytes contract used by direct asset uploads.
+const DIRECT_UPLOAD_LIMIT_BYTES = 200 * 1024 * 1024;
+const ARCHIVE_DIAGNOSTIC_THRESHOLD_BYTES = 150 * 1024 * 1024;
+const LARGEST_FILE_COUNT = 10;
 
 const FORMAT_EXT: Record<string, string> = { mp4: ".mp4", webm: ".webm", mov: ".mov" };
 
 export const examples: Example[] = [
   ["Render the current directory in the cloud", "hyperframes cloud render"],
+  ["Inspect archive size without uploading", "hyperframes cloud render --dry-run"],
   [
     "Pick a specific composition + output path",
     "hyperframes cloud render . --composition compositions/intro.html -o ./renders/intro.mp4",
@@ -173,6 +187,11 @@ export default defineCommand({
       description: "Emit machine-readable JSON instead of human-friendly progress",
       default: false,
     },
+    "dry-run": {
+      type: "boolean",
+      description: "Build and inspect the project zip without authenticating or uploading",
+      default: false,
+    },
     "idempotency-key": {
       type: "string",
       description: "Optional Idempotency-Key for safe retries (1-255 chars from [A-Za-z0-9_:.-])",
@@ -202,6 +221,7 @@ export default defineCommand({
       assetId: args["asset-id"],
       url: args.url,
     });
+    validateDryRunSource(project, args["dry-run"] ?? false);
 
     // 4k supersampling runs through the alpha-incompatible screenshot path;
     // reject the combination client-side instead of failing mid-render.
@@ -221,6 +241,12 @@ export default defineCommand({
       asJson,
     );
 
+    if (args["dry-run"]) {
+      if (project.kind !== "dir") throw new Error("Dry-run project must be a local directory");
+      reportDryRun(prepareLocalArchive(project, args.composition, asJson), asJson);
+      return;
+    }
+
     const variables = resolveVariablesAndValidateIfLocal(
       args.variables,
       args["variables-file"],
@@ -229,8 +255,16 @@ export default defineCommand({
     );
 
     const client = await createCloudClient();
+    const preparedArchive =
+      project.kind === "dir" ? prepareLocalArchive(project, args.composition, asJson) : undefined;
 
-    const upload = await maybeUploadProject(client, project, asJson, args["idempotency-key"]);
+    const upload = await maybeUploadProject(
+      client,
+      project,
+      preparedArchive,
+      asJson,
+      args["idempotency-key"],
+    );
     const submitted = await submitRender(client, {
       projectInput: upload.projectInput,
       fps,
@@ -327,6 +361,15 @@ function validateIdempotencyKey(key: string | undefined): void {
     errorBox("Invalid --idempotency-key", `Got "${key}". Must be 1-255 chars from [A-Za-z0-9_:.-]`);
     process.exit(1);
   }
+}
+
+export function validateDryRunSource(source: ProjectInputSource, dryRun: boolean): void {
+  if (!dryRun || source.kind === "dir") return;
+  errorBox(
+    "Invalid --dry-run input",
+    "--dry-run inspects a local project directory and cannot be combined with --asset-id or --url.",
+  );
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -518,10 +561,107 @@ interface UploadResult {
   projectInput: CreateHyperframesRenderRequest["project"];
 }
 
+interface ArchiveFileSummary {
+  path: string;
+  size_bytes: number;
+}
+
+interface PreparedLocalArchive {
+  project: ProjectDir;
+  archive: PublishArchiveResult;
+  largestFiles: ArchiveFileSummary[];
+}
+
+function summarizeLargestFiles(fileMap: Map<string, Buffer>): ArchiveFileSummary[] {
+  return [...fileMap.entries()]
+    .map(([path, content]) => ({ path, size_bytes: content.byteLength }))
+    .sort((a, b) => b.size_bytes - a.size_bytes || a.path.localeCompare(b.path))
+    .slice(0, LARGEST_FILE_COUNT);
+}
+
+function prepareLocalArchive(
+  source: ProjectInputSource,
+  composition: string | undefined,
+  asJson: boolean,
+): PreparedLocalArchive {
+  const project = resolveProject(source.dir);
+  if (!asJson) {
+    console.log("");
+    console.log(`${c.accent("◆")}  Zipping ${c.accent(project.name)}`);
+  }
+
+  try {
+    const fileMap = buildPublishFileMap(project.dir);
+    const entryPath = relative(
+      project.dir,
+      resolvePath(project.dir, composition ?? "index.html"),
+    ).replaceAll("\\", "/");
+    if (!fileMap.has(entryPath)) {
+      throw new Error(
+        `Composition "${composition ?? "index.html"}" is excluded from the archive. Check .hyperframesignore.`,
+      );
+    }
+    const archive = zipPublishFileMap(fileMap);
+    if (!asJson) {
+      console.log(
+        c.dim(`   ${archive.fileCount} files · ${formatBytes(archive.buffer.byteLength)}`),
+      );
+    }
+    const prepared = { project, archive, largestFiles: summarizeLargestFiles(fileMap) };
+    if (!asJson && archive.buffer.byteLength >= ARCHIVE_DIAGNOSTIC_THRESHOLD_BYTES) {
+      reportLargestFiles(prepared);
+    }
+    return prepared;
+  } catch (err) {
+    const msg = normalizeErrorMessage(err);
+    errorBox("Zip failed", msg, "Check the project and .hyperframesignore for missing files.");
+    process.exit(1);
+  }
+}
+
+function reportLargestFiles(prepared: PreparedLocalArchive): void {
+  console.log(c.dim("   Largest included files:"));
+  for (const file of prepared.largestFiles) {
+    console.log(c.dim(`   ${formatBytes(file.size_bytes).padStart(9)}  ${file.path}`));
+  }
+  console.log(c.dim("   Exclude verified-unneeded files with .hyperframesignore."));
+}
+
+function reportDryRun(prepared: PreparedLocalArchive, asJson: boolean): void {
+  const sizeBytes = prepared.archive.buffer.byteLength;
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        withMeta({
+          archive: {
+            project: prepared.project.name,
+            file_count: prepared.archive.fileCount,
+            size_bytes: sizeBytes,
+            upload_limit_bytes: DIRECT_UPLOAD_LIMIT_BYTES,
+            exceeds_upload_limit: sizeBytes > DIRECT_UPLOAD_LIMIT_BYTES,
+            largest_files: prepared.largestFiles,
+          },
+        }),
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  if (sizeBytes < ARCHIVE_DIAGNOSTIC_THRESHOLD_BYTES) reportLargestFiles(prepared);
+  console.log("");
+  console.log(`${c.success("✓")}  Dry run complete — nothing uploaded`);
+  if (sizeBytes > DIRECT_UPLOAD_LIMIT_BYTES) {
+    console.log(c.warn(`   Archive exceeds the 200 MB direct-upload limit.`));
+  }
+}
+
 // fallow-ignore-next-line complexity
 async function maybeUploadProject(
   client: HyperframesCloudClient,
   source: ProjectInputSource,
+  preparedArchive: PreparedLocalArchive | undefined,
   asJson: boolean,
   idempotencyKey: string | undefined,
 ): Promise<UploadResult> {
@@ -532,41 +672,32 @@ async function maybeUploadProject(
     return { projectInput: { type: "url", url: source.url! } };
   }
 
-  const project = resolveProject(source.dir);
-  if (!asJson) {
-    console.log("");
-    console.log(`${c.accent("◆")}  Zipping ${c.accent(project.name)}`);
-  }
-  let archive;
-  try {
-    archive = createPublishArchive(project.dir);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    errorBox("Zip failed", msg, "Check the project for missing files or unreadable permissions.");
-    process.exit(1);
-  }
-  if (!asJson) {
-    console.log(c.dim(`   ${archive.fileCount} files · ${formatBytes(archive.buffer.byteLength)}`));
-  }
+  if (!preparedArchive) throw new Error("Local project archive was not prepared");
+  const { project, archive } = preparedArchive;
 
   if (!asJson) {
     console.log("");
-    console.log(`${c.accent("◆")}  Uploading to /v3/assets`);
+    console.log(`${c.accent("◆")}  Uploading (direct-to-S3)`);
   }
   const uploadStart = Date.now();
   let uploaded;
   try {
-    uploaded = await client.uploadAsset({
-      file: archive.buffer,
+    uploaded = await uploadZipViaDirectUpload({
+      client,
+      bytes: archive.buffer,
       filename: `${project.name}.zip`,
-      // Tag the multipart part with application/zip so downstream
-      // proxies / WAFs / any server-side path that keys off the
-      // part Content-Type see the intended type. The asset
-      // controller currently sniffs magic bytes from the file
-      // bytes, so this is belt-and-suspenders today; without it,
-      // FormData defaults to application/octet-stream.
-      mimeType: "application/zip",
       idempotencyKey,
+      onProgress: !asJson
+        ? (ev) => {
+            if (ev.phase === "initialize") {
+              console.log(c.dim(`   initializing…`));
+            } else if (ev.phase === "upload" && ev.percent === 0) {
+              console.log(c.dim(`   uploading to S3…`));
+            } else if (ev.phase === "complete") {
+              console.log(c.dim(`   finalizing…`));
+            }
+          }
+        : undefined,
     });
   } catch (err) {
     reportApiError("Upload failed", err);
@@ -733,7 +864,7 @@ async function streamVideo(
     }
     return { bytes: result.bytes };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = normalizeErrorMessage(err);
     errorBox(
       "Download failed",
       message,

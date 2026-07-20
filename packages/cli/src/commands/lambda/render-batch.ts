@@ -36,6 +36,7 @@ import {
   reportVariableIssues,
   validateVariablesAgainstSchema,
 } from "../../utils/variables.js";
+import { normalizeErrorMessage } from "../../utils/errorMessage.js";
 import { warnOnDimensionMismatch } from "./_dimensions.js";
 import { requireStack } from "./state.js";
 
@@ -64,11 +65,19 @@ export interface RenderBatchArgs {
   height: number;
   /** See {@link RenderArgs.outputResolution}. */
   outputResolution?: CanvasResolution;
+  /**
+   * See {@link RenderArgs.outputResolutionAspectAgnostic}. Threaded through
+   * `SerializableDistributedRenderConfig` so the Lambda worker's compile
+   * stage remaps aspect-agnostic aliases (`1080p` / `hd` / `4k` / `uhd`) to
+   * the composition's orientation — same regression class as the local CLI.
+   */
+  outputResolutionAspectAgnostic?: boolean;
   format: DistributedFormat;
   codec?: "h264" | "h265";
   quality?: "draft" | "standard" | "high";
   chunkSize?: number;
   maxParallelChunks?: number;
+  targetChunkFrames?: number;
   /**
    * Maximum in-flight Step Functions starts at any moment. Caps fan-out
    * so a 10 000-entry batch doesn't try to spawn 10 000 executions
@@ -207,18 +216,7 @@ export async function runRenderBatch(args: RenderBatchArgs): Promise<void> {
     process.exit(1);
   }
 
-  const config: SerializableDistributedRenderConfig = {
-    fps: args.fps,
-    width: args.width,
-    height: args.height,
-    outputResolution: args.outputResolution,
-    format: args.format,
-    codec: args.codec,
-    quality: args.quality,
-    chunkSize: args.chunkSize,
-    maxParallelChunks: args.maxParallelChunks,
-    runtimeCap: "lambda",
-  };
+  const config: SerializableDistributedRenderConfig = buildLambdaBatchRenderConfig(args);
 
   // Deploy the site once and reuse it across every entry. --site-id and
   // --dry-run both skip the deploy via a synthesised handle.
@@ -292,7 +290,7 @@ export async function runRenderBatch(args: RenderBatchArgs): Promise<void> {
         outputKey: entry.outputKey,
         executionArn: null,
         status: "failed-to-start",
-        error: err instanceof Error ? err.message : String(err),
+        error: normalizeErrorMessage(err),
       };
     }
   };
@@ -348,6 +346,34 @@ function makePlaceholderSiteHandle(siteId: string, bucketName: string): SiteHand
 }
 
 /**
+ * Build the shared wire {@link SerializableDistributedRenderConfig} used
+ * for every entry in a `hyperframes lambda render-batch` run. Extracted for
+ * boundary-test coverage of the aspect-agnostic flag threading (per-entry
+ * `variables` are still overlayed at dispatch time inside {@link runRenderBatch}).
+ */
+export function buildLambdaBatchRenderConfig(
+  args: RenderBatchArgs,
+): SerializableDistributedRenderConfig {
+  const config: SerializableDistributedRenderConfig = {
+    fps: args.fps,
+    width: args.width,
+    height: args.height,
+    outputResolution: args.outputResolution,
+    format: args.format,
+    codec: args.codec,
+    quality: args.quality,
+    chunkSize: args.chunkSize,
+    maxParallelChunks: args.maxParallelChunks,
+    targetChunkFrames: args.targetChunkFrames,
+    runtimeCap: "lambda",
+  };
+  if (args.outputResolutionAspectAgnostic) {
+    config.outputResolutionAspectAgnostic = true;
+  }
+  return config;
+}
+
+/**
  * Read the JSONL batch file and return one parsed entry per non-blank
  * line. Reads the whole file into memory — fine for typical batch sizes,
  * an in-memory bound the caller can size around. Calls `errorBox` and
@@ -369,10 +395,7 @@ export function parseBatchFile(path: string): Array<{ entry: BatchEntry; lineNum
     try {
       parsed = JSON.parse(line);
     } catch (err) {
-      errorBox(
-        `Invalid JSON in batch file on line ${i + 1}`,
-        err instanceof Error ? err.message : String(err),
-      );
+      errorBox(`Invalid JSON in batch file on line ${i + 1}`, normalizeErrorMessage(err));
       process.exit(1);
     }
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {

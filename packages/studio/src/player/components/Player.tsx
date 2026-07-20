@@ -1,8 +1,9 @@
+import { buildProjectApiPath } from "../../utils/projectRouting";
 import { forwardRef, useEffect, useRef, useState } from "react";
 import { isLottieAnimationLoaded } from "@hyperframes/core/runtime/lottie-readiness";
 import { useMountEffect } from "../../hooks/useMountEffect";
+import { applyPreviewVariablesToUrl } from "../../hooks/previewVariablesStore";
 import { HyperframesLoader } from "../../components/ui";
-import { buildProjectApiPath } from "../../utils/projectRouting";
 // NOTE: importing "@hyperframes/player" registers a class extending HTMLElement
 // at module load, which throws under SSR. Defer the import to the mount effect
 // so it only runs in the browser.
@@ -155,7 +156,12 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
 
         // Create the web component imperatively to avoid JSX custom-element typing.
         const player = document.createElement("hyperframes-player") as HyperframesPlayerElement;
-        const src = directUrl || (projectId ? buildProjectApiPath(projectId, "/preview") : "");
+        const previewUrl =
+          directUrl || (projectId ? buildProjectApiPath(projectId, `/preview`) : "");
+        if (!previewUrl) return;
+        const srcUrl = new URL(previewUrl, window.location.origin);
+        applyPreviewVariablesToUrl(srcUrl);
+        const src = srcUrl.pathname + srcUrl.search;
         player.setAttribute("shader-capture-scale", "1");
         player.setAttribute("shader-loading", "player");
         player.setAttribute("src", src);
@@ -253,11 +259,6 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
                 if (assetPollRef.current) clearInterval(assetPollRef.current);
                 assetPollRef.current = null;
                 setAssetsLoading(false);
-                if (lastUnloaded) {
-                  console.debug(
-                    "[Player] Asset-loading overlay timed out after 10s; hiding anyway. Check network or asset integrity.",
-                  );
-                }
               }
             }, 100);
           } else {

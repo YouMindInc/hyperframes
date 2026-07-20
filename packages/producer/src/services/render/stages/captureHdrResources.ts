@@ -16,7 +16,16 @@
  * exist, leaving the caller with empty maps that the hot loop tolerates.
  */
 
-import { mkdirSync, openSync, readFileSync, statSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  statfsSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
   type CaptureSession,
@@ -26,15 +35,18 @@ import {
   resampleRgb48leObjectFit,
   runFfmpeg,
 } from "@hyperframes/engine";
-import { fpsToFfmpegArg } from "@hyperframes/core";
+import { fpsToFfmpegArg, fpsToNumber } from "@hyperframes/core";
 import type { ProducerLogger } from "../../../logger.js";
-import type {
-  HdrDiagnostics,
-  HdrImageBuffer,
-  HdrVideoFrameSource,
-  RenderJob,
-} from "../../renderOrchestrator.js";
+import type { HdrImageBuffer, HdrVideoFrameSource } from "../../hdrCompositor.js";
+import type { HdrDiagnostics, RenderJob } from "../../renderOrchestrator.js";
 import type { CompositionMetadata } from "../shared.js";
+
+const NO_FOLLOW_FLAG = constants.O_NOFOLLOW ?? 0;
+
+function tempDirSafePrefix(id: string): string {
+  const safe = id.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 80);
+  return safe || "video";
+}
 
 export interface HdrResourcePrep {
   hdrVideoIds: string[];
@@ -154,6 +166,71 @@ export async function probeHdrExtractionDims(args: {
 }
 
 /**
+ * Total bytes the raw rgb48le pre-extraction below will write: 6 bytes/px ×
+ * frame area × frame count, summed across HDR videos. Exposed for the
+ * disk-headroom gate — a plain iPhone HLG clip auto-detected as HDR filled a
+ * near-full disk with 16-bit raw frames before the user found --sdr (wild
+ * report, CLI 0.7.52), so the commitment must be checked and surfaced BEFORE
+ * FFmpeg starts writing.
+ */
+export function estimateHdrExtractionBytes(
+  videos: Array<{ durationSeconds: number; width: number; height: number }>,
+  fps: number,
+): number {
+  let total = 0;
+  for (const v of videos) {
+    const frames = Math.ceil(Math.max(0, v.durationSeconds) * fps);
+    total += frames * v.width * v.height * 6;
+  }
+  return total;
+}
+
+const HDR_EXTRACTION_HEADROOM_FRACTION = 0.9;
+const HDR_EXTRACTION_WARN_BYTES = 10e9;
+
+/**
+ * Disk-headroom gate for raw rgb48le pre-extraction: throws if the planned
+ * writes would consume more than 90% of free space at `framesDir`, warns
+ * above 10 GB either way. Fails fast with the --sdr escape hatch instead of
+ * running the disk to zero mid-extraction ("No space left on device", wild
+ * report: a plain iPhone HLG clip auto-detected as HDR). `statfsSync` errors
+ * (unsupported platform/filesystem) skip the gate silently — only the
+ * headroom violation itself is rethrown.
+ */
+function assertHdrExtractionDiskHeadroom(
+  framesDir: string,
+  plannedVideos: Array<{ durationSeconds: number; width: number; height: number }>,
+  fps: number,
+  log: ProducerLogger,
+): void {
+  const estimatedBytes = estimateHdrExtractionBytes(plannedVideos, fps);
+  let freeBytes: number;
+  try {
+    const stat = statfsSync(framesDir);
+    freeBytes = stat.bavail * stat.bsize;
+  } catch {
+    // statfs unsupported on this platform/filesystem — skip the gate.
+    return;
+  }
+  const estimatedGb = (estimatedBytes / 1e9).toFixed(1);
+  if (estimatedBytes > freeBytes * HDR_EXTRACTION_HEADROOM_FRACTION) {
+    throw new Error(
+      `HDR pre-extraction needs ~${estimatedGb} GB of raw 16-bit frames but only ` +
+        `${(freeBytes / 1e9).toFixed(1)} GB is free at ${framesDir}. ` +
+        `If the composition doesn't need HDR output, re-run with --sdr; ` +
+        `otherwise free up disk space and retry.`,
+    );
+  }
+  if (estimatedBytes > HDR_EXTRACTION_WARN_BYTES) {
+    log.warn(
+      `HDR pre-extraction will write ~${estimatedGb} GB of raw 16-bit frames ` +
+        `(pass --sdr to skip if HDR output isn't needed)`,
+      { estimatedBytes, freeBytes },
+    );
+  }
+}
+
+/**
  * Extract each HDR video into a raw rgb48le frame file via a single FFmpeg
  * pass per video, and open a file descriptor for each. Returns a map keyed
  * by video id. Caller owns lifecycle teardown (closing fds + rm-rf).
@@ -172,11 +249,24 @@ export async function extractHdrVideoFrames(args: {
   const { job, log, framesDir, composition, prep, width, height, abortSignal, hdrDiagnostics } =
     args;
   const out = new Map<string, HdrVideoFrameSource>();
+  mkdirSync(framesDir, { recursive: true });
+  const plannedVideos: Array<{ durationSeconds: number; width: number; height: number }> = [];
+  for (const [videoId] of prep.hdrVideoSrcPaths) {
+    const video = composition.videos.find((v) => v.id === videoId);
+    if (!video) continue;
+    const dims = prep.hdrExtractionDims.get(videoId) ?? { width, height };
+    plannedVideos.push({
+      durationSeconds: video.end - video.start,
+      width: dims.width,
+      height: dims.height,
+    });
+  }
+  assertHdrExtractionDiskHeadroom(framesDir, plannedVideos, fpsToNumber(job.config.fps), log);
   for (const [videoId, srcPath] of prep.hdrVideoSrcPaths) {
     const video = composition.videos.find((v) => v.id === videoId);
     if (!video) continue;
-    const frameDir = join(framesDir, `hdr_${videoId}`);
-    mkdirSync(frameDir, { recursive: true });
+    mkdirSync(framesDir, { recursive: true });
+    const frameDir = mkdtempSync(join(framesDir, `hdr_${tempDirSafePrefix(videoId)}-`));
     const duration = video.end - video.start;
     const dims = prep.hdrExtractionDims.get(videoId) ?? { width, height };
     const rawPath = join(frameDir, "frames.rgb48le");
@@ -212,24 +302,31 @@ export async function extractHdrVideoFrames(args: {
       );
     }
     const frameSize = dims.width * dims.height * 6;
-    const frameCount = Math.floor(statSync(rawPath).size / frameSize);
-    if (frameCount < 1) {
-      hdrDiagnostics.videoExtractionFailures += 1;
-      throw new Error(
-        `HDR frame extraction produced no frames for video "${videoId}". ` +
-          `Aborting render to avoid shipping black HDR layers.`,
-      );
+    const fd = openSync(rawPath, constants.O_RDONLY | NO_FOLLOW_FLAG);
+    let handedOff = false;
+    try {
+      const frameCount = Math.floor(fstatSync(fd).size / frameSize);
+      if (frameCount < 1) {
+        hdrDiagnostics.videoExtractionFailures += 1;
+        throw new Error(
+          `HDR frame extraction produced no frames for video "${videoId}". ` +
+            `Aborting render to avoid shipping black HDR layers.`,
+        );
+      }
+      out.set(videoId, {
+        dir: frameDir,
+        rawPath,
+        fd,
+        width: dims.width,
+        height: dims.height,
+        frameSize,
+        frameCount,
+        scratch: Buffer.allocUnsafe(frameSize),
+      });
+      handedOff = true;
+    } finally {
+      if (!handedOff) closeSync(fd);
     }
-    out.set(videoId, {
-      dir: frameDir,
-      rawPath,
-      fd: openSync(rawPath, "r"),
-      width: dims.width,
-      height: dims.height,
-      frameSize,
-      frameCount,
-      scratch: Buffer.allocUnsafe(frameSize),
-    });
   }
   return out;
 }

@@ -19,7 +19,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recomputePlanHashFromPlanDir } from "../render/stages/freezePlan.js";
+import { RenderQualityError } from "../renderOrchestrator.js";
 import {
+  applyDistributedAudioWarningPolicy,
   buildChunkSlices,
   DEFAULT_CHUNK_SIZE,
   DEFAULT_MAX_PARALLEL_CHUNKS,
@@ -27,6 +29,7 @@ import {
   plan,
   resolveChunkPlan,
 } from "./plan.js";
+import { buildSyntheticRenderJob } from "./shared.js";
 
 // Composition the tests render. `data-duration="1"` keeps the probe stage's
 // `needsBrowser` gate `false` so plan() completes without launching Chrome.
@@ -52,6 +55,30 @@ beforeAll(() => {
 
 afterAll(() => {
   rmSync(runRoot, { recursive: true, force: true });
+});
+
+describe("distributed warning policy", () => {
+  const createJob = (strictness: "strict" | "best-effort") =>
+    buildSyntheticRenderJob({
+      fps: { num: 30, den: 1 },
+      format: "mp4",
+      quality: "high",
+      hdrMode: "force-sdr",
+      strictness,
+      entryFile: "index.html",
+    });
+
+  it("rejects distributed audio degradation in strict mode", () => {
+    const job = createJob("strict");
+    expect(() => applyDistributedAudioWarningPolicy(job, "mix failed")).toThrow(RenderQualityError);
+    expect(job.warnings.map((warning) => warning.code)).toEqual(["audio_processing_failed"]);
+  });
+
+  it("rejects distributed audio degradation in best-effort mode", () => {
+    const job = createJob("best-effort");
+    expect(() => applyDistributedAudioWarningPolicy(job, "mix failed")).toThrow(RenderQualityError);
+    expect(job.warnings.map((warning) => warning.code)).toEqual(["audio_processing_failed"]);
+  });
 });
 
 describe("resolveChunkPlan", () => {
@@ -158,6 +185,81 @@ describe("resolveChunkPlan", () => {
             cursor = s.endFrame;
           }
           expect(cursor).toBe(totalFrames); // union is exactly [0, totalFrames)
+        }
+      }
+    }
+  });
+
+  // ── targetChunkFrames (optional per-chunk frame ceiling) ──
+
+  it("targetChunkFrames omitted is a no-op: identical to the 3-arg auto-sized result", () => {
+    // The default path must be byte-identical whether the 4th arg is absent or
+    // explicitly undefined.
+    for (const totalFrames of [50, 660, 1466, 54000]) {
+      for (const maxParallel of [8, 16, 64]) {
+        const base = resolveChunkPlan(totalFrames, undefined, maxParallel);
+        const withUndef = resolveChunkPlan(totalFrames, undefined, maxParallel, undefined);
+        expect(withUndef).toEqual(base);
+      }
+    }
+  });
+
+  it("targetChunkFrames collapses a short video to fewer chunks than the parallelism cap", () => {
+    // 1466 frames, target 300, cap 16: ceil(1466/300)=5 chunks (not 16), each
+    // ~293 frames. Fewer chunks → less per-chunk fixed overhead.
+    const result = resolveChunkPlan(1466, undefined, 16, 300);
+    expect(result.chunkCount).toBe(5);
+    expect(result.effectiveChunkSize).toBeLessThanOrEqual(300);
+  });
+
+  it("targetChunkFrames bounds a long video's per-chunk frames, adding chunks up to the cap", () => {
+    // 54000 frames (30 min @30fps), target 1600, cap 64: ceil(54000/1600)=34
+    // chunks, each <= 1600 frames so per-chunk render time stays under budget.
+    const result = resolveChunkPlan(54000, undefined, 64, 1600);
+    expect(result.chunkCount).toBe(34);
+    expect(result.effectiveChunkSize).toBeLessThanOrEqual(1600);
+  });
+
+  it("targetChunkFrames is clamped by maxParallelChunks: an extreme length stays at the cap (still over budget)", () => {
+    // 216000 frames (2 h), target 1600, cap 64: needs 135 chunks but clamps to
+    // 64; per-chunk frames then exceed the target — the genuine tier ceiling.
+    const result = resolveChunkPlan(216000, undefined, 64, 1600);
+    expect(result.chunkCount).toBe(64);
+    expect(result.effectiveChunkSize).toBeGreaterThan(1600);
+  });
+
+  it("explicit chunkSize wins over targetChunkFrames (targetChunkFrames is a no-op)", () => {
+    const withTarget = resolveChunkPlan(54000, 240, 64, 1600);
+    const chunkSizeOnly = resolveChunkPlan(54000, 240, 64);
+    expect(withTarget).toEqual(chunkSizeOnly);
+  });
+
+  it("rejects a non-positive or non-integer targetChunkFrames", () => {
+    expect(() => resolveChunkPlan(1466, undefined, 16, 0)).toThrow(/positive integer/);
+    expect(() => resolveChunkPlan(1466, undefined, 16, -100)).toThrow(/positive integer/);
+    expect(() => resolveChunkPlan(1466, undefined, 16, 300.5)).toThrow(/positive integer/);
+  });
+
+  it("never emits an empty or inverted slice across a grid of targetChunkFrames", () => {
+    for (const totalFrames of [37, 660, 1466, 12793, 54000]) {
+      for (const maxParallel of [8, 16, 64]) {
+        for (const target of [100, 300, 1600]) {
+          const { chunkCount, effectiveChunkSize } = resolveChunkPlan(
+            totalFrames,
+            undefined,
+            maxParallel,
+            target,
+          );
+          expect(chunkCount).toBeGreaterThanOrEqual(1);
+          expect(chunkCount).toBeLessThanOrEqual(maxParallel);
+          const slices = buildChunkSlices(totalFrames, chunkCount, effectiveChunkSize);
+          let cursor = 0;
+          for (const s of slices) {
+            expect(s.startFrame).toBe(cursor);
+            expect(s.endFrame).toBeGreaterThan(s.startFrame);
+            cursor = s.endFrame;
+          }
+          expect(cursor).toBe(totalFrames);
         }
       }
     }
@@ -434,6 +536,7 @@ describe("plan() — codec knob", () => {
       ) as Record<string, unknown>;
       expect(encoder.encoder).toBe("libx264-software");
       expect(encoder.pixelFormat).toBe("yuv420p");
+      expect(encoder).not.toHaveProperty("vp9CpuUsed");
     },
     TIMEOUT_MS,
   );
@@ -631,6 +734,32 @@ describe("plan() — webm format (distributed VP9)", () => {
       // keyframe with no alt-ref references reaching back across seams.
       expect(encoder.closedGop).toBe(true);
       expect(encoder.gopSize).toBe(encoder.chunkSize);
+      expect(encoder.vp9CpuUsed).toBe(4);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "locks the resolved VP9 cpu-used value into encoder metadata",
+    async () => {
+      const planDir = join(runRoot, "plan-webm-vp9-cpu-used");
+      mkdirSync(planDir, { recursive: true });
+      await plan(
+        projectDir,
+        {
+          fps: 30,
+          width: 320,
+          height: 240,
+          format: "webm",
+          producerConfig: { vp9CpuUsed: 2 },
+        },
+        planDir,
+      );
+
+      const encoder = JSON.parse(
+        readFileSync(join(planDir, "meta", "encoder.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      expect(encoder.vp9CpuUsed).toBe(2);
     },
     TIMEOUT_MS,
   );

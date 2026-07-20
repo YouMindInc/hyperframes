@@ -1,9 +1,9 @@
 // @vitest-environment node
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseHTML } from "linkedom";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { bundleToSingleHtml } from "./htmlBundler";
 import { getHyperframeRuntimeScript } from "../generated/runtime-inline";
 
@@ -17,7 +17,112 @@ function makeTempProject(files: Record<string, string>): string {
   return dir;
 }
 
+function makeColorGradingProject(lutSrc: string, files: Record<string, string> = {}): string {
+  return makeTempProject({
+    "index.html": `<!doctype html>
+<html><body>
+  <div data-composition-id="root" data-width="320" data-height="180">
+    <video
+      id="clip"
+      src="clip.mp4"
+      data-color-grading='{"lut":{"src":"${lutSrc}","intensity":0.5}}'></video>
+  </div>
+  <script>window.__timelines = window.__timelines || {}; window.__timelines.root = {}</script>
+</body></html>`,
+    ...files,
+  });
+}
+
+function readBundledColorGradingLutSrc(bundled: string): string | undefined {
+  const { document } = parseHTML(bundled);
+  const rawLook = document.getElementById("clip")?.getAttribute("data-color-grading") ?? "";
+  const parsed = JSON.parse(rawLook) as { lut?: { src?: string } };
+  return parsed.lut?.src;
+}
+
+// Mirror the repo convention (preview.test.ts): skip symlink cases on
+// non-symlink-privileged Windows runners rather than crash the suite.
+function tryCreateSymlink(target: string, path: string, type: "dir" | "file"): boolean {
+  try {
+    symlinkSync(target, path, type);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe("bundleToSingleHtml", () => {
+  it("bundles a direct composition entry with paths relative to its file", async () => {
+    const dir = makeTempProject({
+      "index.html": "<html><body>wrong entry</body></html>",
+      "compositions/scene.html": `<!doctype html><html><head><link rel="stylesheet" href="scene.css"></head><body>
+        <div data-composition-id="scene" data-width="320" data-height="180">direct scene</div>
+      </body></html>`,
+      "compositions/scene.css": ".direct-scene { color: rgb(1, 2, 3); }",
+    });
+
+    const bundled = await bundleToSingleHtml(dir, { entryFile: "compositions/scene.html" });
+
+    expect(bundled).toContain("direct scene");
+    expect(bundled).not.toContain("wrong entry");
+    expect(bundled).toContain(".direct-scene { color: rgb(1, 2, 3); }");
+  });
+
+  it("rebases direct-entry authored asset paths before inlining", async () => {
+    const spriteSvg = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"/></svg>';
+    const bgSvg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="8" height="8"/></svg>';
+    const dir = makeTempProject({
+      "index.html": "<html><body>wrong entry</body></html>",
+      "compositions/scene.html": `<!doctype html><html><head>
+        <style>.scene { background-image: url("./bg.svg"); }</style>
+      </head><body>
+        <div class="scene" data-composition-id="scene" data-width="320" data-height="180" data-start="0" data-duration="1">
+          <img src="./sprite.svg">
+        </div>
+        <script>window.__timelines = window.__timelines || {}; window.__timelines.scene = {}</script>
+      </body></html>`,
+      "compositions/sprite.svg": spriteSvg,
+      "compositions/bg.svg": bgSvg,
+    });
+
+    const bundled = await bundleToSingleHtml(dir, { entryFile: "compositions/scene.html" });
+    const spriteDataUrl = `data:image/svg+xml;base64,${Buffer.from(spriteSvg).toString("base64")}`;
+    const bgDataUrl = `data:image/svg+xml;base64,${Buffer.from(bgSvg).toString("base64")}`;
+
+    expect(bundled).toContain(`src="${spriteDataUrl}"`);
+    expect(bundled).toContain(`url("${bgDataUrl}")`);
+    expect(bundled).not.toContain("./sprite.svg");
+    expect(bundled).not.toContain("./bg.svg");
+  });
+
+  it("preserves external SVG fragment references used by <use>", async () => {
+    const spriteSvg = `<svg xmlns="http://www.w3.org/2000/svg">
+      <symbol id="patch-head" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" /></symbol>
+    </svg>`;
+    const dir = makeTempProject({
+      "index.html": `<!doctype html><html><body>
+        <div data-composition-id="main" data-width="320" data-height="180" data-start="0" data-duration="1">
+          <svg>
+            <use id="href-use" href="assets/patch.svg#patch-head"></use>
+            <use id="xlink-use" xlink:href="assets/patch.svg#patch-head"></use>
+          </svg>
+        </div>
+        <script>window.__timelines = window.__timelines || {}; window.__timelines.main = {}</script>
+      </body></html>`,
+      "assets/patch.svg": spriteSvg,
+    });
+
+    const bundled = await bundleToSingleHtml(dir);
+    const { document } = parseHTML(bundled);
+    expect(document.getElementById("href-use")?.getAttribute("href")).toBe(
+      "assets/patch.svg#patch-head",
+    );
+    expect(document.getElementById("xlink-use")?.getAttribute("xlink:href")).toBe(
+      "assets/patch.svg#patch-head",
+    );
+    expect(bundled).not.toContain("data:image/svg+xml;base64");
+  });
+
   it("does not merge author scripts into the runtime bootstrap placeholder", async () => {
     const dir = makeTempProject({
       "index.html": `<!doctype html>
@@ -48,6 +153,47 @@ describe("bundleToSingleHtml", () => {
     // runtime tag — it stays as its own <script> elsewhere in the document.
     expect(runtimeBlock).not.toContain("window.__timelines.main = { duration:");
     expect(bundled).toContain('document.getElementById("scene")');
+  });
+
+  it("inlines an in-project sub-composition script but not one reached through a symlink escaping the project root", async () => {
+    // Security: a shared/cloned project may carry a symlink pointing outside the
+    // root (e.g. ext -> /etc). The bundler reads+inlines local assets, so it must
+    // refuse to follow such a symlink and leak external file contents.
+    const dir = makeTempProject({
+      "index.html": `<!doctype html>
+<html><head>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+</head><body>
+  <div id="root" data-composition-id="main" data-width="1920" data-height="1080">
+    <div id="scene-host"
+      data-composition-id="scene"
+      data-composition-src="compositions/scene.html"
+      data-start="0" data-duration="5"></div>
+  </div>
+  <script>window.__timelines={}; const tl=gsap.timeline({paused:true}); window.__timelines["main"]=tl;</script>
+</body></html>`,
+      "compositions/scene.html": `<template id="scene-template">
+  <div data-composition-id="scene" data-width="1920" data-height="1080">
+    <script src="assets/local.js"></script>
+    <script src="ext/secret.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["scene"] = gsap.timeline({ paused: true });
+    </script>
+  </div>
+</template>`,
+      "assets/local.js": `window.__HF_LOCAL__ = "LOCAL_MARKER_INLINED";`,
+    });
+    const external = mkdtempSync(join(tmpdir(), "hf-bundler-external-"));
+    writeFileSync(join(external, "secret.js"), `window.__HF_SECRET__ = "SECRET_MARKER_LEAKED";`);
+    if (!tryCreateSymlink(external, join(dir, "ext"), "dir")) return;
+
+    const bundled = await bundleToSingleHtml(dir);
+
+    // Positive control: the in-project sub-comp script IS inlined, so the bundler
+    // would have inlined the symlinked one too had isSafePath not rejected it.
+    expect(bundled).toContain("LOCAL_MARKER_INLINED");
+    expect(bundled).not.toContain("SECRET_MARKER_LEAKED");
   });
 
   it("produces a self-contained runtime script when no HYPERFRAME_RUNTIME_URL is set", async () => {
@@ -285,6 +431,22 @@ describe("bundleToSingleHtml", () => {
     expect(bundled).toContain("window.PowerGlitch = { glitch()");
     expect(bundled).not.toContain('src="assets/scene-runtime.js"');
     expect(bundled).not.toContain('src="vendor/effect-plugin.js"');
+  });
+
+  it("preserves local module scripts and their import base URL", async () => {
+    const dir = makeTempProject({
+      "index.html": `<!doctype html><html><body>
+        <div data-composition-id="main" data-start="0" data-duration="1"></div>
+        <script type="module" src="./module.js"></script>
+      </body></html>`,
+      "module.js": `import { value } from "./value.js"; window.result = value;`,
+      "value.js": `export const value = "loaded";`,
+    });
+
+    const bundled = await bundleToSingleHtml(dir);
+
+    expect(bundled).toMatch(/<script\b[^>]*\btype="module"[^>]*\bsrc="\.\/module\.js"/);
+    expect(bundled).not.toContain('import { value } from "./value.js"');
   });
 
   it("preserves local sub-composition script order before inline scene scripts", async () => {
@@ -719,6 +881,44 @@ describe("bundleToSingleHtml", () => {
     expect(bundled).toMatch(/card__hf2[\s\S]*Enterprise[\s\S]*light/);
   });
 
+  it("does not redefine an authored CSS variable for a bundled sub-composition", async () => {
+    const dir = makeTempProject({
+      "index.html": `<!doctype html>
+<html><head>
+  <style>:root { --accent: #4287f5; } .host-badge { color: var(--accent); }</style>
+</head><body>
+  <div
+    data-composition-id="main"
+    data-width="1920"
+    data-height="1080"
+    data-start="0"
+    data-duration="5">
+    <div
+      data-composition-id="card"
+      data-composition-src="compositions/card.html"
+      data-variable-values='{"accent":"blue"}'></div>
+  </div>
+  <script>window.__timelines={};</script>
+</body></html>`,
+      "compositions/card.html": `<!doctype html>
+<html data-composition-variables='[{"id":"accent","type":"string","label":"Accent","default":"red"}]'>
+  <body>
+    <div
+      data-composition-id="card"
+      data-width="1920"
+      data-height="1080"
+      data-start="0"
+      data-duration="5"></div>
+  </body>
+</html>`,
+    });
+
+    const bundled = await bundleToSingleHtml(dir);
+
+    expect(bundled).toContain(":root { --accent: #4287f5; }");
+    expect(bundled).not.toMatch(/\[data-composition-id="card[^"]*"\]\s*\{[^}]*--accent:\s*blue/);
+  });
+
   it("scopes external sub-composition styles and classic scripts", async () => {
     const dir = makeTempProject({
       "index.html": `<!doctype html>
@@ -867,6 +1067,62 @@ describe("bundleToSingleHtml", () => {
     expect(bundled).toContain("--brand: #ff5728");
     expect(bundled).not.toContain("@import");
     expect(bundled).toContain("margin: 0");
+  });
+
+  it("inlines cube LUT files referenced from data-color-grading", async () => {
+    const dir = makeColorGradingProject("assets/luts/identity.cube", {
+      "assets/luts/identity.cube": `LUT_3D_SIZE 2
+0 0 0
+1 0 0
+0 1 0
+1 1 0
+0 0 1
+1 0 1
+0 1 1
+1 1 1`,
+    });
+
+    const bundled = await bundleToSingleHtml(dir);
+    const lutSrc = readBundledColorGradingLutSrc(bundled);
+
+    expect(lutSrc).toMatch(/^data:text\/plain;base64,/);
+    expect(lutSrc).not.toContain("assets/luts/identity.cube");
+  });
+
+  it("can keep data-color-grading LUT paths external for studio preview", async () => {
+    const dir = makeColorGradingProject("assets/luts/identity.cube", {
+      "assets/luts/identity.cube": `LUT_3D_SIZE 2
+0 0 0
+1 0 0
+0 1 0
+1 1 0
+0 0 1
+1 0 1
+0 1 1
+1 1 1`,
+    });
+
+    const bundled = await bundleToSingleHtml(dir, { inlineColorGradingLuts: false });
+    const lutSrc = readBundledColorGradingLutSrc(bundled);
+
+    expect(lutSrc).toBe("assets/luts/identity.cube");
+  });
+
+  it("warns when a render bundle cannot inline a referenced color grading LUT", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const dir = makeColorGradingProject("assets/luts/missing.cube");
+
+      const bundled = await bundleToSingleHtml(dir);
+      const lutSrc = readBundledColorGradingLutSrc(bundled);
+
+      expect(lutSrc).toBe("assets/luts/missing.cube");
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Could not inline color grading LUT "assets/luts/missing.cube"'),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it("resolves nested CSS @import chains", async () => {

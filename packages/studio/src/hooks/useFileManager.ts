@@ -1,12 +1,19 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { buildProjectApiPath, buildStudioApiPath } from "../utils/projectRouting";
+import { useState, useCallback, useMemo, useRef } from "react";
 import type { EditingFile } from "../utils/studioHelpers";
 import { FONT_EXT, isMediaFile } from "../utils/mediaTypes";
 import { fontFamilyFromAssetPath, type ImportedFontAsset } from "../components/editor/fontAssets";
-import { saveProjectFilesWithHistory } from "../utils/studioFileHistory";
 import type { EditHistoryKind } from "../utils/editHistory";
 import { findTagByTarget, type PatchTarget } from "../utils/sourcePatcher";
-import { trackStudioEvent } from "../utils/studioTelemetry";
-import { buildProjectApiPath } from "../utils/projectRouting";
+import {
+  createStudioSaveHttpError,
+  retryStudioSave,
+  StudioFileConflictError,
+  StudioSaveNetworkError,
+} from "../utils/studioSaveDiagnostics";
+import { createStudioWriteToken, studioExpectedFileVersion } from "../utils/studioFileVersion";
+import { useFileTree } from "./useFileTree";
+import { useEditorSave } from "./useEditorSave";
 
 // ── Types ──
 
@@ -34,16 +41,10 @@ export function useFileManager({
   domEditSaveTimestampRef,
   setRefreshKey,
 }: UseFileManagerOptions) {
-  // ── State ──
+  // ── Shared refs ──
 
   const [editingFile, setEditingFile] = useState<EditingFile | null>(null);
-  const [projectDir, setProjectDir] = useState<string | null>(null);
-  const [fileTree, setFileTree] = useState<string[]>([]);
-  const [compositionPaths, setCompositionPaths] = useState<string[]>([]);
-  const [fileTreeLoaded, setFileTreeLoaded] = useState(false);
   const [revealSourceOffset, setRevealSourceOffset] = useState<number | null>(null);
-
-  // ── Refs ──
 
   const editingPathRef = useRef(editingFile?.path);
   editingPathRef.current = editingFile?.path;
@@ -51,139 +52,205 @@ export function useFileManager({
   const projectIdRef = useRef(projectId);
   projectIdRef.current = projectId;
 
-  const saveRafRef = useRef<number | null>(null);
-  const refreshRafRef = useRef<number | null>(null);
   const importedFontAssetsRef = useRef<ImportedFontAsset[]>([]);
+  const fileVersionScope = useMemo(
+    () => ({ projectId, versions: new Map<string, string | null>() }),
+    [projectId],
+  );
+  const fileVersions = fileVersionScope.versions;
+  const observeProjectFileVersion = useCallback(
+    (path: string, version: string | null) => {
+      fileVersions.set(path, version);
+    },
+    [fileVersions],
+  );
 
-  // ── Load file tree when projectId changes ──
+  // ── File tree ──
 
-  // eslint-disable-next-line no-restricted-syntax
-  useEffect(() => {
-    if (!projectId) {
-      setFileTreeLoaded(false);
-      return;
-    }
-    let cancelled = false;
-    setFileTreeLoaded(false);
-    fetch(buildProjectApiPath(projectId))
-      .then((r) => r.json())
-      .then((data: { files?: string[]; dir?: string; compositions?: string[] }) => {
-        if (!cancelled && data.files) setFileTree(data.files);
-        if (!cancelled && data.compositions) setCompositionPaths(data.compositions);
-        if (!cancelled) setProjectDir(typeof data.dir === "string" ? data.dir : null);
-      })
-      .catch(() => {
-        if (!cancelled) setProjectDir(null);
-      })
-      .finally(() => {
-        if (!cancelled) setFileTreeLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
+  const {
+    projectDir,
+    fileTree,
+    setFileTree,
+    fileTreeLoaded,
+    refreshFileTree,
+    compositions,
+    assets,
+    fontAssets,
+  } = useFileTree({ projectId, projectIdRef });
 
   // ── Core file I/O ──
 
-  const readProjectFile = useCallback(async (path: string): Promise<string> => {
-    const pid = projectIdRef.current;
-    if (!pid) throw new Error("No active project");
-    const response = await fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent(path)}`));
-    if (!response.ok) throw new Error(`Failed to read ${path}`);
-    const data = (await response.json()) as { content?: string };
-    if (typeof data.content !== "string") throw new Error(`Missing file contents for ${path}`);
-    return data.content;
-  }, []);
+  const readProjectFile = useCallback(
+    async (path: string): Promise<string> => {
+      if (!projectId) throw new Error("No active project");
+      const response = await fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}`,
+        ),
+      );
+      if (!response.ok) throw new Error(`Failed to read ${path}`);
+      const data = (await response.json()) as { content?: string; version?: string };
+      if (typeof data.content !== "string") throw new Error(`Missing file contents for ${path}`);
+      fileVersions.set(path, data.version ?? response.headers.get("etag"));
+      return data.content;
+    },
+    [fileVersions, projectId],
+  );
 
-  const writeProjectFile = useCallback(async (path: string, content: string): Promise<void> => {
-    const pid = projectIdRef.current;
-    if (!pid) throw new Error("No active project");
-    const response = await fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent(path)}`), {
-      method: "PUT",
-      headers: { "Content-Type": "text/plain" },
-      body: content,
-    });
-    if (!response.ok) throw new Error(`Failed to save ${path}`);
+  const writeProjectFile = useCallback(
+    async (path: string, content: string, expectedContent?: string): Promise<void> => {
+      if (!projectId) throw new Error("No active project");
+      const writeProjectId = projectId;
+      let expectedVersion = await studioExpectedFileVersion(fileVersions, path, expectedContent);
+      if (expectedVersion === undefined) {
+        const preflight = await fetch(
+          buildStudioApiPath(
+            `/projects/${encodeURIComponent(writeProjectId)}/files/${encodeURIComponent(path)}`,
+          ),
+        );
+        if (preflight.ok) {
+          const data = (await preflight.json()) as { content?: string; version?: string };
+          throw new StudioFileConflictError({
+            filePath: path,
+            currentVersion: data.version ?? preflight.headers.get("etag"),
+            currentContent: data.content ?? null,
+            attemptedContent: content,
+          });
+        } else if (preflight.status === 404) {
+          expectedVersion = null;
+        } else {
+          throw await createStudioSaveHttpError(preflight, `Failed to read ${path} before save`);
+        }
+      }
+      const writeToken = createStudioWriteToken();
+      await retryStudioSave(async () => {
+        let response: Response;
+        try {
+          response = await fetch(
+            buildStudioApiPath(
+              `/projects/${encodeURIComponent(writeProjectId)}/files/${encodeURIComponent(path)}`,
+            ),
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "text/plain",
+                "X-Hyperframes-Write-Token": writeToken,
+                ...(expectedVersion ? { "If-Match": expectedVersion } : { "If-None-Match": "*" }),
+              },
+              body: content,
+            },
+          );
+        } catch (error) {
+          throw new StudioSaveNetworkError(`Failed to save ${path}: network error`, {
+            cause: error,
+          });
+        }
+        if (response.status === 409) {
+          const conflict = (await response.json().catch(() => null)) as {
+            currentVersion?: string | null;
+            currentContent?: string | null;
+          } | null;
+          const currentVersion = conflict?.currentVersion ?? null;
+          if (currentVersion && conflict?.currentContent === content) {
+            fileVersions.set(path, currentVersion);
+            return;
+          }
+          throw new StudioFileConflictError({
+            filePath: path,
+            currentVersion,
+            currentContent: conflict?.currentContent ?? null,
+            attemptedContent: content,
+          });
+        }
+        if (!response.ok) throw await createStudioSaveHttpError(response, `Failed to save ${path}`);
+        const result = (await response.json()) as { version?: string };
+        const version = result.version ?? response.headers.get("etag");
+        if (!version)
+          throw new Error(`Save response for ${path} did not include a content version`);
+        fileVersions.set(path, version);
+      });
+      if (projectIdRef.current === writeProjectId && editingPathRef.current === path) {
+        setEditingFile({ path, content });
+      }
+    },
+    [fileVersions, projectId],
+  );
+
+  const updateEditingFileContent = useCallback((path: string, content: string) => {
     if (editingPathRef.current === path) {
       setEditingFile({ path, content });
     }
   }, []);
 
-  const readOptionalProjectFile = useCallback(async (path: string): Promise<string> => {
-    const pid = projectIdRef.current;
-    if (!pid) throw new Error("No active project");
-    const response = await fetch(
-      buildProjectApiPath(pid, `/files/${encodeURIComponent(path)}?optional=1`),
-    );
-    if (!response.ok) throw new Error(`Failed to read ${path}`);
-    const data = (await response.json()) as { content?: string };
-    return typeof data.content === "string" ? data.content : "";
-  }, []);
+  const readOptionalProjectFile = useCallback(
+    async (path: string): Promise<string> => {
+      if (!projectId) throw new Error("No active project");
+      const response = await fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}?optional=1`,
+        ),
+      );
+      if (!response.ok) throw new Error(`Failed to read ${path}`);
+      const data = (await response.json()) as { content?: string; version?: string };
+      fileVersions.set(path, data.version ?? response.headers.get("etag"));
+      return typeof data.content === "string" ? data.content : "";
+    },
+    [fileVersions, projectId],
+  );
+
+  // ── Editor save (debounced content change) ──
+
+  const { saveRafRef, handleContentChange } = useEditorSave({
+    editingPathRef,
+    projectIdRef,
+    readProjectFile,
+    writeProjectFile,
+    recordEdit,
+    domEditSaveTimestampRef,
+    setRefreshKey,
+    showToast,
+  });
 
   // ── File select ──
 
-  const handleFileSelect = useCallback((path: string) => {
-    const pid = projectIdRef.current;
-    if (!pid) return;
-    revealAbortRef.current?.abort();
-    revealAbortRef.current = null;
-    revealRequestIdRef.current++;
-    // Skip fetching binary content for media files — just set the path for preview
-    if (isMediaFile(path)) {
-      setEditingFile({ path, content: null });
-      return;
-    }
-    fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent(path)}`))
-      .then((r) => r.json())
-      .then((data: { content?: string }) => {
-        if (data.content != null) {
-          setEditingFile({ path, content: data.content });
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  // ── Content change (debounced save) ──
-
-  const handleContentChange = useCallback(
-    (content: string) => {
-      const pid = projectIdRef.current;
-      if (!pid) return;
-      const path = editingPathRef.current;
-      if (!path) return;
-
-      if (saveRafRef.current != null) cancelAnimationFrame(saveRafRef.current);
-      saveRafRef.current = requestAnimationFrame(() => {
-        domEditSaveTimestampRef.current = Date.now();
-        saveProjectFilesWithHistory({
-          projectId: pid,
-          label: "Edit source",
-          kind: "source",
-          coalesceKey: `source:${path}`,
-          files: { [path]: content },
-          readFile: readProjectFile,
-          writeFile: writeProjectFile,
-          recordEdit,
-        })
-          .then(() => {
-            if (refreshRafRef.current != null) cancelAnimationFrame(refreshRafRef.current);
-            refreshRafRef.current = requestAnimationFrame(() => setRefreshKey((k) => k + 1));
-          })
-          .catch((error) => {
-            trackStudioEvent("save_failure", {
-              source: "code_editor",
-              error_message: error instanceof Error ? error.message : "unknown",
-            });
-          });
-      });
-    },
-    [domEditSaveTimestampRef, readProjectFile, recordEdit, setRefreshKey, writeProjectFile],
-  );
-
-  // ── Open source for selection (click-to-source) ──
-
   const revealRequestIdRef = useRef(0);
   const revealAbortRef = useRef<AbortController | null>(null);
+
+  const handleFileSelect = useCallback(
+    (path: string) => {
+      const pid = projectIdRef.current;
+      if (!pid) return;
+      revealAbortRef.current?.abort();
+      revealAbortRef.current = null;
+      revealRequestIdRef.current++;
+      // Skip fetching binary content for media files — just set the path for preview
+      if (isMediaFile(path)) {
+        setEditingFile({ path, content: null });
+        return;
+      }
+      fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`,
+        ),
+      )
+        .then((r) => {
+          if (!r.ok) throw new Error(`Failed to load ${path} (${r.status})`);
+          return r.json();
+        })
+        .then((data: { content?: string; version?: string }) => {
+          if (data.content != null) {
+            fileVersions.set(path, data.version ?? null);
+            setEditingFile({ path, content: data.content });
+          }
+        })
+        .catch((err: unknown) => {
+          showToast(err instanceof Error ? err.message : `Failed to load ${path}`, "error");
+        });
+    },
+    [fileVersions, showToast],
+  );
+
+  // ── Click-to-source ──
 
   const openSourceForSelection = useCallback(
     (sourceFile: string, target: PatchTarget) => {
@@ -199,13 +266,19 @@ export function useFileManager({
       const requestId = ++revealRequestIdRef.current;
       const controller = new AbortController();
       revealAbortRef.current = controller;
-      fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent(sourceFile)}`), {
-        signal: controller.signal,
-      })
+      fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(sourceFile)}`,
+        ),
+        {
+          signal: controller.signal,
+        },
+      )
         .then((r) => r.json())
-        .then((data: { content?: string }) => {
+        .then((data: { content?: string; version?: string }) => {
           if (requestId !== revealRequestIdRef.current) return;
           if (data.content != null) {
+            fileVersions.set(sourceFile, data.version ?? null);
             setEditingFile({ path: sourceFile, content: data.content });
             const match = findTagByTarget(data.content, target);
             setRevealSourceOffset(match ? match.start : null);
@@ -213,18 +286,8 @@ export function useFileManager({
         })
         .catch(() => {});
     },
-    [editingFile?.content],
+    [editingFile?.content, fileVersions],
   );
-
-  // ── File tree refresh ──
-
-  const refreshFileTree = useCallback(async () => {
-    const pid = projectIdRef.current;
-    if (!pid) return;
-    const res = await fetch(buildProjectApiPath(pid));
-    const data = await res.json();
-    if (data.files) setFileTree(data.files);
-  }, []);
 
   // ── Upload ──
 
@@ -270,7 +333,7 @@ export function useFileManager({
     [refreshFileTree, setRefreshKey, showToast],
   );
 
-  // ── File management handlers ──
+  // ── File CRUD ──
 
   const handleCreateFile = useCallback(
     async (path: string) => {
@@ -281,29 +344,36 @@ export function useFileManager({
         content =
           '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n</head>\n<body>\n\n</body>\n</html>\n';
       }
-      const res = await fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent(path)}`), {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: content,
-      });
+      const res = await fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`,
+        ),
+        {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: content,
+        },
+      );
       if (res.ok) {
         await refreshFileTree();
         handleFileSelect(path);
       } else {
         const err = await res.json().catch(() => ({ error: "unknown" }));
         console.error(`Create file failed: ${err.error}`);
+        showToast(`Couldn't create ${path}: ${err.error}`, "error");
       }
     },
-    [refreshFileTree, handleFileSelect],
+    [refreshFileTree, handleFileSelect, showToast],
   );
 
   const handleCreateFolder = useCallback(
     async (path: string) => {
       const pid = projectIdRef.current;
       if (!pid) return;
-      // Create a .gitkeep inside the folder so it appears in the tree
       const res = await fetch(
-        buildProjectApiPath(pid, `/files/${encodeURIComponent(path + "/.gitkeep")}`),
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path + "/.gitkeep")}`,
+        ),
         {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
@@ -315,58 +385,70 @@ export function useFileManager({
       } else {
         const err = await res.json().catch(() => ({ error: "unknown" }));
         console.error(`Create folder failed: ${err.error}`);
+        showToast(`Couldn't create folder ${path}: ${err.error}`, "error");
       }
     },
-    [refreshFileTree],
+    [refreshFileTree, showToast],
   );
 
   const handleDeleteFile = useCallback(
     async (path: string) => {
       const pid = projectIdRef.current;
       if (!pid) return;
-      const res = await fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent(path)}`), {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`,
+        ),
+        {
+          method: "DELETE",
+        },
+      );
       if (res.ok) {
         if (editingPathRef.current === path) setEditingFile(null);
         await refreshFileTree();
       } else {
         const err = await res.json().catch(() => ({ error: "unknown" }));
         console.error(`Delete failed: ${err.error}`);
+        showToast(`Couldn't delete ${path}: ${err.error}`, "error");
       }
     },
-    [refreshFileTree],
+    [refreshFileTree, showToast],
   );
 
   const handleRenameFile = useCallback(
     async (oldPath: string, newPath: string) => {
       const pid = projectIdRef.current;
       if (!pid) return;
-      const res = await fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent(oldPath)}`), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPath }),
-      });
+      const res = await fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(oldPath)}`,
+        ),
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPath }),
+        },
+      );
       if (res.ok) {
         if (editingPathRef.current === oldPath) {
           handleFileSelect(newPath);
         }
         await refreshFileTree();
-        // Refresh preview — references in compositions may have been updated
         setRefreshKey((k) => k + 1);
       } else {
         const err = await res.json().catch(() => ({ error: "unknown" }));
         console.error(`Rename failed: ${err.error}`);
+        showToast(`Couldn't rename ${oldPath}: ${err.error}`, "error");
       }
     },
-    [refreshFileTree, handleFileSelect, setRefreshKey],
+    [refreshFileTree, handleFileSelect, setRefreshKey, showToast],
   );
 
   const handleDuplicateFile = useCallback(
     async (path: string) => {
       const pid = projectIdRef.current;
       if (!pid) return;
-      const res = await fetch(buildProjectApiPath(pid, "/duplicate-file"), {
+      const res = await fetch(buildProjectApiPath(pid, `/duplicate-file`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path }),
@@ -378,9 +460,10 @@ export function useFileManager({
       } else {
         const err = await res.json().catch(() => ({ error: "unknown" }));
         console.error(`Duplicate failed: ${err.error}`);
+        showToast(`Couldn't duplicate ${path}: ${err.error}`, "error");
       }
     },
-    [refreshFileTree, handleFileSelect],
+    [refreshFileTree, handleFileSelect, showToast],
   );
 
   const handleMoveFile = handleRenameFile;
@@ -394,12 +477,12 @@ export function useFileManager({
 
   const handleImportFonts = useCallback(
     async (files: FileList | File[]): Promise<ImportedFontAsset[]> => {
+      const pid = projectIdRef.current;
+      if (!pid) return [];
       const uploaded = await uploadProjectFiles(
         Array.from(files).filter((file) => FONT_EXT.test(file.name)),
         "assets/fonts",
       );
-      const pid = projectIdRef.current;
-      if (!pid) throw new Error("No active project");
       const imported = uploaded
         .filter((asset) => FONT_EXT.test(asset))
         .map((asset) => ({
@@ -417,28 +500,6 @@ export function useFileManager({
       return imported;
     },
     [uploadProjectFiles],
-  );
-
-  // ── Derived state ──
-
-  const compositions = compositionPaths;
-
-  const assets = useMemo(
-    () =>
-      fileTree.filter((f) => !f.endsWith(".html") && !f.endsWith(".md") && !f.endsWith(".json")),
-    [fileTree],
-  );
-
-  const fontAssets = useMemo<ImportedFontAsset[]>(
-    () =>
-      assets
-        .filter((asset) => FONT_EXT.test(asset))
-        .map((asset) => ({
-          family: fontFamilyFromAssetPath(asset),
-          path: asset,
-          url: projectId ? buildProjectApiPath(projectId, `/preview/${asset}`) : "",
-        })),
-    [assets, projectId],
   );
 
   // ── Return ──
@@ -462,6 +523,8 @@ export function useFileManager({
     readProjectFile,
     writeProjectFile,
     readOptionalProjectFile,
+    observeProjectFileVersion,
+    updateEditingFileContent,
 
     // Click-to-source
     revealSourceOffset,

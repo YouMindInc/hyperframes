@@ -1,6 +1,8 @@
-import type { RuntimeTimelineMessage, RuntimeTimelineLike } from "./types";
+import type { RuntimeSeekOptions, RuntimeTimelineMessage, RuntimeTimelineLike } from "./types";
+import type { RuntimeColorGradingApi } from "./colorGrading";
 import type { HyperframePickerApi } from "../inline-scripts/pickerApi";
 import type { PlayerAPI } from "../core.types";
+import type { ClipTree } from "./clipTree";
 
 type ThreeClockLike = {
   elapsedTime: number;
@@ -29,10 +31,28 @@ declare global {
     __timelines: Record<string, RuntimeTimelineLike>;
     __player?: PlayerAPI;
     __clipManifest?: RuntimeTimelineMessage;
+    __clipTree?: ClipTree;
+    __hf?: {
+      colorGrading?: RuntimeColorGradingApi;
+      onSwallowed?: (label: string, err: unknown) => void;
+      seek?: (timeSeconds: number, options?: RuntimeSeekOptions) => void;
+      duration?: number;
+    };
     __playerReady?: boolean;
     __renderReady?: boolean;
     __hfRuntimeTeardown?: (() => void) | null;
+    __HF_EXPORT_RENDER_SEEK_CONFIG?: {
+      mode?: string;
+      diagnostics?: boolean;
+      step?: number;
+      offsetFraction?: number;
+      fps?: number;
+      fpsSource?: "render-options" | "default";
+      fpsFallbackReason?: "missing" | "invalid";
+      owner?: string;
+    };
     __HF_PARITY_MODE?: boolean;
+    /** Legacy debug-only fps hint. Render-mode runtime fps uses __HF_EXPORT_RENDER_SEEK_CONFIG.fps. */
     __HF_FPS?: number;
     __HF_MAX_DURATION_SEC?: number;
     __hfThreeTime?: number;
@@ -45,6 +65,13 @@ declare global {
      * imperative push signal: `window.addEventListener("hf-seek", e => render(e.detail.time))`.
      */
     __hfTypegpuTime?: number;
+    /**
+     * Re-render GPU adapters (Three.js / WebGPU) at the given time, bypassing
+     * the `"hf-seek"` dedup. Called by the engine after injecting decoded
+     * video frames so GPU compositions re-upload their video textures from the
+     * freshly-injected `__render_frame__` images. See `forceDispatchSeekEvent`.
+     */
+    __hfReseekGpu?: (time: number) => void;
     __HF_PICKER_API?: HyperframePickerApi;
     gsap?: {
       timeline: (params?: { paused?: boolean }) => RuntimeTimelineLike;
@@ -89,6 +116,36 @@ declare global {
      */
     __hfLottie?: unknown[];
     /**
+     * Mapbox GL JS map instances. Push your map here after creating it:
+     *   window.__hfMapbox = window.__hfMapbox || [];
+     *   window.__hfMapbox.push(map);
+     */
+    __hfMapbox?: unknown[];
+    /**
+     * Leaflet map instances. Push your map here after creating it:
+     *   window.__hfLeaflet = window.__hfLeaflet || [];
+     *   window.__hfLeaflet.push(map);
+     */
+    __hfLeaflet?: unknown[];
+    /**
+     * Google Maps instances. Push your map here after creating it:
+     *   window.__hfGoogleMaps = window.__hfGoogleMaps || [];
+     *   window.__hfGoogleMaps.push(map);
+     */
+    __hfGoogleMaps?: unknown[];
+    /**
+     * MapLibre GL JS map instances. Push your map here after creating it:
+     *   window.__hfMaplibre = window.__hfMaplibre || [];
+     *   window.__hfMaplibre.push(map);
+     */
+    __hfMaplibre?: unknown[];
+    /**
+     * D3 transition instances. Push your transition here after creating it:
+     *   window.__hfD3 = window.__hfD3 || [];
+     *   window.__hfD3.push(transition);
+     */
+    __hfD3?: unknown[];
+    /**
      * Render-time variable overrides injected by the engine when the user
      * passes `hyperframes render --variables '<json>'`. Read indirectly via
      * `window.__hyperframes.getVariables()` (or the named `getVariables`
@@ -105,6 +162,17 @@ declare global {
      * resolved values for the instance currently executing.
      */
     __hfVariablesByComp?: Record<string, Record<string, unknown>>;
+    /**
+     * Set to `true` while the GSAP tween-batching interceptor (injected via
+     * HF_EARLY_STUB in fileServer.ts) is still draining queued tween calls
+     * through requestAnimationFrame batches. Cleared and the "hf-timelines-built"
+     * CustomEvent is dispatched when all queues are empty.
+     *
+     * init.ts uses this to decide whether to defer `bindRootTimelineIfAvailable`:
+     * if true at DOMContentLoaded time, it adds a one-shot event listener and
+     * rebinds after the event fires.
+     */
+    __hfTimelinesBuilding?: boolean;
   }
 }
 

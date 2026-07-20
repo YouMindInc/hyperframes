@@ -13,11 +13,13 @@ import {
   rewriteCssAssetUrls,
   rewriteInlineStyleAssetUrls,
 } from "./rewriteSubCompPaths";
+import { queryByAttr } from "../utils/cssSelector";
 import {
   scopeCssToComposition,
   wrapInlineScriptWithErrorBoundary,
   wrapScopedCompositionScript,
 } from "./compositionScoping";
+import { checkSubCompositionUsability } from "@hyperframes/parsers/sub-composition-validity";
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -100,10 +102,14 @@ export interface InlineSubCompositionsOptions {
   scriptErrorLabel?: string;
 
   /**
-   * Log a warning when a composition file cannot be resolved.
+   * Log a warning when a composition file cannot be resolved. `reason` is a
+   * short, human-readable explanation (e.g. "the file is empty (0 bytes or
+   * whitespace-only)") from `checkSubCompositionUsability` — present for
+   * every skip except when `resolveHtml` returns `null` (file not found,
+   * which callers detect themselves before calling `resolveHtml`).
    * Defaults to `console.warn`.
    */
-  onMissingComposition?: (srcPath: string) => void;
+  onMissingComposition?: (srcPath: string, reason?: string) => void;
 }
 
 export interface InlineSubCompositionsResult {
@@ -143,8 +149,9 @@ function defaultBuildScopeSelector(compId: string): string {
  * 10. Remove `data-composition-src` from host
  * 11. Inject the content into the host element
  */
+// fallow-ignore-next-line complexity
 export function inlineSubCompositions(
-  document: Document,
+  _document: Document,
   hosts: Element[],
   options: InlineSubCompositionsOptions,
 ): InlineSubCompositionsResult {
@@ -175,10 +182,22 @@ export function inlineSubCompositions(
     if (!src) continue;
 
     const compHtml = resolveHtml(src);
+    // Shared with lint + render pre-flight (@hyperframes/parsers'
+    // subCompositionValidity.ts) so all three callers agree on what counts
+    // as a usable sub-composition file. This path stays intentionally
+    // tolerant (skip, don't throw) — preview and studio must keep bundling
+    // around a scene that's still being authored. Lint and the render
+    // pre-flight check use the same helper to fail loudly instead.
+    const validity = checkSubCompositionUsability(compHtml, parseHtml);
+    if (!validity.ok) {
+      onMissingComposition?.(src, validity.detail);
+      continue;
+    }
     if (compHtml == null) {
-      if (onMissingComposition) {
-        onMissingComposition(src);
-      }
+      // Unreachable in practice — checkSubCompositionUsability's "empty"
+      // reason already covers null/undefined — but this lets TypeScript
+      // narrow compHtml to `string` below without an `as T` assertion.
+      onMissingComposition?.(src);
       continue;
     }
 
@@ -199,21 +218,41 @@ export function inlineSubCompositions(
     // Find content: prefer <template>, fall back to <body>
     const contentRoot = compDoc.querySelector("template");
     const contentHtml = contentRoot ? contentRoot.innerHTML || "" : compDoc.body?.innerHTML || "";
+    if (!contentHtml.trim()) {
+      onMissingComposition?.(src);
+      continue;
+    }
     const contentDoc = parseHtml(contentHtml);
+    if (!contentDoc.documentElement) {
+      onMissingComposition?.(src);
+      continue;
+    }
 
-    // Find the inner composition root
+    // Keep structural flattening tied to an exact mount-id match. A template
+    // may intentionally use a different local id (for example, a
+    // `captions-comp` host mounting a `captions` template); flattening that
+    // fallback root changes the compiled DOM and can invalidate selectors and
+    // regression goldens. Discover it separately so script timeline
+    // registration can still map the authored id onto the runtime mount id.
     const innerRoot = compId
-      ? contentDoc.querySelector(`[data-composition-id="${compId}"]`)
+      ? queryByAttr(contentDoc, "data-composition-id", compId)
       : contentDoc.querySelector("[data-composition-id]");
-    const inferredCompId = innerRoot?.getAttribute("data-composition-id")?.trim() || "";
+    const authoredCompositionRoot = innerRoot ?? contentDoc.querySelector("[data-composition-id]");
+    const inferredCompId =
+      authoredCompositionRoot?.getAttribute("data-composition-id")?.trim() || "";
     const authoredRootId = innerRoot?.getAttribute("id")?.trim() || null;
     const scopeCompId = compId || inferredCompId;
+    const scriptCompositionId = inferredCompId || scopeCompId;
     const runtimeScope = runtimeCompId ? buildScopeSelector(runtimeCompId) : "";
 
-    // Variable merging (bundler feature)
+    // Variable merging (bundler feature). Read declared defaults from the
+    // document element (full-document sub-comps) AND the inner composition root
+    // (template/fragment sub-comps store their schema on the root div, not a
+    // synthetic <html>), then let per-instance host values override.
     if (readVariableDefaults && parseHostVariables && runtimeCompId) {
       const mergedVariables = {
         ...readVariableDefaults(compDoc.documentElement),
+        ...(innerRoot ? readVariableDefaults(innerRoot) : {}),
         ...parseHostVariables(hostEl),
       };
       if (Object.keys(mergedVariables).length > 0) {
@@ -221,20 +260,26 @@ export function inlineSubCompositions(
       }
     }
 
+    // Scope one sub-composition <style> body. scopeRootSelectors keeps the
+    // sub-comp's html/body/:root rules from clobbering the host document (they
+    // are remapped to the composition box); see compositionScoping.
+    const scopeSubStyle = (raw: string): string => {
+      const css = rewriteCssAssetUrls(raw, src);
+      return scopeCompId
+        ? scopeCssToComposition(css, scopeCompId, runtimeScope || undefined, authoredRootId, {
+            compoundAuthoredRoot: compoundAuthoredRoot === true,
+            scopeRootSelectors: true,
+          })
+        : css;
+    };
+
     // When a sub-composition is a full HTML document (no <template>), styles
     // and scripts in <head> are not part of contentDoc (which only has body
     // content). Extract them so backgrounds, positioning, fonts, and library
     // scripts (e.g. GSAP CDN) are not silently dropped.
     if (!contentRoot && compDoc.head) {
       for (const s of [...compDoc.head.querySelectorAll("style")]) {
-        const css = rewriteCssAssetUrls(s.textContent || "", src);
-        styles.push(
-          scopeCompId
-            ? scopeCssToComposition(css, scopeCompId, runtimeScope || undefined, authoredRootId, {
-                compoundAuthoredRoot: compoundAuthoredRoot === true,
-              })
-            : css,
-        );
+        styles.push(scopeSubStyle(s.textContent || ""));
       }
       for (const s of [...compDoc.head.querySelectorAll("script")]) {
         const externalSrc = (s.getAttribute("src") || "").trim();
@@ -262,14 +307,7 @@ export function inlineSubCompositions(
 
     // Extract styles from content
     for (const s of [...contentDoc.querySelectorAll("style")]) {
-      const css = rewriteCssAssetUrls(s.textContent || "", src);
-      styles.push(
-        scopeCompId
-          ? scopeCssToComposition(css, scopeCompId, runtimeScope || undefined, authoredRootId, {
-              compoundAuthoredRoot: compoundAuthoredRoot === true,
-            })
-          : css,
-      );
+      styles.push(scopeSubStyle(s.textContent || ""));
       s.remove();
     }
 
@@ -282,13 +320,13 @@ export function inlineSubCompositions(
         }
         scriptItems.push({ kind: "external", src: externalSrc });
       } else {
-        const wrappedScript = scopeCompId
+        const wrappedScript = scriptCompositionId
           ? wrapScopedCompositionScript(
               s.textContent || "",
-              scopeCompId,
+              scriptCompositionId,
               scriptErrorLabel,
               runtimeScope || undefined,
-              runtimeCompId || scopeCompId,
+              runtimeCompId || scopeCompId || scriptCompositionId,
               authoredRootId,
             )
           : wrapInlineScriptWithErrorBoundary(s.textContent || "", scriptErrorLabel);
@@ -346,6 +384,16 @@ export function inlineSubCompositions(
       for (const child of [...innerRoot.querySelectorAll("style, script")]) child.remove();
       if (flattenInnerRoot) {
         const prepared = flattenInnerRoot(innerRoot);
+        if (!compId && inferredCompId) {
+          // Anonymous host: flattenInnerRoot strips data-composition-id,
+          // assuming the host already carries the composition's identity.
+          // When the host has none, nothing in the render DOM matches the
+          // composition's own root-styling CSS or self-referencing scripts
+          // (e.g. document.querySelector('[data-composition-id="X"]')).
+          // Restore it on the wrapper so both keep resolving, same as
+          // before flattening preserved it via outerHTML.
+          prepared.setAttribute("data-composition-id", inferredCompId);
+        }
         hostEl.innerHTML = prepared.outerHTML || "";
       } else {
         hostEl.innerHTML = compId ? innerRoot.innerHTML || "" : innerRoot.outerHTML || "";

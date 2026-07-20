@@ -16,6 +16,7 @@ export {
   endStudioManualEditGesture,
   isStudioManualEditGestureCurrent,
   readStudioPathOffset,
+  readAppliedStudioPathOffset,
   readStudioBoxSize,
   readStudioRotation,
   applyStudioPathOffset,
@@ -240,6 +241,7 @@ export function installStudioManualEditSeekReapply(win: Window, apply: () => voi
     "renderSeek",
   );
   const wrappedTimelineSeek = wrapSeekReapplyFunction(studioWin, studioWin.__timeline, "seek");
+  wrapSeekReapplyFunction(studioWin, studioWin.__timeline, "totalTime");
   const wrappedPlayerPlay = wrapPlayReapplyFunction(studioWin, studioWin.__player, "play");
   const wrappedTimelinePlay = wrapPlayReapplyFunction(studioWin, studioWin.__timeline, "play");
   const wrappedPlayerPause = wrapApplyAfterFunction(studioWin, studioWin.__player, "pause");
@@ -250,6 +252,7 @@ export function installStudioManualEditSeekReapply(win: Window, apply: () => voi
   for (const timeline of Object.values(studioWin.__timelines ?? {})) {
     wrappedNamedTimelineSeek =
       wrapSeekReapplyFunction(studioWin, timeline, "seek") || wrappedNamedTimelineSeek;
+    wrapSeekReapplyFunction(studioWin, timeline, "totalTime");
     wrappedNamedTimelinePlay =
       wrapPlayReapplyFunction(studioWin, timeline, "play") || wrappedNamedTimelinePlay;
     wrappedNamedTimelinePause =
@@ -268,6 +271,7 @@ export function installStudioManualEditSeekReapply(win: Window, apply: () => voi
         if (typeof value === "object" && value !== null) {
           const tl = value as Record<string, unknown>;
           wrapSeekReapplyFunction(studioWin, tl, "seek");
+          wrapSeekReapplyFunction(studioWin, tl, "totalTime");
           wrapPlayReapplyFunction(studioWin, tl, "play");
           wrapApplyAfterFunction(studioWin, tl, "pause");
           studioWin.__hfStudioManualEditsApply?.();

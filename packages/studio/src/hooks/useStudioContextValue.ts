@@ -1,11 +1,9 @@
 import { useCallback, useMemo, useRef, useState, type DragEvent } from "react";
-import {
-  STUDIO_INSPECTOR_PANELS_ENABLED,
-  STUDIO_MOTION_PANEL_ENABLED,
-} from "../components/editor/manualEditingAvailability";
-import { readStudioMotionFromElement } from "../components/editor/studioMotion";
+import { STUDIO_INSPECTOR_PANELS_ENABLED } from "../components/editor/manualEditingAvailability";
 import type { StudioContextValue } from "../contexts/StudioContext";
-import type { DomEditSelection } from "../components/editor/domEditing";
+import type { RightInspectorPanes } from "../utils/studioHelpers";
+import type { TimelineFileDropHandler } from "./useTimelineEditingTypes";
+import { usePlayerStore } from "../player";
 
 interface StudioContextInput {
   projectId: string;
@@ -17,7 +15,6 @@ interface StudioContextInput {
   compositionLoading: boolean;
   refreshKey: number;
   setRefreshKey: React.Dispatch<React.SetStateAction<number>>;
-  currentTime: number;
   timelineElements: StudioContextValue["timelineElements"];
   isPlaying: boolean;
   editHistory: { canUndo: boolean; canRedo: boolean; undoLabel: string; redoLabel: string };
@@ -26,7 +23,12 @@ interface StudioContextInput {
   renderQueue: {
     jobs: unknown[];
     isRendering: boolean;
+    loadError: string | null;
+    actionError: string | null;
+    dismissActionError: () => void;
+    reloadRenders: () => void;
     deleteRender: (id: string) => void;
+    cancelRender: (id: string) => void;
     clearCompleted: () => void;
     startRender: (options: unknown) => Promise<void>;
   };
@@ -34,8 +36,6 @@ interface StudioContextInput {
   waitForPendingDomEditSaves: () => Promise<void>;
   handlePreviewIframeRef: (iframe: HTMLIFrameElement | null) => void;
   refreshPreviewDocumentVersion: () => void;
-  timelineVisible: boolean;
-  toggleTimelineVisibility: () => void;
 }
 
 // fallow-ignore-next-line complexity
@@ -50,7 +50,7 @@ export function buildStudioContextValue(input: StudioContextInput): StudioContex
     compositionLoading: input.compositionLoading,
     refreshKey: input.refreshKey,
     setRefreshKey: input.setRefreshKey,
-    currentTime: input.currentTime,
+
     timelineElements: input.timelineElements,
     isPlaying: input.isPlaying,
     editHistory: input.editHistory,
@@ -61,16 +61,12 @@ export function buildStudioContextValue(input: StudioContextInput): StudioContex
     waitForPendingDomEditSaves: input.waitForPendingDomEditSaves,
     handlePreviewIframeRef: input.handlePreviewIframeRef,
     refreshPreviewDocumentVersion: input.refreshPreviewDocumentVersion,
-    timelineVisible: input.timelineVisible,
-    toggleTimelineVisibility: input.toggleTimelineVisibility,
   };
 }
 
 export interface InspectorState {
-  selectedStudioMotion: ReturnType<typeof readStudioMotionFromElement> | null;
   layersPanelActive: boolean;
   designPanelActive: boolean;
-  motionPanelActive: boolean;
   inspectorPanelActive: boolean;
   inspectorButtonActive: boolean;
   shouldShowSelectedDomBounds: boolean;
@@ -78,36 +74,39 @@ export interface InspectorState {
 
 export function useInspectorState(
   rightPanelTab: string,
+  rightInspectorPanes: RightInspectorPanes,
   rightCollapsed: boolean,
   isPlaying: boolean,
-  domEditSelection: DomEditSelection | null,
+  isGestureRecording?: boolean,
 ): InspectorState {
   // fallow-ignore-next-line complexity
   return useMemo(() => {
-    const selectedStudioMotion =
-      STUDIO_INSPECTOR_PANELS_ENABLED && domEditSelection
-        ? readStudioMotionFromElement(domEditSelection.element)
-        : null;
-    const layersPanelActive = STUDIO_INSPECTOR_PANELS_ENABLED && rightPanelTab === "layers";
-    const designPanelActive = STUDIO_INSPECTOR_PANELS_ENABLED && rightPanelTab === "design";
-    const motionPanelActive =
-      STUDIO_INSPECTOR_PANELS_ENABLED && STUDIO_MOTION_PANEL_ENABLED && rightPanelTab === "motion";
-    const inspectorPanelActive = layersPanelActive || designPanelActive || motionPanelActive;
+    const inspectorTabActive = rightPanelTab === "design" || rightPanelTab === "layers";
+    const layersPanelActive =
+      STUDIO_INSPECTOR_PANELS_ENABLED && inspectorTabActive && rightInspectorPanes.layers;
+    const designPanelActive =
+      STUDIO_INSPECTOR_PANELS_ENABLED && inspectorTabActive && rightInspectorPanes.design;
+    const inspectorPanelActive = layersPanelActive || designPanelActive;
     return {
-      selectedStudioMotion,
       layersPanelActive,
       designPanelActive,
-      motionPanelActive,
       inspectorPanelActive,
       inspectorButtonActive:
         STUDIO_INSPECTOR_PANELS_ENABLED && !rightCollapsed && inspectorPanelActive,
-      shouldShowSelectedDomBounds: inspectorPanelActive && !rightCollapsed && !isPlaying,
+      // Keep the selection box + motion path drawn even when the Inspector is
+      // collapsed — closing the panel shouldn't visually deselect the element.
+      // The Variables tab also works against the canvas selection (bind card),
+      // so the selection outline stays visible there too.
+      shouldShowSelectedDomBounds:
+        (inspectorPanelActive || rightPanelTab === "variables") &&
+        !isPlaying &&
+        !isGestureRecording,
     };
-  }, [rightPanelTab, rightCollapsed, isPlaying, domEditSelection]);
+  }, [rightPanelTab, rightInspectorPanes, rightCollapsed, isPlaying, isGestureRecording]);
 }
 
 // fallow-ignore-next-line complexity
-export function useDragOverlay(onImportFiles: (files: FileList) => void) {
+function useDragOverlay(onImportFiles: (files: FileList) => void) {
   const [active, setActive] = useState(false);
   const counterRef = useRef(0);
   const onDragOver = useCallback((e: DragEvent) => {
@@ -135,4 +134,16 @@ export function useDragOverlay(onImportFiles: (files: FileList) => void) {
     [onImportFiles],
   );
   return { active, onDragOver, onDragEnter, onDragLeave, onDrop };
+}
+
+/** Global OS file drop: imports and places at the playhead position. */
+export function useGlobalFileDrop(handleTimelineFileDrop: TimelineFileDropHandler) {
+  const onDrop = useCallback(
+    (files: FileList) => {
+      const start = usePlayerStore.getState().currentTime;
+      void handleTimelineFileDrop(Array.from(files), { start, track: 0 });
+    },
+    [handleTimelineFileDrop],
+  );
+  return useDragOverlay(onDrop);
 }

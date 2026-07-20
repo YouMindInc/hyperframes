@@ -10,13 +10,11 @@
 
 import { defineCommand } from "citty";
 import type { DistributedFormat } from "@hyperframes/aws-lambda/sdk";
-import {
-  type CanvasResolution,
-  VALID_CANVAS_RESOLUTIONS,
-  normalizeResolutionFlag,
-} from "@hyperframes/core";
+import { type CanvasResolution } from "@hyperframes/core";
+import { parseOutputResolutionFlag } from "../utils/parseOutputResolution.js";
 import type { Example } from "./_examples.js";
 import { c } from "../ui/colors.js";
+import { readAllowedCompositionFpsFromDir } from "../utils/compositionFps.js";
 
 export const examples: Example[] = [
   ["Deploy the Lambda render stack to AWS", "hyperframes lambda deploy"],
@@ -133,6 +131,11 @@ export default defineCommand({
     quality: { type: "string", description: "draft | standard | high" },
     "chunk-size": { type: "string", description: "Frames per chunk (default: 240)" },
     "max-parallel-chunks": { type: "string", description: "Max concurrent chunks (default: 16)" },
+    "target-chunk-frames": {
+      type: "string",
+      description:
+        "Cap per-chunk frames; auto-adds chunks (up to --max-parallel-chunks) to keep each under this. Ignored if --chunk-size is set.",
+    },
     "execution-name": {
       type: "string",
       description: "Step Functions execution name (default: hf-render-<uuid>)",
@@ -292,12 +295,16 @@ export default defineCommand({
           console.error("[lambda render] --width and --height are required.");
           process.exit(1);
         }
-        const fpsRaw = parseIntFlag(args.fps) ?? 30;
+        const fpsRaw =
+          parseIntFlag(args.fps) ??
+          readAllowedCompositionFpsFromDir(projectDir, [24, 30, 60]) ??
+          30;
         if (fpsRaw !== 24 && fpsRaw !== 30 && fpsRaw !== 60) {
           console.error(`[lambda render] --fps must be 24, 30, or 60; got ${fpsRaw}.`);
           process.exit(1);
         }
         const { runRender } = await import("./lambda/render.js");
+        const renderResolution = parseOutputResolution(args["output-resolution"]);
         await runRender({
           projectDir,
           stackName,
@@ -305,12 +312,14 @@ export default defineCommand({
           fps: fpsRaw,
           width,
           height,
-          outputResolution: parseOutputResolution(args["output-resolution"]),
+          outputResolution: renderResolution.outputResolution,
+          outputResolutionAspectAgnostic: renderResolution.outputResolutionAspectAgnostic,
           format: parseFormat(args.format),
           codec: parseCodec(args.codec),
           quality: parseQuality(args.quality),
           chunkSize: parsePositiveInt(args["chunk-size"], "--chunk-size"),
           maxParallelChunks: parsePositiveInt(args["max-parallel-chunks"], "--max-parallel-chunks"),
+          targetChunkFrames: parsePositiveInt(args["target-chunk-frames"], "--target-chunk-frames"),
           executionName: args["execution-name"] as string | undefined,
           outputKey: args["output-key"] as string | undefined,
           variables: args.variables as string | undefined,
@@ -343,12 +352,16 @@ export default defineCommand({
           console.error("[lambda render-batch] --width and --height are required.");
           process.exit(1);
         }
-        const fpsRaw = parseIntFlag(args.fps) ?? 30;
+        const fpsRaw =
+          parseIntFlag(args.fps) ??
+          readAllowedCompositionFpsFromDir(projectDir, [24, 30, 60]) ??
+          30;
         if (fpsRaw !== 24 && fpsRaw !== 30 && fpsRaw !== 60) {
           console.error(`[lambda render-batch] --fps must be 24, 30, or 60; got ${fpsRaw}.`);
           process.exit(1);
         }
         const { runRenderBatch } = await import("./lambda/render-batch.js");
+        const batchResolution = parseOutputResolution(args["output-resolution"]);
         await runRenderBatch({
           projectDir,
           stackName,
@@ -357,12 +370,14 @@ export default defineCommand({
           fps: fpsRaw,
           width,
           height,
-          outputResolution: parseOutputResolution(args["output-resolution"]),
+          outputResolution: batchResolution.outputResolution,
+          outputResolutionAspectAgnostic: batchResolution.outputResolutionAspectAgnostic,
           format: parseFormat(args.format),
           codec: parseCodec(args.codec),
           quality: parseQuality(args.quality),
           chunkSize: parsePositiveInt(args["chunk-size"], "--chunk-size"),
           maxParallelChunks: parsePositiveInt(args["max-parallel-chunks"], "--max-parallel-chunks"),
+          targetChunkFrames: parsePositiveInt(args["target-chunk-frames"], "--target-chunk-frames"),
           maxConcurrent: parsePositiveInt(args["max-concurrent"], "--max-concurrent"),
           strictVariables: Boolean(args["strict-variables"]),
           dryRun: Boolean(args["dry-run"]),
@@ -467,12 +482,23 @@ const parseQuality = (raw: unknown): (typeof QUALITIES)[number] | undefined =>
 const parseChromeSource = (raw: unknown): (typeof CHROME_SOURCES)[number] =>
   parseEnum(raw, CHROME_SOURCES, "[lambda deploy] --chrome-source", "sparticuz")!;
 
-function parseOutputResolution(raw: unknown): CanvasResolution | undefined {
-  if (raw == null || raw === "") return undefined;
-  const normalized = normalizeResolutionFlag(String(raw));
-  if (normalized) return normalized;
-  throw new Error(
-    `[lambda render] --output-resolution must be one of ${VALID_CANVAS_RESOLUTIONS.join("|")} ` +
-      `(or an alias: 1080p, 4k, uhd, hd, 1080p-portrait, portrait-1080p, 4k-portrait, 1080p-square, square-1080p, 4k-square); got ${String(raw)}`,
-  );
+/**
+ * Lambda flavor of the shared {@link parseOutputResolutionFlag} — same wire
+ * contract as the Cloud Run counterpart. Runtime work lives in the shared
+ * util; wire-config-level coverage lives at `./lambda/render.test.ts` /
+ * `./lambda/render-batch.test.ts`, and full input-space coverage at
+ * `../utils/parseOutputResolution.test.ts`.
+ */
+function parseOutputResolution(raw: unknown): {
+  outputResolution: CanvasResolution | undefined;
+  outputResolutionAspectAgnostic: boolean;
+} {
+  return parseOutputResolutionFlag(raw, {
+    surfaceLabel: "[lambda render]",
+    // The Lambda `--output-resolution` help text advertises the full alias
+    // list (tier-only + orientation-suffixed) — keep the error message
+    // faithful to that surface's docs.
+    aliasHint:
+      "1080p, 4k, uhd, hd, 1080p-portrait, portrait-1080p, 4k-portrait, 1080p-square, square-1080p, 4k-square",
+  });
 }

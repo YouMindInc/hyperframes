@@ -1,3 +1,4 @@
+// fallow-ignore-file complexity
 /**
  * GPU Encoder Detection
  *
@@ -6,6 +7,9 @@
  */
 
 import { spawn } from "child_process";
+import { getFfmpegBinary } from "./ffmpegBinaries.js";
+import { ManagedChildProcess } from "./managedChildProcess.js";
+import { trackChildProcess } from "./processTracker.js";
 
 export type ConcreteGpuEncoder = "nvenc" | "videotoolbox" | "vaapi" | "qsv" | "amf";
 export type GpuEncoder = ConcreteGpuEncoder | null;
@@ -58,25 +62,20 @@ export async function selectUsableGpuEncoder(
 }
 
 export async function detectGpuEncoder(): Promise<GpuEncoder> {
-  return new Promise((resolve) => {
-    const ffmpeg = spawn("ffmpeg", ["-encoders"], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    let stdout = "";
-
-    ffmpeg.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    ffmpeg.on("close", () => {
-      const candidates = getCompiledGpuEncoders(stdout);
-      void selectUsableGpuEncoder(candidates, canUseGpuEncoder)
-        .then(resolve)
-        .catch(() => resolve(null));
-    });
-
-    ffmpeg.on("error", () => resolve(null));
+  const ffmpeg = spawn(getFfmpegBinary(), ["-encoders"], {
+    stdio: ["pipe", "pipe", "pipe"],
   });
+  trackChildProcess(ffmpeg);
+  let stdout = "";
+  ffmpeg.stdout.on("data", (data) => {
+    stdout += data.toString();
+  });
+  const outcome = await new ManagedChildProcess(ffmpeg, {
+    deadlineAtMs: Date.now() + 30_000,
+  }).wait();
+  if (outcome.reason !== "exit" || outcome.exitCode !== 0) return null;
+  const candidates = getCompiledGpuEncoders(stdout);
+  return selectUsableGpuEncoder(candidates, canUseGpuEncoder).catch(() => null);
 }
 
 let cachedGpuEncoder: GpuEncoder | undefined = undefined;
@@ -106,7 +105,17 @@ export function getGpuEncoderName(encoder: GpuEncoder, codec: "h264" | "h265"): 
   }
 }
 
-function getProbeArgs(encoder: ConcreteGpuEncoder): string[] {
+// Minimum probe dimensions must clear every GPU encoder's hardware minimum.
+// NVIDIA data-center SKUs (L4/T4/A10/A100) reject frames below ~257px on
+// either dimension with "Frame Dimension less than the minimum supported
+// value" (observed on driver 595.58.03, CUDA 13.2). The documented SDK
+// minimums (145×49 H.264, 129×33 HEVC) are lower, but the driver enforces
+// a stricter per-SKU alignment. 320×240 clears all known GPU encoder
+// minimums (NVENC, VideoToolbox, VAAPI, QSV, AMF) while staying cheap.
+const GPU_PROBE_WIDTH = 320;
+const GPU_PROBE_HEIGHT = 240;
+
+export function getProbeArgs(encoder: ConcreteGpuEncoder): string[] {
   const args = [
     "-hide_banner",
     "-loglevel",
@@ -114,7 +123,7 @@ function getProbeArgs(encoder: ConcreteGpuEncoder): string[] {
     "-f",
     "lavfi",
     "-i",
-    "color=size=16x16:rate=1:duration=1",
+    `color=size=${GPU_PROBE_WIDTH}x${GPU_PROBE_HEIGHT}:rate=1:duration=1`,
     "-frames:v",
     "1",
     "-an",
@@ -135,46 +144,23 @@ function getProbeArgs(encoder: ConcreteGpuEncoder): string[] {
 }
 
 async function canUseGpuEncoder(encoder: ConcreteGpuEncoder): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false;
-    let timedOut = false;
-    let killTimer: ReturnType<typeof setTimeout> | undefined;
-    let stderr = "";
-    const finish = (usable: boolean) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (killTimer) clearTimeout(killTimer);
-      resolve(usable);
-    };
-    const ffmpeg = spawn("ffmpeg", getProbeArgs(encoder), {
-      stdio: ["ignore", "ignore", "pipe"],
-    });
-
-    ffmpeg.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      ffmpeg.kill("SIGTERM");
-      killTimer = setTimeout(() => {
-        ffmpeg.kill("SIGKILL");
-        finish(false);
-      }, GPU_PROBE_KILL_GRACE_MS);
-    }, GPU_PROBE_TIMEOUT_MS);
-
-    ffmpeg.on("close", (code, signal) => {
-      const usable = code === 0;
-      logGpuProbeFailure(encoder, { code, signal, stderr, timedOut });
-      finish(usable);
-    });
-
-    ffmpeg.on("error", (error) => {
-      logGpuProbeFailure(encoder, { error, timedOut });
-      finish(false);
-    });
+  const ffmpeg = spawn(getFfmpegBinary(), getProbeArgs(encoder), {
+    stdio: ["ignore", "ignore", "pipe"],
   });
+  trackChildProcess(ffmpeg);
+  const outcome = await new ManagedChildProcess(ffmpeg, {
+    deadlineAtMs: Date.now() + GPU_PROBE_TIMEOUT_MS,
+    terminationGraceMs: GPU_PROBE_KILL_GRACE_MS,
+  }).wait();
+  const usable = outcome.reason === "exit" && outcome.exitCode === 0;
+  logGpuProbeFailure(encoder, {
+    code: outcome.exitCode,
+    signal: outcome.signal,
+    stderr: outcome.stderr,
+    error: outcome.error,
+    timedOut: outcome.reason === "deadline",
+  });
+  return usable;
 }
 
 function logGpuProbeFailure(

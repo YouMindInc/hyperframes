@@ -16,13 +16,12 @@ describe("manual editing availability", () => {
     vi.resetModules();
   });
 
-  it("enables inspector selection and manual dragging by default while motion stays opt-in", async () => {
+  it("enables inspector selection and manual dragging by default", async () => {
     const availability = await loadAvailabilityWithEnv({});
 
     expect(availability.STUDIO_PREVIEW_MANUAL_EDITING_ENABLED).toBe(true);
     expect(availability.STUDIO_PREVIEW_SELECTION_ENABLED).toBe(true);
     expect(availability.STUDIO_INSPECTOR_PANELS_ENABLED).toBe(true);
-    expect(availability.STUDIO_MOTION_PANEL_ENABLED).toBe(false);
   });
 
   it("disables preview selection when the inspector panel flag is explicitly off", async () => {
@@ -105,5 +104,15 @@ describe("manual editing availability", () => {
     expect(resolveStudioBooleanEnvFlag({}, ["MISSING"], false)).toBe(false);
     expect(resolveStudioBooleanEnvFlag({ EMPTY: "" }, ["EMPTY"], true)).toBe(true);
     expect(resolveStudioBooleanEnvFlag({ UNKNOWN: "maybe" }, ["UNKNOWN"], false)).toBe(false);
+  });
+
+  it("defaults the flat inspector flag to true and honors an explicit override", async () => {
+    const on = await loadAvailabilityWithEnv({});
+    expect(on.STUDIO_FLAT_INSPECTOR_ENABLED).toBe(true);
+
+    const off = await loadAvailabilityWithEnv({
+      VITE_STUDIO_FLAT_INSPECTOR_ENABLED: "false",
+    });
+    expect(off.STUDIO_FLAT_INSPECTOR_ENABLED).toBe(false);
   });
 });

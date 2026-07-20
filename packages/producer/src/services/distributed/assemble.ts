@@ -37,6 +37,7 @@ import { dirname, join } from "node:path";
 import { applyFaststart, muxVideoWithAudio, runFfmpeg } from "@hyperframes/engine";
 import { fpsToFfmpegArg } from "@hyperframes/core";
 import { defaultLogger, type ProducerLogger } from "../../logger.js";
+import { formatExportFrameName } from "../../utils/paths.js";
 import { padOrTrimAudioToVideoFrameCount } from "../render/audioPadTrim.js";
 import type { ChunkSliceJson } from "../render/stages/freezePlan.js";
 import type { DistributedFormat } from "./shared.js";
@@ -295,6 +296,7 @@ export async function assemble(
         videoPath: postConcatPath,
         audioPath,
         outputPath: paddedAudioPath,
+        signal: abortSignal,
       });
       if (!padTrimResult.success) {
         throw new Error(`[assemble] audio pad/trim failed: ${padTrimResult.error}`);
@@ -319,7 +321,7 @@ export async function assemble(
         audioForMux,
         muxOutputPath,
         abortSignal,
-        undefined,
+        { audioCodec: "aac" },
         { num: plan.dimensions.fpsNum, den: plan.dimensions.fpsDen },
       );
       if (!muxResult.success) {
@@ -397,7 +399,7 @@ function mergePngFrameDirs(
       throw new Error(`[assemble] png-sequence chunk has no frames: ${chunkDir}`);
     }
     for (const frame of frames) {
-      const dst = join(outputPath, `frame_${String(globalIdx + 1).padStart(6, "0")}.png`);
+      const dst = join(outputPath, formatExportFrameName(globalIdx, "png"));
       cpSync(join(chunkDir, frame), dst);
       globalIdx += 1;
     }

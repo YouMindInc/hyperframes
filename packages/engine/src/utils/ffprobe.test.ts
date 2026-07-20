@@ -1,6 +1,7 @@
+// fallow-ignore-file code-duplication
 import { EventEmitter } from "events";
 import { readFileSync } from "fs";
-import { resolve } from "path";
+import { basename, resolve } from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractMediaMetadata, extractPngMetadataFromBuffer } from "./ffprobe.js";
 
@@ -164,13 +165,99 @@ function createSpawnSpy(outcomes: SpawnOutcome[]): {
 }
 
 describe("ffprobe missing-binary fallback", () => {
+  const originalFfprobePath = process.env.HYPERFRAMES_FFPROBE_PATH;
+  const originalPath = process.env.PATH;
+
+  function hidePathBinaries(): void {
+    process.env.PATH = "";
+  }
+
   afterEach(() => {
     vi.resetModules();
     vi.doUnmock("child_process");
+    if (originalFfprobePath === undefined) delete process.env.HYPERFRAMES_FFPROBE_PATH;
+    else process.env.HYPERFRAMES_FFPROBE_PATH = originalFfprobePath;
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
   });
+
+  it("spawns the configured absolute FFprobe path when HYPERFRAMES_FFPROBE_PATH is set", async () => {
+    process.env.HYPERFRAMES_FFPROBE_PATH = "/tools/ffprobe.exe";
+    const { spawn, calls } = createSpawnSpy([
+      {
+        kind: "exit",
+        code: 0,
+        stdout: JSON.stringify({
+          streams: [{ codec_type: "audio", codec_name: "aac", sample_rate: "48000", channels: 2 }],
+          format: { duration: "1.25", bit_rate: "128000" },
+        }),
+      },
+    ]);
+    vi.resetModules();
+    vi.doMock("child_process", () => ({ spawn }));
+
+    const { extractAudioMetadata } = await import("./ffprobe.js");
+    const meta = await extractAudioMetadata("/tmp/uses-configured-ffprobe.wav");
+
+    expect(meta.durationSeconds).toBe(1.25);
+    expect(calls[0]?.command).toBe(resolve("/tools/ffprobe.exe"));
+  });
+
+  it.each([
+    { name: "non-AAC metadata", codec: "mp3", packets: undefined, expected: 1.25, calls: 1 },
+    { name: "valid AAC packet count", codec: "aac", packets: "783", expected: 16.704, calls: 2 },
+    {
+      name: "missing AAC packet count",
+      codec: "aac",
+      packets: undefined,
+      expected: 1.25,
+      calls: 2,
+    },
+    { name: "zero AAC packet count", codec: "aac", packets: "0", expected: 1.25, calls: 2 },
+    {
+      name: "invalid AAC packet count",
+      codec: "aac",
+      packets: "invalid",
+      expected: 1.25,
+      calls: 2,
+    },
+  ])(
+    "derives audio duration for $name",
+    async ({ codec, packets, expected, calls: expectedCalls }) => {
+      const outcomes: SpawnOutcome[] = [
+        {
+          kind: "exit",
+          code: 0,
+          stdout: JSON.stringify({
+            streams: [
+              { codec_type: "audio", codec_name: codec, sample_rate: "48000", channels: 2 },
+            ],
+            format: { duration: "1.25", bit_rate: "128000" },
+          }),
+        },
+      ];
+      if (codec === "aac") {
+        outcomes.push({
+          kind: "exit",
+          code: 0,
+          stdout: JSON.stringify({ streams: [{ nb_read_packets: packets }], format: {} }),
+        });
+      }
+      const { spawn, calls } = createSpawnSpy(outcomes);
+      vi.resetModules();
+      vi.doMock("child_process", () => ({ spawn }));
+
+      const { extractAudioMetadata } = await import("./ffprobe.js");
+      const meta = await extractAudioMetadata(`/tmp/${codec}-${packets ?? "none"}.audio`);
+
+      expect(meta.durationSeconds).toBeCloseTo(expected, 6);
+      expect(calls).toHaveLength(expectedCalls);
+    },
+  );
 
   it("extractMediaMetadata falls back to PNG cICP metadata when ffprobe is missing", async () => {
     const { spawn, calls } = createSpawnSpy([{ kind: "missing" }]);
+    hidePathBinaries();
     vi.resetModules();
     vi.doMock("child_process", () => ({ spawn }));
 
@@ -182,7 +269,7 @@ describe("ffprobe missing-binary fallback", () => {
     const meta = await extractMediaMetadataMocked(fixture);
 
     expect(calls.length).toBe(1);
-    expect(calls[0]?.command).toBe("ffprobe");
+    expect(basename(calls[0]?.command ?? "")).toMatch(/^ffprobe(?:\.exe)?$/);
     expect(meta.videoCodec).toBe("png");
     expect(meta.durationSeconds).toBe(0);
     expect(meta.fps).toBe(0);
@@ -267,6 +354,7 @@ describe("ffprobe missing-binary fallback", () => {
 
   it("extractMediaMetadata rethrows ffprobe-missing error for non-image files without fallback", async () => {
     const { spawn } = createSpawnSpy([{ kind: "missing" }]);
+    hidePathBinaries();
     vi.resetModules();
     vi.doMock("child_process", () => ({ spawn }));
 
@@ -277,6 +365,7 @@ describe("ffprobe missing-binary fallback", () => {
 
   it("extractAudioMetadata surfaces a ffprobe-missing error verbatim", async () => {
     const { spawn, calls } = createSpawnSpy([{ kind: "missing" }]);
+    hidePathBinaries();
     vi.resetModules();
     vi.doMock("child_process", () => ({ spawn }));
 
@@ -286,11 +375,12 @@ describe("ffprobe missing-binary fallback", () => {
       /ffprobe not found/,
     );
     expect(calls.length).toBe(1);
-    expect(calls[0]?.command).toBe("ffprobe");
+    expect(basename(calls[0]?.command ?? "")).toMatch(/^ffprobe(?:\.exe)?$/);
   });
 
   it("analyzeKeyframeIntervals surfaces a ffprobe-missing error verbatim", async () => {
     const { spawn, calls } = createSpawnSpy([{ kind: "missing" }]);
+    hidePathBinaries();
     vi.resetModules();
     vi.doMock("child_process", () => ({ spawn }));
 
@@ -300,11 +390,12 @@ describe("ffprobe missing-binary fallback", () => {
       /ffprobe not found/,
     );
     expect(calls.length).toBe(1);
-    expect(calls[0]?.command).toBe("ffprobe");
+    expect(basename(calls[0]?.command ?? "")).toMatch(/^ffprobe(?:\.exe)?$/);
   });
 
   it("ffprobe-missing error message includes install hint", async () => {
     const { spawn } = createSpawnSpy([{ kind: "missing" }]);
+    hidePathBinaries();
     vi.resetModules();
     vi.doMock("child_process", () => ({ spawn }));
 

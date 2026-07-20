@@ -4,25 +4,17 @@ import { Film } from "../../icons/SystemIcons";
 import { Section } from "./propertyPanelPrimitives";
 import { ADD_METHODS, ADD_METHOD_LABELS, METHOD_TOOLTIPS } from "./gsapAnimationConstants";
 import { AnimationCard } from "./AnimationCard";
+import {
+  trackAnimationMetaUpdate,
+  type GsapAnimationEditCallbacks,
+} from "./gsapAnimationCallbacks";
+import { useTrackDesignInput } from "../../contexts/DesignPanelInputContext";
 
-interface GsapAnimationSectionProps {
+interface GsapAnimationSectionProps extends GsapAnimationEditCallbacks {
   animations: GsapAnimation[];
   multipleTimelines?: boolean;
   unsupportedTimelinePattern?: boolean;
-  onUpdateProperty: (animationId: string, property: string, value: number | string) => void;
-  onUpdateMeta: (
-    animationId: string,
-    updates: { duration?: number; ease?: string; position?: number },
-  ) => void;
-  onDeleteAnimation: (animationId: string) => void;
-  onAddProperty: (animationId: string, property: string) => void;
-  onRemoveProperty: (animationId: string, property: string) => void;
-  onUpdateFromProperty?: (animationId: string, property: string, value: number | string) => void;
-  onAddFromProperty?: (animationId: string, property: string) => void;
-  onRemoveFromProperty?: (animationId: string, property: string) => void;
   onAddAnimation: (method: "to" | "from" | "set" | "fromTo") => void;
-  onLivePreview?: (property: string, value: number | string) => void;
-  onLivePreviewEnd?: () => void;
 }
 
 export const GsapAnimationSection = memo(function GsapAnimationSection({
@@ -40,8 +32,30 @@ export const GsapAnimationSection = memo(function GsapAnimationSection({
   onAddAnimation,
   onLivePreview,
   onLivePreviewEnd,
+  onSetArcPath,
+  onUpdateArcSegment,
+  onUpdateKeyframeEase,
+  onSetAllKeyframeEases,
+  onUnroll,
 }: GsapAnimationSectionProps) {
+  const track = useTrackDesignInput();
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const trackProperty = (property: string) => {
+    const control =
+      property === "visibility"
+        ? "toggle"
+        : property === "filter" || property === "clipPath"
+          ? "text"
+          : "metric";
+    track(control, property);
+  };
+  const updateMeta = (
+    animationId: string,
+    updates: { duration?: number; ease?: string; position?: number },
+  ) => {
+    trackAnimationMetaUpdate(track, updates);
+    onUpdateMeta(animationId, updates);
+  };
 
   return (
     <Section title="Animation" icon={<Film size={15} />}>
@@ -53,9 +67,9 @@ export const GsapAnimationSection = memo(function GsapAnimationSection({
       )}
       {unsupportedTimelinePattern && (
         <p className="mb-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-400">
-          This composition uses a timeline assignment pattern (window.__timelines[...]) that the
-          editor doesn&apos;t support. Use a variable declaration (const tl = gsap.timeline()) to
-          enable editing.
+          This timeline uses a computed key (window.__timelines[variable]) the editor can&apos;t
+          resolve statically. Use a string-literal key (window.__timelines[&quot;id&quot;]) or a
+          variable declaration (const tl = gsap.timeline()) to enable editing.
         </p>
       )}
       {multipleTimelines || unsupportedTimelinePattern ? null : (
@@ -65,16 +79,94 @@ export const GsapAnimationSection = memo(function GsapAnimationSection({
               key={anim.id}
               animation={anim}
               defaultExpanded={index === 0}
-              onUpdateProperty={onUpdateProperty}
-              onUpdateMeta={onUpdateMeta}
-              onDeleteAnimation={onDeleteAnimation}
-              onAddProperty={onAddProperty}
-              onRemoveProperty={onRemoveProperty}
-              onUpdateFromProperty={onUpdateFromProperty}
-              onAddFromProperty={onAddFromProperty}
-              onRemoveFromProperty={onRemoveFromProperty}
+              onUpdateProperty={(animationId, property, value) => {
+                trackProperty(property);
+                onUpdateProperty(animationId, property, value);
+              }}
+              onUpdateMeta={updateMeta}
+              onDeleteAnimation={(animationId) => {
+                track("button", "Remove animation");
+                onDeleteAnimation(animationId);
+              }}
+              onAddProperty={(animationId, property) => {
+                track("select", "Add effect property");
+                onAddProperty(animationId, property);
+              }}
+              onRemoveProperty={(animationId, property) => {
+                track("button", `Remove ${property}`);
+                onRemoveProperty(animationId, property);
+              }}
+              onUpdateFromProperty={
+                onUpdateFromProperty
+                  ? (animationId, property, value) => {
+                      trackProperty(property);
+                      onUpdateFromProperty(animationId, property, value);
+                    }
+                  : undefined
+              }
+              onAddFromProperty={
+                onAddFromProperty
+                  ? (animationId, property) => {
+                      track("select", "Add from property");
+                      onAddFromProperty(animationId, property);
+                    }
+                  : undefined
+              }
+              onRemoveFromProperty={
+                onRemoveFromProperty
+                  ? (animationId, property) => {
+                      track("button", `Remove from ${property}`);
+                      onRemoveFromProperty(animationId, property);
+                    }
+                  : undefined
+              }
               onLivePreview={onLivePreview}
               onLivePreviewEnd={onLivePreviewEnd}
+              onSetArcPath={
+                onSetArcPath
+                  ? (animationId, config) => {
+                      track(
+                        "toggle",
+                        config.autoRotate !== undefined ? "Auto rotate" : "Arc motion",
+                      );
+                      onSetArcPath(animationId, config);
+                    }
+                  : undefined
+              }
+              onUpdateArcSegment={
+                onUpdateArcSegment
+                  ? (animationId, segmentIndex, update) => {
+                      if (update.curviness === undefined) {
+                        track("button", `Reset arc segment ${segmentIndex + 1}`);
+                      }
+                      onUpdateArcSegment(animationId, segmentIndex, update);
+                    }
+                  : undefined
+              }
+              onUpdateKeyframeEase={
+                onUpdateKeyframeEase
+                  ? (animationId, percentage, ease) => {
+                      track("select", "Keyframe ease");
+                      onUpdateKeyframeEase(animationId, percentage, ease);
+                    }
+                  : undefined
+              }
+              onSetAllKeyframeEases={
+                onSetAllKeyframeEases
+                  ? (animationId, ease) => {
+                      track("select", "All keyframe eases");
+                      onSetAllKeyframeEases(animationId, ease);
+                    }
+                  : undefined
+              }
+              onUnroll={
+                onUnroll
+                  ? (animationId) => {
+                      track("button", "Unroll animation");
+                      onUnroll(animationId);
+                    }
+                  : undefined
+              }
             />
           ))}
 
@@ -87,6 +179,7 @@ export const GsapAnimationSection = memo(function GsapAnimationSection({
                     type="button"
                     title={METHOD_TOOLTIPS[method]}
                     onClick={() => {
+                      track("button", `Add ${method} animation`);
                       onAddAnimation(method);
                       setAddMenuOpen(false);
                     }}

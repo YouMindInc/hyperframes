@@ -4,187 +4,31 @@ import { SUPPORTED_EASES, SUPPORTED_PROPS } from "@hyperframes/core/gsap-constan
 import { RESPONSIVE_GRID } from "./propertyPanelHelpers";
 import { MetricField, SelectField } from "./propertyPanelPrimitives";
 import { controlPointsForGsapEase } from "./studioMotion";
-import {
-  EASE_LABELS,
-  METHOD_LABELS,
-  METHOD_TOOLTIPS,
-  PERCENT_PROPS,
-  PROP_LABELS,
-  PROP_TOOLTIPS,
-  PROP_UNITS,
-} from "./gsapAnimationConstants";
+import { EASE_LABELS, METHOD_LABELS, METHOD_TOOLTIPS, PROP_LABELS } from "./gsapAnimationConstants";
 import { buildTweenSummary } from "./gsapAnimationHelpers";
 import { EaseCurveSection } from "./EaseCurveSection";
-const BOOLEAN_PROPS = new Set(["visibility"]);
+import { ArcPathControls } from "./ArcPathControls";
+import type { GsapAnimationEditCallbacks } from "./gsapAnimationCallbacks";
+import { ComputedTweenNotice } from "./ComputedTweenNotice";
+import { KeyframeEaseList } from "./KeyframeEaseList";
+import {
+  PropertyRow,
+  AddPropertyTrigger,
+  parseNumericOrString,
+  BOOLEAN_PROPS,
+} from "./AnimationCardParts";
 
-function isPercentProp(prop: string): boolean {
-  return PERCENT_PROPS.has(prop);
-}
-
-function displayValue(prop: string, val: number | string): string {
-  if (isPercentProp(prop)) return String(Math.round(Math.max(0, Math.min(1, Number(val))) * 100));
-  return String(val);
-}
-
-function adjustedValue(prop: string, raw: string): string {
-  if (isPercentProp(prop)) return String(Math.max(0, Math.min(1, Number(raw) / 100)));
-  return raw;
-}
-
-function RemoveButton({ onClick, title }: { onClick: () => void; title: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex-shrink-0 rounded p-0.5 text-neutral-600 transition-colors hover:bg-neutral-800 hover:text-red-400"
-      title={title}
-    >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 12 12"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      >
-        <path d="M3 3l6 6M9 3l-6 6" />
-      </svg>
-    </button>
-  );
-}
-
-function PropertyRow({
-  prop,
-  val,
-  onCommit,
-  onRemove,
-  removeTitle,
-}: {
-  prop: string;
-  val: number | string;
-  onCommit: (adjusted: string) => void;
-  onRemove: () => void;
-  removeTitle: string;
-}) {
-  if (BOOLEAN_PROPS.has(prop)) {
-    const isVisible = val === "visible" || val === 1;
-    return (
-      <div className="flex items-center gap-1">
-        <div className="min-w-0 flex-1 flex items-center gap-2 px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800">
-          <span className="flex-1 text-[11px] font-medium text-neutral-500">
-            {PROP_LABELS[prop] ?? prop}
-          </span>
-          <button
-            type="button"
-            onClick={() => onCommit(isVisible ? "hidden" : "visible")}
-            className={`flex-shrink-0 w-7 h-4 rounded-full transition-colors relative ${isVisible ? "bg-emerald-500/30" : "bg-neutral-700"}`}
-            title={isVisible ? "Visible — click to hide" : "Hidden — click to show"}
-          >
-            <span
-              className={`absolute top-0.5 h-3 w-3 rounded-full transition-transform ${isVisible ? "bg-emerald-400 translate-x-3.5" : "bg-neutral-500 translate-x-0.5"}`}
-            />
-          </button>
-        </div>
-        <RemoveButton onClick={onRemove} title={removeTitle} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1">
-      <div className="min-w-0 flex-1">
-        <MetricField
-          label={PROP_LABELS[prop] ?? prop}
-          value={displayValue(prop, val)}
-          suffix={PROP_UNITS[prop]}
-          tooltip={PROP_TOOLTIPS[prop]}
-          scrub
-          liveCommit
-          onCommit={(raw) => onCommit(adjustedValue(prop, raw))}
-        />
-      </div>
-      <RemoveButton onClick={onRemove} title={removeTitle} />
-    </div>
-  );
-}
-
-function AddPropertyTrigger({
-  adding,
-  available,
-  addLabel,
-  addTitle,
-  onAdd,
-  onOpen,
-  onClose,
-  buttonClassName,
-}: {
-  adding: boolean;
-  available: string[];
-  addLabel: string;
-  addTitle: string;
-  onAdd: (prop: string) => void;
-  onOpen: () => void;
-  onClose: () => void;
-  buttonClassName: string;
-}) {
-  if (adding && available.length > 0) {
-    return (
-      <select
-        autoFocus
-        className="min-w-0 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-[11px] text-neutral-100 outline-none"
-        defaultValue=""
-        onChange={(e) => {
-          if (e.target.value) onAdd(e.target.value);
-          onClose();
-        }}
-        onBlur={onClose}
-      >
-        <option value="" disabled>
-          Choose property…
-        </option>
-        {available.map((p) => (
-          <option key={p} value={p}>
-            {PROP_LABELS[p] ?? p}
-          </option>
-        ))}
-      </select>
-    );
-  }
-  if (available.length === 0) return null;
-  return (
-    <button type="button" onClick={onOpen} className={buttonClassName} title={addTitle}>
-      {addLabel}
-    </button>
-  );
-}
-
-function parseNumericOrString(raw: string): number | string {
-  const num = Number(raw);
-  return Number.isFinite(num) ? num : raw;
-}
-
-interface AnimationCardProps {
+interface AnimationCardProps extends GsapAnimationEditCallbacks {
   animation: GsapAnimation;
   defaultExpanded: boolean;
-  onUpdateProperty: (animationId: string, property: string, value: number | string) => void;
-  onUpdateMeta: (
-    animationId: string,
-    updates: { duration?: number; ease?: string; position?: number },
-  ) => void;
-  onDeleteAnimation: (animationId: string) => void;
-  onAddProperty: (animationId: string, property: string) => void;
-  onRemoveProperty: (animationId: string, property: string) => void;
-  onUpdateFromProperty?: (animationId: string, property: string, value: number | string) => void;
-  onAddFromProperty?: (animationId: string, property: string) => void;
-  onRemoveFromProperty?: (animationId: string, property: string) => void;
-  onLivePreview?: (property: string, value: number | string) => void;
-  onLivePreviewEnd?: () => void;
+  flat?: boolean;
 }
 
 // fallow-ignore-next-line complexity
 export const AnimationCard = memo(function AnimationCard({
   animation,
   defaultExpanded,
+  flat,
   onUpdateProperty,
   onUpdateMeta,
   onDeleteAnimation,
@@ -195,10 +39,16 @@ export const AnimationCard = memo(function AnimationCard({
   onRemoveFromProperty,
   onLivePreview,
   onLivePreviewEnd,
+  onSetArcPath,
+  onUpdateArcSegment,
+  onUpdateKeyframeEase,
+  onSetAllKeyframeEases,
+  onUnroll,
 }: AnimationCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [addingProp, setAddingProp] = useState(false);
   const [addingFromProp, setAddingFromProp] = useState(false);
+  const [expandedKfPct, setExpandedKfPct] = useState<number | null>(null);
 
   const usedProps = useMemo(
     () => new Set(Object.keys(animation.properties)),
@@ -267,7 +117,8 @@ export const AnimationCard = memo(function AnimationCard({
   const [copied, setCopied] = useState(false);
 
   const methodLabel = METHOD_LABELS[animation.method] ?? animation.method;
-  const easeName = animation.ease ?? "none";
+  const easeName =
+    (animation.keyframes ? animation.keyframes.easeEach : undefined) ?? animation.ease ?? "none";
   const easeLabel = easeName.startsWith("custom(")
     ? "Custom curve"
     : (EASE_LABELS[easeName] ?? easeName);
@@ -277,25 +128,62 @@ export const AnimationCard = memo(function AnimationCard({
       : animation.position;
 
   const summary = useMemo(() => buildTweenSummary(animation), [animation]);
+  const setKeys = Object.keys(animation.properties);
+  if (
+    animation.method === "set" &&
+    // `every` is vacuously true on an empty bag — require at least one key so a
+    // property-less set doesn't masquerade as a position row.
+    (setKeys.includes("x") || setKeys.includes("y")) &&
+    setKeys.every((k) => k === "x" || k === "y" || k === "immediateRender")
+  )
+    return (
+      <div className="border-b border-neutral-800 pb-2">
+        <div className="flex items-center gap-2 py-1.5">
+          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
+            Position
+          </span>
+          <span className="text-[11px] text-neutral-500">
+            x: {Math.round(Number(animation.properties.x ?? 0))}, y:{" "}
+            {Math.round(Number(animation.properties.y ?? 0))}
+          </span>
+          <span className="ml-auto text-[9px] text-neutral-600">drag to move</span>
+        </div>
+      </div>
+    );
 
   return (
-    <div className="border-b border-neutral-800 pb-3">
+    <div
+      data-flat-effect-card={flat ? "true" : undefined}
+      className={
+        flat
+          ? "border-b border-l-2 border-panel-accent/40 border-b-panel-hairline pb-3 pl-2"
+          : "border-b border-neutral-800 pb-3"
+      }
+    >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center gap-2 py-1.5"
       >
         <span
-          className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400"
+          className="rounded bg-panel-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-panel-accent"
           title={METHOD_TOOLTIPS[animation.method]}
         >
           {methodLabel}
         </span>
-        <span className="text-[11px] font-medium text-neutral-400" title="When this effect plays">
-          {typeof animation.position === "number" ? `${animation.position}s` : animation.position} –{" "}
-          {typeof endTime === "number" ? `${endTime.toFixed(1)}s` : endTime}
+        <span
+          className={`text-[11px] font-medium ${flat ? "text-panel-text-3" : "text-neutral-400"}`}
+          title="When this effect plays"
+        >
+          {typeof animation.position === "number"
+            ? `${parseFloat(animation.position.toFixed(3))}s`
+            : animation.position}{" "}
+          – {typeof endTime === "number" ? `${parseFloat(endTime.toFixed(3))}s` : endTime}
         </span>
-        <span className="ml-auto text-[10px] text-neutral-500" title={easeName}>
+        <span
+          className={`ml-auto text-[10px] ${flat ? "text-panel-text-3" : "text-neutral-500"}`}
+          title={easeName}
+        >
           {easeLabel}
         </span>
         <svg
@@ -303,7 +191,7 @@ export const AnimationCard = memo(function AnimationCard({
           height="10"
           viewBox="0 0 10 10"
           fill="currentColor"
-          className={`flex-shrink-0 text-neutral-500 transition-transform ${expanded ? "" : "-rotate-90"}`}
+          className={`flex-shrink-0 transition-transform ${flat ? "text-panel-text-5" : "text-neutral-500"} ${expanded ? "" : "-rotate-90"}`}
         >
           <path d="M2 3l3 4 3-4z" />
         </svg>
@@ -312,10 +200,26 @@ export const AnimationCard = memo(function AnimationCard({
       {expanded && (
         <div className="pt-2">
           <div className="space-y-3">
+            <ComputedTweenNotice
+              provenance={animation.provenance}
+              onUnroll={onUnroll ? () => onUnroll(animation.id) : undefined}
+            />
             <div className="flex items-start gap-2">
-              <p className="flex-1 text-[10px] leading-relaxed text-neutral-400 italic">
-                {summary}
-              </p>
+              <div className="flex-1">
+                <p className="text-[10px] leading-relaxed text-neutral-400 italic">{summary}</p>
+                {animation.keyframes && (
+                  <p className="mt-1 text-[9px] text-neutral-500">
+                    <span
+                      className="inline-block w-2 h-2 mr-1 align-middle"
+                      style={{
+                        background: "currentColor",
+                        clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+                      }}
+                    />
+                    Keyframed — click a segment below to edit its curve
+                  </p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -344,7 +248,7 @@ export const AnimationCard = memo(function AnimationCard({
                 value={
                   typeof animation.position === "string"
                     ? animation.position
-                    : String(Math.max(0, animation.position))
+                    : String(parseFloat(Math.max(0, animation.position).toFixed(3)))
                 }
                 suffix={typeof animation.position === "number" ? "s" : undefined}
                 tooltip="When this effect begins on the timeline"
@@ -354,29 +258,48 @@ export const AnimationCard = memo(function AnimationCard({
 
             {animation.method !== "set" && (
               <>
-                <SelectField
-                  label="Speed"
-                  value={
-                    animation.ease?.startsWith("custom(") ? "custom" : (animation.ease ?? "none")
-                  }
-                  options={[...SUPPORTED_EASES, "custom"]}
-                  onChange={(next) => {
-                    if (next === "custom") {
-                      const points = controlPointsForGsapEase(animation.ease ?? "power2.out");
-                      const path = `M0,0 C${points.x1},${points.y1} ${points.x2},${points.y2} 1,1`;
-                      onUpdateMeta(animation.id, { ease: `custom(${path})` });
-                    } else {
-                      onUpdateMeta(animation.id, { ease: next });
+                {animation.keyframes && onUpdateKeyframeEase ? (
+                  <KeyframeEaseList
+                    keyframes={animation.keyframes.keyframes}
+                    globalEase={animation.keyframes.easeEach ?? animation.ease ?? "none"}
+                    expandedPct={expandedKfPct}
+                    onToggle={setExpandedKfPct}
+                    onEaseCommit={(pct, ease) => onUpdateKeyframeEase(animation.id, pct, ease)}
+                    onApplyAll={
+                      onSetAllKeyframeEases
+                        ? (ease) => onSetAllKeyframeEases(animation.id, ease)
+                        : undefined
                     }
-                  }}
-                />
-                <EaseCurveSection
-                  ease={animation.ease ?? "none"}
-                  duration={animation.duration}
-                  onCustomEaseCommit={(customEase) =>
-                    onUpdateMeta(animation.id, { ease: customEase })
-                  }
-                />
+                  />
+                ) : (
+                  <>
+                    <SelectField
+                      label="Speed"
+                      value={easeName.startsWith("custom(") ? "custom" : easeName}
+                      options={[...SUPPORTED_EASES, "custom"]}
+                      onChange={(next) => {
+                        const easeKey = animation.keyframes ? "easeEach" : "ease";
+                        if (next === "custom") {
+                          const points = controlPointsForGsapEase(
+                            easeName !== "none" ? easeName : "power2.out",
+                          );
+                          const path = `M0,0 C${points.x1},${points.y1} ${points.x2},${points.y2} 1,1`;
+                          onUpdateMeta(animation.id, { [easeKey]: `custom(${path})` });
+                        } else {
+                          onUpdateMeta(animation.id, { [easeKey]: next });
+                        }
+                      }}
+                    />
+                    <EaseCurveSection
+                      ease={easeName}
+                      duration={animation.duration}
+                      onCustomEaseCommit={(customEase) => {
+                        const easeKey = animation.keyframes ? "easeEach" : "ease";
+                        onUpdateMeta(animation.id, { [easeKey]: customEase });
+                      }}
+                    />
+                  </>
+                )}
               </>
             )}
 
@@ -413,7 +336,7 @@ export const AnimationCard = memo(function AnimationCard({
             )}
 
             {animation.method === "fromTo" && Object.keys(animation.properties).length > 0 && (
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-400/70">
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-panel-accent/70">
                 To
               </p>
             )}
@@ -435,6 +358,39 @@ export const AnimationCard = memo(function AnimationCard({
                 ))}
               </div>
             )}
+
+            {onSetArcPath &&
+              (animation.properties.x != null ||
+                animation.properties.y != null ||
+                animation.keyframes) && (
+                <div className="border-t border-neutral-800 pt-3">
+                  <ArcPathControls
+                    arcPath={
+                      animation.arcPath ?? { enabled: false, autoRotate: false, segments: [] }
+                    }
+                    segmentCount={Math.max(
+                      animation.properties.x != null || animation.properties.y != null ? 1 : 0,
+                      (animation.keyframes?.keyframes?.length ?? 0) - 1,
+                    )}
+                    onToggle={(enabled) =>
+                      onSetArcPath(animation.id, {
+                        enabled,
+                        segments: animation.arcPath?.segments,
+                      })
+                    }
+                    onUpdateSegment={(index, update) =>
+                      onUpdateArcSegment?.(animation.id, index, update)
+                    }
+                    onToggleAutoRotate={(autoRotate) =>
+                      onSetArcPath(animation.id, {
+                        enabled: true,
+                        autoRotate,
+                        segments: animation.arcPath?.segments,
+                      })
+                    }
+                  />
+                </div>
+              )}
 
             <div className="flex items-center gap-2 pt-1">
               <AddPropertyTrigger

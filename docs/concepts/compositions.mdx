@@ -43,6 +43,8 @@ You can embed one composition inside another in two ways: loading from an extern
       data-composition-id="intro-anim"
       data-composition-src="compositions/intro-anim.html"
       data-start="0"
+      data-duration="4"
+      data-playback-start="0"
       data-track-index="3"
     ></div>
     ```
@@ -68,6 +70,8 @@ You can embed one composition inside another in two ways: loading from an extern
       </div>
     </template>
     ```
+
+    `data-playback-start` selects the child timeline time shown when the host begins. It defaults to `0`. A left trim or split advances this source-time offset by the elapsed host time multiplied by `data-playback-rate`, so the nested animation remains continuous instead of restarting.
   </Tab>
   <Tab title="Inline">
     Define a nested composition directly inside the parent. This is simpler for one-off compositions that do not need to be reused.
@@ -131,7 +135,7 @@ HyperFrames does not automatically bind `data-var-*` attributes into your compos
 
 The supported pattern is:
 
-1. Declare the variables once on the sub-comp's `<html>` root with `data-composition-variables` (id + type + default).
+1. Declare the variables once on the sub-comp's composition root with `data-composition-variables` (id + type + default) — the `<html>` element for a full-document composition, or the `[data-composition-id]` root element for a template / fragment sub-composition.
 2. Pass per-instance values on each composition host with `data-variable-values`.
 3. Read the resolved values inside the composition with `window.__hyperframes.getVariables()`. The runtime layers the host's `data-variable-values` over the declared defaults on a per-instance basis, so the same source can be embedded multiple times with different values.
 

@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { Browser, PuppeteerNode } from "puppeteer-core";
 
@@ -11,6 +15,7 @@ import {
   drainBrowserPool,
   forceReleaseBrowser,
   releaseBrowser,
+  resolveHeadlessShellPath,
   resolveBrowserGpuMode,
 } from "./browserManager.js";
 
@@ -25,6 +30,25 @@ describe("buildChromeArgs browser GPU mode", () => {
     expect(args).toContain("--use-angle=swiftshader");
     expect(args).toContain("--enable-unsafe-swiftshader");
     expect(args).not.toContain("--enable-gpu-rasterization");
+  });
+
+  it("disables GPU compositing only for software BeginFrame capture", () => {
+    const softwareBeginFrame = buildChromeArgs(
+      { ...base, captureMode: "beginframe" },
+      { browserGpuMode: "software" },
+    );
+    const softwareScreenshot = buildChromeArgs(
+      { ...base, captureMode: "screenshot" },
+      { browserGpuMode: "software" },
+    );
+    const hardwareBeginFrame = buildChromeArgs(
+      { ...base, captureMode: "beginframe", platform: "linux" },
+      { browserGpuMode: "hardware" },
+    );
+
+    expect(softwareBeginFrame).toContain("--disable-gpu-compositing");
+    expect(softwareScreenshot).not.toContain("--disable-gpu-compositing");
+    expect(hardwareBeginFrame).not.toContain("--disable-gpu-compositing");
   });
 
   it("uses Metal-backed ANGLE for hardware browser GPU mode on macOS", () => {
@@ -44,11 +68,13 @@ describe("buildChromeArgs browser GPU mode", () => {
     expect(args).not.toContain("--use-angle=swiftshader");
   });
 
-  it("uses EGL for hardware browser GPU mode on Linux", () => {
+  it("uses ANGLE-EGL for hardware browser GPU mode on Linux", () => {
     const args = buildChromeArgs({ ...base, platform: "linux" }, { browserGpuMode: "hardware" });
-    expect(args).toContain("--use-gl=egl");
+    expect(args).toContain("--use-gl=angle");
+    expect(args).toContain("--use-angle=gl-egl");
     expect(args).toContain("--enable-gpu-rasterization");
-    expect(args).not.toContain("--use-gl=angle");
+    expect(args).toContain("--ignore-gpu-blocklist");
+    expect(args).toContain("--disable-software-rasterizer");
     expect(args).not.toContain("--use-angle=swiftshader");
   });
 
@@ -64,12 +90,24 @@ describe("buildChromeArgs browser GPU mode", () => {
 });
 
 describe("resolveBrowserGpuMode", () => {
+  const setMockWebGlProbe = (info: { hasWebGL: boolean; vendor: string; renderer: string }) => {
+    const close = vi.fn().mockResolvedValue(undefined);
+    const evaluate = vi.fn().mockResolvedValue(info);
+    const launch = vi.fn().mockResolvedValue({
+      newPage: vi.fn().mockResolvedValue({ evaluate }),
+      close,
+    });
+    _setPuppeteerForTests({ launch } as unknown as PuppeteerNode);
+    return { close, launch };
+  };
+
   beforeEach(() => {
     _resetAutoBrowserGpuModeCacheForTests();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    _setPuppeteerForTests(undefined);
     _resetAutoBrowserGpuModeCacheForTests();
   });
 
@@ -134,6 +172,147 @@ describe("resolveBrowserGpuMode", () => {
     expect(p2).toBe(p3);
     const results = await Promise.all([p1, p2, p3]);
     expect(results).toEqual(["software", "software", "software"]);
+  });
+
+  it.each([
+    [
+      "llvmpipe",
+      "Google Inc. (Mesa/X.org)",
+      "ANGLE (Mesa/X.org, llvmpipe (LLVM 12.0.0 256 bits), OpenGL ES 3.2)",
+    ],
+    [
+      "Microsoft Basic Render Driver",
+      "Google Inc. (Microsoft)",
+      "ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0)",
+    ],
+    ["Mesa offscreen", "Google Inc. (Mesa)", "ANGLE (Mesa, Mesa offscreen, OpenGL ES 3.2)"],
+    [
+      "lavapipe",
+      "Google Inc. (Mesa)",
+      "ANGLE (Mesa, llvmpipe/lavapipe Vulkan software rasterizer)",
+    ],
+  ])("treats %s WebGL as software in auto mode", async (_label, vendor, renderer) => {
+    const { close, launch } = setMockWebGlProbe({
+      hasWebGL: true,
+      vendor,
+      renderer,
+    });
+
+    const mode = await resolveBrowserGpuMode("auto", {
+      chromePath: "/mock/chrome-headless-shell",
+      browserTimeout: 2000,
+    });
+
+    expect(mode).toBe("software");
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats empty WebGL renderer metadata as software in auto mode", async () => {
+    const { close, launch } = setMockWebGlProbe({
+      hasWebGL: true,
+      vendor: "",
+      renderer: "",
+    });
+
+    const mode = await resolveBrowserGpuMode("auto", {
+      chromePath: "/mock/chrome-headless-shell",
+      browserTimeout: 2000,
+    });
+
+    expect(mode).toBe("software");
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps real hardware WebGL as hardware in auto mode", async () => {
+    const { close, launch } = setMockWebGlProbe({
+      hasWebGL: true,
+      vendor: "Google Inc. (NVIDIA Corporation)",
+      renderer: "ANGLE (NVIDIA, NVIDIA A10G, OpenGL 4.6)",
+    });
+
+    const mode = await resolveBrowserGpuMode("auto", {
+      chromePath: "/mock/chrome-headless-shell",
+      browserTimeout: 2000,
+    });
+
+    expect(mode).toBe("hardware");
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("resolveHeadlessShellPath", () => {
+  const originalHeadlessShellPath = process.env.PRODUCER_HEADLESS_SHELL_PATH;
+  const originalHyperframesBrowserPath = process.env.HYPERFRAMES_BROWSER_PATH;
+
+  afterEach(() => {
+    if (originalHeadlessShellPath === undefined) delete process.env.PRODUCER_HEADLESS_SHELL_PATH;
+    else process.env.PRODUCER_HEADLESS_SHELL_PATH = originalHeadlessShellPath;
+    if (originalHyperframesBrowserPath === undefined) delete process.env.HYPERFRAMES_BROWSER_PATH;
+    else process.env.HYPERFRAMES_BROWSER_PATH = originalHyperframesBrowserPath;
+  });
+
+  it("throws a clear error when PRODUCER_HEADLESS_SHELL_PATH points at a missing binary", () => {
+    process.env.PRODUCER_HEADLESS_SHELL_PATH = "/missing/chrome-headless-shell.exe";
+
+    expect(() => resolveHeadlessShellPath({})).toThrow(
+      /Chrome binary not found at PRODUCER_HEADLESS_SHELL_PATH/,
+    );
+  });
+
+  it("uses HYPERFRAMES_BROWSER_PATH when the CLI resolved a browser explicitly", () => {
+    const dir = mkdtempSync(join(tmpdir(), "hyperframes-engine-browser-env-"));
+    try {
+      const binary = join(dir, "chrome-headless-shell");
+      writeFileSync(binary, "");
+      delete process.env.PRODUCER_HEADLESS_SHELL_PATH;
+      process.env.HYPERFRAMES_BROWSER_PATH = binary;
+
+      expect(resolveHeadlessShellPath({})).toBe(binary);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reuses chrome-headless-shell from the HyperFrames-managed cache", () => {
+    const home = mkdtempSync(join(tmpdir(), "hyperframes-engine-browser-cache-"));
+    try {
+      const binary = join(
+        home,
+        ".cache",
+        "hyperframes",
+        "chrome",
+        "chrome-headless-shell",
+        "linux-152.0.7928.2",
+        "chrome-headless-shell-linux64",
+        "chrome-headless-shell",
+      );
+      mkdirSync(join(binary, ".."), { recursive: true });
+      writeFileSync(binary, "");
+      const olderBinary = binary.replace("linux-152.0.7928.2", "linux-99.0.1.1");
+      mkdirSync(join(olderBinary, ".."), { recursive: true });
+      writeFileSync(olderBinary, "");
+
+      // os.homedir() reads HOME on POSIX and USERPROFILE on Windows.
+      const env = { ...process.env, HOME: home, USERPROFILE: home };
+      delete env.PRODUCER_HEADLESS_SHELL_PATH;
+      delete env.HYPERFRAMES_BROWSER_PATH;
+      const moduleUrl = new URL("./browserManager.ts", import.meta.url).href;
+      const stdout = execFileSync(
+        "bun",
+        [
+          "--eval",
+          `import(${JSON.stringify(moduleUrl)}).then(({ resolveHeadlessShellPath }) => process.stdout.write(resolveHeadlessShellPath({}) ?? ""))`,
+        ],
+        { encoding: "utf8", env },
+      );
+
+      expect(stdout).toBe(binary);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 
@@ -205,8 +384,8 @@ describe("browser pool", () => {
     expect(first.browser).toBe(second.browser);
     expect(launchFn).toHaveBeenCalledTimes(1);
 
-    await releaseBrowser(first.browser, poolCfg);
-    await releaseBrowser(second.browser, poolCfg);
+    await first.release();
+    await second.release();
   });
 
   it("concurrent acquires via Promise.all trigger exactly one launch", async () => {
@@ -220,14 +399,14 @@ describe("browser pool", () => {
     expect(a.browser).toBe(b.browser);
     expect(b.browser).toBe(c.browser);
 
-    await releaseBrowser(a.browser, poolCfg);
-    await releaseBrowser(b.browser, poolCfg);
-    await releaseBrowser(c.browser, poolCfg);
+    await a.release();
+    await b.release();
+    await c.release();
   });
 
   it("pool recovers from a disconnected browser", async () => {
     const first = await acquireBrowser(["--no-sandbox"], poolCfg);
-    await releaseBrowser(first.browser, poolCfg);
+    await first.release();
 
     // Simulate Chrome crash
     (first.browser as unknown as { connected: boolean }).connected = false;
@@ -240,15 +419,40 @@ describe("browser pool", () => {
     expect(second.browser).not.toBe(first.browser);
     expect(launchFn).toHaveBeenCalledTimes(2);
 
-    await releaseBrowser(second.browser, poolCfg);
+    await second.release();
   });
 
   it("release at refCount 0 closes the browser", async () => {
     const result = await acquireBrowser(["--no-sandbox"], poolCfg);
     const closeFn = result.browser.close as ReturnType<typeof vi.fn>;
 
-    await releaseBrowser(result.browser, poolCfg);
+    await result.release();
     expect(closeFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("releaseBrowser preserves the sole-owner legacy path", async () => {
+    const result = await acquireBrowser(["--no-sandbox"], poolCfg);
+    const closeFn = result.browser.close as ReturnType<typeof vi.fn>;
+
+    await releaseBrowser(result.browser);
+
+    expect(closeFn).toHaveBeenCalledTimes(1);
+    await result.release();
+    expect(closeFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("releaseBrowser rejects an ambiguous pooled browser handle", async () => {
+    const first = await acquireBrowser(["--no-sandbox"], poolCfg);
+    const second = await acquireBrowser(["--no-sandbox"], poolCfg);
+    const closeFn = first.browser.close as ReturnType<typeof vi.fn>;
+
+    await expect(releaseBrowser(first.browser)).rejects.toThrow(
+      "Cannot release a pooled browser by handle while 2 leases are active",
+    );
+    expect(closeFn).not.toHaveBeenCalled();
+
+    await first.release();
+    await second.release();
   });
 
   it("pool returns a separate browser when forceScreenshot mismatches pooled mode", async () => {
@@ -260,8 +464,8 @@ describe("browser pool", () => {
     expect(second.browser).toBe(first.browser);
     expect(launchFn).toHaveBeenCalledTimes(1);
 
-    await releaseBrowser(first.browser, poolCfg);
-    await releaseBrowser(second.browser, poolCfg);
+    await first.release();
+    await second.release();
   });
 
   it("forceReleaseBrowser does not kill Chrome when other sessions hold refs", async () => {
@@ -275,8 +479,9 @@ describe("browser pool", () => {
     // Should NOT have disconnected — other session still holds a ref
     expect(disconnectFn).not.toHaveBeenCalled();
 
-    // Release the remaining ref normally
-    await releaseBrowser(second.browser, poolCfg);
+    // Each owner releases its own identity; neither can consume the other.
+    result.forceRelease();
+    await second.release();
   });
 
   it("drainBrowserPool is safe to call when no browser is pooled", async () => {

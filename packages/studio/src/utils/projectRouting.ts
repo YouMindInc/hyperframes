@@ -7,6 +7,11 @@ export interface ProjectHashRoute {
   params: URLSearchParams;
 }
 
+export interface StudioAppProps {
+  apiBaseUrl?: string;
+  projectId?: string | null;
+}
+
 function decodeHashProjectId(value: string): string {
   try {
     return decodeURIComponent(value);
@@ -62,7 +67,7 @@ export function parseProjectIdFromHash(hash: string): string | null {
 
 function normalizeApiBaseUrl(apiBaseUrl?: string): string {
   const next = apiBaseUrl?.trim() || DEFAULT_STUDIO_API_BASE_URL;
-  return next.replace(/\/+(?=($|\?))/, "");
+  return next.replace(/\/+$/u, "");
 }
 
 function normalizeApiSuffix(suffix = ""): string {
@@ -71,13 +76,13 @@ function normalizeApiSuffix(suffix = ""): string {
 }
 
 function joinApiPath(basePath: string, suffixPath: string): string {
-  const normalizedBase = basePath.replace(/\/+$/, "");
+  const normalizedBase = basePath.replace(/\/+$/u, "");
   const normalizedSuffix = suffixPath.startsWith("/") ? suffixPath : `/${suffixPath}`;
-  return `${normalizedBase}${normalizedSuffix}`.replace(/\/{2,}/g, "/");
+  return `${normalizedBase}${normalizedSuffix}`.replace(/\/{2,}/gu, "/");
 }
 
 function isAbsoluteApiBaseUrl(apiBaseUrl: string): boolean {
-  return /^[a-z][a-z\d+.-]*:\/\//i.test(apiBaseUrl);
+  return /^[a-z][a-z\d+.-]*:\/\//iu.test(apiBaseUrl);
 }
 
 export function configureStudioApiBaseUrl(apiBaseUrl?: string): void {
@@ -109,4 +114,12 @@ export function buildProjectApiPath(
     `/projects/${encodeProjectId(projectId)}${normalizedSuffix}`,
     apiBaseUrl,
   );
+}
+
+export function buildCompositionPreviewPath(
+  projectId: string | null,
+  compositionPath: string | null,
+): string | null {
+  if (!projectId || !compositionPath) return null;
+  return buildProjectApiPath(projectId, `/preview/comp/${compositionPath}`);
 }

@@ -32,6 +32,8 @@ import {
 } from "./manualEditsTypes";
 import { roundRotationAngle } from "./manualEditsParsing";
 import { applyStudioMotionFromDom } from "./studioMotion";
+import { gsapAnimatesProperty } from "./gsapAnimatesProperty";
+import { splitTopLevelWhitespace } from "./manualEditsStyleHelpers";
 
 /* ── Gesture tracking ─────────────────────────────────────────────── */
 let studioManualEditGestureId = 0;
@@ -67,6 +69,19 @@ export function readStudioPathOffset(element: HTMLElement): { x: number; y: numb
     x: readPxCustomProperty(element, STUDIO_OFFSET_X_PROP),
     y: readPxCustomProperty(element, STUDIO_OFFSET_Y_PROP),
   };
+}
+
+/**
+ * The path offset ACTUALLY applied right now. The `--hf-studio-offset` vars can
+ * linger after GSAP re-bakes the element's transform (`translate:"none"`), so the
+ * raw var isn't a safe drag base — using it re-commits a phantom offset and flings
+ * the element off-screen. The offset only counts when the inline `translate` is the
+ * studio var-translate; otherwise it's dormant and the applied offset is zero.
+ */
+export function readAppliedStudioPathOffset(element: HTMLElement): { x: number; y: number } {
+  return (element.style.translate || "").includes(STUDIO_OFFSET_X_PROP)
+    ? readStudioPathOffset(element)
+    : { x: 0, y: 0 };
 }
 
 export function readStudioBoxSize(element: HTMLElement): { width: number; height: number } {
@@ -148,24 +163,6 @@ export function restoreInlineDisplay(element: HTMLElement): void {
 }
 
 /* ── Translate helpers ────────────────────────────────────────────── */
-function splitTopLevelWhitespace(value: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let current = "";
-  for (const char of value.trim()) {
-    if (char === "(") depth += 1;
-    if (char === ")") depth = Math.max(0, depth - 1);
-    if (/\s/.test(char) && depth === 0) {
-      if (current) parts.push(current);
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  if (current) parts.push(current);
-  return parts;
-}
-
 function composeTranslateValue(element: HTMLElement, x: string, y: string): string {
   const original = element.getAttribute(STUDIO_ORIGINAL_TRANSLATE_ATTR)?.trim();
   if (!original || original === "none") return `${x} ${y}`;
@@ -223,6 +220,7 @@ function isIdentityAfterTranslateStrip(m: DOMMatrix): boolean {
 }
 
 function stripGsapTranslateFromTransform(element: HTMLElement): void {
+  if (element.hasAttribute(STUDIO_MANUAL_EDIT_GESTURE_ATTR)) return;
   const transform = element.style.getPropertyValue("transform");
   if (!transform || transform === "none") return;
   const DOMMatrixCtor = (element.ownerDocument.defaultView as (Window & typeof globalThis) | null)
@@ -233,8 +231,11 @@ function stripGsapTranslateFromTransform(element: HTMLElement): void {
     if (m.m41 === 0 && m.m42 === 0) return;
     const offsetX = readPxCustomProperty(element, STUDIO_OFFSET_X_PROP);
     const offsetY = readPxCustomProperty(element, STUDIO_OFFSET_Y_PROP);
-    m.m41 -= offsetX;
-    m.m42 -= offsetY;
+    const angle = Math.atan2(m.b, m.a);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    m.m41 -= offsetX * cos - offsetY * sin;
+    m.m42 -= offsetX * sin + offsetY * cos;
     if (Math.abs(m.m41) < 0.01 && Math.abs(m.m42) < 0.01 && isIdentityAfterTranslateStrip(m)) {
       element.style.removeProperty("transform");
     } else {
@@ -245,6 +246,50 @@ function stripGsapTranslateFromTransform(element: HTMLElement): void {
   }
 }
 
+// GSAP owns the element's `transform` (it bakes x/y into a matrix and writes
+// `translate: none` every tick). Folding the drag offset into a CSS `translate`
+// — as the non-GSAP path does — composes ON TOP of GSAP's transform, and the
+// subsequent strip/reapply math compounds into a runaway matrix that flings the
+// element off-canvas. So for GSAP-animated elements we keep `translate: none`
+// and push the offset straight into GSAP's x/y via gsap.set; the var() offset is
+// still persisted (buildPathOffsetPatches), and GSAP re-reads it at init on
+// reload. Returns true when handled as GSAP (caller must skip the CSS path).
+function applyStudioPathOffsetViaGsap(
+  element: HTMLElement,
+  offset: { x: number; y: number },
+): boolean {
+  if (!gsapAnimatesProperty(element, "x", "y")) return false;
+  element.style.setProperty("translate", "none");
+  const win = element.ownerDocument.defaultView as
+    | (Window & {
+        gsap?: {
+          set: (el: Element, vars: Record<string, unknown>) => void;
+          getProperty: (el: Element, prop: string) => number;
+        };
+      })
+    | null;
+  if (win?.gsap) {
+    const baseX = Number.parseFloat(element.getAttribute("data-hf-drag-gsap-base-x") ?? "");
+    const baseY = Number.parseFloat(element.getAttribute("data-hf-drag-gsap-base-y") ?? "");
+    const origX = Number.parseFloat(element.getAttribute("data-hf-drag-initial-offset-x") ?? "");
+    const origY = Number.parseFloat(element.getAttribute("data-hf-drag-initial-offset-y") ?? "");
+    const gsapBaseX = Number.isFinite(baseX)
+      ? baseX
+      : (win.gsap.getProperty(element, "x") as number);
+    const gsapBaseY = Number.isFinite(baseY)
+      ? baseY
+      : (win.gsap.getProperty(element, "y") as number);
+    if (!Number.isFinite(baseX))
+      element.setAttribute("data-hf-drag-gsap-base-x", String(gsapBaseX));
+    if (!Number.isFinite(baseY))
+      element.setAttribute("data-hf-drag-gsap-base-y", String(gsapBaseY));
+    const deltaX = offset.x - (Number.isFinite(origX) ? origX : 0);
+    const deltaY = offset.y - (Number.isFinite(origY) ? origY : 0);
+    win.gsap.set(element, { x: gsapBaseX + deltaX, y: gsapBaseY + deltaY });
+  }
+  return true;
+}
+
 export function applyStudioPathOffset(
   element: HTMLElement,
   offset: { x: number; y: number },
@@ -252,6 +297,10 @@ export function applyStudioPathOffset(
 ): void {
   promoteInlineForTransform(element);
   writeStudioPathOffsetVars(element, offset, { updateBase: options.updateBase ?? true });
+  // GSAP elements: route through gsap.set, NOT a CSS translate (would corrupt the
+  // matrix). Symmetrical with applyStudioPathOffsetDraft — the commit path used to
+  // skip this branch, which is what flung dragged GSAP elements off-canvas.
+  if (applyStudioPathOffsetViaGsap(element, offset)) return;
   element.style.setProperty(
     "translate",
     composeTranslateValue(
@@ -269,6 +318,8 @@ export function applyStudioPathOffsetDraft(
 ): void {
   promoteInlineForTransform(element);
   writeStudioPathOffsetVars(element, offset, { updateBase: false });
+  if (applyStudioPathOffsetViaGsap(element, offset)) return;
+  // Non-GSAP elements: use CSS translate as before.
   element.style.setProperty(
     "translate",
     composeTranslateValue(element, `${Math.round(offset.x)}px`, `${Math.round(offset.y)}px`),
@@ -467,20 +518,7 @@ export function applyStudioRotationDraft(element: HTMLElement, rotation: { angle
   );
 }
 
-/* ── HTML patch builders (re-exported from manualEditsDomPatches) ── */
-export {
-  buildPathOffsetPatches,
-  buildClearPathOffsetPatches,
-  buildBoxSizePatches,
-  buildClearBoxSizePatches,
-  buildRotationPatches,
-  buildClearRotationPatches,
-  buildMotionPatches,
-  buildClearMotionPatches,
-} from "./manualEditsDomPatches";
-
 /* ── Seek reapply (position + motion) ────────────────────────────── */
-
 function queryStudioElements(doc: Document, attr: string): HTMLElement[] {
   const ctor = doc.defaultView?.HTMLElement;
   if (!ctor) return [];
@@ -501,19 +539,26 @@ function queryStudioElements(doc: Document, attr: string): HTMLElement[] {
 
 function reapplyPathOffsets(doc: Document): void {
   for (const el of queryStudioElements(doc, STUDIO_PATH_OFFSET_ATTR)) {
+    const gsapSkip = gsapAnimatesProperty(el, "x", "y");
     const x = el.style.getPropertyValue(STUDIO_OFFSET_X_PROP);
     const y = el.style.getPropertyValue(STUDIO_OFFSET_Y_PROP);
+    if (gsapSkip) continue;
     if (x || y) {
-      applyStudioPathOffset(el, {
-        x: Number.parseFloat(x) || 0,
-        y: Number.parseFloat(y) || 0,
-      });
+      applyStudioPathOffset(
+        el,
+        {
+          x: Number.parseFloat(x) || 0,
+          y: Number.parseFloat(y) || 0,
+        },
+        { updateBase: false },
+      );
     }
   }
 }
 
 function reapplyBoxSizes(doc: Document): void {
   for (const el of queryStudioElements(doc, STUDIO_BOX_SIZE_ATTR)) {
+    if (gsapAnimatesProperty(el, "width", "height")) continue;
     const w = Number.parseFloat(el.style.getPropertyValue(STUDIO_WIDTH_PROP));
     const h = Number.parseFloat(el.style.getPropertyValue(STUDIO_HEIGHT_PROP));
     if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
@@ -521,7 +566,6 @@ function reapplyBoxSizes(doc: Document): void {
     }
   }
 }
-
 function reapplyRotations(doc: Document): void {
   for (const el of queryStudioElements(doc, STUDIO_ROTATION_ATTR)) {
     const angle = Number.parseFloat(el.style.getPropertyValue(STUDIO_ROTATION_PROP));

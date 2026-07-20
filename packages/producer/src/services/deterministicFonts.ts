@@ -2,9 +2,17 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { defaultLogger } from "../logger.js";
 
+import { FONT_ALIAS_MAP } from "@hyperframes/core/fonts/aliases";
+import {
+  locateSystemFontVariants,
+  SYSTEM_FONT_SIZE_LIMIT,
+} from "@hyperframes/core/fonts/system-locator";
 import { parseHTML } from "linkedom";
+import postcss, { type AtRule, type Declaration, type Rule } from "postcss";
 import { EMBEDDED_FONT_DATA } from "./fontData.generated.js";
+import { fontToDataUri } from "./fontCompression.js";
 
 type FontFaceSpec = {
   weight: string;
@@ -54,8 +62,216 @@ export function parseFontFamilyValue(value: string): string[] {
     .filter((piece) => piece.length > 0);
 }
 
+function systemPrimaryReplacement(value: string, deterministicPrimary: string): string | null {
+  const families = parseFontFamilyValue(value);
+  if (families.length === 0) return null;
+  if (!GENERIC_FAMILIES.has(normalizeFamilyName(families[0]!))) return null;
+  return `${deterministicPrimary}, ${value.trim()}`;
+}
+
+function parseCssRoot(css: string): postcss.Root | null {
+  try {
+    return postcss.parse(css);
+  } catch {
+    return null;
+  }
+}
+
+function isFontFaceDeclaration(decl: Declaration): boolean {
+  const parent = decl.parent;
+  return parent?.type === "atrule" && (parent as AtRule).name.toLowerCase() === "font-face";
+}
+
+function normalizeCssDeclarations(root: postcss.Root, deterministicPrimary: string): boolean {
+  let changed = false;
+  root.walkDecls((decl) => {
+    if (decl.prop.startsWith("--")) {
+      const replacement = systemPrimaryReplacement(decl.value, deterministicPrimary);
+      if (!replacement) return;
+      decl.value = replacement;
+      changed = true;
+      return;
+    }
+
+    if (decl.prop.toLowerCase() !== "font-family") return;
+    if (isFontFaceDeclaration(decl)) {
+      return;
+    }
+    const replacement = systemPrimaryReplacement(decl.value, deterministicPrimary);
+    if (!replacement) return;
+    decl.value = replacement;
+    changed = true;
+  });
+
+  return changed;
+}
+
+function normalizeCssFontFamilyDeclarations(css: string, deterministicPrimary: string): string {
+  const root = parseCssRoot(css);
+  if (!root) return css;
+  const changed = normalizeCssDeclarations(root, deterministicPrimary);
+  return changed ? root.toString() : css;
+}
+
+function normalizeInlineStyleAttribute(style: string, deterministicPrimary: string): string {
+  const root = parseCssRoot(`*{${style}}`);
+  if (!root) return style;
+  const rule = root.first;
+  if (rule?.type !== "rule") return style;
+  const before = rule.toString();
+  normalizeCssDeclarations(root, deterministicPrimary);
+  if (rule.toString() === before) return style;
+  const serialized = ((rule as Rule).nodes ?? []).map((node) => node.toString()).join("; ");
+  return serialized.endsWith(";") ? serialized : `${serialized};`;
+}
+
+/**
+ * Import/generated HTML often uses host UI stacks such as
+ * `-apple-system, BlinkMacSystemFont, sans-serif` as a primary family. That is
+ * fine on the author's machine but not in distributed render workers, where
+ * host fonts differ by OS. Promote a bundled deterministic family to the
+ * primary slot while preserving the original stack as fallbacks.
+ */
+export function normalizeSystemFontPrimaryFamilies(
+  html: string,
+  deterministicPrimary = "Inter",
+): string {
+  const { document } = parseHTML(html);
+  let changed = false;
+
+  for (const styleEl of Array.from(document.querySelectorAll("style"))) {
+    const current = styleEl.textContent ?? "";
+    const next = normalizeCssFontFamilyDeclarations(current, deterministicPrimary);
+    if (next === current) continue;
+    styleEl.textContent = next;
+    changed = true;
+  }
+
+  for (const el of Array.from(document.querySelectorAll("[style]"))) {
+    const current = el.getAttribute("style") ?? "";
+    const next = normalizeInlineStyleAttribute(current, deterministicPrimary);
+    if (next === current) continue;
+    el.setAttribute("style", next);
+    changed = true;
+  }
+
+  for (const el of Array.from(document.querySelectorAll("[data-font-family]"))) {
+    const current = el.getAttribute("data-font-family") ?? "";
+    const next = systemPrimaryReplacement(current, deterministicPrimary);
+    if (!next) continue;
+    el.setAttribute("data-font-family", next);
+    changed = true;
+  }
+
+  return changed ? document.toString() : html;
+}
+
 /** Surfaces font-family is declared on in served HTML. */
 export type FontFamilySurface = "font-family" | "data-font-family";
+
+export type FontFamilyDeclaration = {
+  surface: FontFamilySurface;
+  declaration: string;
+  families: string[];
+};
+
+function collectCssCustomProperties(css: string, customProperties: Map<string, string>): void {
+  const root = parseCssRoot(css);
+  if (!root) return;
+  root.walkDecls((decl) => {
+    if (!decl.prop.startsWith("--")) return;
+    customProperties.set(decl.prop, decl.value);
+  });
+}
+
+function* iterateCssRootFontFamilyDeclarations(
+  root: postcss.Root,
+): Generator<FontFamilyDeclaration> {
+  const declarations: FontFamilyDeclaration[] = [];
+  root.walkDecls((decl) => {
+    if (decl.prop.toLowerCase() !== "font-family") return;
+    if (isFontFaceDeclaration(decl)) return;
+    const declaration = decl.value;
+    declarations.push({
+      surface: "font-family",
+      declaration,
+      families: parseFontFamilyValue(declaration),
+    });
+  });
+  yield* declarations;
+}
+
+function* iterateCssFontFamilyDeclarations(css: string): Generator<FontFamilyDeclaration> {
+  const root = parseCssRoot(css);
+  if (!root) return;
+  yield* iterateCssRootFontFamilyDeclarations(root);
+}
+
+function* iterateInlineStyleFontFamilyDeclarations(
+  style: string,
+): Generator<FontFamilyDeclaration> {
+  const root = parseCssRoot(`*{${style}}`);
+  if (!root) return;
+  yield* iterateCssRootFontFamilyDeclarations(root);
+}
+
+/**
+ * Collect simple CSS custom-property font aliases from style blocks and inline
+ * styles. CSS cascade is richer than this map, but for compiler-generated
+ * imports the common shape is `--font: Inter, sans-serif` paired with
+ * `font-family: var(--font)`.
+ */
+export function collectFontFamilyCustomProperties(html: string): Map<string, string> {
+  const { document } = parseHTML(html);
+  const customProperties = new Map<string, string>();
+
+  for (const styleEl of Array.from(document.querySelectorAll("style"))) {
+    collectCssCustomProperties(styleEl.textContent ?? "", customProperties);
+  }
+  for (const el of Array.from(document.querySelectorAll("[style]"))) {
+    collectCssCustomProperties(`*{${el.getAttribute("style") ?? ""}}`, customProperties);
+  }
+
+  return customProperties;
+}
+
+function primaryCssVariableName(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed.toLowerCase().startsWith("var(")) return null;
+
+  let depth = 0;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const char = trimmed[index];
+    if (char === "(") {
+      depth += 1;
+      continue;
+    }
+    if (char !== ")") continue;
+    depth -= 1;
+    if (depth !== 0) continue;
+
+    const varExpression = trimmed.slice(0, index + 1);
+    const inner = varExpression.slice(4, -1).trim();
+    const commaIndex = inner.indexOf(",");
+    const variableName = (commaIndex === -1 ? inner : inner.slice(0, commaIndex)).trim();
+    return /^--[A-Za-z0-9_-]+$/.test(variableName) ? variableName : null;
+  }
+
+  return null;
+}
+
+export function resolveFontFamilyDeclarationFamilies(
+  declaration: string,
+  customProperties: ReadonlyMap<string, string>,
+): string[] {
+  const families = parseFontFamilyValue(declaration);
+  const variableName = primaryCssVariableName(declaration);
+  if (!variableName) return families;
+
+  const resolved = customProperties.get(variableName);
+  if (!resolved) return families;
+  return [...parseFontFamilyValue(resolved), ...families.slice(1)];
+}
 
 /**
  * Iterate every font-family declaration in a compiled HTML document. Yields
@@ -65,16 +281,20 @@ export type FontFamilySurface = "font-family" | "data-font-family";
  */
 export function* iterateFontFamilyDeclarations(
   html: string,
-): Generator<{ surface: FontFamilySurface; declaration: string; families: string[] }, void, void> {
-  const sources: ReadonlyArray<readonly [RegExp, FontFamilySurface]> = [
-    [/font-family\s*:\s*([^;}{]+)[;}]?/gi, "font-family"],
-    [/data-font-family=["']([^"']+)["']/gi, "data-font-family"],
-  ];
-  for (const [regex, surface] of sources) {
-    for (const match of html.matchAll(regex)) {
-      const declaration = match[1] ?? "";
-      yield { surface, declaration, families: parseFontFamilyValue(declaration) };
-    }
+): Generator<FontFamilyDeclaration, void, void> {
+  const { document } = parseHTML(html);
+
+  for (const styleEl of Array.from(document.querySelectorAll("style"))) {
+    yield* iterateCssFontFamilyDeclarations(styleEl.textContent ?? "");
+  }
+
+  for (const el of Array.from(document.querySelectorAll("[style]"))) {
+    yield* iterateInlineStyleFontFamilyDeclarations(el.getAttribute("style") ?? "");
+  }
+
+  for (const el of Array.from(document.querySelectorAll("[data-font-family]"))) {
+    const declaration = el.getAttribute("data-font-family") ?? "";
+    yield { surface: "data-font-family", declaration, families: parseFontFamilyValue(declaration) };
   }
 }
 
@@ -153,39 +373,11 @@ const CANONICAL_FONTS: Record<string, CanonicalFontSpec> = {
   },
 };
 
-const FONT_ALIASES: Record<string, keyof typeof CANONICAL_FONTS> = {
-  inter: "inter",
-  "helvetica neue": "inter",
-  helvetica: "inter",
-  arial: "inter",
-  "helvetica bold": "inter",
-  montserrat: "montserrat",
-  futura: "montserrat",
-  "din alternate": "montserrat",
-  "arial black": "montserrat",
-  outfit: "outfit",
-  nunito: "nunito",
-  oswald: "oswald",
-  "bebas neue": "league-gothic",
-  "league gothic": "league-gothic",
-  "archivo black": "archivo-black",
-  "space mono": "space-mono",
-  "ibm plex mono": "ibm-plex-mono",
-  "jetbrains mono": "jetbrains-mono",
-  "courier new": "jetbrains-mono",
-  courier: "jetbrains-mono",
-  "eb garamond": "eb-garamond",
-  garamond: "eb-garamond",
-  "playfair display": "playfair-display",
-  "source code pro": "source-code-pro",
-  "noto sans jp": "noto-sans-jp",
-  "noto sans japanese": "noto-sans-jp",
-  roboto: "roboto",
-  "open sans": "open-sans",
-  lato: "lato",
-  poppins: "poppins",
-  "segoe ui": "roboto",
-};
+// FONT_ALIASES derives from the shared alias map in @hyperframes/core.
+// The cast is safe: every value in FONT_ALIAS_MAP is a valid CANONICAL_FONTS key.
+export const FONT_ALIASES = FONT_ALIAS_MAP as Record<string, keyof typeof CANONICAL_FONTS>;
+
+export { FONT_ALIAS_KEYS } from "@hyperframes/core/fonts/aliases";
 
 function normalizeFamilyName(family: string): string {
   return family
@@ -225,14 +417,23 @@ function extractExistingFontFaces(html: string): Set<string> {
 
 function extractRequestedFontFamilies(html: string): Map<string, string> {
   const requested = new Map<string, string>();
-  for (const { families } of iterateFontFamilyDeclarations(html)) {
-    for (const originalCase of families) {
+  const customProperties = collectFontFamilyCustomProperties(html);
+  for (const { declaration } of iterateFontFamilyDeclarations(html)) {
+    for (const originalCase of resolveFontFamilyDeclarationFamilies(
+      declaration,
+      customProperties,
+    )) {
       const normalized = originalCase.toLowerCase();
       if (!normalized || GENERIC_FAMILIES.has(normalized)) continue;
+      if (normalized.startsWith("var(")) continue;
       if (!requested.has(normalized)) requested.set(normalized, originalCase);
     }
   }
   return requested;
+}
+
+export function fontFormatHint(src: string): "collection" | "woff2" {
+  return src.startsWith("data:font/collection;") ? "collection" : "woff2";
 }
 
 function buildFontFaceRule(
@@ -245,7 +446,7 @@ function buildFontFaceRule(
   return [
     "@font-face {",
     `  font-family: "${familyName}";`,
-    `  src: url("${src}") format("woff2");`,
+    `  src: url("${src}") format("${fontFormatHint(src)}");`,
     `  font-style: ${style};`,
     `  font-weight: ${weight};`,
     "  font-display: block;",
@@ -259,6 +460,7 @@ function buildFontFaceRule(
 async function buildFontFaceCss(
   requestedFamilies: Map<string, string>,
   options: InternalFontFetchOptions,
+  fontText?: string,
 ): Promise<{
   css: string;
   unresolved: string[];
@@ -286,7 +488,7 @@ async function buildFontFaceCss(
       // already covered by the embedded bundle. This ensures that
       // compositions requesting e.g. wght@200 get that weight even
       // if the bundle only ships 400/700/900.
-      const googleFaces = await fetchGoogleFont(originalCaseFamily, options);
+      const googleFaces = await fetchGoogleFont(originalCaseFamily, options, fontText);
       for (const face of googleFaces) {
         // A weight covered by the embedded bundle is already full-coverage —
         // skip it. For weights the bundle lacks, add EVERY subset face (a
@@ -306,7 +508,7 @@ async function buildFontFaceCss(
     }
 
     // Path 2: fetch from Google Fonts (with local cache)
-    const googleFaces = await fetchGoogleFont(originalCaseFamily, options);
+    const googleFaces = await fetchGoogleFont(originalCaseFamily, options, fontText);
     if (googleFaces.length > 0) {
       for (const face of googleFaces) {
         rules.push(
@@ -322,7 +524,30 @@ async function buildFontFaceCss(
       continue;
     }
 
-    // Neither path resolved
+    // Path 3: locate font on the local filesystem, compress, and embed.
+    if (options.allowSystemFontCapture) {
+      const variants = locateSystemFontVariants(originalCaseFamily);
+      if (variants.length > 0) {
+        let totalBytes = 0;
+        for (const variant of variants) {
+          const fontBuffer = readFileSync(variant.path);
+          totalBytes += fontBuffer.length;
+          const dataUri = await fontToDataUri(fontBuffer, variant.format);
+          rules.push(buildFontFaceRule(originalCaseFamily, dataUri, variant.weight, variant.style));
+        }
+        if (totalBytes > SYSTEM_FONT_SIZE_LIMIT) {
+          defaultLogger.warn(
+            `[Compiler] System font "${originalCaseFamily}" is large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total across ${variants.length} variant(s)) — embedding anyway. Consider font subsetting for production.`,
+          );
+        }
+        defaultLogger.info(
+          `[Compiler] Embedded system font "${originalCaseFamily}" — ${variants.length} variant(s), ${(totalBytes / 1024).toFixed(0)} KB total`,
+        );
+        continue;
+      }
+    }
+
+    // No path resolved
     unresolved.push(originalCaseFamily);
   }
 
@@ -340,14 +565,14 @@ function warnUnresolvedFonts(unresolved: string[]): void {
       return acc;
     }, [])
     .sort();
-  console.warn(
+  defaultLogger.warn(
     `[Compiler] No deterministic font mapping for: ${unresolved.join(", ")}\n` +
       `  Mapped fonts: ${mapped.join(", ")}\n` +
       `  To fix, pick one:\n` +
       `    1. Use a mapped font name instead (see list above)\n` +
       `    2. Add a @font-face block in your HTML with a local or hosted font file\n` +
       `    3. Install the font locally on the render machine (Docker: add to Dockerfile)\n` +
-      `    4. Add an alias to FONT_ALIASES in deterministicFonts.ts (for contributors)\n` +
+      `    4. Add an alias to FONT_ALIAS_MAP in packages/core/src/fonts/aliases.ts (for contributors)\n` +
       `  Docs: https://hyperframes.heygen.com/docs/fonts`,
   );
 }
@@ -442,6 +667,7 @@ export class FontFetchError extends Error {
 interface InternalFontFetchOptions {
   failClosedFontFetch: boolean;
   fetchImpl: typeof fetch;
+  allowSystemFontCapture: boolean;
 }
 
 /**
@@ -514,10 +740,12 @@ async function ensureWoff2DataUri(
 async function fetchGoogleFont(
   familyName: string,
   options: InternalFontFetchOptions,
+  fontText?: string,
 ): Promise<GoogleFontFace[]> {
   const slug = fontSlug(familyName);
   const encodedFamily = encodeURIComponent(familyName);
-  const url = `https://fonts.googleapis.com/css2?family=${encodedFamily}:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700`;
+  const textParam = fontText ? `&text=${encodeURIComponent(fontText)}` : "";
+  const url = `https://fonts.googleapis.com/css2?family=${encodedFamily}:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700${textParam}`;
 
   let cssText: string;
   try {
@@ -580,7 +808,7 @@ async function fetchGoogleFont(
   }
 
   if (faces.length > 0) {
-    console.log(
+    defaultLogger.info(
       `[Compiler] Fetched ${faces.length} font face(s) for "${familyName}" from Google Fonts (cached to ${fontCacheDir(slug)})`,
     );
   }
@@ -613,6 +841,30 @@ export interface InjectDeterministicFontFacesOptions {
    * network.
    */
   fetchImpl?: typeof fetch;
+  /**
+   * When `true` (default for local renders), fonts that aren't resolved by
+   * the bundled alias map or Google Fonts are located on the local filesystem,
+   * compressed to woff2, and embedded as data URIs. Set to `false` for
+   * distributed/Lambda renders where the host filesystem is not guaranteed
+   * to contain the same fonts as the authoring machine.
+   */
+  allowSystemFontCapture?: boolean;
+}
+
+// Keep the complete CSS request under the broadly supported ~2 KB URL limit.
+// Using unique source characters covers static text plus strings authored in
+// scripts, while collapsing repeated prose and base64 assets to a tiny set.
+const GOOGLE_FONTS_TEXT_MAX_ENCODED_LENGTH = 1_700;
+
+function extractGoogleFontsText(html: string): string | undefined {
+  const { document } = parseHTML(html);
+  const decodedBodyText = document.body?.textContent ?? "";
+  const uniqueCharacters = [...new Set([...Array.from(html), ...Array.from(decodedBodyText)])].join(
+    "",
+  );
+  return encodeURIComponent(uniqueCharacters).length <= GOOGLE_FONTS_TEXT_MAX_ENCODED_LENGTH
+    ? uniqueCharacters
+    : undefined;
 }
 
 export async function injectDeterministicFontFaces(
@@ -621,7 +873,12 @@ export async function injectDeterministicFontFaces(
 ): Promise<string> {
   const failClosedFontFetch = options.failClosedFontFetch === true;
   const fetchImpl = options.fetchImpl ?? fetch;
-  const fetchOptions: InternalFontFetchOptions = { failClosedFontFetch, fetchImpl };
+  const allowSystemFontCapture = options.allowSystemFontCapture !== false;
+  const fetchOptions: InternalFontFetchOptions = {
+    failClosedFontFetch,
+    fetchImpl,
+    allowSystemFontCapture,
+  };
 
   const existingFaces = extractExistingFontFaces(html);
   const requestedFamilies = extractRequestedFontFamilies(html);
@@ -637,7 +894,19 @@ export async function injectDeterministicFontFaces(
     return html;
   }
 
-  const { css, unresolved } = await buildFontFaceCss(pendingFamilies, fetchOptions);
+  const { css, unresolved } = await buildFontFaceCss(
+    pendingFamilies,
+    fetchOptions,
+    extractGoogleFontsText(html),
+  );
+  if (unresolved.length > 0 && options.failClosedFontFetch) {
+    throw new FontFetchError(
+      unresolved.join(", "),
+      "",
+      `[Compiler] Unresolved fonts in fail-closed mode: ${unresolved.join(", ")}. ` +
+        `Distributed renders require all fonts to be resolvable.`,
+    );
+  }
   if (!css) {
     if (unresolved.length > 0) {
       warnUnresolvedFonts(unresolved);
@@ -656,7 +925,7 @@ export async function injectDeterministicFontFaces(
   styleEl.textContent = css;
   head.insertBefore(styleEl, head.firstChild);
 
-  console.log(
+  defaultLogger.info(
     `[Compiler] Injected deterministic @font-face rules for ${pendingFamilies.size - unresolved.length} requested font families`,
   );
   if (unresolved.length > 0) {

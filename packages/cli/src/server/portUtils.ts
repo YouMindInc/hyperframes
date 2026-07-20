@@ -97,6 +97,7 @@ export async function testPortOnAllHosts(
 
 interface HyperframesConfigResponse {
   isHyperframes: boolean;
+  pid?: number;
   projectName: string;
   projectDir: string;
   serverBuildSignature?: string | null;
@@ -188,7 +189,7 @@ export function detectHyperframesServer(
  * Get the PID of the process listening on a port (macOS/Linux only).
  * Returns null on Windows or if detection fails.
  */
-export async function getProcessOnPort(port: number): Promise<string | null> {
+async function getProcessOnPort(port: number): Promise<string | null> {
   if (process.platform === "win32") return null;
   try {
     const { stdout } = await execFileAsync("lsof", [`-ti:${port}`, "-sTCP:LISTEN"], {
@@ -205,6 +206,13 @@ export async function getProcessOnPort(port: number): Promise<string | null> {
 
 export interface ActiveServer {
   port: number;
+  /**
+   * Loopback host the server is reachable on, URL-ready (`127.0.0.1` or
+   * `[::1]`). Vite dev servers bind IPv6 (`::1`) while embedded servers bind
+   * IPv4; consumers must use this rather than assuming `127.0.0.1`. Defaults to
+   * `127.0.0.1` when unset (embedded scan path).
+   */
+  host?: string;
   projectName: string;
   projectDir: string;
   version: string;
@@ -271,7 +279,10 @@ export async function scanActiveServers(startPort = 3002): Promise<ActiveServer[
       ports.map(async (port) => {
         const config = await probePort(port);
         if (!config) return null;
-        const pid = await getProcessOnPort(port);
+        const pid =
+          Number.isInteger(config.pid) && Number(config.pid) > 0
+            ? String(config.pid)
+            : await getProcessOnPort(port);
         return {
           port,
           projectName: config.projectName,
@@ -336,8 +347,16 @@ export async function findPortAndServe(
   projectDir: string,
   forceNew: boolean,
   expectedServerBuildSignature: string | null = null,
+  bindHost?: string,
 ): Promise<FindPortResult> {
   const { createAdaptorServer } = await import("@hono/node-server");
+  // SECURITY (F-001): bind to loopback by default. The studio API exposes
+  // unauthenticated project file read/write/delete + render-spawn endpoints;
+  // a bare `listen(port)` binds the unspecified address (`::`/`0.0.0.0`),
+  // handing those endpoints to anyone on the LAN. Operators who genuinely
+  // need LAN exposure opt in explicitly via the HYPERFRAMES_PREVIEW_HOST
+  // env var (e.g. HYPERFRAMES_PREVIEW_HOST=0.0.0.0).
+  const host = bindHost ?? (process.env.HYPERFRAMES_PREVIEW_HOST?.trim() || "127.0.0.1");
   const normalizedDir = resolve(projectDir).replace(/\\/g, "/").toLowerCase();
   const endPort = startPort + MAX_PORT_SCAN - 1;
 
@@ -362,7 +381,7 @@ export async function findPortAndServe(
           };
           server!.once("error", onError);
           server!.once("listening", onListening);
-          server!.listen(port);
+          server!.listen(port, host);
         });
         return { type: "started", server, port };
       } catch (err: unknown) {

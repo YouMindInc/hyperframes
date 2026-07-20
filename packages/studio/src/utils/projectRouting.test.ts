@@ -106,6 +106,14 @@ describe("project routing utilities", () => {
     );
   });
 
+  it("encodes nested YouComputer project ids as one API path segment", () => {
+    configureStudioApiBaseUrl("/hyperframes-studio/api");
+
+    expect(buildProjectApiPath("hyperframes/demo", "/files/index.html")).toBe(
+      "/hyperframes-studio/api/projects/hyperframes%2Fdemo/files/index.html",
+    );
+  });
+
   it("builds API paths from a configured relative base path", () => {
     configureStudioApiBaseUrl("/hyperframes-studio/session-1/api");
 
@@ -120,16 +128,10 @@ describe("project routing utilities", () => {
       buildProjectApiPath(
         "multi-comps",
         "/preview?__hf_shader_loading=player",
-        "https://youmind.com/c/abc12345/hyperframes-studio/session-1/api",
+        "https://youmind.com/c/abc12345/hyperframes-studio/api",
       ),
     ).toBe(
-      "https://youmind.com/c/abc12345/hyperframes-studio/session-1/api/projects/multi-comps/preview?__hf_shader_loading=player",
-    );
-  });
-
-  it("preserves query parameters on base URLs and suffixes", () => {
-    expect(buildStudioApiPath("/projects?tab=renders", "/api?projectDir=%2Ftmp%2Fdemo")).toBe(
-      "/api/projects?projectDir=%2Ftmp%2Fdemo&tab=renders",
+      "https://youmind.com/c/abc12345/hyperframes-studio/api/projects/multi-comps/preview?__hf_shader_loading=player",
     );
   });
 });

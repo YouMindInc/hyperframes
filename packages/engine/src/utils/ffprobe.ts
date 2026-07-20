@@ -1,34 +1,42 @@
+// fallow-ignore-file code-duplication complexity
 import { spawn } from "child_process";
 import { readFileSync } from "fs";
 import { extname } from "path";
+import { FFPROBE_PATH_ENV, getFfprobeBinary } from "./ffmpegBinaries.js";
+import { ManagedChildProcess } from "./managedChildProcess.js";
+import { trackChildProcess } from "./processTracker.js";
 
 /** Spawn ffprobe with given args, return stdout. Throws on non-zero exit or missing binary. */
-function runFfprobe(args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("ffprobe", args);
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-    proc.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`[FFmpeg] ffprobe exited with code ${code}: ${stderr}`));
-      } else {
-        resolve(stdout);
-      }
-    });
-    proc.on("error", (err) => {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        reject(new Error("[FFmpeg] ffprobe not found. Please install FFmpeg."));
-      } else {
-        reject(err);
-      }
-    });
+async function runFfprobe(args: string[], signal?: AbortSignal): Promise<string> {
+  const command = getFfprobeBinary();
+  const proc = spawn(command, args);
+  trackChildProcess(proc);
+  let stdout = "";
+  proc.stdout.on("data", (data) => {
+    stdout += data.toString();
   });
+  const managed = new ManagedChildProcess(proc, {
+    signal,
+    deadlineAtMs: Date.now() + 30_000,
+  });
+  const outcome = await managed.wait();
+  if (outcome.reason === "spawn_error") {
+    if ((outcome.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      const configured = process.env[FFPROBE_PATH_ENV]?.trim();
+      throw new Error(
+        configured
+          ? `[FFmpeg] ffprobe not found at ${FFPROBE_PATH_ENV}="${configured}". Please install FFmpeg.`
+          : "[FFmpeg] ffprobe not found. Please install FFmpeg.",
+      );
+    }
+    throw outcome.error ?? new Error(outcome.stderr);
+  }
+  if (outcome.reason !== "exit" || outcome.exitCode !== 0) {
+    throw new Error(
+      `[FFmpeg] ffprobe ${outcome.reason} with code ${outcome.exitCode}: ${outcome.stderr}`,
+    );
+  }
+  return stdout;
 }
 
 function parseProbeJson(stdout: string): FFProbeOutput {
@@ -43,6 +51,8 @@ function parseProbeJson(stdout: string): FFProbeOutput {
 
 const videoMetadataCache = new Map<string, Promise<VideoMetadata>>();
 const audioMetadataCache = new Map<string, Promise<AudioMetadata>>();
+// FFmpeg's built-in AAC encoder emits AAC-LC, which has 1024 samples per packet.
+const AAC_LC_SAMPLES_PER_PACKET = 1024;
 
 export interface VideoColorSpace {
   /** Color transfer characteristics, e.g. "bt709", "smpte2084", "arib-std-b67" */
@@ -55,6 +65,7 @@ export interface VideoColorSpace {
 
 export interface VideoMetadata {
   durationSeconds: number;
+  videoStreamDurationSeconds: number;
   width: number;
   height: number;
   fps: number;
@@ -70,6 +81,10 @@ export interface VideoMetadata {
 
 export interface AudioMetadata {
   durationSeconds: number;
+  /** Audio stream's own duration (from `stream.duration`), falling back to
+   *  container duration when the stream field is absent. Prefer this over
+   *  `durationSeconds` for stream-level parity checks. */
+  streamDurationSeconds?: number;
   sampleRate: number;
   channels: number;
   audioCodec: string;
@@ -81,6 +96,9 @@ interface FFProbeStream {
   codec_name?: string;
   width?: number;
   height?: number;
+  duration?: string;
+  nb_frames?: string;
+  nb_read_packets?: string;
   pix_fmt?: string;
   r_frame_rate?: string;
   avg_frame_rate?: string;
@@ -264,6 +282,7 @@ export async function extractMediaMetadata(filePath: string): Promise<VideoMetad
       if (stillImageMeta) {
         return {
           durationSeconds: 0,
+          videoStreamDurationSeconds: 0,
           width: stillImageMeta.width,
           height: stillImageMeta.height,
           fps: 0,
@@ -296,8 +315,12 @@ export async function extractMediaMetadata(filePath: string): Promise<VideoMetad
     const hasAlpha =
       /(^|[^a-z])yuva|rgba|argb|bgra|gbrap|gray[a-z0-9]*a/i.test(pixelFormat) || alphaMode === "1";
 
+    const containerDuration = output?.format.duration ? parseFloat(output.format.duration) : 0;
+    const streamDuration = videoStream.duration ? parseFloat(videoStream.duration) : 0;
+
     return {
-      durationSeconds: output?.format.duration ? parseFloat(output.format.duration) : 0,
+      durationSeconds: containerDuration,
+      videoStreamDurationSeconds: streamDuration > 0 ? streamDuration : containerDuration,
       width: videoStream.width || stillImageMeta?.width || 0,
       height: videoStream.height || stillImageMeta?.height || 0,
       fps,
@@ -326,35 +349,60 @@ export async function extractMediaMetadata(filePath: string): Promise<VideoMetad
  */
 export const extractVideoMetadata = extractMediaMetadata;
 
-export async function extractAudioMetadata(filePath: string): Promise<AudioMetadata> {
-  const cached = audioMetadataCache.get(filePath);
+export async function extractAudioMetadata(
+  filePath: string,
+  options?: { signal?: AbortSignal },
+): Promise<AudioMetadata> {
+  // A caller-owned abort signal cannot safely share a cached in-flight probe:
+  // cancelling one consumer would also cancel unrelated consumers. Signal-bound
+  // probes therefore bypass the process-promise cache.
+  const cached = options?.signal ? undefined : audioMetadataCache.get(filePath);
   if (cached) return cached;
 
   const probePromise = (async (): Promise<AudioMetadata> => {
-    const stdout = await runFfprobe([
-      "-v",
-      "quiet",
-      "-print_format",
-      "json",
-      "-show_format",
-      "-show_streams",
-      filePath,
-    ]);
+    const stdout = await runFfprobe(
+      ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filePath],
+      options?.signal,
+    );
     const output = parseProbeJson(stdout);
     const audioStream = output.streams.find((s) => s.codec_type === "audio");
     if (!audioStream) throw new Error("[FFmpeg] No audio stream found");
 
-    const durationSeconds = output.format.duration ? parseFloat(output.format.duration) : 0;
+    let durationSeconds = output.format.duration ? parseFloat(output.format.duration) : 0;
+    const streamDuration = audioStream.duration ? parseFloat(audioStream.duration) : undefined;
+    const sampleRate = audioStream.sample_rate ? parseInt(audioStream.sample_rate) : 44100;
+    const audioCodec = audioStream.codec_name || "unknown";
+    if (audioCodec === "aac" && sampleRate > 0) {
+      const packetStdout = await runFfprobe([
+        "-v",
+        "quiet",
+        "-select_streams",
+        "a:0",
+        "-count_packets",
+        "-show_entries",
+        "stream=nb_read_packets",
+        "-print_format",
+        "json",
+        filePath,
+      ]);
+      const packetOutput = parseProbeJson(packetStdout);
+      const packetCount = Number(packetOutput.streams[0]?.nb_read_packets);
+      if (Number.isFinite(packetCount) && packetCount > 0) {
+        durationSeconds = (packetCount * AAC_LC_SAMPLES_PER_PACKET) / sampleRate;
+      }
+    }
 
     return {
       durationSeconds,
-      sampleRate: audioStream.sample_rate ? parseInt(audioStream.sample_rate) : 44100,
+      streamDurationSeconds: streamDuration && streamDuration > 0 ? streamDuration : undefined,
+      sampleRate,
       channels: audioStream.channels || 2,
-      audioCodec: audioStream.codec_name || "unknown",
+      audioCodec,
       bitrate: output.format.bit_rate ? parseInt(output.format.bit_rate) : undefined,
     };
   })();
 
+  if (options?.signal) return probePromise;
   audioMetadataCache.set(filePath, probePromise);
   probePromise.catch(() => {
     if (audioMetadataCache.get(filePath) === probePromise) {

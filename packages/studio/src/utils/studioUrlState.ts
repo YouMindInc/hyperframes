@@ -1,9 +1,7 @@
 import type { RightPanelTab } from "./studioHelpers";
 import { buildProjectHash, parseProjectHashRoute } from "./projectRouting";
-import {
-  STUDIO_INSPECTOR_PANELS_ENABLED,
-  STUDIO_MOTION_PANEL_ENABLED,
-} from "../components/editor/manualEditingAvailability";
+import { STUDIO_INSPECTOR_PANELS_ENABLED } from "../components/editor/manualEditingAvailability";
+import { roundTo3 } from "./rounding";
 
 export interface StudioUrlSelectionState {
   sourceFile?: string;
@@ -21,22 +19,32 @@ export interface StudioUrlState {
   selection: StudioUrlSelectionState | null;
 }
 
-const VALID_TABS: RightPanelTab[] = ["layers", "design", "motion", "renders"];
+const VALID_TABS: RightPanelTab[] = ["layers", "design", "renders", "slideshow", "variables"];
+
+/**
+ * The composition a schema-level panel (Variables / Slideshow) targets on the
+ * master view, where there is no explicit `activeCompPath`. Prefer the
+ * `index.html` convention, but fall back to the first `.html` in the file tree
+ * (composition-browser order) so projects whose entry file is `card.html`,
+ * `hero.html`, etc. don't silently mis-target a non-existent `index.html`.
+ * Returns null when the project carries no composition file at all.
+ */
+export function resolveMasterCompositionPath(fileTree: string[]): string | null {
+  if (fileTree.includes("index.html")) return "index.html";
+  return fileTree.find((p) => p.endsWith(".html")) ?? null;
+}
 
 export function normalizeStudioUrlPanelTab(
   tab: RightPanelTab | null,
   options: {
     inspectorPanelsEnabled?: boolean;
-    motionPanelEnabled?: boolean;
   } = {},
 ): RightPanelTab | null {
   if (!tab) return null;
   if (!VALID_TABS.includes(tab)) return null;
   const inspectorPanelsEnabled = options.inspectorPanelsEnabled ?? STUDIO_INSPECTOR_PANELS_ENABLED;
-  const motionPanelEnabled = options.motionPanelEnabled ?? STUDIO_MOTION_PANEL_ENABLED;
 
   if (!inspectorPanelsEnabled && tab !== "renders") return "renders";
-  if (tab === "motion" && !motionPanelEnabled) return "design";
   return tab;
 }
 
@@ -111,13 +119,15 @@ export function readStudioUrlStateFromWindow(): StudioUrlState {
   return parseStudioUrlStateFromHash(window.location.hash);
 }
 
+// Pre-existing param-assembly complexity — surfaced by this PR's line shifts.
+// fallow-ignore-next-line complexity
 export function buildStudioHash(projectId: string, state: StudioUrlState): string {
   const params = new URLSearchParams();
 
   params.set("v", "1");
   if (state.activeCompPath) params.set("comp", state.activeCompPath);
   if (state.currentTime != null && Number.isFinite(state.currentTime)) {
-    params.set("t", String(Math.max(0, Math.round(state.currentTime * 1000) / 1000)));
+    params.set("t", String(Math.max(0, roundTo3(state.currentTime))));
   }
   if (state.rightPanelTab) params.set("tab", state.rightPanelTab);
   if (state.rightCollapsed != null) params.set("rc", state.rightCollapsed ? "1" : "0");

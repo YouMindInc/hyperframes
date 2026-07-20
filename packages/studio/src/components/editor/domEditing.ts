@@ -26,14 +26,17 @@ export {
 // Layers, text fields, capabilities, selection, patch ops
 export {
   buildDefaultDomEditTextField,
+  buildDomEditPatchTarget,
   buildDomEditStylePatchOperation,
   buildDomEditTextPatchOperation,
   collectDomEditLayerItems,
   countDomEditChildLayers,
+  buildTextFieldChildLocator,
   getDomEditLayerKey,
   getDomEditNonEditableReason,
   getDomEditTargetKey,
   isTextEditableSelection,
+  readHfId,
   refreshDomEditSelection,
   resolveDomEditCapabilities,
   resolveDomEditSelection,

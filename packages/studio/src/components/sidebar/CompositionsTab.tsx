@@ -1,5 +1,7 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { buildProjectApiPath } from "../../utils/projectRouting";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { setPreviewMediaMuted } from "../../player/lib/timelineIframeHelpers";
+import { TIMELINE_COMPOSITION_MIME } from "../../utils/timelineCompositionDrop";
 
 interface CompositionsTabProps {
   projectId: string;
@@ -7,7 +9,9 @@ interface CompositionsTabProps {
   activeComposition: string | null;
   onSelect: (comp: string) => void;
   onRenderComposition?: (comp: string) => void;
+  onAddToTimeline?: (comp: string) => void;
   isRendering?: boolean;
+  lintFindingsByFile?: Map<string, { count: number; messages: string[] }>;
 }
 
 const DEFAULT_PREVIEW_STAGE = { width: 1920, height: 1080 };
@@ -87,12 +91,13 @@ function resolveIframeDuration(iframe: HTMLIFrameElement | null): number | null 
   }
 }
 
-function syncIframePlayback(iframe: HTMLIFrameElement | null, shouldPlay: boolean): boolean {
+export function syncIframePlayback(iframe: HTMLIFrameElement | null, shouldPlay: boolean): boolean {
   try {
     const player = (iframe?.contentWindow as PreviewWindow | null)?.__player;
     if (!player) return false;
 
     if (shouldPlay) {
+      setPreviewMediaMuted(iframe, true);
       player.play?.();
       return true;
     }
@@ -112,6 +117,8 @@ function CompCard({
   onSelect,
   onRender,
   isRendering,
+  lintInfo,
+  onAddToTimeline,
 }: {
   projectId: string;
   comp: string;
@@ -119,12 +126,15 @@ function CompCard({
   onSelect: () => void;
   onRender?: () => void;
   isRendering?: boolean;
+  lintInfo?: { count: number; messages: string[] };
+  onAddToTimeline?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [stageSize, setStageSize] = useState(DEFAULT_PREVIEW_STAGE);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draggedRef = useRef(false);
 
   const requestIframePlaybackSync = useCallback((shouldPlay: boolean) => {
     if (syncTimer.current) {
@@ -175,10 +185,32 @@ function CompCard({
 
   return (
     <div
-      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      draggable
+      onDragStart={(event) => {
+        draggedRef.current = true;
+        event.dataTransfer.effectAllowed = "copy";
+        event.dataTransfer.setData(TIMELINE_COMPOSITION_MIME, JSON.stringify({ sourcePath: comp }));
+      }}
+      onDragEnd={() => {
+        window.setTimeout(() => {
+          draggedRef.current = false;
+        }, 0);
+      }}
+      onClick={() => {
+        if (!draggedRef.current) onSelect();
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
       onPointerEnter={handleEnter}
       onPointerLeave={handleLeave}
-      className={`group/card w-full text-left px-2 py-1.5 flex items-center gap-2.5 transition-colors cursor-pointer ${
+      className={`group/card w-full select-none text-left px-2 py-1.5 flex items-center gap-2.5 transition-colors cursor-grab active:cursor-grabbing ${
         isActive
           ? "bg-studio-accent/10 border-l-2 border-studio-accent"
           : "border-l-2 border-transparent hover:bg-neutral-800/50"
@@ -216,10 +248,32 @@ function CompCard({
           tabIndex={-1}
         />
       </div>
-      <div className="min-w-0 flex-1">
-        <span className="text-[11px] font-medium text-neutral-300 truncate block">{name}</span>
+      <div
+        className="min-w-0 flex-1"
+        title={lintInfo && lintInfo.count > 0 ? lintInfo.messages.join("\n") : undefined}
+      >
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] font-medium text-neutral-300 truncate">{name}</span>
+          {lintInfo && lintInfo.count > 0 && (
+            <span className="flex-shrink-0 w-2 h-2 rounded-full bg-amber-400" />
+          )}
+        </div>
         <span className="text-[9px] text-neutral-600 truncate block">{comp}</span>
       </div>
+      {onAddToTimeline && (
+        <button
+          type="button"
+          title={`Add ${name} to timeline at playhead`}
+          aria-label={`Add ${name} to timeline at playhead`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onAddToTimeline();
+          }}
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-neutral-600 opacity-0 transition-[color,background-color,opacity] hover:bg-neutral-800 hover:text-studio-accent group-hover/card:opacity-100 group-focus-within/card:opacity-100 focus:opacity-100"
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      )}
       {onRender && (
         <button
           type="button"
@@ -262,7 +316,9 @@ export const CompositionsTab = memo(function CompositionsTab({
   activeComposition,
   onSelect,
   onRenderComposition,
+  onAddToTimeline,
   isRendering,
+  lintFindingsByFile,
 }: CompositionsTabProps) {
   if (compositions.length === 0) {
     return (
@@ -282,7 +338,9 @@ export const CompositionsTab = memo(function CompositionsTab({
           isActive={activeComposition === comp}
           onSelect={() => onSelect(comp)}
           onRender={onRenderComposition ? () => onRenderComposition(comp) : undefined}
+          onAddToTimeline={onAddToTimeline ? () => onAddToTimeline(comp) : undefined}
           isRendering={isRendering}
+          lintInfo={lintFindingsByFile?.get(comp)}
         />
       ))}
     </div>

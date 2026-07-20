@@ -35,9 +35,21 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { type CanvasResolution } from "@hyperframes/core";
-import { type EngineConfig, getEncoderPreset, resolveConfig } from "@hyperframes/engine";
+import { type CanvasResolution, fpsToNumber } from "@hyperframes/core";
+import {
+  type EngineConfig,
+  type VideoFrameFormat,
+  getEncoderPreset,
+  normalizeVp9CpuUsed,
+  resolveConfig,
+} from "@hyperframes/engine";
 import { defaultLogger, type ProducerLogger } from "../../logger.js";
+import {
+  applyRenderWarningPolicy,
+  type RenderJob,
+  type RenderStrictness,
+} from "../renderOrchestrator.js";
+import { closeFileServerSafely } from "../fileServer.js";
 import { runAudioStage } from "../render/stages/audioStage.js";
 import { runCompileStage } from "../render/stages/compileStage.js";
 import { runExtractVideosStage } from "../render/stages/extractVideosStage.js";
@@ -53,7 +65,11 @@ import {
   type PlanDimensions,
   sha256Hex,
 } from "../render/stages/planHash.js";
-import { validateNoGpuEncode, validateNoSystemFonts } from "../render/planValidation.js";
+import {
+  validateDistributedDuration,
+  validateNoGpuEncode,
+  validateNoSystemFonts,
+} from "../render/planValidation.js";
 import { snapshotRuntimeEnv } from "../render/runtimeEnvSnapshot.js";
 import {
   buildSyntheticRenderJob,
@@ -104,8 +120,20 @@ export interface DistributedRenderConfig {
   crf?: number;
   /** Target video bitrate (e.g. `"10M"`); mutually exclusive with `crf`. */
   bitrate?: string;
+  /**
+   * Source-video frame extraction format. Defaults to `"auto"`, matching the
+   * in-process renderer: alpha/alpha-capable sources extract as PNG, other
+   * sources extract as JPG unless the caller explicitly requests `"png"`.
+   */
+  videoFrameFormat?: VideoFrameFormat;
   /** Output resolution preset; engages Chrome `deviceScaleFactor` supersampling. */
   outputResolution?: CanvasResolution;
+  /**
+   * True when `outputResolution` was normalized from an aspect-agnostic alias
+   * (`1080p`, `hd`, `4k`, `uhd`) — the compile stage re-targets the preset
+   * to the composition's orientation.
+   */
+  outputResolutionAspectAgnostic?: boolean;
 
   /**
    * Frames per chunk. When explicitly set, that value is used and
@@ -128,6 +156,23 @@ export interface DistributedRenderConfig {
   chunkSize?: number;
   /** Default `16`. Caps long renders to fewer-but-longer chunks for operational fairness. */
   maxParallelChunks?: number;
+  /**
+   * Upper bound on frames-per-chunk, in frames. Optional; when omitted (the
+   * default) chunk sizing is unchanged. When set, chunking targets the fewest
+   * chunks whose per-chunk frame count stays at or below this bound, still
+   * capped by `maxParallelChunks`:
+   *
+   *     chunkCount = clamp(ceil(totalFrames / targetChunkFrames), 1, maxParallelChunks)
+   *
+   * This bounds per-chunk render *time* (which scales with frames-per-chunk) so
+   * a single chunk can't exceed a downstream per-chunk timeout on a long video,
+   * while short videos still collapse to few chunks. It is a ceiling, not a
+   * fixed size: a video short enough to fit in fewer chunks gets fewer. Ignored
+   * when `chunkSize` is set (an explicit fixed size already pins per-chunk
+   * frames). Mutually exclusive with `chunkSize` in intent; if both are passed,
+   * `chunkSize` wins and `targetChunkFrames` is a no-op.
+   */
+  targetChunkFrames?: number;
   /** Runtime hint; consumed by future per-runtime budget checks. The current implementation records the value but does not enforce. */
   runtimeCap?: "lambda" | "temporal" | "cloud-run-job" | "k8s-job" | "none";
 
@@ -161,10 +206,14 @@ export interface DistributedRenderConfig {
   cfr?: boolean;
 
   logger?: ProducerLogger;
+  /** JSON-safe engine snapshot carried across cloud/process boundaries. */
+  engineConfig?: EngineConfig;
   /** Optional engine config override (env vars are not read when provided). */
   producerConfig?: EngineConfig;
   /** Entry HTML file relative to `projectDir`. Defaults to `"index.html"`. */
   entryFile?: string;
+  /** Strict rejects correctness warnings; best-effort returns a qualified outcome. */
+  strictness?: RenderStrictness;
   /** Caller-supplied AbortSignal. Threaded through compile / probe / extract / audio stages. */
   abortSignal?: AbortSignal;
   /**
@@ -214,6 +263,25 @@ export interface PlanResult {
   format: DistributedFormat;
   ffmpegVersion: string;
   producerVersion: string;
+}
+
+/** Applies the same audio correctness policy used by the in-process renderer. */
+export function applyDistributedAudioWarningPolicy(
+  job: RenderJob,
+  audioError: string,
+  log: ProducerLogger = defaultLogger,
+): void {
+  applyRenderWarningPolicy(
+    job,
+    [
+      {
+        code: "audio_processing_failed",
+        message: `Audio mix failed; output would be video-only: ${audioError}`,
+        details: { mediaType: "audio" },
+      },
+    ],
+    log,
+  );
 }
 
 /**
@@ -310,6 +378,7 @@ export const FORMAT_NOT_SUPPORTED_IN_DISTRIBUTED = "FORMAT_NOT_SUPPORTED_IN_DIST
  * gate.
  */
 export class FormatNotSupportedInDistributedError extends Error {
+  // fallow-ignore-next-line unused-class-member
   readonly code: typeof FORMAT_NOT_SUPPORTED_IN_DISTRIBUTED = FORMAT_NOT_SUPPORTED_IN_DISTRIBUTED;
   readonly format: string;
   readonly reason: string;
@@ -410,11 +479,18 @@ export function measurePlanDirBytes(planDir: string): number {
  * the caller's fan-out intent: passing `maxParallelChunks=16` without
  * `chunkSize` produces 16 chunks (subject to the `MIN_CHUNK_SIZE` floor
  * on tiny renders). Explicit numbers, including `240`, take precedence.
+ *
+ * Optional `targetChunkFrames` caps per-chunk frames in the auto-sized path:
+ * the auto-sizer then targets `clamp(ceil(totalFrames / targetChunkFrames), 1,
+ * maxParallelChunks)` chunks, so short videos collapse to fewer chunks and long
+ * videos add chunks (up to the cap) to keep each one under the bound. It is a
+ * no-op when omitted, and ignored when `configChunkSize` is set.
  */
 export function resolveChunkPlan(
   totalFrames: number,
   configChunkSize: number | undefined,
   maxParallelChunks: number,
+  targetChunkFrames?: number,
 ): { chunkCount: number; effectiveChunkSize: number } {
   // Integer-only inputs: a fractional `totalFrames` (e.g. 10.5) would
   // otherwise produce a last chunk with non-integer `endFrame`, and the
@@ -430,8 +506,22 @@ export function resolveChunkPlan(
   if (configChunkSize !== undefined) {
     assertPositiveInteger("configChunkSize", configChunkSize);
   }
+  if (targetChunkFrames !== undefined) {
+    assertPositiveInteger("targetChunkFrames", targetChunkFrames);
+  }
+  // `targetChunkFrames` lowers the auto-sizer's effective parallelism so the
+  // chosen chunk count keeps frames-per-chunk at or below the bound, without
+  // ever exceeding `maxParallelChunks`. It only affects the auto-sized path
+  // (`configChunkSize === undefined`); an explicit `chunkSize` already pins
+  // per-chunk frames and takes precedence. When `targetChunkFrames` is
+  // undefined, `autoSizeParallel === maxParallelChunks` and the auto-sized
+  // chunk size is identical to the prior behavior.
+  const autoSizeParallel =
+    targetChunkFrames === undefined
+      ? maxParallelChunks
+      : Math.min(maxParallelChunks, Math.max(1, Math.ceil(totalFrames / targetChunkFrames)));
   const resolvedChunkSize =
-    configChunkSize ?? Math.max(MIN_CHUNK_SIZE, Math.ceil(totalFrames / maxParallelChunks));
+    configChunkSize ?? Math.max(MIN_CHUNK_SIZE, Math.ceil(totalFrames / autoSizeParallel));
   const naiveCount = Math.ceil(totalFrames / resolvedChunkSize);
   const chunkCount = Math.min(maxParallelChunks, Math.max(1, naiveCount));
   const effectiveChunkSize = Math.max(resolvedChunkSize, Math.ceil(totalFrames / chunkCount));
@@ -523,12 +613,17 @@ function buildLockedRenderConfig(input: {
   forceScreenshot: boolean;
   deviceScaleFactor: number;
   ffmpegVersion: string;
+  engineConfig: Pick<EngineConfig, "vp9CpuUsed">;
   effectiveChunkSize: number;
   chunkCount: number;
   runtimeEnv: Record<string, string>;
 }): LockedRenderConfig {
   const { config, forceScreenshot, deviceScaleFactor, ffmpegVersion } = input;
   const { encoder, pixelFormat, preset } = resolveEncoderTriple(config);
+  const locksVp9CpuUsed =
+    encoder === "libvpx-vp9-software"
+      ? { vp9CpuUsed: normalizeVp9CpuUsed(input.engineConfig.vp9CpuUsed) }
+      : {};
   return {
     captureMode: forceScreenshot ? "screenshot" : "beginframe",
     forceScreenshot,
@@ -545,6 +640,7 @@ function buildLockedRenderConfig(input: {
     preset,
     crf: config.crf,
     bitrate: config.bitrate,
+    ...locksVp9CpuUsed,
     // GOP === chunkSize so every chunk's first frame is an IDR keyframe and
     // ffmpeg concat-copy round-trips losslessly.
     gopSize: input.effectiveChunkSize,
@@ -661,7 +757,7 @@ export async function plan(
     }
   };
   const cfg: EngineConfig = {
-    ...(config.producerConfig ?? resolveConfig()),
+    ...(config.producerConfig ?? config.engineConfig ?? resolveConfig()),
     browserGpuMode: "software",
     forceScreenshot: false,
   };
@@ -672,13 +768,16 @@ export async function plan(
     format: config.format,
     crf: config.crf,
     bitrate: config.bitrate,
+    videoFrameFormat: config.videoFrameFormat,
     outputResolution: config.outputResolution,
+    outputResolutionAspectAgnostic: config.outputResolutionAspectAgnostic,
     // HDR is banned in distributed mode. force-sdr keeps the
     // extract / encoder paths off the HDR branches entirely.
     hdrMode: config.hdrMode ?? "force-sdr",
+    strictness: config.strictness,
     entryFile: config.entryFile ?? "index.html",
     logger: config.logger,
-    producerConfig: config.producerConfig,
+    producerConfig: cfg,
   });
   const entryFile = config.entryFile ?? "index.html";
   const htmlPath = join(projectDir, entryFile);
@@ -743,10 +842,23 @@ export async function plan(
     // Distributed renders fail closed on font-fetch errors so the planDir
     // is content-addressed against deterministic fonts only.
     failClosedFontFetch: config.failClosedFontFetch !== false,
+    // Distributed renders must not capture host-specific system fonts —
+    // the Lambda/worker filesystem won't have the same fonts installed.
+    allowSystemFontCapture: false,
+    variables: config.variables,
   });
   let compiled = compileResult.compiled;
   const composition = compileResult.composition;
-  const { deviceScaleFactor, forceScreenshot } = compileResult;
+  const { deviceScaleFactor } = compileResult;
+  // Apply the same low-memory mode bump that renderOrchestrator does at
+  // renderOrchestrator.ts:1598-1606 — compileStage does not consult
+  // cfg.lowMemoryMode, so the probe would otherwise see forceScreenshot:false
+  // on a constrained host and launch in beginframe mode (the exact bug #1236
+  // fixed for the in-process path).
+  // TODO: move this bump into compileStage so both call sites simplify and
+  // the rule lives in one place (follow-up; out of scope for #1236 fix).
+  let forceScreenshot = compileResult.forceScreenshot;
+  if (cfg.lowMemoryMode) forceScreenshot = true;
   // composition.{width,height} are the authored page dimensions. The
   // post-supersample output dims are `compileResult.outputWidth/outputHeight`
   // — chunks render at output dims, but planHash + composition.json record
@@ -769,6 +881,7 @@ export async function plan(
     workDir,
     job,
     cfg,
+    forceScreenshot,
     log,
     assertNotAborted,
     compiled,
@@ -782,7 +895,12 @@ export async function plan(
   job.duration = probeResult.duration;
   job.totalFrames = probeResult.totalFrames;
   const totalFrames = probeResult.totalFrames;
-  if (probeResult.fileServer) probeResult.fileServer.close();
+  validateDistributedDuration({
+    duration: probeResult.duration,
+    totalFrames,
+    fps: fpsToNumber(job.config.fps),
+  });
+  if (probeResult.fileServer) closeFileServerSafely(probeResult.fileServer, "plan", log);
   if (probeResult.probeSession) {
     // Close inside a try/catch — leaking a Chrome process here would mask
     // the original plan() result on cancellation paths.
@@ -823,6 +941,9 @@ export async function plan(
     abortSignal,
     assertNotAborted,
   });
+  if (audioResult.audioError) {
+    applyDistributedAudioWarningPolicy(job, audioResult.audioError, log);
+  }
 
   // Promote staged artifacts from the temp work tree into the final planDir
   // shape. `workDir` is `<planDir>/.plan-work/` — always the same filesystem
@@ -877,6 +998,7 @@ export async function plan(
     totalFrames,
     config.chunkSize,
     maxParallel,
+    config.targetChunkFrames,
   );
   const chunks = buildChunkSlices(totalFrames, chunkCount, effectiveChunkSize);
 
@@ -889,6 +1011,7 @@ export async function plan(
     forceScreenshot,
     deviceScaleFactor,
     ffmpegVersion,
+    engineConfig: cfg,
     effectiveChunkSize,
     chunkCount,
     runtimeEnv,

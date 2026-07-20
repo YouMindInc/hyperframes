@@ -11,6 +11,10 @@ export function useFileManagerContext(): FileManagerValue {
   return ctx;
 }
 
+export function useFileManagerContextOptional(): FileManagerValue | null {
+  return useContext(FileManagerContext);
+}
+
 export function FileManagerProvider({
   value: {
     editingFile,
@@ -26,6 +30,8 @@ export function FileManagerProvider({
     readProjectFile,
     writeProjectFile,
     readOptionalProjectFile,
+    observeProjectFileVersion,
+    updateEditingFileContent,
     revealSourceOffset,
     openSourceForSelection,
     handleFileSelect,
@@ -64,6 +70,8 @@ export function FileManagerProvider({
       readProjectFile,
       writeProjectFile,
       readOptionalProjectFile,
+      observeProjectFileVersion,
+      updateEditingFileContent,
       revealSourceOffset,
       openSourceForSelection,
       handleFileSelect,
@@ -96,6 +104,8 @@ export function FileManagerProvider({
       readProjectFile,
       writeProjectFile,
       readOptionalProjectFile,
+      observeProjectFileVersion,
+      updateEditingFileContent,
       revealSourceOffset,
       openSourceForSelection,
       handleFileSelect,
