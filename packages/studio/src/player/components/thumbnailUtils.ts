@@ -1,3 +1,4 @@
+import { buildProjectApiPath } from "../../utils/projectRouting";
 /** Rendered height of a timeline-clip thumbnail strip, in CSS px. */
 export const THUMBNAIL_CLIP_HEIGHT = 66;
 
@@ -50,5 +51,5 @@ export function encodePreviewPath(relativePath: string): string {
  */
 export function resolveMediaPreviewUrl(src: string, projectId: string): string {
   if (/^(?:https?:|data:|blob:)/i.test(src)) return src;
-  return `/api/projects/${projectId}/preview/${encodePreviewPath(src)}`;
+  return buildProjectApiPath(projectId, `/preview/${encodePreviewPath(src)}`);
 }

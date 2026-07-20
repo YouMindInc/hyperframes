@@ -65,6 +65,21 @@ async function getPreviewSignature(projectDir: string): Promise<string> {
 }
 
 describe("registerPreviewRoutes", () => {
+  it("injects the configured Studio API base path", async () => {
+    const projectDir = createProjectDir();
+    const app = new Hono();
+    registerPreviewRoutes(
+      app,
+      createAdapter(projectDir, { apiBaseUrl: "/c/demo/hyperframes-studio/api" }),
+    );
+
+    const response = await app.request("http://localhost/projects/demo/preview");
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('<base href="/c/demo/hyperframes-studio/api/projects/demo/preview/">');
+  });
+
   it("injects Studio GSAP motion manifest runtime into project preview", async () => {
     const projectDir = createProjectDir();
     writeFileSync(

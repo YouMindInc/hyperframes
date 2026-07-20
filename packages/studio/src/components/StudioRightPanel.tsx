@@ -1,3 +1,4 @@
+import { buildProjectApiPath } from "../utils/projectRouting";
 import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import { PropertyPanel } from "./editor/PropertyPanel";
 import { LayersPanel } from "./editor/LayersPanel";
@@ -289,18 +290,15 @@ export function StudioRightPanel({
         onProgress?: (progress: BackgroundRemovalProgress) => void;
       },
     ) => {
-      const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/media/remove-background`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            inputPath,
-            createBackgroundPlate: options.createBackgroundPlate === true,
-            quality: options.quality ?? "balanced",
-          }),
-        },
-      );
+      const response = await fetch(buildProjectApiPath(projectId, `/media/remove-background`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inputPath,
+          createBackgroundPlate: options.createBackgroundPlate === true,
+          quality: options.quality ?? "balanced",
+        }),
+      });
       const data = (await response.json().catch(() => ({}))) as {
         jobId?: string;
         error?: string;

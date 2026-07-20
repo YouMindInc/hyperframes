@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { findUnsafeDomPatchValues } from "@hyperframes/core/studio-api/finite-mutation";
 import type { DomEditSelection } from "../components/editor/domEditingTypes";
 
@@ -100,7 +101,9 @@ export async function assignGsapTargetAutoIdIfNeeded({
     return false;
   }
   const res = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
+    buildStudioApiPath(
+      `/projects/${encodeURIComponent(projectId)}/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
+    ),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

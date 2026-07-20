@@ -1,3 +1,4 @@
+import { buildProjectApiPath, buildStudioApiPath } from "../../utils/projectRouting";
 // Composition drill-down stack management for NLEContext/EditorShell
 import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlayerStore } from "../../player";
@@ -29,7 +30,7 @@ export function useCompositionStack({
     {
       id: "master",
       label: "Master",
-      previewUrl: `/api/projects/${projectId}/preview`,
+      previewUrl: buildProjectApiPath(projectId, `/preview`),
     },
   ]);
 
@@ -89,7 +90,9 @@ export function useCompositionStack({
             .split("/")
             .pop()
             ?.replace(/\.html$/, "") || resolvedPath;
-        const previewUrl = `/api/projects/${projectId}/preview/comp/${encodePreviewPath(resolvedPath)}`;
+        const previewUrl = buildStudioApiPath(
+          `/projects/${projectId}/preview/comp/${encodePreviewPath(resolvedPath)}`,
+        );
         return [...prev, { id: resolvedPath, label, previewUrl }];
       });
     },
@@ -103,14 +106,16 @@ export function useCompositionStack({
     const master: CompositionLevel = {
       id: "master",
       label: "Master",
-      previewUrl: `/api/projects/${projectId}/preview`,
+      previewUrl: buildProjectApiPath(projectId, `/preview`),
     };
     if (activeCompositionPath === "index.html") {
       usePlayerStore.getState().setElements([]);
       updateCompositionStack([master]);
     } else if (activeCompositionPath && activeCompositionPath.startsWith("compositions/")) {
       const label = activeCompositionPath.replace(/^compositions\//, "").replace(/\.html$/, "");
-      const previewUrl = `/api/projects/${projectId}/preview/comp/${encodePreviewPath(activeCompositionPath)}`;
+      const previewUrl = buildStudioApiPath(
+        `/projects/${projectId}/preview/comp/${encodePreviewPath(activeCompositionPath)}`,
+      );
       usePlayerStore.getState().setElements([]);
       updateCompositionStack((prev) => {
         if (prev[prev.length - 1]?.id === activeCompositionPath) return prev;

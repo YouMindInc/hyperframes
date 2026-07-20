@@ -1,3 +1,4 @@
+import { buildProjectApiPath, buildStudioApiPath } from "../utils/projectRouting";
 import { useCallback, useRef } from "react";
 import { findUnsafeDomPatchValues } from "@hyperframes/core/studio-api/finite-mutation";
 import { FONT_EXT } from "../utils/mediaTypes";
@@ -114,6 +115,7 @@ export function useDomEditCommits({
 }: UseDomEditCommitsParams) {
   const resolveImportedFontAsset = useCallback(
     (fontFamilyValue: string): ImportedFontAsset | null => {
+      if (!projectId) return null;
       const family = primaryFontFamilyValue(fontFamilyValue);
       if (!family) return null;
       const imported = importedFontAssetsRef.current.find(
@@ -129,7 +131,7 @@ export function useDomEditCommits({
       return {
         family: fontFamilyFromAssetPath(asset),
         path: asset,
-        url: `/api/projects/${projectId}/preview/${asset}`,
+        url: buildProjectApiPath(projectId, `/preview/${asset}`),
       };
     },
     [fileTree, projectId, importedFontAssetsRef],
@@ -148,7 +150,7 @@ export function useDomEditCommits({
       const targetPath = selection.sourceFile || activeCompPath || "index.html";
 
       const readResponse = await fetch(
-        `/api/projects/${pid}/files/${encodeURIComponent(targetPath)}`,
+        buildProjectApiPath(pid, `/files/${encodeURIComponent(targetPath)}`),
       );
       if (!readResponse.ok) {
         throw await createStudioSaveHttpError(readResponse, `Failed to read ${targetPath}`);
@@ -198,7 +200,9 @@ export function useDomEditCommits({
       domEditSaveTimestampRef.current = Date.now();
 
       const patchResponse = await fetch(
-        `/api/projects/${pid}/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
+        buildStudioApiPath(
+          `/projects/${pid}/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
+        ),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -1,3 +1,4 @@
+import { buildProjectApiPath } from "../utils/projectRouting";
 // Soft-reload-first preview sync for timeline timing edits: server GSAP
 // position mutations (shift / scale), folding those rewrites into the timing
 // edit's undo history, and swapping the rewritten script into the live preview
@@ -16,7 +17,7 @@ export async function readFileContent(projectId: string, targetPath: string): Pr
     throw new Error(`Unsafe path: ${targetPath}`);
   }
   const response = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(targetPath)}`,
+    buildProjectApiPath(projectId, `/files/${encodeURIComponent(targetPath)}`),
   );
   if (!response.ok) {
     throw new Error(`Failed to read ${targetPath}`);
@@ -30,9 +31,7 @@ export async function readFileContent(projectId: string, targetPath: string): Pr
 
 /** Verify rollback ownership support before any GSAP mutation can land. */
 async function requireGsapOwnershipProtocol(projectId: string): Promise<void> {
-  const response = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/gsap-mutation-capabilities`,
-  );
+  const response = await fetch(buildProjectApiPath(projectId, `/gsap-mutation-capabilities`));
   if (!response.ok) {
     throw new GsapOwnershipProtocolError("Server does not support owned GSAP mutations");
   }
@@ -55,7 +54,7 @@ async function rollbackOwnedMutation(
     throw new Error(`Unsafe path: ${targetPath}`);
   }
   const response = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/gsap-mutation-rollback/${encodeURIComponent(targetPath)}`,
+    buildProjectApiPath(projectId, `/gsap-mutation-rollback/${encodeURIComponent(targetPath)}`),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -153,7 +152,7 @@ async function postGsapMutation(
   let response: Response;
   try {
     response = await fetch(
-      `/api/projects/${encodeURIComponent(projectId)}/gsap-mutations/${encodeURIComponent(filePath)}`,
+      buildProjectApiPath(projectId, `/gsap-mutations/${encodeURIComponent(filePath)}`),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

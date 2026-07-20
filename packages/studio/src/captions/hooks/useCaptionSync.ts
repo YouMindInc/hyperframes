@@ -1,3 +1,4 @@
+import { buildProjectApiPath, buildStudioApiPath } from "../../utils/projectRouting";
 import { useCallback, useRef } from "react";
 import { useCaptionStore } from "../store";
 import { useMountEffect } from "../../hooks/useMountEffect";
@@ -75,7 +76,7 @@ export function useCaptionSync(projectId: string | null) {
 
     const overrides = buildOverrides(state.model);
 
-    fetch(`/api/projects/${pid}/files/${encodeURIComponent("caption-overrides.json")}`, {
+    fetch(buildProjectApiPath(pid, `/files/${encodeURIComponent("caption-overrides.json")}`), {
       method: "PUT",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(overrides, null, 2),
@@ -118,7 +119,9 @@ export function useCaptionSync(projectId: string | null) {
 
     try {
       const res = await fetch(
-        `/api/projects/${pid}/files/${encodeURIComponent("caption-overrides.json")}`,
+        buildStudioApiPath(
+          `/projects/${pid}/files/${encodeURIComponent("caption-overrides.json")}`,
+        ),
       );
       if (!res.ok) return;
       const data = await res.json();

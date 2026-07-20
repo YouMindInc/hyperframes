@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 // fallow-ignore-file complexity
 import { useCallback, useRef } from "react";
 import type { TimelineElement } from "../player";
@@ -398,7 +399,9 @@ export function useTimelineEditing({
         }
 
         const removeResponse = await fetch(
-          `/api/projects/${pid}/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
+          buildStudioApiPath(
+            `/projects/${pid}/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
+          ),
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

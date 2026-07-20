@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "./projectRouting";
 import type { StudioSelectionSnapshot } from "@hyperframes/studio-server";
 import type { DomEditSelection } from "../components/editor/domEditing";
 
@@ -23,7 +24,9 @@ function thumbnailUrl({
   });
   if (selection.selector) params.set("selector", selection.selector);
   if (selection.selectorIndex != null) params.set("selectorIndex", String(selection.selectorIndex));
-  return `/api/projects/${encodeURIComponent(projectId)}/thumbnail/${compPath}?${params.toString()}`;
+  return buildStudioApiPath(
+    `/projects/${encodeURIComponent(projectId)}/thumbnail/${compPath}?${params.toString()}`,
+  );
 }
 
 export function buildStudioSelectionSnapshot({

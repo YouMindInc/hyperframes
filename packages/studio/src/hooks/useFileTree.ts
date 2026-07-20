@@ -1,3 +1,4 @@
+import { buildProjectApiPath } from "../utils/projectRouting";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { FONT_EXT } from "../utils/mediaTypes";
 import { fontFamilyFromAssetPath, type ImportedFontAsset } from "../components/editor/fontAssets";
@@ -21,7 +22,7 @@ export function useFileTree({ projectId, projectIdRef }: UseFileTreeOptions) {
     }
     let cancelled = false;
     setFileTreeLoaded(false);
-    fetch(`/api/projects/${projectId}`)
+    fetch(buildProjectApiPath(projectId))
       .then((r) => r.json())
       .then((data: { files?: string[]; dir?: string; compositions?: string[] }) => {
         if (!cancelled && data.files) setFileTree(data.files);
@@ -42,7 +43,7 @@ export function useFileTree({ projectId, projectIdRef }: UseFileTreeOptions) {
   const refreshFileTree = useCallback(async () => {
     const pid = projectIdRef.current;
     if (!pid) return;
-    const res = await fetch(`/api/projects/${pid}`);
+    const res = await fetch(buildProjectApiPath(pid));
     const data = await res.json();
     if (data.files) setFileTree(data.files);
   }, [projectIdRef]);
@@ -55,17 +56,16 @@ export function useFileTree({ projectId, projectIdRef }: UseFileTreeOptions) {
     [fileTree],
   );
 
-  const fontAssets = useMemo<ImportedFontAsset[]>(
-    () =>
-      assets
-        .filter((asset) => FONT_EXT.test(asset))
-        .map((asset) => ({
-          family: fontFamilyFromAssetPath(asset),
-          path: asset,
-          url: `/api/projects/${projectId}/preview/${asset}`,
-        })),
-    [assets, projectId],
-  );
+  const fontAssets = useMemo<ImportedFontAsset[]>(() => {
+    if (!projectId) return [];
+    return assets
+      .filter((asset) => FONT_EXT.test(asset))
+      .map((asset) => ({
+        family: fontFamilyFromAssetPath(asset),
+        path: asset,
+        url: buildProjectApiPath(projectId, `/preview/${asset}`),
+      }));
+  }, [assets, projectId]);
 
   return {
     projectDir,

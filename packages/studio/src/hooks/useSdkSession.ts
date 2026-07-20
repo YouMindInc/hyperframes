@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { MutableRefObject } from "react";
 import { openComposition } from "@hyperframes/sdk";
@@ -22,7 +23,9 @@ async function readProjectFileOptional(
   // already confines both values to single segments of this same-origin URL.
   if (path.includes("\0") || path.includes("..")) return undefined;
   const res = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}?optional=1`,
+    buildStudioApiPath(
+      `/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}?optional=1`,
+    ),
   );
   if (!res.ok) return undefined;
   const data = (await res.json()) as { content?: string };
@@ -200,7 +203,7 @@ export function useSdkSession(
       return () => import.meta.hot?.off?.("hf:file-change", handler);
     }
     // SSE fallback for the embedded studio server.
-    const es = new EventSource("/api/events");
+    const es = new EventSource(buildStudioApiPath("/events"));
     es.addEventListener("file-change", handler);
     return () => es.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps

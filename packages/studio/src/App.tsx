@@ -58,17 +58,18 @@ import { DomEditProvider } from "./contexts/DomEditContext";
 import { StudioSplash } from "./components/StudioSplash";
 import { useServerConnection } from "./hooks/useServerConnection";
 import { useTimelineAddAtPlayhead } from "./hooks/useTimelineAddAtPlayhead";
-import {
-  normalizeStudioCompositionPath,
-  readStudioUrlStateFromWindow,
-  resolveMasterCompositionPath,
-} from "./utils/studioUrlState";
+import * as studioUrlState from "./utils/studioUrlState";
 import { trackStudioSessionStart } from "./telemetry/events";
 import { hasFiredSessionStart, markSessionStartFired } from "./telemetry/config";
+import { buildCompositionPreviewPath, type StudioAppProps } from "./utils/projectRouting";
+
 // fallow-ignore-next-line complexity
-export function StudioApp() {
-  const { projectId, resolving, waitingForServer } = useServerConnection();
-  const initialUrlStateRef = useRef(readStudioUrlStateFromWindow());
+export function StudioApp({ apiBaseUrl, projectId: explicitProjectId }: StudioAppProps = {}) {
+  const { projectId, resolving, waitingForServer } = useServerConnection(
+    explicitProjectId,
+    apiBaseUrl,
+  );
+  const initialUrlStateRef = useRef(studioUrlState.readStudioUrlStateFromWindow());
   const viewModeValue = useViewModeState();
   useEffect(() => {
     if (resolving || waitingForServer) return;
@@ -125,7 +126,7 @@ export function StudioApp() {
     setRefreshKey,
   });
   const masterCompPath = useMemo(
-    () => resolveMasterCompositionPath(fileManager.fileTree),
+    () => studioUrlState.resolveMasterCompositionPath(fileManager.fileTree),
     [fileManager.fileTree],
   );
   const { sdkHandle, editFlowSdkSession } = useStudioSdkSessions(
@@ -137,7 +138,7 @@ export function StudioApp() {
   useEffect(() => {
     if (activeCompPathHydrated) return;
     if (!fileManager.fileTreeLoaded) return;
-    const nextCompPath = normalizeStudioCompositionPath(
+    const nextCompPath = studioUrlState.normalizeStudioCompositionPath(
       initialUrlStateRef.current.activeCompPath,
       fileManager.fileTree,
     );
@@ -340,9 +341,7 @@ export function StudioApp() {
   const renderClipContent = useRenderClipContent({
     projectIdRef: fileManager.projectIdRef,
     compIdToSrc,
-    activePreviewUrl: activeCompPath
-      ? `/api/projects/${projectId}/preview/comp/${activeCompPath}`
-      : null,
+    activePreviewUrl: buildCompositionPreviewPath(projectId, activeCompPath),
     effectiveTimelineDuration,
   });
   const compositionDimensions = useCompositionDimensions();

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { injectScriptsIntoHtml, stripEmbeddedRuntimeScripts } from "@hyperframes/core/compiler";
 import type { StudioApiAdapter } from "../types.js";
+import { buildStudioApiPath } from "../helpers/apiBase.js";
 import { resolveWithinProject } from "../helpers/safePath.js";
 import { getMimeType } from "../helpers/mime.js";
 import { buildSubCompositionHtml } from "../helpers/subComposition.js";
@@ -391,7 +392,7 @@ export function registerPreviewRoutes(api: Hono, adapter: PreviewApiAdapter): vo
       }
 
       // Inject <base> for relative asset resolution
-      const baseHref = `/api/projects/${project.id}/preview/`;
+      const baseHref = buildStudioApiPath(adapter, `/projects/${project.id}/preview/`);
       if (!bundled.includes("<base")) {
         bundled = bundled.replace(/<head>/i, `<head><base href="${baseHref}">`);
       }
@@ -504,7 +505,7 @@ export function registerPreviewRoutes(api: Hono, adapter: PreviewApiAdapter): vo
     const stamped = pinSubCompHfIds(compFile, compPath);
     if (stamped === null) return c.text("not found", 404); // file removed between stat and read
 
-    const baseHref = `/api/projects/${project.id}/preview/`;
+    const baseHref = buildStudioApiPath(adapter, `/projects/${project.id}/preview/`);
     let html = buildSubCompositionHtml(
       project.dir,
       compPath,

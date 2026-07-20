@@ -14,7 +14,7 @@ import type { TimelineElement } from "../player/store/playerStore";
  * the earliest start time when multiple clips share the same source.
  *
  * Matching mirrors `deriveUsedPaths` in AssetsTab: an element's `src` may be a
- * fully-absolute URL, a server-relative `/api/projects/…/preview/…` path, a
+ * fully-absolute URL, a server-relative Studio API preview path, a
  * `./`-prefixed relative path, or a bare relative path — all normalised to the
  * project-relative form that `assetPath` carries.
  *
@@ -49,7 +49,7 @@ function normalizeSrc(src: string): string {
     // Not an absolute URL — leave as-is
   }
   s = s
-    .replace(/^\/api\/projects\/[^/]+\/preview\//, "")
+    .replace(/^.*\/api\/projects\/[^/]+\/preview\//, "")
     .replace(/^\.?\//, "")
     .split(/[?#]/)[0];
   try {

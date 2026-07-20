@@ -1,3 +1,4 @@
+import { buildProjectApiPath } from "../utils/projectRouting";
 import { useEffect, useRef, type MutableRefObject } from "react";
 import type { DomEditSelection } from "../components/editor/domEditing";
 import { usePlayerStore } from "../player";
@@ -26,7 +27,7 @@ function reportSelectionPublishError(error: unknown): void {
 }
 
 function putSelection(projectId: string, selection: unknown, signal?: AbortSignal): Promise<void> {
-  return fetch(`/api/projects/${encodeURIComponent(projectId)}/selection`, {
+  return fetch(buildProjectApiPath(projectId, `/selection`), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ selection }),

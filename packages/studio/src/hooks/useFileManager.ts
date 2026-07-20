@@ -1,3 +1,4 @@
+import { buildProjectApiPath, buildStudioApiPath } from "../utils/projectRouting";
 import { useState, useCallback, useMemo, useRef } from "react";
 import type { EditingFile } from "../utils/studioHelpers";
 import { FONT_EXT, isMediaFile } from "../utils/mediaTypes";
@@ -83,7 +84,9 @@ export function useFileManager({
     async (path: string): Promise<string> => {
       if (!projectId) throw new Error("No active project");
       const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}`,
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}`,
+        ),
       );
       if (!response.ok) throw new Error(`Failed to read ${path}`);
       const data = (await response.json()) as { content?: string; version?: string };
@@ -101,7 +104,9 @@ export function useFileManager({
       let expectedVersion = await studioExpectedFileVersion(fileVersions, path, expectedContent);
       if (expectedVersion === undefined) {
         const preflight = await fetch(
-          `/api/projects/${encodeURIComponent(writeProjectId)}/files/${encodeURIComponent(path)}`,
+          buildStudioApiPath(
+            `/projects/${encodeURIComponent(writeProjectId)}/files/${encodeURIComponent(path)}`,
+          ),
         );
         if (preflight.ok) {
           const data = (await preflight.json()) as { content?: string; version?: string };
@@ -122,7 +127,9 @@ export function useFileManager({
         let response: Response;
         try {
           response = await fetch(
-            `/api/projects/${encodeURIComponent(writeProjectId)}/files/${encodeURIComponent(path)}`,
+            buildStudioApiPath(
+              `/projects/${encodeURIComponent(writeProjectId)}/files/${encodeURIComponent(path)}`,
+            ),
             {
               method: "PUT",
               headers: {
@@ -179,7 +186,9 @@ export function useFileManager({
     async (path: string): Promise<string> => {
       if (!projectId) throw new Error("No active project");
       const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}?optional=1`,
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}?optional=1`,
+        ),
       );
       if (!response.ok) throw new Error(`Failed to read ${path}`);
       const data = (await response.json()) as { content?: string; version?: string };
@@ -219,7 +228,11 @@ export function useFileManager({
         setEditingFile({ path, content: null });
         return;
       }
-      fetch(`/api/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`)
+      fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`,
+        ),
+      )
         .then((r) => {
           if (!r.ok) throw new Error(`Failed to load ${path} (${r.status})`);
           return r.json();
@@ -253,9 +266,14 @@ export function useFileManager({
       const requestId = ++revealRequestIdRef.current;
       const controller = new AbortController();
       revealAbortRef.current = controller;
-      fetch(`/api/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(sourceFile)}`, {
-        signal: controller.signal,
-      })
+      fetch(
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(sourceFile)}`,
+        ),
+        {
+          signal: controller.signal,
+        },
+      )
         .then((r) => r.json())
         .then((data: { content?: string; version?: string }) => {
           if (requestId !== revealRequestIdRef.current) return;
@@ -286,7 +304,7 @@ export function useFileManager({
 
       const qs = dir ? `?dir=${encodeURIComponent(dir)}` : "";
       try {
-        const res = await fetch(`/api/projects/${encodeURIComponent(pid)}/upload${qs}`, {
+        const res = await fetch(buildProjectApiPath(pid, `/upload${qs}`), {
           method: "POST",
           body: formData,
         });
@@ -327,7 +345,9 @@ export function useFileManager({
           '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n</head>\n<body>\n\n</body>\n</html>\n';
       }
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`,
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`,
+        ),
         {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
@@ -351,7 +371,9 @@ export function useFileManager({
       const pid = projectIdRef.current;
       if (!pid) return;
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path + "/.gitkeep")}`,
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path + "/.gitkeep")}`,
+        ),
         {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
@@ -374,7 +396,9 @@ export function useFileManager({
       const pid = projectIdRef.current;
       if (!pid) return;
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`,
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(path)}`,
+        ),
         {
           method: "DELETE",
         },
@@ -396,7 +420,9 @@ export function useFileManager({
       const pid = projectIdRef.current;
       if (!pid) return;
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(oldPath)}`,
+        buildStudioApiPath(
+          `/projects/${encodeURIComponent(pid)}/files/${encodeURIComponent(oldPath)}`,
+        ),
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -422,7 +448,7 @@ export function useFileManager({
     async (path: string) => {
       const pid = projectIdRef.current;
       if (!pid) return;
-      const res = await fetch(`/api/projects/${encodeURIComponent(pid)}/duplicate-file`, {
+      const res = await fetch(buildProjectApiPath(pid, `/duplicate-file`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path }),
@@ -462,7 +488,7 @@ export function useFileManager({
         .map((asset) => ({
           family: fontFamilyFromAssetPath(asset),
           path: asset,
-          url: `/api/projects/${encodeURIComponent(pid)}/preview/${asset}`,
+          url: buildProjectApiPath(pid, `/preview/${asset}`),
         }));
       importedFontAssetsRef.current = [
         ...imported,

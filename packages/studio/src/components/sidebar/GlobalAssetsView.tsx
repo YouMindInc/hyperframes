@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../../utils/projectRouting";
 import { useEffect, useMemo, useState } from "react";
 
 // Cross-project asset view — the global media-use cache (~/.media), fetched from
@@ -43,7 +44,7 @@ export function GlobalAssetsView({ searchQuery }: { searchQuery: string }) {
   const [records, setRecords] = useState<GlobalAssetRecord[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/assets/global")
+    fetch(buildStudioApiPath("/assets/global"))
       .then((r) => (r.ok ? r.json() : { assets: [] }))
       .then((d) => {
         if (!cancelled) setRecords(Array.isArray(d.assets) ? d.assets : []);

@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useCallback } from "react";
 import {
   readProjectFileContent,
@@ -72,7 +73,9 @@ async function commitStructuralMutation(
 
   deps.domEditSaveTimestampRef.current = Date.now();
   const mutateResponse = await fetch(
-    `/api/projects/${pid}/file-mutations/${route}/${encodeURIComponent(targetPath)}`,
+    buildStudioApiPath(
+      `/projects/${pid}/file-mutations/${route}/${encodeURIComponent(targetPath)}`,
+    ),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

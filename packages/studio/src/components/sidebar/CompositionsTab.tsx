@@ -1,3 +1,4 @@
+import { buildProjectApiPath } from "../../utils/projectRouting";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { setPreviewMediaMuted } from "../../player/lib/timelineIframeHelpers";
 import { TIMELINE_COMPOSITION_MIME } from "../../utils/timelineCompositionDrop";
@@ -161,7 +162,7 @@ function CompCard({
     setHovered(false);
   };
   const name = comp.replace(/^compositions\//, "").replace(/\.html$/, "");
-  const previewUrl = `/api/projects/${projectId}/preview/comp/${comp}`;
+  const previewUrl = buildProjectApiPath(projectId, `/preview/comp/${comp}`);
   const previewScale = resolveCompositionPreviewScale({
     cardWidth: CARD_W,
     cardHeight: CARD_H,

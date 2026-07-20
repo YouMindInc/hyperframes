@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { StudioSaveHttpError, trackStudioSaveFailure } from "../utils/studioSaveDiagnostics";
 import type { DomEditPatchBatch } from "./domEditCommitTypes";
 import { formatFieldsSuffix } from "./gsapScriptCommitHelpers";
@@ -96,7 +97,9 @@ export async function patchElementBatches(projectId: string, batches: DomEditPat
   const body = JSON.stringify({ batches });
   try {
     const response = await fetch(
-      `/api/projects/${encodeURIComponent(projectId)}/file-mutations/patch-element-batches`,
+      buildStudioApiPath(
+        `/projects/${encodeURIComponent(projectId)}/file-mutations/patch-element-batches`,
+      ),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

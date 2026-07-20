@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { GsapAnimation, GsapKeyframesData, ParsedGsap } from "@hyperframes/core/gsap-parser";
 import { isStudioHoldSet } from "@hyperframes/core/gsap-parser";
@@ -104,7 +105,9 @@ export async function fetchParsedAnimations(
 ): Promise<ParsedGsap | null> {
   try {
     const res = await fetch(
-      `/api/projects/${encodeURIComponent(projectId)}/gsap-animations/${encodeURIComponent(sourceFile)}`,
+      buildStudioApiPath(
+        `/projects/${encodeURIComponent(projectId)}/gsap-animations/${encodeURIComponent(sourceFile)}`,
+      ),
       // Always re-read the freshly-parsed source; no per-call timestamp (which
       // would defeat caching forever and is a deterministic-render no-no).
       { cache: "no-store" },

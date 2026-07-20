@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../../utils/projectRouting";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   googleFontStylesheetUrl,
@@ -175,7 +176,7 @@ export function FontFamilyField({
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/fonts")
+    void fetch(buildStudioApiPath("/fonts"))
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { fonts?: string[] } | null) => {
         if (cancelled || !Array.isArray(data?.fonts)) return;
@@ -190,7 +191,7 @@ export function FontFamilyField({
   useEffect(() => {
     let cancelled = false;
     setLoadingGoogleFonts(true);
-    void fetch("/api/fonts/google")
+    void fetch(buildStudioApiPath("/fonts/google"))
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { fonts?: string[] } | null) => {
         if (cancelled || !Array.isArray(data?.fonts)) return;
@@ -329,7 +330,9 @@ export function FontFamilyField({
 
   const importSystemFont = async (family: string): Promise<ImportedFontAsset | null> => {
     if (!onImportFonts) return null;
-    const response = await fetch(`/api/fonts/file?family=${encodeURIComponent(family)}`);
+    const response = await fetch(
+      buildStudioApiPath(`/fonts/file?family=${encodeURIComponent(family)}`),
+    );
     if (!response.ok) return null;
     const blob = await response.blob();
     const ext = response.headers.get("Content-Disposition")?.match(/\.(\w+)"?$/)?.[1] ?? "ttf";

@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { buildProjectHash, parseProjectIdFromHash } from "../utils/projectRouting";
+import {
+  buildProjectHash,
+  buildStudioApiPath,
+  configureStudioApiBaseUrl,
+  parseProjectIdFromHash,
+} from "../utils/projectRouting";
 import { useMountEffect } from "./useMountEffect";
 
 interface ServerConnectionState {
@@ -18,7 +23,11 @@ interface ServerConnectionState {
  * Polls every 2 s until the server responds, then transitions automatically.
  * Cleans up pending timers on unmount so it is safe under React StrictMode.
  */
-export function useServerConnection(): ServerConnectionState {
+export function useServerConnection(
+  explicitProjectId: string | null = null,
+  apiBaseUrl?: string,
+): ServerConnectionState {
+  configureStudioApiBaseUrl(apiBaseUrl);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
   const [waitingForServer, setWaitingForServer] = useState(false);
@@ -37,12 +46,12 @@ export function useServerConnection(): ServerConnectionState {
     }
 
     function tryConnect() {
-      fetch("/api/projects")
+      fetch(buildStudioApiPath("/projects"))
         .then((r) => r.json())
         .then((data) => {
           if (cancelled) return;
-          if (hashProjectId) {
-            setProjectId(hashProjectId);
+          if (explicitProjectId || hashProjectId) {
+            setProjectId(explicitProjectId ?? hashProjectId);
             setWaitingForServer(false);
           } else {
             const first = (data.projects ?? [])[0];
@@ -73,12 +82,13 @@ export function useServerConnection(): ServerConnectionState {
   // eslint-disable-next-line no-restricted-syntax
   useEffect(() => {
     const onHashChange = () => {
+      if (explicitProjectId) return;
       const next = parseProjectIdFromHash(window.location.hash);
       if (next && next !== projectId) setProjectId(next);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
-  }, [projectId]);
+  }, [explicitProjectId, projectId]);
 
   return { projectId, resolving, waitingForServer };
 }

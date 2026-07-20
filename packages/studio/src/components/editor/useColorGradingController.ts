@@ -1,3 +1,4 @@
+import { buildProjectApiPath, buildStudioApiPath } from "../../utils/projectRouting";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   HF_COLOR_GRADING_ATTR,
@@ -57,7 +58,7 @@ function stripPreviewAssetPath(src: string, projectId: string): string | null {
   } catch {
     return null;
   }
-  const projectMarker = `/api/projects/${encodeURIComponent(projectId)}/preview/`;
+  const projectMarker = buildProjectApiPath(projectId, `/preview/`);
   const genericMarker = "/preview/";
   const marker = pathname.includes(projectMarker) ? projectMarker : genericMarker;
   const index = pathname.indexOf(marker);
@@ -304,9 +305,11 @@ export function useColorGradingController({
     }
     const controller = new AbortController();
     fetch(
-      `/api/projects/${encodeURIComponent(projectId)}/media/metadata?path=${encodeURIComponent(
-        selectedAssetPath,
-      )}`,
+      buildStudioApiPath(
+        `/projects/${encodeURIComponent(projectId)}/media/metadata?path=${encodeURIComponent(
+          selectedAssetPath,
+        )}`,
+      ),
       { signal: controller.signal },
     )
       .then(async (response) => {

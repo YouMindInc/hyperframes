@@ -1,3 +1,4 @@
+import { buildProjectApiPath } from "../../utils/projectRouting";
 // fallow-ignore-file code-duplication
 import { memo, useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { MEDIA_EXT, FONT_EXT } from "../../utils/mediaTypes";
@@ -51,8 +52,8 @@ export function countUsage(
  *
  * This function normalizes every src shape to the bare project-relative path so
  * it matches the asset-list entries:
- *   - Absolute URL  → strip origin + /api/projects/<id>/preview/ prefix, decode %XX
- *   - Server-relative /api/…preview/… → same strip + decode
+ *   - Absolute URL  → strip origin + Studio API preview prefix, decode %XX
+ *   - Server-relative Studio API preview URL → same strip + decode
  *   - Relative "./"-prefixed or bare → strip leading ./ or /
  *   - ?query / #hash → dropped
  *
@@ -73,7 +74,7 @@ export function deriveUsedPaths(elements: Array<{ src?: string }>): Set<string> 
     }
 
     s = s
-      .replace(/^\/api\/projects\/[^/]+\/preview\//, "") // strip the dev serve prefix
+      .replace(/^.*\/api\/projects\/[^/]+\/preview\//, "") // strip the Studio API prefix
       .replace(/^\.?\//, "") // strip leading ./ or /
       .split(/[?#]/)[0]; // drop query / hash
 
@@ -114,7 +115,7 @@ export const AssetsTab = memo(function AssetsTab({
   useEffect(() => {
     if (manifest404Ref.current.has(projectId)) return;
     let cancelled = false;
-    fetch(`/api/projects/${projectId}/preview/.media/manifest.jsonl`)
+    fetch(buildProjectApiPath(projectId, `/preview/.media/manifest.jsonl`))
       .then((r) => {
         if (!r.ok) {
           manifest404Ref.current.add(projectId);

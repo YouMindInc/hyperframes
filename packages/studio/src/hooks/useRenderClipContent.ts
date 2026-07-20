@@ -1,3 +1,4 @@
+import { buildProjectApiPath, buildStudioApiPath } from "../utils/projectRouting";
 import { useCallback, type ReactNode } from "react";
 import { createElement } from "react";
 import { CompositionThumbnail, VideoThumbnail } from "../player";
@@ -13,7 +14,7 @@ export function normalizeCompositionSrc(
 ): string {
   try {
     const parsed = new URL(compSrc, origin);
-    const previewPrefix = `/api/projects/${projectId}/preview/`;
+    const previewPrefix = buildProjectApiPath(projectId, `/preview/`);
     if (parsed.pathname.startsWith(previewPrefix)) {
       return parsed.pathname.slice(previewPrefix.length);
     }
@@ -27,7 +28,7 @@ export function normalizeCompositionSrc(
 function resolvePreviewRelative(src: string | undefined, pid: string): string | null {
   if (!src) return null;
   if (!src.startsWith("http")) return src;
-  const base = `/api/projects/${pid}/preview/`;
+  const base = buildProjectApiPath(pid, `/preview/`);
   const idx = src.indexOf(base);
   return idx !== -1 ? decodeURIComponent(src.slice(idx + base.length)) : null;
 }
@@ -58,10 +59,10 @@ function renderAudioClip(el: TimelineElement, pid: string, labelColor: string): 
   // returns the DECODED path, so it must be re-encoded here.
   const encodedRelative = srcRelative ? encodePreviewPath(srcRelative) : null;
   const audioUrl = encodedRelative
-    ? `/api/projects/${pid}/preview/${encodedRelative}`
+    ? buildProjectApiPath(pid, `/preview/${encodedRelative}`)
     : (el.src ?? "");
   const waveformUrl = encodedRelative
-    ? `/api/projects/${pid}/waveform/${encodedRelative}`
+    ? buildProjectApiPath(pid, `/waveform/${encodedRelative}`)
     : undefined;
   const { start, end } = trimFractions(el);
   return createElement(AudioWaveform, {
@@ -110,7 +111,9 @@ export function useRenderClipContent({
       // instead of capturing the master at a time when the comp is fading in.
       if (compSrc) {
         return createElement(CompositionThumbnail, {
-          previewUrl: `/api/projects/${pid}/preview/comp/${encodePreviewPath(compSrc)}`,
+          previewUrl: buildStudioApiPath(
+            `/projects/${pid}/preview/comp/${encodePreviewPath(compSrc)}`,
+          ),
           label: "",
           labelColor: style.label,
 
@@ -169,7 +172,7 @@ export function useRenderClipContent({
 
       if (htmlPreviewEligible) {
         return createElement(CompositionThumbnail, {
-          previewUrl: `/api/projects/${pid}/preview`,
+          previewUrl: buildProjectApiPath(pid, `/preview`),
           label: "",
           labelColor: style.label,
 

@@ -14,7 +14,7 @@ afterEach(() => {
   }
 });
 
-function createAdapter(): StudioApiAdapter {
+function createAdapter(overrides: Partial<StudioApiAdapter> = {}): StudioApiAdapter {
   const projectDir = mkdtempSync(join(tmpdir(), "hf-thumbnail-test-"));
   tempProjectDirs.push(projectDir);
 
@@ -32,10 +32,26 @@ function createAdapter(): StudioApiAdapter {
       outputPath: "/tmp/out.mp4",
     }),
     generateThumbnail: vi.fn(async () => Buffer.from("thumb")),
+    ...overrides,
   };
 }
 
 describe("registerThumbnailRoutes", () => {
+  it("uses the configured Studio API base path for preview capture", async () => {
+    const adapter = createAdapter({ apiBaseUrl: "/c/demo/hyperframes-studio/api" });
+    const app = new Hono();
+    registerThumbnailRoutes(app, adapter);
+
+    const response = await app.request("http://localhost/projects/demo/thumbnail/index.html?t=1.2");
+
+    expect(response.status).toBe(200);
+    expect(adapter.generateThumbnail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        previewUrl: "http://localhost/c/demo/hyperframes-studio/api/projects/demo/preview",
+      }),
+    );
+  });
+
   it("forwards selector queries to thumbnail generation", async () => {
     const adapter = createAdapter();
     const app = new Hono();

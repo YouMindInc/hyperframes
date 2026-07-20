@@ -1,3 +1,4 @@
+import { buildProjectApiPath } from "./projectRouting";
 import type { TimelineElement } from "../player/store/playerStore";
 import type { DomEditSelection } from "../components/editor/domEditing";
 import type { TimelineAssetKind } from "./timelineAssetDrop";
@@ -309,7 +310,7 @@ export async function resolveDroppedAssetDuration(
 
   const media = document.createElement(kind === "video" ? "video" : "audio");
   media.preload = "metadata";
-  media.src = `/api/projects/${projectId}/preview/${assetPath}`;
+  media.src = buildProjectApiPath(projectId, `/preview/${assetPath}`);
 
   const duration = await new Promise<number>((resolve) => {
     const timeout = window.setTimeout(() => resolve(DEFAULT_TIMELINE_ASSET_DURATION[kind]), 3000);
@@ -346,7 +347,7 @@ export async function resolveDroppedAssetDimensions(
   kind: TimelineAssetKind,
 ): Promise<{ width: number; height: number } | null> {
   if (kind === "audio") return null;
-  const src = `/api/projects/${projectId}/preview/${assetPath}`;
+  const src = buildProjectApiPath(projectId, `/preview/${assetPath}`);
 
   if (kind === "image") {
     return new Promise((resolve) => {

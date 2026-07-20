@@ -151,7 +151,7 @@ function defaultBuildScopeSelector(compId: string): string {
  */
 // fallow-ignore-next-line complexity
 export function inlineSubCompositions(
-  document: Document,
+  _document: Document,
   hosts: Element[],
   options: InlineSubCompositionsOptions,
 ): InlineSubCompositionsResult {

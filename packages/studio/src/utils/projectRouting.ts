@@ -1,8 +1,15 @@
 const PROJECT_HASH_PREFIX = "#project/";
+const DEFAULT_STUDIO_API_BASE_URL = "/api";
+let configuredStudioApiBaseUrl = DEFAULT_STUDIO_API_BASE_URL;
 
 export interface ProjectHashRoute {
   projectId: string;
   params: URLSearchParams;
+}
+
+export interface StudioAppProps {
+  apiBaseUrl?: string;
+  projectId?: string | null;
 }
 
 function decodeHashProjectId(value: string): string {
@@ -58,7 +65,61 @@ export function parseProjectIdFromHash(hash: string): string | null {
   return parseProjectHashRoute(hash)?.projectId ?? null;
 }
 
-export function buildProjectApiPath(projectId: string, suffix = ""): string {
+function normalizeApiBaseUrl(apiBaseUrl?: string): string {
+  const next = apiBaseUrl?.trim() || DEFAULT_STUDIO_API_BASE_URL;
+  return next.replace(/\/+$/u, "");
+}
+
+function normalizeApiSuffix(suffix = ""): string {
   const normalizedSuffix = suffix && !suffix.startsWith("/") ? `/${suffix}` : suffix;
-  return `/api/projects/${encodeProjectId(projectId)}${normalizedSuffix}`;
+  return normalizedSuffix || "/";
+}
+
+function joinApiPath(basePath: string, suffixPath: string): string {
+  const normalizedBase = basePath.replace(/\/+$/u, "");
+  const normalizedSuffix = suffixPath.startsWith("/") ? suffixPath : `/${suffixPath}`;
+  return `${normalizedBase}${normalizedSuffix}`.replace(/\/{2,}/gu, "/");
+}
+
+function isAbsoluteApiBaseUrl(apiBaseUrl: string): boolean {
+  return /^[a-z][a-z\d+.-]*:\/\//iu.test(apiBaseUrl);
+}
+
+export function configureStudioApiBaseUrl(apiBaseUrl?: string): void {
+  configuredStudioApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl);
+}
+
+export function buildStudioApiPath(suffix = "", apiBaseUrl = configuredStudioApiBaseUrl): string {
+  const normalizedBase = normalizeApiBaseUrl(apiBaseUrl);
+  const normalizedSuffix = normalizeApiSuffix(suffix);
+  const baseUrl = new URL(normalizedBase, "http://hyperframes.local");
+  const suffixUrl = new URL(normalizedSuffix, "http://hyperframes.local");
+  baseUrl.pathname = joinApiPath(baseUrl.pathname, suffixUrl.pathname);
+  const search = new URLSearchParams(baseUrl.search);
+  suffixUrl.searchParams.forEach((value, key) => search.append(key, value));
+  baseUrl.search = search.toString();
+  baseUrl.hash = suffixUrl.hash;
+
+  if (isAbsoluteApiBaseUrl(normalizedBase)) return baseUrl.toString();
+  return `${baseUrl.pathname}${baseUrl.search}${baseUrl.hash}`;
+}
+
+export function buildProjectApiPath(
+  projectId: string,
+  suffix = "",
+  apiBaseUrl = configuredStudioApiBaseUrl,
+): string {
+  const normalizedSuffix = suffix && !suffix.startsWith("/") ? `/${suffix}` : suffix;
+  return buildStudioApiPath(
+    `/projects/${encodeProjectId(projectId)}${normalizedSuffix}`,
+    apiBaseUrl,
+  );
+}
+
+export function buildCompositionPreviewPath(
+  projectId: string | null,
+  compositionPath: string | null,
+): string | null {
+  if (!projectId || !compositionPath) return null;
+  return buildProjectApiPath(projectId, `/preview/comp/${compositionPath}`);
 }

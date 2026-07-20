@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useCallback, useRef, useState } from "react";
 import { useMountEffect } from "./useMountEffect";
 import {
@@ -254,7 +255,7 @@ export function usePreviewPersistence({
       return () => import.meta.hot?.off?.("hf:file-change", handler);
     }
     // SSE fallback for embedded studio server
-    const es = new EventSource("/api/events");
+    const es = new EventSource(buildStudioApiPath("/events"));
     es.addEventListener("file-change", handler);
     return () => es.close();
   });

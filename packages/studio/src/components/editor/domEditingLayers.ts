@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../../utils/projectRouting";
 import type { PatchOperation } from "../../utils/sourcePatcher";
 import {
   resolveEditingAffordances,
@@ -292,7 +293,9 @@ async function probeSourceElement(
 ): Promise<boolean> {
   try {
     const response = await fetch(
-      `/api/projects/${projectId}/file-mutations/probe-element/${encodeURIComponent(sourceFile)}`,
+      buildStudioApiPath(
+        `/projects/${projectId}/file-mutations/probe-element/${encodeURIComponent(sourceFile)}`,
+      ),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

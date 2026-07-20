@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useCallback } from "react";
 import { usePlayerStore } from "../player";
 import {
@@ -112,7 +113,9 @@ export function useElementLifecycleOps({
 
         domEditSaveTimestampRef.current = Date.now();
         const removeResponse = await fetch(
-          `/api/projects/${pid}/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
+          buildStudioApiPath(
+            `/projects/${pid}/file-mutations/remove-element/${encodeURIComponent(targetPath)}`,
+          ),
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

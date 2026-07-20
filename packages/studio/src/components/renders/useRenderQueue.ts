@@ -1,3 +1,4 @@
+import { buildProjectApiPath, buildStudioApiPath } from "../../utils/projectRouting";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { trackStudioRenderStart } from "../../telemetry/events";
 import { getAnonymousId } from "../../telemetry/config";
@@ -89,7 +90,7 @@ export function useRenderQueue(projectId: string | null) {
   const loadRenders = useCallback(async () => {
     if (!projectId) return;
     try {
-      const res = await fetch(`/api/projects/${projectId}/renders`);
+      const res = await fetch(buildProjectApiPath(projectId, `/renders`));
       if (!res.ok) {
         setLoadError(`Couldn't load render history (server error ${res.status}).`);
         return;
@@ -180,7 +181,7 @@ export function useRenderQueue(projectId: string | null) {
       }
       let res: Response;
       try {
-        res = await fetch(`/api/projects/${projectId}/render`, {
+        res = await fetch(buildProjectApiPath(projectId, `/render`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -224,7 +225,7 @@ export function useRenderQueue(projectId: string | null) {
       activeJobRef.current = jobId;
 
       // Track progress via SSE
-      const es = new EventSource(`/api/render/${jobId}/progress`);
+      const es = new EventSource(buildStudioApiPath(`/render/${jobId}/progress`));
       eventSourceRef.current = es;
 
       es.addEventListener("progress", (event) => {
@@ -287,7 +288,7 @@ export function useRenderQueue(projectId: string | null) {
         ),
       );
       try {
-        const res = await fetch(`/api/render/${jobId}/cancel`, { method: "POST" });
+        const res = await fetch(buildStudioApiPath(`/render/${jobId}/cancel`), { method: "POST" });
         if (!res.ok && res.status !== 404) {
           setActionError("Couldn't cancel on the server — the render may still be running.");
           return;
@@ -314,7 +315,7 @@ export function useRenderQueue(projectId: string | null) {
       setActionError(null);
       closeActiveEventSource(jobId);
       try {
-        const res = await fetch(`/api/render/${jobId}`, { method: "DELETE" });
+        const res = await fetch(buildStudioApiPath(`/render/${jobId}`), { method: "DELETE" });
         if (!res.ok) {
           setActionError("Couldn't delete the render — it's still on disk.");
           return;

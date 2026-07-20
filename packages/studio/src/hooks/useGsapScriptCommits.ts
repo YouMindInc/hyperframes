@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useCallback, useMemo, useRef } from "react";
 import { findUnsafeMutationValues } from "@hyperframes/core/studio-api/finite-mutation";
 import { readProjectFileContent as readSharedProjectFileContent } from "../utils/studioFileHistory";
@@ -43,7 +44,9 @@ async function mutateGsapScript(
   mutation: Record<string, unknown>,
 ): Promise<MutationResult> {
   const res = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/gsap-mutations/${encodeURIComponent(sourceFile)}`,
+    buildStudioApiPath(
+      `/projects/${encodeURIComponent(projectId)}/gsap-mutations/${encodeURIComponent(sourceFile)}`,
+    ),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -62,7 +65,9 @@ async function mutateGsapScriptBatch(
   mutations: Record<string, unknown>[],
 ): Promise<MutationResult> {
   const res = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/gsap-mutations-batch/${encodeURIComponent(sourceFile)}`,
+    buildStudioApiPath(
+      `/projects/${encodeURIComponent(projectId)}/gsap-mutations-batch/${encodeURIComponent(sourceFile)}`,
+    ),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
