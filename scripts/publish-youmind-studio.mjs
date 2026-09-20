@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { scopeStudioCss } from "./hyperframes-embed-css.mjs";
@@ -86,6 +86,22 @@ for (const packageDir of ["studio-server", "studio"]) {
 }
 
 if (publish && !dryRun) {
+  const existing = spawnSync(
+    "gh",
+    ["release", "view", tag, "--repo", repository, "--json", "assets"],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  if (existing.status === 0) {
+    const assetNames = new Set(JSON.parse(existing.stdout).assets.map((asset) => asset.name));
+    const expectedNames = ["studio-server", "studio"].map(
+      (name) => `youmindinc-hyperframes-${name}-${version}.tgz`,
+    );
+    if (!expectedNames.every((name) => assetNames.has(name))) {
+      throw new Error(`Release ${tag} exists but is incomplete; refusing to overwrite it`);
+    }
+    console.log(`Release ${tag} already contains both packages; leaving it unchanged`);
+    process.exit(0);
+  }
   // Do not overwrite an existing release; published tarball URLs are immutable pins.
   execFileSync(
     "gh",
