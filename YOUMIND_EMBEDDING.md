@@ -16,7 +16,7 @@ The fork retains the upstream UI and adds host integration:
 - Studio Server accepts `adapter.apiBaseUrl` for preview and thumbnail URLs.
 
 Build with Bun. Run Studio tests with its Vitest script, not `bun test`.
-YouComputer's `scripts/publish-hyperframes-runtime.mjs` packages both Studio and
+This fork's `scripts/publish-youmind-studio.mjs` packages both Studio and
 Studio Server under `@youmindinc`, with pinned public dependencies and generated
 types. It generates a scoped `embed.css` from the upstream compiled stylesheet.
 YouComputer release jobs install these fixed packages; they do not clone a

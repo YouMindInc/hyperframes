@@ -132,14 +132,6 @@ export function buildProjectApiPath(
   );
 }
 
-export function buildCompositionPreviewPath(
-  projectId: string | null,
-  compositionPath: string | null,
-): string | null {
-  if (!projectId || !compositionPath) return null;
-  return buildProjectApiPath(projectId, `/preview/comp/${compositionPath}`);
-}
-
 /** The runtime resolves composition files against the preview base URL. */
 export function projectPathFromPreviewUrl(source: string): string {
   const origin =
