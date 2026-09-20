@@ -5,31 +5,32 @@ import { join, resolve } from "node:path";
 import { scopeStudioCss } from "./hyperframes-embed-css.mjs";
 
 const repoRoot = resolve(new URL("..", import.meta.url).pathname);
-const hyperframesRoot = repoRoot;
-const distTag = process.env.HYPERFRAMES_YOUMIND_DIST_TAG ?? "youmind";
+const sourceVersion = JSON.parse(
+  readFileSync(join(repoRoot, "packages/studio/package.json"), "utf8"),
+).version;
+const tagMatch = process.env.GITHUB_REF_NAME?.match(/^youmind-studio-(\d+\.\d+\.\d+)\.(\d+)$/);
+const version =
+  process.env.HYPERFRAMES_YOUMIND_VERSION ??
+  (tagMatch ? `${tagMatch[1]}-youmind.${tagMatch[2]}` : `${sourceVersion}-youmind.0`);
+if (!version.startsWith(`${sourceVersion}-youmind.`))
+  throw new Error("Package version must match the upstream source version");
+const tag = `youmind-studio-${version.replace("-youmind.", ".")}`;
+const repository = "YouMindInc/hyperframes";
+const releaseBase = `https://github.com/${repository}/releases/download/${tag}`;
 const stagingParent = join(repoRoot, ".youmind-publish");
 const dryRun = process.argv.includes("--dry-run");
-const packOnly = process.argv.includes("--pack");
+const publish = process.argv.includes("--publish");
+const tarballs = [];
 
 for (const packageDir of ["studio-server", "studio"]) {
-  const sourceRoot = join(hyperframesRoot, "packages", packageDir);
+  const sourceRoot = join(repoRoot, "packages", packageDir);
   const sourcePkg = JSON.parse(readFileSync(join(sourceRoot, "package.json"), "utf8"));
-  const version = process.env.HYPERFRAMES_YOUMIND_VERSION ?? `${sourcePkg.version}-youmind.0`;
+  if (sourcePkg.version !== sourceVersion) throw new Error("Studio and server versions must match");
   const packageName = `@youmindinc/hyperframes-${packageDir}`;
   const stagingRoot = join(stagingParent, packageDir);
   if (!existsSync(join(sourceRoot, "dist", "index.d.ts"))) {
-    throw new Error(`Build ${packageDir}, including its type declarations, before publishing`);
+    throw new Error(`Build ${packageDir}, including its type declarations, before packaging`);
   }
-  if (!dryRun && !packOnly) {
-    try {
-      execFileSync("npm", ["view", `${packageName}@${version}`, "version"], { stdio: "ignore" });
-      console.log(`${packageName}@${version} already exists; skipping`);
-      continue;
-    } catch {
-      /* Publish a new immutable version below. */
-    }
-  }
-
   const publishConfig = sourcePkg.publishConfig ?? {};
   const manifest = {
     ...sourcePkg,
@@ -42,56 +43,65 @@ for (const packageDir of ["studio-server", "studio"]) {
       Object.entries(sourcePkg.dependencies ?? {}).map(([name, spec]) => [
         name,
         name === "@hyperframes/studio-server"
-          ? `npm:@youmindinc/hyperframes-studio-server@${version}`
+          ? `${releaseBase}/youmindinc-hyperframes-studio-server-${version}.tgz`
           : spec.startsWith("workspace:")
-            ? sourcePkg.version
+            ? sourceVersion
             : spec,
       ]),
     ),
     repository: {
       type: "git",
-      url: "git+https://github.com/YouMindInc/hyperframes.git",
+      url: `git+https://github.com/${repository}.git`,
       directory: `packages/${packageDir}`,
     },
     publishConfig: { registry: "https://npm.pkg.github.com" },
+    scripts: undefined,
+    devDependencies: undefined,
   };
-  manifest.scripts = undefined;
-  manifest.devDependencies = undefined;
   if (JSON.stringify(manifest).match(/"(?:link|workspace|file):/)) {
-    throw new Error("Published HyperFrames manifest must not contain local dependency references");
+    throw new Error("Released HyperFrames manifest must not contain local dependency references");
   }
   rmSync(stagingRoot, { recursive: true, force: true });
   mkdirSync(stagingRoot, { recursive: true });
   for (const entry of sourcePkg.files) {
-    if (existsSync(join(sourceRoot, entry))) {
+    if (existsSync(join(sourceRoot, entry)))
       cpSync(join(sourceRoot, entry), join(stagingRoot, entry), { recursive: true });
-    }
   }
   if (packageDir === "studio") {
     writeFileSync(
-      join(stagingRoot, "dist", "embed.css"),
-      scopeStudioCss(readFileSync(join(stagingRoot, "dist", "styles.css"), "utf8")),
+      join(stagingRoot, "dist/embed.css"),
+      scopeStudioCss(readFileSync(join(stagingRoot, "dist/styles.css"), "utf8")),
     );
     manifest.exports["./embed.css"] = "./dist/embed.css";
   }
   writeFileSync(join(stagingRoot, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  const args = dryRun
-    ? ["pack", "--dry-run", "--json"]
-    : packOnly
-      ? ["pack", "--pack-destination", stagingParent, "--json"]
-      : ["publish", "--tag", distTag];
-  console.log(
-    `${dryRun ? "checking" : packOnly ? "packing" : "publishing"} ${packageName}@${version}`,
+  execFileSync(
+    "npm",
+    dryRun
+      ? ["pack", "--dry-run", "--json"]
+      : ["pack", "--pack-destination", stagingParent, "--json"],
+    { cwd: stagingRoot, stdio: "inherit" },
   );
-  execFileSync("npm", args, {
-    cwd: stagingRoot,
-    env: {
-      ...process.env,
-      npm_config_userconfig:
-        process.env.NPM_CONFIG_USERCONFIG ??
-        process.env.npm_config_userconfig ??
-        join(repoRoot, ".npmrc"),
-    },
-    stdio: "inherit",
-  });
+  tarballs.push(join(stagingParent, `youmindinc-hyperframes-${packageDir}-${version}.tgz`));
+}
+
+if (publish && !dryRun) {
+  // Do not overwrite an existing release; published tarball URLs are immutable pins.
+  execFileSync(
+    "gh",
+    [
+      "release",
+      "create",
+      tag,
+      ...tarballs,
+      "--repo",
+      repository,
+      "--verify-tag",
+      "--title",
+      `YouMind Studio ${version}`,
+      "--notes",
+      `HyperFrames ${sourceVersion} with YouMind host embedding. Pinned Studio and Studio Server packages; no credentials or user content included.`,
+    ],
+    { cwd: repoRoot, stdio: "inherit" },
+  );
 }

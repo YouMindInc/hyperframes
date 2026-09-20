@@ -17,7 +17,9 @@ The fork retains the upstream UI and adds host integration:
 
 Build with Bun. Run Studio tests with its Vitest script, not `bun test`.
 This fork's `scripts/publish-youmind-studio.mjs` packages both Studio and
-Studio Server under `@youmindinc`, with pinned public dependencies and generated
+Studio Server as immutable GitHub Release tarballs under `@youmindinc`, with pinned public dependencies and generated
 types. It generates a scoped `embed.css` from the upstream compiled stylesheet.
 YouComputer release jobs install these fixed packages; they do not clone a
 moving fork branch. Electron export rendering remains a separate host feature.
+
+Release tags use `youmind-studio-<upstream-version>.<revision>`. To release locally, build first, set `HYPERFRAMES_YOUMIND_VERSION=<version>-youmind.<revision>`, then run `node scripts/publish-youmind-studio.mjs --publish` after pushing the matching tag. Existing releases are never overwritten.

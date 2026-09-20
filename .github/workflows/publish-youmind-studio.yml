@@ -4,8 +4,7 @@ on:
     tags: ["youmind-studio-*"]
   workflow_dispatch:
 permissions:
-  contents: read
-  packages: write
+  contents: write
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -17,8 +16,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: https://npm.pkg.github.com
-          scope: "@youmindinc"
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Build matching Studio packages
         run: |
@@ -30,7 +27,7 @@ jobs:
         run: |
           bun run --cwd packages/studio test src/utils/projectRouting.test.ts src/utils/projectRouting.embed.test.ts src/hooks/useServerConnection.hashProject.test.tsx
           bun run --cwd packages/studio-server test src/routes/preview.test.ts src/routes/thumbnail.test.ts
-      - name: Publish private packages
-        run: node scripts/publish-youmind-studio.mjs
+      - name: Publish versioned packages
+        run: node scripts/publish-youmind-studio.mjs --publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
