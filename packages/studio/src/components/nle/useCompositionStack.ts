@@ -1,4 +1,4 @@
-import { buildProjectApiPath, buildStudioApiPath } from "../../utils/projectRouting";
+import { buildProjectApiPath } from "../../utils/projectRouting";
 // Composition drill-down stack management for NLEContext/EditorShell
 import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlayerStore } from "../../player";
@@ -90,8 +90,9 @@ export function useCompositionStack({
             .split("/")
             .pop()
             ?.replace(/\.html$/, "") || resolvedPath;
-        const previewUrl = buildStudioApiPath(
-          `/projects/${projectId}/preview/comp/${encodePreviewPath(resolvedPath)}`,
+        const previewUrl = buildProjectApiPath(
+          projectId,
+          `/preview/comp/${encodePreviewPath(resolvedPath)}`,
         );
         return [...prev, { id: resolvedPath, label, previewUrl }];
       });
@@ -111,17 +112,24 @@ export function useCompositionStack({
     if (activeCompositionPath === "index.html") {
       usePlayerStore.getState().setElements([]);
       updateCompositionStack([master]);
-    } else if (activeCompositionPath && activeCompositionPath.startsWith("compositions/")) {
+    } else if (activeCompositionPath) {
+      // Any composition file that isn't the root, wherever it lives. Gating
+      // this on a `compositions/` prefix meant a project laying its comps out
+      // anywhere else (`parts/part-1.html`, generated multi-part builds) hit
+      // no branch at all: the stack kept the master mounted while the Comps
+      // panel highlighted the row, so the canvas and timeline stayed on
+      // index.html and edits landed in the root file.
       const label = activeCompositionPath.replace(/^compositions\//, "").replace(/\.html$/, "");
-      const previewUrl = buildStudioApiPath(
-        `/projects/${projectId}/preview/comp/${encodePreviewPath(activeCompositionPath)}`,
+      const previewUrl = buildProjectApiPath(
+        projectId,
+        `/preview/comp/${encodePreviewPath(activeCompositionPath)}`,
       );
       usePlayerStore.getState().setElements([]);
       updateCompositionStack((prev) => {
         if (prev[prev.length - 1]?.id === activeCompositionPath) return prev;
         return [master, { id: activeCompositionPath, label, previewUrl }];
       });
-    } else if (!activeCompositionPath) {
+    } else {
       usePlayerStore.getState().setElements([]);
       updateCompositionStack([master]);
     }

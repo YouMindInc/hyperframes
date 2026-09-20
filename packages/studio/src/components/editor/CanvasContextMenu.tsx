@@ -1,8 +1,9 @@
+import { getStudioPortalContainer } from "../../utils/studioPortal";
 /**
  * Right-click context menu for a selected canvas element.
  *
  * Mirrors the look, positioning, and dismiss behavior of
- * player/components/ClipContextMenu.tsx — portaled to document.body,
+ * player/components/ClipContextMenu.tsx — portaled to getStudioPortalContainer(),
  * overflow-adjusted, dismissed on outside-click or Escape via
  * useContextMenuDismiss.
  *
@@ -195,7 +196,7 @@ export const CanvasContextMenu = memo(function CanvasContextMenu({
 
   if (!hasZActions && !hasDelete) return null;
 
-  // The menu is portaled to document.body, but in the React tree it is still a
+  // The menu is portaled to getStudioPortalContainer(), but in the React tree it is still a
   // child of the DomEditOverlay <div>. React synthetic events bubble through the
   // REACT tree (not the DOM tree), so a click on any menu control would otherwise
   // bubble into the overlay's onPointerDown / onMouseDown handlers — which
@@ -212,7 +213,7 @@ export const CanvasContextMenu = memo(function CanvasContextMenu({
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-50 bg-neutral-900 border border-neutral-700 rounded-md shadow-lg py-1 min-w-[180px]"
+      className="fixed z-200 bg-neutral-900 border border-neutral-700 rounded-md shadow-lg py-1 min-w-[180px]"
       style={{ left: adjustedX, top: adjustedY }}
       onPointerDown={stopBubble}
       onMouseDown={stopBubble}
@@ -273,6 +274,6 @@ export const CanvasContextMenu = memo(function CanvasContextMenu({
         </button>
       )}
     </div>,
-    document.body,
+    getStudioPortalContainer(),
   );
 });

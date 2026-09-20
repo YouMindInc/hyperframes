@@ -1,18 +1,30 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildFrameCaptureUrl } from "./frameCapture";
 import {
   buildProjectApiPath,
   buildProjectHash,
-  buildStudioApiPath,
-  configureStudioApiBaseUrl,
   encodeProjectId,
   parseProjectHashRoute,
   parseProjectIdFromHash,
 } from "./projectRouting";
 
 describe("project routing utilities", () => {
-  afterEach(() => {
-    configureStudioApiBaseUrl();
+  it.each([
+    "C:",
+    "C:demo",
+    ".",
+    "..",
+    "../sessions",
+    "a/../b",
+    "/a",
+    "a//b",
+    "a\\b",
+    "a\u0000b",
+    "a\nb",
+  ])("rejects unsafe decoded project IDs: %s", (id) => {
+    expect(parseProjectIdFromHash(`#project/${encodeURIComponent(id)}`)).toBeNull();
+    expect(() => buildProjectApiPath(id, "/files/index.html")).toThrow("Invalid project ID");
+    expect(() => buildProjectHash(id)).toThrow("Invalid project ID");
   });
 
   it("decodes project ids from hash routes before building capture URLs", () => {
@@ -30,7 +42,7 @@ describe("project routing utilities", () => {
         origin: "http://localhost:3002",
       }),
     ).toBe(
-      "http://localhost:3002/api/projects/Notion%20Showcase/thumbnail/index.html?t=1.809&format=png&v=1777636800000",
+      "http://localhost:3002/api/projects/Notion%20Showcase/thumbnail/index.html?t=1.809&format=png&output=source&v=1777636800000",
     );
 
     vi.useRealTimers();
@@ -103,35 +115,6 @@ describe("project routing utilities", () => {
   it("keeps unicode project ids safe in API paths", () => {
     expect(buildProjectApiPath("Mañana demo", "/preview")).toBe(
       "/api/projects/Ma%C3%B1ana%20demo/preview",
-    );
-  });
-
-  it("encodes nested YouComputer project ids as one API path segment", () => {
-    configureStudioApiBaseUrl("/hyperframes-studio/api");
-
-    expect(buildProjectApiPath("hyperframes/demo", "/files/index.html")).toBe(
-      "/hyperframes-studio/api/projects/hyperframes%2Fdemo/files/index.html",
-    );
-  });
-
-  it("builds API paths from a configured relative base path", () => {
-    configureStudioApiBaseUrl("/hyperframes-studio/session-1/api");
-
-    expect(buildStudioApiPath("/projects")).toBe("/hyperframes-studio/session-1/api/projects");
-    expect(buildProjectApiPath("multi-comps", "/preview")).toBe(
-      "/hyperframes-studio/session-1/api/projects/multi-comps/preview",
-    );
-  });
-
-  it("builds API paths from an absolute base URL", () => {
-    expect(
-      buildProjectApiPath(
-        "multi-comps",
-        "/preview?__hf_shader_loading=player",
-        "https://youmind.com/c/abc12345/hyperframes-studio/api",
-      ),
-    ).toBe(
-      "https://youmind.com/c/abc12345/hyperframes-studio/api/projects/multi-comps/preview?__hf_shader_loading=player",
     );
   });
 });

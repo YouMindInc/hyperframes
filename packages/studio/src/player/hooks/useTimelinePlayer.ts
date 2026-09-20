@@ -4,6 +4,7 @@ import { useMountEffect } from "../../hooks/useMountEffect";
 import { usePlaybackKeyboard } from "./usePlaybackKeyboard";
 import { useTimelineSyncCallbacks } from "./useTimelineSyncCallbacks";
 import { useTimelinePlayerLoop } from "./useTimelinePlayerLoop";
+import { logReload } from "../../utils/reloadDebug";
 
 export type { ClipManifestClip } from "../lib/playbackTypes";
 export { createStaticSeekPlaybackAdapter } from "../lib/playbackAdapter";
@@ -34,39 +35,17 @@ import {
 import {
   readTimelineDurationFromDocument,
   mergeTimelineElementsPreservingDowngrades,
-  parseTimelineFromDOM,
 } from "../lib/timelineDOM";
 import { normalizeToZones } from "../components/timelineZones";
-import {
-  setPreviewMediaMuted,
-  setPreviewPlaybackRate,
-  shouldMutePreviewAudio,
-} from "../lib/timelineIframeHelpers";
+import { applyPreviewAudioFlags, setPreviewPlaybackRate } from "../lib/timelineIframeHelpers";
 import { scrubMusicAtSeek, stopScrubPreviewAudio } from "../lib/playbackScrub";
+import { hasTimelinePerformanceFixtureLease } from "../lib/timelinePerformanceFixture";
 import { applyCachedSourceDurations, probeMissingSourceDurations } from "../lib/mediaProbe";
 import { shouldResumeForwardPlaybackAfterSeek, shouldStopAfterSeek } from "../lib/playbackSeek";
 import { applyPreviewVariablesToUrl } from "../../hooks/previewVariablesStore";
-import { acceptStudioRuntimeMessage } from "../lib/runtimeProtocol";
-
-/**
- * Whether the derived elements differ from the current ones in any field that
- * affects rendering (identity, timing, track, or source length) — used to skip
- * redundant store writes.
- */
-function timelineElementsChanged(prev: TimelineElement[], next: TimelineElement[]): boolean {
-  if (next.length !== prev.length) return true;
-  return next.some((el, i) => {
-    const p = prev[i];
-    return (
-      !p ||
-      el.id !== p.id ||
-      el.start !== p.start ||
-      el.duration !== p.duration ||
-      el.track !== p.track ||
-      el.sourceDuration !== p.sourceDuration
-    );
-  });
-}
+import { createPreviewMessageHandler } from "./previewMessageRouter";
+import { timelineElementsChanged } from "./timelinePlayerSync";
+import { safeContentDocument } from "./timelineSyncHydration";
 
 export function useTimelinePlayer() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -82,11 +61,16 @@ export function useTimelinePlayer() {
   const staticSeekAdapterRef = useRef<StaticSeekCacheEntry | null>(null);
   const staticSeekWarnedRef = useRef(false);
 
-  const { setIsPlaying, setCurrentTime, setDuration, setTimelineReady, setElements } =
+  const { setIsPlaying, setCurrentTime, setDuration, requestTimelineReady, setElements } =
     usePlayerStore.getState();
 
+  // The fixture lease belongs at this shared synchronization boundary so every
+  // iframe discovery path has the same owner for deciding whether it may write.
   const syncTimelineElements = useCallback(
+    // The lease guard adds one deliberate branch at the shared synchronization boundary.
+    // fallow-ignore-next-line complexity
     (elements: TimelineElement[], nextDuration?: number) => {
+      if (hasTimelinePerformanceFixtureLease()) return;
       const state = usePlayerStore.getState();
       const resolvedDuration = nextDuration ?? state.duration;
       // applyCachedSourceDurations re-applies the cached probe duration: re-derived
@@ -103,6 +87,7 @@ export function useTimelinePlayer() {
             state.duration,
             resolvedDuration,
           ),
+          state.timelineProjectId,
         ),
       );
 
@@ -117,22 +102,30 @@ export function useTimelinePlayer() {
         setDuration(nextDuration ?? 0);
       }
       if (!state.timelineReady) {
-        setTimelineReady(true);
+        // Same gate as initializeAdapter's own readiness wait: this is the
+        // message-based fallback for compositions that report their duration
+        // via clip manifest rather than the direct adapter, and it must not
+        // enable Play any earlier than that path does.
+        requestTimelineReady(safeContentDocument(iframeRef.current));
       }
 
       // Asynchronously enrich media elements still missing sourceDuration
       // (header-only probe, cheap), applying each resolved value to the store.
-      void probeMissingSourceDurations(mergedElements, (key, durationSeconds) => {
-        usePlayerStore.setState((state) => {
-          const idx = state.elements.findIndex((e) => (e.key ?? e.id) === key);
-          if (idx === -1 || state.elements[idx].sourceDuration != null) return {};
-          const patched = state.elements.slice();
-          patched[idx] = { ...state.elements[idx], sourceDuration: durationSeconds };
-          return { elements: patched };
-        });
-      });
+      void probeMissingSourceDurations(
+        mergedElements,
+        state.timelineProjectId,
+        (key, durationSeconds) => {
+          usePlayerStore.setState((state) => {
+            const idx = state.elements.findIndex((e) => (e.key ?? e.id) === key);
+            if (idx === -1 || state.elements[idx].sourceDuration != null) return {};
+            const patched = state.elements.slice();
+            patched[idx] = { ...state.elements[idx], sourceDuration: durationSeconds };
+            return { elements: patched };
+          });
+        },
+      );
     },
-    [setElements, setTimelineReady, setDuration],
+    [setElements, requestTimelineReady, setDuration],
   );
 
   // Pre-existing dispatcher complexity — surfaced by this PR's line shifts, not new logic.
@@ -241,13 +234,9 @@ export function useTimelinePlayer() {
       }
     } catch {}
   }, []);
-  const applyPreviewAudioState = useCallback((playbackRateOverride?: number) => {
-    const { audioMuted, playbackRate } = usePlayerStore.getState();
-    const effectivePlaybackRate = playbackRateOverride ?? playbackRate;
-    setPreviewMediaMuted(
-      iframeRef.current,
-      shouldMutePreviewAudio(audioMuted, effectivePlaybackRate),
-    );
+  const applyPreviewAudioState = useCallback(() => {
+    const { audioMuted, audioVolume } = usePlayerStore.getState();
+    applyPreviewAudioFlags(iframeRef.current, audioMuted, audioVolume);
   }, []);
   const play = useCallback(() => {
     stopRAFLoop();
@@ -285,7 +274,7 @@ export function useTimelinePlayer() {
       if (initialTime !== adapter.getTime()) adapter.seek(initialTime);
       const speed = Math.max(0.1, Math.min(4, rate));
       applyPlaybackRate(speed);
-      applyPreviewAudioState(speed);
+      applyPreviewAudioState();
       let startTime = initialTime;
       let startedAt = performance.now();
 
@@ -404,8 +393,20 @@ export function useTimelinePlayer() {
         seek(state.requestedSeekTime);
         usePlayerStore.getState().clearSeekRequest();
       }
+      // Play or stop from outside the loop — the FX rack auditioning a preset
+      // while paused, which is silent otherwise. `returnTo` puts the playhead
+      // back where the request found it: hovering is not an edit.
+      const request = state.playbackRequest;
+      if (request && request.nonce !== prev.playbackRequest?.nonce) {
+        if (request.playing) play();
+        else {
+          pause();
+          if (request.returnTo !== null) seek(request.returnTo);
+        }
+        usePlayerStore.getState().clearPlaybackRequest();
+      }
     });
-  }, [seek]);
+  }, [seek, play, pause]);
   const { playbackKeyDownRef, playbackKeyUpRef, attachIframeShortcutListeners, togglePlay } =
     usePlaybackKeyboard({
       iframeRef,
@@ -429,7 +430,7 @@ export function useTimelinePlayer() {
       syncTimelineElements,
       setDuration,
       setCurrentTime,
-      setTimelineReady,
+      requestTimelineReady,
       setIsPlaying,
       attachIframeShortcutListeners,
       applyPreviewAudioState,
@@ -461,6 +462,7 @@ export function useTimelinePlayer() {
   const refreshPlayer = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
+    logReload("refreshPlayer", () => ({ stack: new Error("refreshPlayer").stack }));
     saveSeekPosition();
     // Hide the iframe across the full reload so the user never sees the reloading
     // document's RAW DOM (every clip stacked and visible) in the window between the
@@ -485,50 +487,14 @@ export function useTimelinePlayer() {
     const handleWindowKeyDown = (e: KeyboardEvent) => playbackKeyDownRef.current(e);
     const handleWindowKeyUp = (e: KeyboardEvent) => playbackKeyUpRef.current(e);
 
-    // Pre-existing message-router complexity — surfaced by line shifts, not new logic.
-    // fallow-ignore-next-line complexity
-    const handleMessage = (e: MessageEvent) => {
-      const data = e.data;
-      const ourIframe = iframeRef.current;
-      if (e.source && ourIframe && e.source !== ourIframe.contentWindow) {
-        return;
-      }
-      if (data?.source === "hf-preview") {
-        if (!acceptStudioRuntimeMessage(data)) return;
-      }
-      if (data?.source === "hf-preview" && data?.type === "state") {
-        try {
-          if (usePlayerStore.getState().elements.length === 0) {
-            const iframeWin = ourIframe?.contentWindow as IframeWindow | null;
-            const manifest = iframeWin?.__clipManifest;
-            if (manifest && manifest.clips.length > 0) {
-              processTimelineMessageRef.current(manifest);
-            }
-          }
-          const msSinceTimeline = Date.now() - lastTimelineMessageRef.current;
-          if (msSinceTimeline > 500) {
-            enrichMissingCompositionsRef.current();
-          }
-        } catch {}
-      }
-      if (data?.source === "hf-preview" && data?.type === "timeline" && Array.isArray(data.clips)) {
-        lastTimelineMessageRef.current = Date.now();
-        processTimelineMessageRef.current(data);
-        enrichMissingCompositionsRef.current();
-        if (usePlayerStore.getState().elements.length === 0) {
-          try {
-            const doc = ourIframe?.contentDocument;
-            const adapter = getAdapter();
-            if (doc && adapter) {
-              const els = parseTimelineFromDOM(doc, adapter.getDuration());
-              if (els.length > 0) {
-                syncTimelineElements(els);
-              }
-            }
-          } catch {}
-        }
-      }
-    };
+    const handleMessage = createPreviewMessageHandler({
+      iframeRef,
+      processTimelineMessageRef,
+      enrichMissingCompositionsRef,
+      lastTimelineMessageRef,
+      getAdapter,
+      syncTimelineElements,
+    });
 
     const handleVisibilityChange = () => {
       if (document.hidden && usePlayerStore.getState().isPlaying) {
@@ -571,7 +537,8 @@ export function useTimelinePlayer() {
     return usePlayerStore.subscribe((state, prev) => {
       const playbackRateChanged = state.playbackRate !== prev.playbackRate;
       const audioMutedChanged = state.audioMuted !== prev.audioMuted;
-      if (!playbackRateChanged && !audioMutedChanged) return;
+      const audioVolumeChanged = state.audioVolume !== prev.audioVolume;
+      if (!playbackRateChanged && !audioMutedChanged && !audioVolumeChanged) return;
 
       if (playbackRateChanged) {
         applyPlaybackRate(state.playbackRate);

@@ -9,7 +9,6 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 import type { DomEditSelection } from "../components/editor/domEditingTypes";
-import { STUDIO_GSAP_PANEL_ENABLED } from "../components/editor/manualEditingAvailability";
 import { usePlayerStore } from "../player";
 import { useDomEditPreviewSync } from "./useDomEditPreviewSync";
 import { useGsapAnimationsForElement, usePopulateKeyframeCacheForFile } from "./useGsapTweenCache";
@@ -17,13 +16,15 @@ import { useGsapAnimationFetchFallback } from "./useGsapAnimationFetchFallback";
 import { useGsapInteractionFailureTelemetry } from "./useGsapInteractionFailureTelemetry";
 import { useGsapSelectionHandlers } from "./useGsapSelectionHandlers";
 import type { PatchTarget } from "../utils/sourcePatcher";
-import type { SidebarTab } from "../components/sidebar/LeftSidebar";
+import { useDockLayoutStore } from "../components/dock/dockLayoutStore";
 
 export interface UseDomEditWiringParams {
   projectId: string | null;
   activeCompPath: string | null;
   domEditSelection: DomEditSelection | null;
   domEditSelectionRef: React.MutableRefObject<DomEditSelection | null>;
+  domEditGroupSelectionsRef: React.MutableRefObject<DomEditSelection[]>;
+  refreshDomEditGroupSelectionsFromPreview: (selections: DomEditSelection[]) => Promise<void>;
   previewIframeRef: React.RefObject<HTMLIFrameElement | null>;
   previewIframe: HTMLIFrameElement | null;
   captionEditMode: boolean;
@@ -32,7 +33,7 @@ export interface UseDomEditWiringParams {
   bumpGsapCache: () => void;
   showToast: (message: string, tone?: "error" | "info") => void;
   refreshPreviewDocumentVersion: () => void;
-  syncPreviewHistoryHotkey: (iframe: HTMLIFrameElement | null) => void;
+  syncPreviewHotkeys: (iframe: HTMLIFrameElement | null) => void;
   applyStudioManualEditsToPreviewRef: React.MutableRefObject<
     (iframe: HTMLIFrameElement) => Promise<void>
   >;
@@ -42,8 +43,6 @@ export interface UseDomEditWiringParams {
   ) => void;
   buildDomSelectionFromTarget: (element: HTMLElement) => Promise<DomEditSelection | null>;
   openSourceForSelection?: (sourceFile: string, target: PatchTarget) => void;
-  selectSidebarTab?: (tab: SidebarTab) => void;
-  getSidebarTab?: () => SidebarTab;
   // GSAP script commit ops (from useGsapScriptCommits)
   updateGsapProperty: (
     sel: DomEditSelection,
@@ -92,21 +91,21 @@ export interface UseDomEditWiringParams {
     animId: string,
     fromPercentage: number,
     toPercentage: number,
-  ) => void;
+  ) => Promise<boolean>;
   resizeKeyframedTween: (
     sel: DomEditSelection,
     animId: string,
     position: number,
     duration: number,
     pctRemap: Array<{ from: number; to: number }>,
-  ) => void;
+  ) => Promise<boolean>;
   convertToKeyframes: (
     sel: DomEditSelection,
     animId: string,
     resolvedFromValues?: Record<string, number | string>,
   ) => Promise<void>;
   removeAllKeyframes: (sel: DomEditSelection, animId: string) => Promise<void>;
-  handleDomManualEditsReset: (sel: DomEditSelection) => void;
+  handleDomManualEditsReset: (sel: DomEditSelection) => Promise<void>;
 }
 
 // fallow-ignore-next-line complexity
@@ -116,6 +115,8 @@ export function useDomEditWiring({
   activeCompPath,
   domEditSelection,
   domEditSelectionRef,
+  domEditGroupSelectionsRef,
+  refreshDomEditGroupSelectionsFromPreview,
   previewIframeRef,
   previewIframe,
   captionEditMode,
@@ -124,13 +125,11 @@ export function useDomEditWiring({
   bumpGsapCache,
   showToast,
   refreshPreviewDocumentVersion,
-  syncPreviewHistoryHotkey,
+  syncPreviewHotkeys,
   applyStudioManualEditsToPreviewRef,
   applyDomSelection,
   buildDomSelectionFromTarget,
   openSourceForSelection,
-  selectSidebarTab,
-  getSidebarTab,
   updateGsapProperty,
   updateGsapMeta,
   deleteGsapAnimation,
@@ -154,16 +153,16 @@ export function useDomEditWiring({
 
   const onClickToSource = useCallback(
     (selection: DomEditSelection) => {
-      if (!openSourceForSelection || !selectSidebarTab) return;
+      if (!openSourceForSelection) return;
       if (!selection.sourceFile) return;
-      selectSidebarTab("code");
+      useDockLayoutStore.getState().activatePanel("code");
       openSourceForSelection(selection.sourceFile, {
         id: selection.id,
         selector: selection.selector,
         selectorIndex: selection.selectorIndex,
       });
     },
-    [openSourceForSelection, selectSidebarTab],
+    [openSourceForSelection],
   );
 
   // ── DOM selection -> timeline element sync ──
@@ -195,7 +194,7 @@ export function useDomEditWiring({
   const gsapSourceFile = domEditSelection?.sourceFile || activeCompPath || "index.html";
 
   usePopulateKeyframeCacheForFile(
-    STUDIO_GSAP_PANEL_ENABLED ? (projectId ?? null) : null,
+    projectId ?? null,
     gsapSourceFile,
     gsapCacheVersion,
     previewIframeRef,
@@ -206,7 +205,7 @@ export function useDomEditWiring({
     multipleTimelines: gsapMultipleTimelines,
     unsupportedTimelinePattern: gsapUnsupportedTimelinePattern,
   } = useGsapAnimationsForElement(
-    STUDIO_GSAP_PANEL_ENABLED ? (projectId ?? null) : null,
+    projectId ?? null,
     gsapSourceFile,
     domEditSelection
       ? { id: domEditSelection.id ?? null, selector: domEditSelection.selector ?? null }
@@ -220,7 +219,7 @@ export function useDomEditWiring({
   // ── Telemetry & fallback ──
 
   const trackGsapInteractionFailure = useGsapInteractionFailureTelemetry(activeCompPath, showToast);
-  const makeFetchFallback = useGsapAnimationFetchFallback(projectId, gsapSourceFile);
+  const makeFetchFallback = useGsapAnimationFetchFallback(projectId);
 
   // ── GSAP selection handlers ──
 
@@ -255,14 +254,15 @@ export function useDomEditWiring({
     activeCompPath,
     captionEditMode,
     domEditSelectionRef,
+    domEditGroupSelectionsRef,
     domEditSelection,
     applyDomSelection,
+    refreshDomEditGroupSelectionsFromPreview,
     buildDomSelectionFromTarget,
     refreshPreviewDocumentVersion,
-    syncPreviewHistoryHotkey,
+    syncPreviewHotkeys,
     applyStudioManualEditsToPreviewRef,
     openSourceForSelection,
-    getSidebarTab,
     gsapCacheVersion,
   });
 

@@ -2,7 +2,6 @@ import { useTrackDesignInput } from "../../contexts/DesignPanelInputContext";
 import { FlatRow, FlatSegmentedRow, FlatSelectRow } from "./propertyPanelFlatPrimitives";
 import { KeyframeNavigation } from "./KeyframeNavigation";
 import { formatPxMetricValue } from "./propertyPanelHelpers";
-import { STUDIO_KEYFRAMES_ENABLED } from "./manualEditingAvailability";
 import { resolveValueTier } from "./propertyPanelValueTier";
 import { PropertyPanel3dTransform } from "./propertyPanel3dTransform";
 import type { DomEditSelection } from "./domEditingTypes";
@@ -69,7 +68,7 @@ function KeyframeGutter({
   | "onConvertToKeyframes"
 >) {
   const track = useTrackDesignInput();
-  if (!STUDIO_KEYFRAMES_ENABLED || !gsapAnimId) return null;
+  if (!gsapAnimId) return null;
   const hasKeyframesOnProp = Boolean(navKeyframes?.some((kf) => property in kf.properties));
   return (
     <span data-flat-kf-gutter="true" style={{ opacity: hasKeyframesOnProp ? 1 : 0.3 }}>
@@ -83,10 +82,10 @@ function KeyframeGutter({
           track("button", `Add ${property} keyframe`);
           void onCommitAnimatedProperty(element, property, displayValue);
         }}
-        onRemoveKeyframe={(pct) => {
+        onRemoveKeyframe={(pct, animationId) => {
           if (!onRemoveKeyframe) return;
           track("button", `Remove ${property} keyframe`);
-          onRemoveKeyframe(animIdForProp(property), pct);
+          onRemoveKeyframe(animationId ?? animIdForProp(property), pct);
         }}
         onConvertToKeyframes={() => {
           if (!onConvertToKeyframes) return;
@@ -182,7 +181,7 @@ export function LayoutZIndexRow({
   onSetStyle,
 }: {
   styles: Record<string, string>;
-  onSetStyle: (prop: string, value: string) => void | Promise<void>;
+  onSetStyle: (prop: string, value: string) => void | Promise<unknown>;
 }) {
   const zIndex = String(parseInt(styles["z-index"] || "auto", 10) || 0);
   return (
@@ -201,7 +200,7 @@ export function LayoutFlexBlock({
   disabled,
 }: {
   styles: Record<string, string>;
-  onSetStyle: (prop: string, value: string) => void | Promise<void>;
+  onSetStyle: (prop: string, value: string) => void | Promise<unknown>;
   disabled: boolean;
 }) {
   const isFlex = styles.display === "flex" || styles.display === "inline-flex";
@@ -338,7 +337,7 @@ interface FlatLayoutSectionProps
     > {
   element: DomEditSelection;
   styles: Record<string, string>;
-  onSetStyle: (prop: string, value: string) => void | Promise<void>;
+  onSetStyle: (prop: string, value: string) => void | Promise<unknown>;
   disabled: boolean;
 }
 

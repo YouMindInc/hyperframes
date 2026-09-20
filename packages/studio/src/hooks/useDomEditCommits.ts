@@ -1,4 +1,4 @@
-import { buildProjectApiPath, buildStudioApiPath } from "../utils/projectRouting";
+import { buildProjectApiPath } from "../utils/projectRouting";
 import { useCallback, useRef } from "react";
 import { findUnsafeDomPatchValues } from "@hyperframes/core/studio-api/finite-mutation";
 import { FONT_EXT } from "../utils/mediaTypes";
@@ -33,7 +33,9 @@ import {
   patchElementBatches,
   readErrorResponseBody,
 } from "./useDomEditCommitsHelpers";
-import { cutoverCommittedOrThrow, type CutoverResult } from "../utils/sdkCutover";
+import type { CutoverResult } from "../utils/sdkCutover";
+import { studioWriteHeaders } from "../utils/studioFileVersion";
+import { reseekPreviewRuntime } from "./timelineTrackVisibility";
 interface RecordEditInput {
   label: string;
   kind: EditHistoryKind;
@@ -48,7 +50,6 @@ export interface UseDomEditCommitsParams {
   showToast: (message: string, tone?: "error" | "info") => void;
   queueDomEditSave: <T>(save: () => Promise<T>) => Promise<T>;
   writeProjectFile: (path: string, content: string, expectedContent?: string) => Promise<void>;
-  domEditSaveTimestampRef: React.MutableRefObject<number>;
   editHistory: { recordEdit: (entry: RecordEditInput) => Promise<void> };
   fileTree: string[];
   importedFontAssetsRef: React.MutableRefObject<ImportedFontAsset[]>;
@@ -96,7 +97,6 @@ export function useDomEditCommits({
   showToast,
   queueDomEditSave,
   writeProjectFile,
-  domEditSaveTimestampRef,
   editHistory,
   fileTree,
   importedFontAssetsRef,
@@ -115,7 +115,6 @@ export function useDomEditCommits({
 }: UseDomEditCommitsParams) {
   const resolveImportedFontAsset = useCallback(
     (fontFamilyValue: string): ImportedFontAsset | null => {
-      if (!projectId) return null;
       const family = primaryFontFamilyValue(fontFamilyValue);
       if (!family) return null;
       const imported = importedFontAssetsRef.current.find(
@@ -127,7 +126,7 @@ export function useDomEditCommits({
           FONT_EXT.test(path) &&
           fontFamilyFromAssetPath(path).toLowerCase() === family.toLowerCase(),
       );
-      if (!asset) return null;
+      if (!asset || !projectId) return null;
       return {
         family: fontFamilyFromAssetPath(asset),
         path: asset,
@@ -140,14 +139,25 @@ export function useDomEditCommits({
   const reportedUnresolvableRef = useRef(new Set<string>());
 
   // fallow-ignore-next-line complexity
-  const persistDomEditOperations: PersistDomEditOperations = useCallback(
+  const performPersistDomEditOperations = useCallback(
     // fallow-ignore-next-line complexity
-    async (selection, operations, options) => {
-      const pid = projectIdRef.current;
-      if (!pid) throw new Error("No active project");
+    async (
+      selection: DomEditSelection,
+      operations: PatchOperation[],
+      options: Parameters<PersistDomEditOperations>[2],
+      expectedProjectId: string,
+    ) => {
+      if (projectIdRef.current !== expectedProjectId) {
+        throw new Error("Active project changed before the edit could be saved");
+      }
+      const pid = expectedProjectId;
       if (options?.shouldSave && !options.shouldSave()) return;
 
       const targetPath = selection.sourceFile || activeCompPath || "index.html";
+      const completePersistence = <T>(result: T, changed: boolean): T => {
+        if (options?.skipRefresh && changed) reseekPreviewRuntime(previewIframeRef.current);
+        return result;
+      };
 
       const readResponse = await fetch(
         buildProjectApiPath(pid, `/files/${encodeURIComponent(targetPath)}`),
@@ -159,6 +169,10 @@ export function useDomEditCommits({
       const originalContent = readData.content;
       if (typeof originalContent !== "string") {
         throw new Error(`Missing file contents for ${targetPath}`);
+      }
+
+      if (projectIdRef.current !== expectedProjectId) {
+        throw new Error("Active project changed before the edit could be saved");
       }
 
       if (options?.shouldSave && !options.shouldSave()) return;
@@ -187,25 +201,22 @@ export function useDomEditCommits({
           coalesceKey: options?.coalesceKey,
           skipRefresh: options?.skipRefresh,
         });
-        if (cutoverCommittedOrThrow(cutover)) {
+        if (cutover.status === "failed") throw cutover.error;
+        if (cutover.status === "committed") {
           // SDK handled it — its in-memory doc is already current, so do NOT
           // forceReload (that would echo-reload the session we just wrote).
-          return;
+          return completePersistence(
+            { sourceFile: targetPath, version: cutover.version, changed: true },
+            true,
+          );
         }
       }
 
-      // Mark the save timestamp before the file write so the SSE file-change
-      // handler suppresses the reload even if the event arrives before the
-      // response (the server writes the file and emits SSE during the fetch).
-      domEditSaveTimestampRef.current = Date.now();
-
       const patchResponse = await fetch(
-        buildStudioApiPath(
-          `/projects/${pid}/file-mutations/patch-element/${encodeURIComponent(targetPath)}`,
-        ),
+        buildProjectApiPath(pid, `/file-mutations/patch-element/${encodeURIComponent(targetPath)}`),
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...studioWriteHeaders() },
           body: JSON.stringify(patchBody),
         },
       );
@@ -221,6 +232,8 @@ export function useDomEditCommits({
         changed?: boolean;
         matched?: boolean;
         content?: string;
+        path?: string;
+        version?: string;
       };
 
       if (!patchData.changed) {
@@ -238,7 +251,12 @@ export function useDomEditCommits({
           throw new DomEditPersistUnresolvableError(targetPath);
         }
         warnDomEditPersistNoOp(selection, operations);
-        return;
+        return completePersistence(
+          typeof patchData.path === "string" && typeof patchData.version === "string"
+            ? { sourceFile: patchData.path, version: patchData.version, changed: false }
+            : undefined,
+          false,
+        );
       }
 
       const patchedContent =
@@ -276,29 +294,52 @@ export function useDomEditCommits({
       if (!options?.skipRefresh) {
         reloadPreview();
       }
+      return completePersistence(
+        finalContent === patchedContent &&
+          typeof patchData.path === "string" &&
+          typeof patchData.version === "string"
+          ? { sourceFile: patchData.path, version: patchData.version, changed: true }
+          : undefined,
+        true,
+      );
     },
     [
       activeCompPath,
       editHistory,
       writeProjectFile,
       projectIdRef,
-      domEditSaveTimestampRef,
       reloadPreview,
       showToast,
       forceReloadSdkSession,
       onTrySdkPersist,
+      previewIframeRef,
     ],
   );
 
+  const persistDomEditOperations: PersistDomEditOperations = useCallback(
+    (selection, operations, options) => {
+      const expectedProjectId = projectIdRef.current;
+      if (!expectedProjectId) return Promise.reject(new Error("No active project"));
+      return queueDomEditSave(() =>
+        performPersistDomEditOperations(selection, operations, options, expectedProjectId),
+      );
+    },
+    [performPersistDomEditOperations, projectIdRef, queueDomEditSave],
+  );
+
   const commitDomEditPatchBatches: CommitDomEditPatchBatches = useCallback(
-    (batches, options) =>
-      queueDomEditSave(
+    (batches, options) => {
+      const expectedProjectId = projectIdRef.current;
+      if (!expectedProjectId) return Promise.reject(new Error("No active project"));
+      return queueDomEditSave(
         // One queued transaction owns validation, persistence, history, reload,
         // and its durable result; splitting those phases risks partial commits.
         // fallow-ignore-next-line complexity
         async () => {
-          const pid = projectIdRef.current;
-          if (!pid) throw new Error("No active project");
+          if (projectIdRef.current !== expectedProjectId) {
+            throw new Error("Active project changed before the edit could be saved");
+          }
+          const pid = expectedProjectId;
           const unsafeFields = batches.flatMap((batch) =>
             batch.patches.flatMap((patch) => findUnsafeDomPatchValues(patch)),
           );
@@ -310,7 +351,6 @@ export function useDomEditCommits({
             );
           }
 
-          domEditSaveTimestampRef.current = Date.now();
           const atomicResult = await patchElementBatches(pid, batches);
           const allMatched =
             atomicResult.durable && atomicResult.files.every((result) => result.allMatched);
@@ -336,8 +376,7 @@ export function useDomEditCommits({
           // produces a visible blink. Skip the reload when the caller asked for it
           // AND the persist is provably in sync: style-only ops, every target
           // matched. Any unmatched patch means the live DOM now shows state disk
-          // doesn't hold — reload so the preview reconverges. (The SSE/file-watcher
-          // reload is independently suppressed by domEditSaveTimestampRef above.)
+          // doesn't hold — reload so the preview reconverges.
           const skipSafe =
             options.skipReload === true && batchesAreInlineStyleOnly(batches) && durable;
           if (!durable || (changed && !skipSafe)) reloadPreview();
@@ -360,27 +399,24 @@ export function useDomEditCommits({
           label: options.label,
         });
         throw error;
-      }),
-    [
-      domEditSaveTimestampRef,
-      editHistory,
-      forceReloadSdkSession,
-      projectIdRef,
-      queueDomEditSave,
-      reloadPreview,
-      showToast,
-    ],
+      });
+    },
+    [editHistory, forceReloadSdkSession, projectIdRef, queueDomEditSave, reloadPreview, showToast],
   );
 
   // ── Text & style commits (delegated to useDomEditTextCommits) ──
 
   const {
     handleDomStyleCommit,
+    handleDomStyleCommitForSelection,
     handleDomAttributeCommit,
     handleDomAttributeLiveCommit,
+    handleDomAttributeQuietCommit,
     handleDomHtmlAttributeCommit,
     handleDomAttributesCommit,
     handleDomTextCommit,
+    handleDomTextCommitForSelection,
+    handleDomRichTextCommit,
     commitDomTextFields,
     handleDomTextFieldStyleCommit,
     handleDomAddTextField,
@@ -402,7 +438,6 @@ export function useDomEditCommits({
   const commitPositionPatchToHtml = useDomEditPositionPatchCommit({
     activeCompPath,
     persistDomEditOperations,
-    queueDomEditSave,
     showToast,
   });
 
@@ -421,11 +456,10 @@ export function useDomEditCommits({
 
   // ── Element lifecycle (delete, z-index reorder) ──
 
-  const { handleDomEditElementDelete, handleDomZIndexReorderCommit } = useElementLifecycleOps({
+  const { handleDomEditElementsDelete, handleDomZIndexReorderCommit } = useElementLifecycleOps({
     activeCompPath,
     showToast,
     writeProjectFile,
-    domEditSaveTimestampRef,
     editHistory,
     projectIdRef,
     reloadPreview,
@@ -439,11 +473,15 @@ export function useDomEditCommits({
   return {
     resolveImportedFontAsset,
     handleDomStyleCommit,
+    handleDomStyleCommitForSelection,
     handleDomAttributeCommit,
     handleDomAttributeLiveCommit,
+    handleDomAttributeQuietCommit,
     handleDomHtmlAttributeCommit,
     handleDomAttributesCommit,
     handleDomTextCommit,
+    handleDomTextCommitForSelection,
+    handleDomRichTextCommit,
     commitDomTextFields,
     handleDomTextFieldStyleCommit,
     handleDomAddTextField,
@@ -452,7 +490,7 @@ export function useDomEditCommits({
     handleDomBoxSizeCommit,
     handleDomRotationCommit,
     handleDomManualEditsReset,
-    handleDomEditElementDelete,
+    handleDomEditElementsDelete,
     handleDomZIndexReorderCommit,
   };
 }

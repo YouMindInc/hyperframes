@@ -1,10 +1,6 @@
+import { buildStudioApiPath, configureStudioApiBaseUrl } from "../utils/projectRouting";
 import { useEffect, useState } from "react";
-import {
-  buildProjectHash,
-  buildStudioApiPath,
-  configureStudioApiBaseUrl,
-  parseProjectIdFromHash,
-} from "../utils/projectRouting";
+import { buildProjectHash, parseProjectIdFromHash } from "../utils/projectRouting";
 import { useMountEffect } from "./useMountEffect";
 
 interface ServerConnectionState {
@@ -23,6 +19,26 @@ interface ServerConnectionState {
  * Polls every 2 s until the server responds, then transitions automatically.
  * Cleans up pending timers on unmount so it is safe under React StrictMode.
  */
+/**
+ * Whether a hash-supplied project id still names something the server can
+ * resolve. Three answers, not two: a failed request must NOT be read as
+ * "missing", or one network blip would discard a perfectly good deep link.
+ *
+ * Resolved through `/api/projects/:id`, which calls the same
+ * `adapter.resolveProject` the file routes use. A match against the
+ * `/api/projects` list would be wrong twice over: that list omits session ids
+ * (which resolve fine) and skips project dirs without an `index.html`.
+ */
+async function resolveHashProject(id: string): Promise<"ok" | "missing" | "unknown"> {
+  try {
+    const res = await fetch(buildStudioApiPath(`/projects/${encodeURIComponent(id)}`));
+    if (res.ok) return "ok";
+    return res.status === 404 ? "missing" : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 export function useServerConnection(
   explicitProjectId: string | null = null,
   apiBaseUrl?: string,
@@ -48,20 +64,38 @@ export function useServerConnection(
     function tryConnect() {
       fetch(buildStudioApiPath("/projects"))
         .then((r) => r.json())
-        .then((data) => {
+        .then(async (data) => {
           if (cancelled) return;
-          if (explicitProjectId || hashProjectId) {
-            setProjectId(explicitProjectId ?? hashProjectId);
+          if (explicitProjectId) {
+            setProjectId(explicitProjectId);
             setWaitingForServer(false);
-          } else {
-            const first = (data.projects ?? [])[0];
-            if (first) {
-              setProjectId(first.id);
+            return;
+          }
+          // A hash project id outlives the project it names — a renamed folder,
+          // or a bookmark from a project that is gone. Trusting it blindly made
+          // every later /api/projects/<id>/... request 404 for the life of the
+          // tab, including the composition read that opens the SDK session, so
+          // every edit fell back to the server path with nothing to show why.
+          // Telemetry after the read-reason split: 120 http_error/404 reads
+          // across 5 users in 24h, ~24 each, never recovering.
+          if (hashProjectId) {
+            const state = await resolveHashProject(hashProjectId);
+            if (cancelled) return;
+            // "unknown" keeps the old behaviour: a transient failure must not
+            // rewrite the user's hash out from under a valid project.
+            if (state !== "missing") {
+              setProjectId(hashProjectId);
               setWaitingForServer(false);
-              window.location.hash = buildProjectHash(first.id);
-            } else {
-              scheduleRetry();
+              return;
             }
+          }
+          const first = (data.projects ?? [])[0];
+          if (first) {
+            setProjectId(first.id);
+            setWaitingForServer(false);
+            window.location.hash = buildProjectHash(first.id);
+          } else {
+            scheduleRetry();
           }
         })
         .catch(() => {
