@@ -1,0 +1,33 @@
+name: Publish YouMind Studio
+on:
+  push:
+    tags: ["youmind-studio-*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.2.15
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build matching Studio packages
+        run: |
+          bun run --filter '@hyperframes/{parsers,lint,studio-server}' build
+          bun run --filter @hyperframes/core build
+          bun run --filter '@hyperframes/{player,sdk}' build
+          bun run --filter @hyperframes/studio build
+      - name: Verify embedding
+        run: |
+          bun run --cwd packages/studio test src/utils/projectRouting.test.ts src/utils/projectRouting.embed.test.ts src/hooks/useServerConnection.hashProject.test.tsx
+          bun run --cwd packages/studio-server test src/routes/preview.test.ts src/routes/thumbnail.test.ts
+      - name: Publish versioned packages
+        run: node scripts/publish-youmind-studio.mjs --publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

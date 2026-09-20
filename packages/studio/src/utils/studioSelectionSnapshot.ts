@@ -21,6 +21,7 @@ function thumbnailUrl({
   const params = new URLSearchParams({
     t: String(round3(currentTime)),
     format: "png",
+    output: "source",
   });
   if (selection.selector) params.set("selector", selection.selector);
   if (selection.selectorIndex != null) params.set("selectorIndex", String(selection.selectorIndex));

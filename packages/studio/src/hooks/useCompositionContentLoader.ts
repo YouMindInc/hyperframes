@@ -24,7 +24,7 @@ export function useCompositionContentLoader({
       if (!projectId) return;
       setActiveCompPath(comp.endsWith(".html") ? comp : null);
       setEditingFile({ path: comp, content: null });
-      fetch(buildProjectApiPath(projectId, `/files/${comp}`))
+      fetch(buildProjectApiPath(projectId, `/files/${encodeURIComponent(comp)}`))
         .then(async (r) => {
           if (!r.ok) throw new Error(`Failed to load ${comp} (${r.status})`);
           return r.json();

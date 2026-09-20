@@ -2,6 +2,7 @@ import { buildStudioApiPath } from "../utils/projectRouting";
 import { StudioSaveHttpError, trackStudioSaveFailure } from "../utils/studioSaveDiagnostics";
 import type { DomEditPatchBatch } from "./domEditCommitTypes";
 import { formatFieldsSuffix } from "./gsapScriptCommitHelpers";
+import { studioWriteHeaders } from "../utils/studioFileVersion";
 
 export function formatUnsafeFieldList(fields: Array<{ path: string }>): string {
   return fields.map((field) => field.path).join(", ");
@@ -102,7 +103,7 @@ export async function patchElementBatches(projectId: string, batches: DomEditPat
       ),
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...studioWriteHeaders() },
         body,
       },
     );

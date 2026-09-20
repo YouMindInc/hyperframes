@@ -92,6 +92,7 @@ export function ImageFillField({
   const track = useTrackDesignInput();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const imageAssets = useMemo(() => assets.filter((a) => IMAGE_EXT.test(a)), [assets]);
   const selectedAsset = useMemo(
     () => resolveSelectedAsset(value, sourceFile, imageAssets),
@@ -102,6 +103,7 @@ export function ImageFillField({
   const handleUpload = async (files: FileList | null) => {
     if (!files?.length || !onImportAssets) return;
     setUploading(true);
+    setUploadError(null);
     try {
       const uploaded = await onImportAssets(files);
       const nextImage = uploaded.find((a) => IMAGE_EXT.test(a));
@@ -109,6 +111,8 @@ export function ImageFillField({
         track("button", "Upload image");
         onCommit(`url("${toProjectRootAssetPath(nextImage)}")`);
       }
+    } catch {
+      setUploadError("Upload failed — check the file and try again.");
     } finally {
       setUploading(false);
     }
@@ -129,7 +133,7 @@ export function ImageFillField({
                 : "cursor-pointer hover:border-neutral-600 hover:text-white"
             }`}
           >
-            <Plus size={12} className="flex-shrink-0" />
+            <Plus size={12} className="shrink-0" />
             <span className="truncate">{uploading ? "Uploading…" : "Upload image"}</span>
           </button>
           <input
@@ -145,6 +149,11 @@ export function ImageFillField({
             }}
           />
         </div>
+        {uploadError && (
+          <div className="text-[10px] text-red-400" role="alert">
+            {uploadError}
+          </div>
+        )}
         {imageAssets.length > 0 ? (
           <div className="space-y-3">
             {selectedAsset && (
@@ -169,7 +178,7 @@ export function ImageFillField({
                   }
                   onCommit(`url("${toProjectRootAssetPath(next)}")`);
                 }}
-                className="min-w-0 w-full appearance-none bg-transparent text-[11px] font-medium text-neutral-100 outline-none disabled:cursor-not-allowed disabled:text-neutral-600"
+                className="min-w-0 w-full appearance-none bg-transparent text-[11px] font-medium text-neutral-100 outline-hidden disabled:cursor-not-allowed disabled:text-neutral-600"
               >
                 <option value="">None</option>
                 {imageAssets.map((asset) => (
@@ -263,10 +272,48 @@ export function GradientField({
           {parsed.stops.map((stop, index) => (
             <div
               key={`stop-preview-${index}`}
-              className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+              role="slider"
+              tabIndex={disabled ? -1 : 0}
+              aria-label={`Stop ${index + 1} position`}
+              aria-valuenow={Math.round(stop.position)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              onKeyDown={(event) => {
+                if (disabled) return;
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                const step = event.shiftKey ? 10 : 1;
+                const delta = event.key === "ArrowRight" ? step : -step;
+                updateStop(index, {
+                  position: Math.max(0, Math.min(100, Math.round(stop.position + delta))),
+                });
+              }}
+              className="absolute top-1/2 h-4 w-4 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.35)] outline-hidden focus-visible:ring-2 focus-visible:ring-studio-accent"
               style={{
                 left: `calc(${stop.position}% - 8px)`,
                 backgroundColor: stop.color,
+              }}
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => {
+                if (disabled) return;
+                event.stopPropagation();
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                if (disabled || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                const rect = previewRef.current?.getBoundingClientRect();
+                if (!rect || rect.width <= 0) return;
+                const next = Math.max(
+                  0,
+                  Math.min(100, ((event.clientX - rect.left) / rect.width) * 100),
+                );
+                updateStop(index, { position: Math.round(next * 10) / 10 });
+              }}
+              onPointerUp={(event) => {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }}
+              onPointerCancel={(event) => {
+                event.currentTarget.releasePointerCapture(event.pointerId);
               }}
             />
           ))}
@@ -292,7 +339,7 @@ export function GradientField({
                 track("toggle", "Repeat gradient");
                 patch({ repeating: e.target.checked });
               }}
-              className="h-4 w-4 rounded border-neutral-700 bg-neutral-950 text-panel-accent focus:ring-panel-accent"
+              className="h-4 w-4 rounded-sm border-neutral-700 bg-neutral-950 text-panel-accent focus:ring-panel-accent"
             />
             Repeat
           </label>
@@ -393,7 +440,8 @@ export function GradientField({
             type="button"
             disabled={disabled || parsed.stops.length >= 6}
             onClick={() => addStop()}
-            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 text-[11px] font-medium text-neutral-300 transition-colors hover:border-neutral-600 hover:text-white disabled:cursor-not-allowed disabled:text-neutral-600"
+            title={parsed.stops.length >= 6 ? "Maximum 6 stops" : "Add a gradient stop"}
+            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 text-[11px] font-medium text-neutral-300 transition-colors hover:border-neutral-600 hover:text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:text-neutral-600"
           >
             <Plus size={12} />
             Add stop

@@ -10,6 +10,18 @@ export interface ProjectHashRoute {
 export interface StudioAppProps {
   apiBaseUrl?: string;
   projectId?: string | null;
+  portalContainer?: HTMLElement | null;
+}
+
+/** Hosts may identify projects by safe workspace-relative paths. */
+export function isValidProjectId(value: string): boolean {
+  return (
+    value.length > 0 &&
+    !value.includes(":") &&
+    !value.includes("\\") &&
+    !value.split("/").some((part) => !part || part === "." || part === "..") &&
+    !Array.from(value).some((char) => char.charCodeAt(0) < 32)
+  );
 }
 
 function decodeHashProjectId(value: string): string {
@@ -35,6 +47,7 @@ function normalizeHashParams(
 }
 
 export function encodeProjectId(projectId: string): string {
+  if (!isValidProjectId(projectId)) throw new Error("Invalid project ID");
   return encodeURIComponent(projectId);
 }
 
@@ -54,9 +67,12 @@ export function parseProjectHashRoute(hash: string): ProjectHashRoute | null {
   const encodedProjectId = queryIndex >= 0 ? route.slice(0, queryIndex) : route;
   if (!encodedProjectId || encodedProjectId.includes("/")) return null;
 
+  const projectId = decodeHashProjectId(encodedProjectId);
+  if (!isValidProjectId(projectId)) return null;
+
   const rawParams = queryIndex >= 0 ? route.slice(queryIndex + 1) : "";
   return {
-    projectId: decodeHashProjectId(encodedProjectId),
+    projectId,
     params: new URLSearchParams(rawParams),
   };
 }
@@ -116,10 +132,13 @@ export function buildProjectApiPath(
   );
 }
 
-export function buildCompositionPreviewPath(
-  projectId: string | null,
-  compositionPath: string | null,
-): string | null {
-  if (!projectId || !compositionPath) return null;
-  return buildProjectApiPath(projectId, `/preview/comp/${compositionPath}`);
+/** The runtime resolves composition files against the preview base URL. */
+export function projectPathFromPreviewUrl(source: string): string {
+  const origin =
+    typeof window === "undefined" ? "http://hyperframes.local" : window.location.origin;
+  const base = new URL(buildStudioApiPath("/projects/"), origin);
+  const url = new URL(source, origin);
+  if (url.origin !== base.origin || !url.pathname.startsWith(base.pathname)) return source;
+  const match = url.pathname.slice(base.pathname.length).match(/^[^/]+\/preview\/(?:comp\/)?(.+)$/);
+  return match?.[1] ? decodeURIComponent(match[1]) : source;
 }

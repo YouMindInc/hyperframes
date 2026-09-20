@@ -254,10 +254,16 @@ describe("captureDurationRollback", () => {
 describe("fetch URL encoding (user-influenced segments)", () => {
   it("URI-encodes the projectId in file reads", async () => {
     const fetchMock = stubFetch(["<html>"], {});
-    await readFileContent("p/../evil", "index.html");
+    await readFileContent("videos/Project #1", "index.html");
     expect(requestUrl(fetchMock.mock.calls[0]![0])).toBe(
-      "/api/projects/p%2F..%2Fevil/files/index.html",
+      "/api/projects/videos%2FProject%20%231/files/index.html",
     );
+  });
+
+  it("rejects parent traversal before making a file read request", async () => {
+    const fetchMock = stubFetch(["<html>"], {});
+    await expect(readFileContent("p/../evil", "index.html")).rejects.toThrow("Invalid project ID");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("URI-encodes the projectId in GSAP mutation calls", async () => {
