@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTimelineAssetInsertHtml } from "../../utils/timelineAssetDrop";
+import { configureStudioApiBaseUrl } from "../../utils/projectRouting";
 import {
   authoredSrcPath,
   computeThumbnailStrip,
@@ -106,6 +107,26 @@ describe("resolveMediaPreviewUrl", () => {
         "http://localhost:5190",
       ),
     ).toBe("http://localhost:5190/api/media/clip.mp4");
+  });
+
+  it("preserves custom-protocol media without treating sibling Studio domains as the same origin", () => {
+    const origin = "youcomputer://studio-active";
+    const projectId = "nested/Studio check";
+    const canonical = `${origin}/hyperframes-studio/api/projects/nested%2FStudio%20check/preview/assets/proof.svg`;
+    configureStudioApiBaseUrl("/hyperframes-studio/api");
+    try {
+      expect(resolveMediaPreviewUrl(canonical, projectId, origin)).toBe(canonical);
+      expect(
+        resolveMediaPreviewUrl(`${origin}/assets/my%20logo.svg?v=1#frame`, projectId, origin),
+      ).toBe(
+        "/hyperframes-studio/api/projects/nested%2FStudio%20check/preview/assets/my%20logo.svg?v=1#frame",
+      );
+      const sibling = canonical.replace("studio-active", "studio-sibling");
+      expect(resolveMediaPreviewUrl(sibling, projectId, origin)).toBe(sibling);
+      expect(resolveMediaPreviewUrl(canonical, projectId)).toBe(canonical);
+    } finally {
+      configureStudioApiBaseUrl();
+    }
   });
 
   it("routes composition-relative paths through the project preview endpoint", () => {

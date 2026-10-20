@@ -113,12 +113,24 @@ export function encodePreviewPath(relativePath: string): string {
   return relativePath.split("/").map(encodeURIComponent).join("/");
 }
 
+function parseSameOriginMediaUrl(src: string, studioOrigin?: string): URL | null {
+  if (!studioOrigin) return null;
+  try {
+    const origin = new URL(studioOrigin);
+    const parsed = new URL(src, origin);
+    // 自定义协议在部分 URL 实现中的 origin 为 null，必须同时比较协议和主机。
+    return parsed.protocol === origin.protocol && parsed.host === origin.host ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolve a timeline element's media src to a URL loadable from the studio
  * (parent) document. Composition-relative paths (e.g. "assets/image.png") are
  * routed through the project preview endpoint with each segment encoded.
  *
- * External http(s), `data:`, and `blob:` URLs pass through untouched. A
+ * External absolute, `data:`, and `blob:` URLs pass through untouched. A
  * same-origin absolute URL outside the project preview endpoint is the browser's
  * resolved form of a root-relative authored path, so route it back through the
  * active project instead of accidentally fetching the Studio shell.
@@ -133,17 +145,12 @@ export function resolveMediaPreviewUrl(
 
   let relativePath = src;
   let suffix = "";
-  if (/^https?:/i.test(src)) {
-    let parsed: URL;
-    try {
-      parsed = new URL(src);
-    } catch {
-      return src;
-    }
-    if (!studioOrigin || parsed.origin !== studioOrigin) return src;
-    const previewPath = new URL(buildProjectApiPath(projectId, `/preview/`), studioOrigin).pathname;
+  if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(src)) {
+    const parsed = parseSameOriginMediaUrl(src, studioOrigin);
+    if (!parsed) return src;
+    const previewPath = new URL(buildProjectApiPath(projectId, `/preview/`), parsed).pathname;
     if (parsed.pathname.startsWith(previewPath)) return src;
-    if (parsed.pathname.startsWith(buildStudioApiPath("/"))) return src;
+    if (parsed.pathname.startsWith(new URL(buildStudioApiPath("/"), parsed).pathname)) return src;
     try {
       relativePath = parsed.pathname
         .replace(/^\/+/, "")
