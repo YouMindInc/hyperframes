@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../../utils/projectRouting";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   googleFontStylesheetUrl,
@@ -144,8 +145,8 @@ async function fetchFontList(url: string): Promise<string[]> {
 function loadFontLists(): void {
   if (fontLists.loaded) return;
   fontListsRequest ??= Promise.all([
-    fetchFontList("/api/fonts"),
-    fetchFontList("/api/fonts/google"),
+    fetchFontList(buildStudioApiPath("/fonts")),
+    fetchFontList(buildStudioApiPath("/fonts/google")),
   ])
     .then(([installed, google]) => {
       const names = google.concat(POPULAR_GOOGLE_FONT_FAMILIES);

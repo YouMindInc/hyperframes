@@ -103,6 +103,10 @@ export interface StudioSelectionResponse {
  * provides its own implementation.
  */
 export interface StudioApiAdapter {
+  /** 宿主的 API 挂载前缀；默认沿用独立 Studio。 */
+  apiBaseUrl?: string;
+  /** 素材读取仍需满足宿主授予的工作区范围。 */
+  isPreviewAssetAllowed?: (path: string) => boolean;
   /** List all available projects. */
   listProjects(): Promise<ResolvedProject[]> | ResolvedProject[];
 

@@ -89,13 +89,13 @@ function reportHashVerdict(stage: "mount" | "hashchange", verdict: ProjectHashVe
   });
 }
 
-export function useServerConnection(): ServerConnectionState {
-  const [projectId, setProjectId] = useState<string | null>(null);
+export function useServerConnection(explicitProjectId?: string | null): ServerConnectionState {
+  const [projectId, setProjectId] = useState<string | null>(explicitProjectId ?? null);
   const [resolving, setResolving] = useState(true);
   const [waitingForServer, setWaitingForServer] = useState(false);
 
   useMountEffect(() => {
-    const hashProjectId = parseProjectIdFromHash(window.location.hash);
+    const hashProjectId = explicitProjectId ?? parseProjectIdFromHash(window.location.hash);
     let cancelled = false;
     // Explicitly `number` (the DOM return of window.setTimeout) rather than
     // ReturnType<typeof window.setTimeout> — with @types/node present, that infers
@@ -107,7 +107,37 @@ export function useServerConnection(): ServerConnectionState {
       retryTimer = window.setTimeout(tryConnect, 2000);
     }
 
+    function finishResolving() {
+      if (!cancelled) setResolving(false);
+    }
+
+    function completeHostConnection(id: string | null) {
+      if (cancelled) return;
+      if (!id) {
+        scheduleRetry();
+        return;
+      }
+      setProjectId(id);
+      setWaitingForServer(false);
+    }
+
+    async function connectHost(id: string) {
+      try {
+        await studioApiFetch("/api/projects").then((response) => response.json());
+        const verdict = await resolveHashProject(id);
+        completeHostConnection(verdict.outcome === "missing" ? null : id);
+      } catch {
+        completeHostConnection(null);
+      } finally {
+        finishResolving();
+      }
+    }
+
     function tryConnect() {
+      if (explicitProjectId) {
+        void connectHost(explicitProjectId);
+        return;
+      }
       studioApiFetch("/api/projects")
         .then((r) => r.json())
         .then(async (data) => {
@@ -143,9 +173,7 @@ export function useServerConnection(): ServerConnectionState {
         .catch(() => {
           if (!cancelled) scheduleRetry();
         })
-        .finally(() => {
-          if (!cancelled) setResolving(false);
-        });
+        .finally(finishResolving);
     }
 
     tryConnect();
@@ -157,6 +185,7 @@ export function useServerConnection(): ServerConnectionState {
 
   // eslint-disable-next-line no-restricted-syntax
   useEffect(() => {
+    if (explicitProjectId) return;
     const onHashChange = () => {
       const next = parseProjectIdFromHash(window.location.hash);
       if (!next || next === projectId) return;
@@ -185,7 +214,7 @@ export function useServerConnection(): ServerConnectionState {
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
-  }, [projectId]);
+  }, [projectId, explicitProjectId]);
 
   return { projectId, resolving, waitingForServer };
 }

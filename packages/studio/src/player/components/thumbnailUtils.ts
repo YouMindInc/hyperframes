@@ -1,5 +1,5 @@
 import { decodedUrlPath } from "@hyperframes/parsers";
-import { buildProjectApiPath } from "../../utils/projectRouting";
+import { buildStudioApiPath, buildProjectApiPath } from "../../utils/projectRouting";
 import { MAX_VISIBLE_THUMBNAIL_FRAMES } from "../lib/timelineViewportBudgets";
 
 export interface ThumbnailStripLayout {
@@ -143,7 +143,7 @@ export function resolveMediaPreviewUrl(
     if (!studioOrigin || parsed.origin !== studioOrigin) return src;
     const previewPath = new URL(buildProjectApiPath(projectId, `/preview/`), studioOrigin).pathname;
     if (parsed.pathname.startsWith(previewPath)) return src;
-    if (parsed.pathname.startsWith("/api/")) return src;
+    if (parsed.pathname.startsWith(buildStudioApiPath("/"))) return src;
     try {
       relativePath = parsed.pathname
         .replace(/^\/+/, "")

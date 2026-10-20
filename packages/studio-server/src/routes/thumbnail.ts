@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../helpers/apiBase.js";
 import type { Hono } from "hono";
 import {
   closeSync,
@@ -183,7 +184,10 @@ export function registerThumbnailRoutes(api: Hono, adapter: StudioApiAdapter): v
     const motion = manifestKey(join(project.dir, STUDIO_MOTION_PATH));
     sourceMtime = Math.max(sourceMtime, manualEdits.mtimeMs, motion.mtimeMs);
 
-    const projectUrl = `http://${c.req.header("host")}/api/projects/${encodeURIComponent(project.id)}`;
+    const projectUrl = new URL(
+      buildStudioApiPath(adapter, `/projects/${encodeURIComponent(project.id)}`),
+      `http://${c.req.header("host") || "localhost"}`,
+    ).toString();
     const previewPath =
       compPath === "index.html"
         ? `${projectUrl}/preview`

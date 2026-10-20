@@ -1,21 +1,20 @@
+import { decodedUrlPath } from "@hyperframes/parsers";
 const PROJECT_HASH_PREFIX = "#project/";
+const DEFAULT_STUDIO_API_BASE_URL = "/api";
+let configuredStudioApiBaseUrl = DEFAULT_STUDIO_API_BASE_URL;
 
 export interface ProjectHashRoute {
   projectId: string;
   params: URLSearchParams;
 }
 
-const WINDOWS_DRIVE_PREFIX = /^[a-z]:/i;
-
-/** Project names are single path segments, including when received from a hash or server. */
+/** Hosts may identify projects by safe workspace-relative paths. */
 export function isValidProjectId(value: string): boolean {
   return (
     value.length > 0 &&
-    value !== "." &&
-    value !== ".." &&
-    !WINDOWS_DRIVE_PREFIX.test(value) &&
-    !value.includes("/") &&
+    !/^[a-z]:/i.test(value) &&
     !value.includes("\\") &&
+    !value.split("/").some((part) => !part || part === "." || part === "..") &&
     !Array.from(value).some((char) => char.charCodeAt(0) < 32)
   );
 }
@@ -77,7 +76,81 @@ export function parseProjectIdFromHash(hash: string): string | null {
   return parseProjectHashRoute(hash)?.projectId ?? null;
 }
 
-export function buildProjectApiPath(projectId: string, suffix = ""): string {
+function normalizeApiBaseUrl(apiBaseUrl?: string): string {
+  const next = apiBaseUrl?.trim() || DEFAULT_STUDIO_API_BASE_URL;
+  return next.replace(/\/+$/u, "");
+}
+
+function normalizeApiSuffix(suffix = ""): string {
   const normalizedSuffix = suffix && !suffix.startsWith("/") ? `/${suffix}` : suffix;
-  return `/api/projects/${encodeProjectId(projectId)}${normalizedSuffix}`;
+  return normalizedSuffix || "/";
+}
+
+function joinApiPath(basePath: string, suffixPath: string): string {
+  const normalizedBase = basePath.replace(/\/+$/u, "");
+  const normalizedSuffix = suffixPath.startsWith("/") ? suffixPath : `/${suffixPath}`;
+  return `${normalizedBase}${normalizedSuffix}`.replace(/\/{2,}/gu, "/");
+}
+
+function isAbsoluteApiBaseUrl(apiBaseUrl: string): boolean {
+  return /^[a-z][a-z\d+.-]*:\/\//iu.test(apiBaseUrl);
+}
+
+export function configureStudioApiBaseUrl(apiBaseUrl?: string): void {
+  configuredStudioApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl);
+}
+
+export function buildStudioApiPath(suffix = "", apiBaseUrl = configuredStudioApiBaseUrl): string {
+  const normalizedBase = normalizeApiBaseUrl(apiBaseUrl);
+  const normalizedSuffix = normalizeApiSuffix(suffix);
+  const baseUrl = new URL(normalizedBase, "http://hyperframes.local");
+  const suffixUrl = new URL(normalizedSuffix, "http://hyperframes.local");
+  baseUrl.pathname = joinApiPath(baseUrl.pathname, suffixUrl.pathname);
+  const search = new URLSearchParams(baseUrl.search);
+  suffixUrl.searchParams.forEach((value, key) => search.append(key, value));
+  baseUrl.search = search.toString();
+  baseUrl.hash = suffixUrl.hash;
+
+  if (isAbsoluteApiBaseUrl(normalizedBase)) return baseUrl.toString();
+  return `${baseUrl.pathname}${baseUrl.search}${baseUrl.hash}`;
+}
+
+export function buildProjectApiPath(
+  projectId: string,
+  suffix = "",
+  apiBaseUrl = configuredStudioApiBaseUrl,
+): string {
+  const normalizedSuffix = suffix && !suffix.startsWith("/") ? `/${suffix}` : suffix;
+  return buildStudioApiPath(
+    `/projects/${encodeProjectId(projectId)}${normalizedSuffix}`,
+    apiBaseUrl,
+  );
+}
+
+/** 解析当前宿主的预览 URL，所有反向素材识别共用这一处边界。 */
+export function parseStudioPreviewUrl(
+  source: string,
+): { url: URL; projectApiPath: string; assetPath: string } | null {
+  const origin =
+    typeof window === "undefined" ? "http://hyperframes.local" : window.location.origin;
+  const base = new URL(buildStudioApiPath("/projects/"), origin);
+  let url: URL;
+  try {
+    url = new URL(source, origin);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== base.protocol ||
+    url.host !== base.host ||
+    !url.pathname.startsWith(base.pathname)
+  )
+    return null;
+  const match = url.pathname.slice(base.pathname.length).match(/^([^/]+)\/preview\/(.+)$/);
+  return match ? { url, projectApiPath: `${base.pathname}${match[1]}`, assetPath: match[2] } : null;
+}
+
+export function projectPathFromPreviewUrl(source: string): string {
+  const preview = parseStudioPreviewUrl(source);
+  return preview ? decodedUrlPath(preview.assetPath.replace(/^comp\//, "")) : source;
 }

@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../../utils/projectRouting";
 import { mediaMetadataUrl } from "../../utils/studioHelpers";
 import { useLivePreviewIframe } from "../../player/store/previewIframeStore";
 import { onPreviewContentReplaced } from "../../player/sceneSwap";
@@ -72,7 +73,7 @@ function stripPreviewAssetPath(src: string, projectId: string): string | null {
   } catch {
     return null;
   }
-  const projectMarker = `/api/projects/${encodeURIComponent(projectId)}/preview/`;
+  const projectMarker = buildStudioApiPath(`/projects/${encodeURIComponent(projectId)}/preview/`);
   const genericMarker = "/preview/";
   const marker = pathname.includes(projectMarker) ? projectMarker : genericMarker;
   const index = pathname.indexOf(marker);

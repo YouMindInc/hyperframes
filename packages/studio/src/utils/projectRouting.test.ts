@@ -9,14 +9,23 @@ import {
 } from "./projectRouting";
 
 describe("project routing utilities", () => {
-  it.each(["C:", "C:demo", ".", "..", "../sessions", "a/b", "a\\b", "a\u0000b", "a\nb"])(
-    "rejects unsafe decoded project IDs: %s",
-    (id) => {
-      expect(parseProjectIdFromHash(`#project/${encodeURIComponent(id)}`)).toBeNull();
-      expect(() => buildProjectApiPath(id, "/files/index.html")).toThrow("Invalid project ID");
-      expect(() => buildProjectHash(id)).toThrow("Invalid project ID");
-    },
-  );
+  it.each([
+    "C:",
+    "C:demo",
+    ".",
+    "..",
+    "../sessions",
+    "a/../b",
+    "a//b",
+    "/root",
+    "a\\b",
+    "a\u0000b",
+    "a\nb",
+  ])("rejects unsafe decoded project IDs: %s", (id) => {
+    expect(parseProjectIdFromHash(`#project/${encodeURIComponent(id)}`)).toBeNull();
+    expect(() => buildProjectApiPath(id, "/files/index.html")).toThrow("Invalid project ID");
+    expect(() => buildProjectHash(id)).toThrow("Invalid project ID");
+  });
 
   it("opens a folder whose name has a colon, encoded once both ways", () => {
     const id = "Customer story: Northwind";

@@ -80,3 +80,24 @@ describe("timeline image thumbnails", () => {
     expect(latest().onload).toBeNull();
   });
 });
+
+it("requests Sharp thumbnails at a host API mount", async () => {
+  const { configureStudioApiBaseUrl } = await import("../../utils/projectRouting");
+  configureStudioApiBaseUrl("/mounted/hyperframes-studio/api");
+  try {
+    const result = decodeImageThumbnail(
+      "/mounted/hyperframes-studio/api/projects/p/preview/photo.jpg?v=2",
+      new AbortController().signal,
+    );
+    expect(latest().src).toBe(
+      new URL(
+        "/mounted/hyperframes-studio/api/projects/p/image-thumbnail/photo.jpg?v=2",
+        location.href,
+      ).href,
+    );
+    latest().onload?.();
+    await result;
+  } finally {
+    configureStudioApiBaseUrl();
+  }
+});

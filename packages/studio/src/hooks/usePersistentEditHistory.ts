@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HistoryListItem, HistoryResult } from "@hyperframes/studio-server";
 import { studioFileContentVersion, studioWriteHeaders } from "../utils/studioFileVersion";
@@ -120,7 +121,7 @@ function createOwnHistory() {
 const DEFAULT_COALESCE_MS = 300;
 
 function historyUrl(projectId: string, path = ""): string {
-  return `/api/projects/${encodeURIComponent(projectId)}/history${path}`;
+  return buildStudioApiPath(`/projects/${encodeURIComponent(projectId)}/history${path}`);
 }
 
 async function cantUndo(paths: string[] | undefined): Promise<ApplyResult> {

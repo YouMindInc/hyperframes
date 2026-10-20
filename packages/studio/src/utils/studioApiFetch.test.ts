@@ -73,3 +73,23 @@ describe("studioApiFetch", () => {
     });
   });
 });
+
+it("routes native API requests through the configured host mount", async () => {
+  vi.resetModules();
+  const { configureStudioApiBaseUrl } = await import("./projectRouting");
+  const { studioApiFetch } = await import("./studioApiFetch");
+  const fetcher = vi.fn(async () => new Response("ok"));
+  vi.stubGlobal("fetch", fetcher);
+  configureStudioApiBaseUrl("/mounted/hyperframes-studio/api");
+  try {
+    await studioApiFetch("/api/projects/demo/history");
+    expect(fetcher).toHaveBeenCalledWith(
+      "/mounted/hyperframes-studio/api/projects/demo/history",
+      expect.anything(),
+    );
+  } finally {
+    configureStudioApiBaseUrl();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  }
+});

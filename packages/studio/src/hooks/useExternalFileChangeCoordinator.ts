@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import {
   mergeFileChangePayloads,
@@ -129,7 +130,7 @@ export function sseFileChangeChannel(
   onDelivery: (delivery: unknown) => void,
   onReconnect: () => void,
 ): () => void {
-  const eventSource = new EventSource("/api/events");
+  const eventSource = new EventSource(buildStudioApiPath("/events"));
   eventSource.addEventListener("file-change", onDelivery);
   // Reopening the stream does not replay changes missed during a disconnect.
   let opened = false;

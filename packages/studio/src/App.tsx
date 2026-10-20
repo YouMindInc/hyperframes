@@ -60,22 +60,24 @@ import { StudioSplash } from "./components/StudioSplash";
 import { useServerConnection } from "./hooks/useServerConnection";
 import { useStudioSessionStart } from "./hooks/useStudioSessionStart";
 import { useTimelineAddAtPlayhead } from "./hooks/useTimelineAddAtPlayhead";
-import { readStudioUrlStateFromWindow, resolveMasterCompositionPath } from "./utils/studioUrlState";
+import {
+  readStudioUrlStateFromWindow,
+  parseStudioUrlStateFromHash,
+  resolveMasterCompositionPath,
+} from "./utils/studioUrlState";
 import { useActiveComposition } from "./hooks/useActiveComposition";
+import { configureStudioEmbedding, type StudioAppProps } from "./utils/studioEmbedding";
 import { requestPreviewReload } from "./player/previewReloading";
 const getTimelineSelectionSet = () => usePlayerStore.getState().selectedElementIds;
 
-export interface StudioAppProps {
-  /** Clicks still select and report; the preview cannot move, edit or delete anything. */
-  readOnlyPreview?: boolean;
-  /** Short text shown on disabled hand-edit controls while `readOnlyPreview` is set. */
-  readOnlyPreviewReason?: string;
-}
-
 // fallow-ignore-next-line complexity
-export function StudioApp({ readOnlyPreview = false, readOnlyPreviewReason }: StudioAppProps = {}) {
-  const { projectId, resolving, waitingForServer } = useServerConnection();
-  const initialUrlStateRef = useRef(readStudioUrlStateFromWindow());
+export function StudioApp(options: StudioAppProps = {}) {
+  const { explicitProjectId, readOnlyPreview, readOnlyPreviewReason } =
+    configureStudioEmbedding(options);
+  const { projectId, resolving, waitingForServer } = useServerConnection(explicitProjectId);
+  const initialUrlStateRef = useRef(
+    explicitProjectId ? parseStudioUrlStateFromHash("") : readStudioUrlStateFromWindow(),
+  );
   useStudioSessionStart(projectId, resolving, waitingForServer);
   const [compIdToSrc, setCompIdToSrc] = useState<Map<string, string>>(new Map());
   const previewIframe = useOwnPreviewIframe();
@@ -403,7 +405,7 @@ export function StudioApp({ readOnlyPreview = false, readOnlyPreviewReason }: St
   // value that decides whether the panel is actually showing.
   const inspectorButtonActive = !panelLayout.rightCollapsed && inspectorPanelActive;
   useStudioUrlState({
-    projectId,
+    projectId: explicitProjectId ? null : projectId,
     activeCompPath,
     duration: effectiveTimelineDuration,
     isPlaying,

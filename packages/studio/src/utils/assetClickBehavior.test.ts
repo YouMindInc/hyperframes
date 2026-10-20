@@ -102,3 +102,17 @@ describe("isPointerClick", () => {
     expect(isPointerClick(-DRAG_THRESHOLD_PX, 0)).toBe(false);
   });
 });
+
+it("selects the existing clip for a host-mounted encoded asset", async () => {
+  const { configureStudioApiBaseUrl } = await import("./projectRouting");
+  configureStudioApiBaseUrl("youcomputer://studio-selected/hyperframes-studio/api");
+  try {
+    const clip = makeEl({
+      id: "mounted",
+      src: "youcomputer://studio-selected/hyperframes-studio/api/projects/video/preview/assets/photo%25%20%23.jpg?v=2",
+    });
+    expect(findClipForAsset([clip], "assets/photo% #.jpg")).toBe(clip);
+  } finally {
+    configureStudioApiBaseUrl();
+  }
+});

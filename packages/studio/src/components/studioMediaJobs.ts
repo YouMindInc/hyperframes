@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import type {
   BackgroundRemovalProgress,
   BackgroundRemovalResult,
@@ -66,7 +67,9 @@ export function waitForMediaJob(
       reject(new DOMException("Background removal was cancelled", "AbortError"));
       return;
     }
-    const events = new EventSource(`/api/media-jobs/${encodeURIComponent(jobId)}/progress`);
+    const events = new EventSource(
+      buildStudioApiPath(`/media-jobs/${encodeURIComponent(jobId)}/progress`),
+    );
     let settled = false;
     let reconnectTimer: number | null = null;
 

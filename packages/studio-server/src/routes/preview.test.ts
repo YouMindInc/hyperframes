@@ -102,6 +102,41 @@ async function getPreviewSignature(projectDir: string): Promise<string> {
 }
 
 describe("registerPreviewRoutes", () => {
+  it("keeps the host prefix and one encoded nested project segment on every preview", async () => {
+    const id = "videos/Demo #1";
+    for (const bundled of [null, "<html><head></head><body>Bundled</body></html>"]) {
+      const dir = createProjectDir();
+      mkdirSync(join(dir, "compositions"));
+      writeFileSync(
+        join(dir, "compositions/child.html"),
+        "<html><head></head><body>Child</body></html>",
+      );
+      const app = new Hono();
+      registerPreviewRoutes(
+        app,
+        createAdapter(dir, {
+          apiBaseUrl: "/c/fixture/hyperframes-studio/api",
+          bundle: async () => bundled,
+        }),
+      );
+      for (const suffix of ["/preview", "/preview/comp/compositions/child.html"]) {
+        const response = await app.request(`/projects/${encodeURIComponent(id)}${suffix}`);
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain(
+          `/c/fixture/hyperframes-studio/api/projects/${encodeURIComponent(id)}/preview/`,
+        );
+      }
+    }
+  });
+
+  it("honors the host workspace boundary on read-only preview assets", async () => {
+    const dir = createProjectDir();
+    writeFileSync(join(dir, "proof.svg"), "<svg/>");
+    const app = new Hono();
+    registerPreviewRoutes(app, createAdapter(dir, { isPreviewAssetAllowed: () => false }));
+    expect((await app.request("/projects/demo/preview/proof.svg")).status).toBe(404);
+  });
+
   it("adds its <base> even when a script mentions one, and keeps an authored <base>", async () => {
     const projectDir = createProjectDir();
     const app = new Hono();

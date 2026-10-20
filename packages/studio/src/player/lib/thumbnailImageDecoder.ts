@@ -1,17 +1,12 @@
+import { parseStudioPreviewUrl } from "../../utils/projectRouting";
 import type { ThumbnailLoadedResult } from "./thumbnailScheduler";
 import { TIMELINE_VIEWPORT_BUDGETS } from "./timelineViewportBudgets";
 
 function thumbnailSource(source: string): string {
-  const url = new URL(source, window.location.href);
-  if (
-    url.origin !== window.location.origin ||
-    !/^\/api\/projects\/[^/]+\/preview\/.+\.jpe?g$/i.test(url.pathname)
-  )
-    return source;
-  url.pathname = url.pathname.replace(
-    /^(\/api\/projects\/[^/]+)\/preview\//,
-    "$1/image-thumbnail/",
-  );
+  const preview = parseStudioPreviewUrl(source);
+  if (!preview || !/\.jpe?g$/i.test(preview.assetPath)) return source;
+  const { url } = preview;
+  url.pathname = `${preview.projectApiPath}/image-thumbnail/${preview.assetPath}`;
   return url.href;
 }
 

@@ -1,3 +1,4 @@
+import { getStudioPortalContainer } from "../../utils/studioPortal";
 /**
  * Select: Base UI select in Input's box. The trigger keeps `role="combobox"`, which both hotkey selector
  * lists match. Options are data, not children, so typeahead and the value display can read labels.
@@ -76,7 +77,7 @@ export function Select({
         </BaseSelect.Icon>
       </BaseSelect.Trigger>
 
-      <BaseSelect.Portal>
+      <BaseSelect.Portal container={getStudioPortalContainer()}>
         <BaseSelect.Positioner sideOffset={4} alignItemWithTrigger={false} className={POPUP_LAYER}>
           <BaseSelect.Popup
             className={cn(

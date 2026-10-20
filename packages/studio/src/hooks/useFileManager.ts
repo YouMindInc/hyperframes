@@ -1,3 +1,4 @@
+import { buildStudioApiPath } from "../utils/projectRouting";
 import { useState, useCallback, useRef } from "react";
 import type { EditingFile } from "../utils/studioHelpers";
 import { FONT_EXT, isMediaFile } from "../utils/mediaTypes";
@@ -387,7 +388,9 @@ export function useFileManager({
         .map((asset) => ({
           family: fontFamilyFromAssetPath(asset),
           path: asset,
-          url: `/api/projects/${encodeURIComponent(pid)}/preview/${encodeUrlPath(asset)}`,
+          url: buildStudioApiPath(
+            `/projects/${encodeURIComponent(pid)}/preview/${encodeUrlPath(asset)}`,
+          ),
         }));
       importedFontAssetsRef.current = [
         ...imported,

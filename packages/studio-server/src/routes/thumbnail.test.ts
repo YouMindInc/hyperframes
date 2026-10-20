@@ -67,6 +67,25 @@ async function writeComposition(
 }
 
 describe("registerThumbnailRoutes", () => {
+  it("captures the mounted preview with a nested project ID encoded once", async () => {
+    const adapter = createAdapter();
+    adapter.apiBaseUrl = "/c/fixture/hyperframes-studio/api";
+    await writeComposition(adapter, 1920, 1080);
+    const id = "videos/Demo #1";
+    const app = new Hono();
+    registerThumbnailRoutes(app, adapter);
+    expect(
+      (await app.request(`/projects/${encodeURIComponent(id)}/thumbnail/index.html?t=1`)).status,
+    ).toBe(200);
+    expect(adapter.generateThumbnail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        previewUrl: expect.stringContaining(
+          `/c/fixture/hyperframes-studio/api/projects/${encodeURIComponent(id)}/preview?`,
+        ),
+      }),
+    );
+  });
+
   it("screenshots the capture variant of the preview document", async () => {
     const adapter = createAdapter();
     await writeComposition(adapter, 1920, 1080);

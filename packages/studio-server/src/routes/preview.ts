@@ -21,6 +21,7 @@ import { PREVIEW_PROXY_BOX_PARAM, parsePreviewProxyBox } from "@hyperframes/core
 import { gsapCdnDist, motionPathPluginUrl } from "@hyperframes/core/gsap-cdn";
 import { findStartTags, injectTagsAtHeadStart } from "@hyperframes/core/compiler/html-document";
 import { isWithinProjectRoot } from "@hyperframes/parsers/asset-resolution";
+import { buildStudioApiPath } from "../helpers/apiBase.js";
 import type { ResolvedProject, StudioApiAdapter } from "../types.js";
 import {
   isPrivateProjectFile,
@@ -403,13 +404,13 @@ export const PREVIEW_BUNDLE_OPTIONS = {
   sceneParts: true,
 } as const satisfies BundleOptions;
 
-const previewBaseHref = (projectId: string) =>
-  `/api/projects/${encodeURIComponent(projectId)}/preview/`;
+const previewBaseHref = (projectId: string, adapter: PreviewApiAdapter) =>
+  buildStudioApiPath(adapter, `/projects/${encodeURIComponent(projectId)}/preview/`);
 
-const withPreviewBase = (html: string, projectId: string) =>
+const withPreviewBase = (html: string, projectId: string, adapter: PreviewApiAdapter) =>
   hasBaseElement(html)
     ? html
-    : injectTagsAtHeadStart(html, `<base href="${previewBaseHref(projectId)}">`);
+    : injectTagsAtHeadStart(html, `<base href="${previewBaseHref(projectId, adapter)}">`);
 
 export function registerPreviewRoutes(api: Hono, adapter: PreviewApiAdapter): void {
   const previewCacheHeaders = (etag: string) => ({
@@ -460,7 +461,7 @@ export function registerPreviewRoutes(api: Hono, adapter: PreviewApiAdapter): vo
       recordPreviewBuilt(project.dir);
 
       // Inject <base> for relative asset resolution
-      bundled = withPreviewBase(bundled, project.id);
+      bundled = withPreviewBase(bundled, project.id, adapter);
 
       // Also covers elements the adapter injected; ids already present are kept.
       bundled = injectStudioPreviewAugmentations(
@@ -492,6 +493,7 @@ export function registerPreviewRoutes(api: Hono, adapter: PreviewApiAdapter): vo
         const fallbackHtml = withPreviewBase(
           withPreviewRuntime(ensureHfIds(fallback.html), adapter.runtimeUrl),
           project.id,
+          adapter,
         );
         let fallbackAugmented = injectStudioPreviewAugmentations(
           await transformPreviewHtml(fallbackHtml, adapter, project, fallback.compositionPath),
@@ -603,7 +605,7 @@ export function registerPreviewRoutes(api: Hono, adapter: PreviewApiAdapter): vo
     const stamped = pinSubCompHfIds(compFile, compPath);
     if (stamped === null) return c.text("not found", 404); // file removed between stat and read
 
-    const baseHref = previewBaseHref(project.id);
+    const baseHref = previewBaseHref(project.id, adapter);
     let html = buildSubCompositionHtml(
       project.dir,
       compPath,
@@ -632,7 +634,11 @@ export function registerPreviewRoutes(api: Hono, adapter: PreviewApiAdapter): vo
     // use resolveWithinProject because saves write their data-hf-id values.
     const candidate = resolve(project.dir, subPath);
     const file = isWithinProjectRoot(project.dir, candidate) ? candidate : null;
-    if (!file || isPrivateProjectFile(project.dir, file)) {
+    if (
+      !file ||
+      adapter.isPreviewAssetAllowed?.(file) === false ||
+      isPrivateProjectFile(project.dir, file)
+    ) {
       return c.text("not found", 404);
     }
     recordPreviewRead(project.dir, file);

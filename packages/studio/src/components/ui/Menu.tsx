@@ -7,6 +7,7 @@ import { ContextMenu as BaseContextMenu } from "@base-ui/react/context-menu";
 import { Menu as BaseMenu } from "@base-ui/react/menu";
 import { useRef } from "react";
 import type { ComponentPropsWithoutRef, ElementType, ReactElement, ReactNode } from "react";
+import { getStudioPortalContainer } from "../../utils/studioPortal";
 import { cn } from "./cn";
 
 /**
@@ -27,6 +28,7 @@ const CONTENTS = { display: "contents" } as const;
 
 /** Base UI reads a `null` container as "not resolved yet" and renders nothing, so give `null` a host by the trigger. */
 export function useInlinePortal(container: PortalContainer) {
+  if (container === undefined) container = getStudioPortalContainer();
   const host = useRef<HTMLSpanElement>(null);
   if (container !== null) return { host: null, portal: { container } };
   return {

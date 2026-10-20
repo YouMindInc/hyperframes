@@ -1,4 +1,4 @@
-import { buildProjectApiPath } from "../../utils/projectRouting";
+import { buildProjectApiPath, projectPathFromPreviewUrl } from "../../utils/projectRouting";
 // fallow-ignore-file code-duplication
 import { memo, useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { SearchInput } from "../ui/SearchInput";
@@ -72,6 +72,11 @@ export function deriveUsedPaths(elements: Array<{ src?: string }>): Set<string> 
   const paths = new Set<string>();
   for (const el of elements) {
     if (!el.src) continue;
+    const mounted = projectPathFromPreviewUrl(el.src);
+    if (mounted !== el.src) {
+      paths.add(mounted);
+      continue;
+    }
     let s = el.src;
 
     // Strip absolute origin if present (http://host/path → /path)

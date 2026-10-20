@@ -1,4 +1,4 @@
-import { buildProjectApiPath } from "../../utils/projectRouting";
+import { buildStudioApiPath, buildProjectApiPath } from "../../utils/projectRouting";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { CanvasResolution } from "@hyperframes/parsers";
 import { trackStudioRenderStart } from "../../telemetry/events";
@@ -317,7 +317,7 @@ export function useRenderQueue(
       activeJobRef.current = jobId;
 
       // Track progress via SSE
-      const es = new EventSource(`/api/render/${jobId}/progress`);
+      const es = new EventSource(buildStudioApiPath(`/render/${jobId}/progress`));
       eventSourceRef.current = es;
 
       es.addEventListener("progress", (event) => {
@@ -380,7 +380,9 @@ export function useRenderQueue(
         ),
       );
       try {
-        const res = await studioApiFetch(`/api/render/${jobId}/cancel`, { method: "POST" });
+        const res = await studioApiFetch(`/api/render/${jobId}/cancel`, {
+          method: "POST",
+        });
         if (!res.ok && res.status !== 404) {
           setActionError("Couldn't cancel on the server. The render may still be running.");
           return;
@@ -407,7 +409,9 @@ export function useRenderQueue(
       setActionError(null);
       closeActiveEventSource(jobId);
       try {
-        const res = await studioApiFetch(`/api/render/${jobId}`, { method: "DELETE" });
+        const res = await studioApiFetch(`/api/render/${jobId}`, {
+          method: "DELETE",
+        });
         if (!res.ok) {
           setActionError("Couldn't delete the render. It's still on disk.");
           return;

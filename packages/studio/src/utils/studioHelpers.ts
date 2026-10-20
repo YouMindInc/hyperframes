@@ -1,4 +1,4 @@
-import { buildProjectApiPath } from "./projectRouting";
+import { buildStudioApiPath, buildProjectApiPath } from "./projectRouting";
 import { isTypingTarget } from "./typingTarget";
 import type { TimelineElement } from "../player/store/playerStore";
 import type { DomEditSelection } from "../components/editor/domEditing";
@@ -385,7 +385,9 @@ export async function resolveDroppedAssetDuration(
 }
 
 export function mediaMetadataUrl(projectId: string, assetPath: string): string {
-  return `/api/projects/${encodeURIComponent(projectId)}/media/metadata?path=${encodeURIComponent(assetPath)}`;
+  return buildStudioApiPath(
+    `/projects/${encodeURIComponent(projectId)}/media/metadata?path=${encodeURIComponent(assetPath)}`,
+  );
 }
 
 /** Dropped video audio stream from the metadata endpoint. Failure answers false so the drop still lands muted. */

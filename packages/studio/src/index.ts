@@ -272,3 +272,5 @@ export { collectStudioLookScene } from "./webmcp/tools/lookTools";
 export type { StudioLookSnapshot } from "./webmcp/tools/lookTools";
 export type { ModelContextTool } from "./webmcp/types";
 export type { ToolResult } from "./webmcp/toolResult";
+
+export type { StudioAppProps } from "./utils/studioEmbedding";

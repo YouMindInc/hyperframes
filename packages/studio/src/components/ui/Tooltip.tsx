@@ -1,3 +1,4 @@
+import { getStudioPortalContainer } from "../../utils/studioPortal";
 /**
  * Tooltip: Base UI's tooltip in Studio tokens. The trigger is a box-less
  * `display: contents` wrapper so a disabled control still gets hover.
@@ -40,7 +41,7 @@ export function Tooltip({
           "aria-describedby": open && !disabled ? tooltipId : children.props["aria-describedby"],
         })}
       </BaseTooltip.Trigger>
-      <BaseTooltip.Portal>
+      <BaseTooltip.Portal container={getStudioPortalContainer()}>
         <BaseTooltip.Positioner
           anchor={() => boxRef.current?.firstElementChild ?? null}
           side={side}

@@ -181,3 +181,19 @@ describe("globalAssetRows", () => {
     expect(globalAssetRows(recs, "  ").length).toBe(3);
   });
 });
+
+it("recognizes used images at the host API mount", async () => {
+  const { configureStudioApiBaseUrl } = await import("../../utils/projectRouting");
+  configureStudioApiBaseUrl("youcomputer://studio-selected/hyperframes-studio/api");
+  try {
+    expect(
+      deriveUsedPaths([
+        {
+          src: "youcomputer://studio-selected/hyperframes-studio/api/projects/video/preview/assets/photo%25%20%23.jpg?v=2",
+        },
+      ]),
+    ).toEqual(new Set(["assets/photo% #.jpg"]));
+  } finally {
+    configureStudioApiBaseUrl();
+  }
+});

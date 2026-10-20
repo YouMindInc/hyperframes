@@ -1,3 +1,4 @@
+import { projectPathFromPreviewUrl } from "./projectRouting";
 /**
  * Pure helpers for CapCut-style asset card click behavior.
  *
@@ -41,6 +42,8 @@ export function findClipForAsset(
  * Mirrors the logic in `deriveUsedPaths` (AssetsTab.tsx) — keep in sync.
  */
 function normalizeSrc(src: string): string {
+  const mounted = projectPathFromPreviewUrl(src);
+  if (mounted !== src) return mounted;
   let s = src;
   try {
     const u = new URL(s);
